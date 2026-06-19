@@ -21,7 +21,9 @@ static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
 // git_info spawns 2-3 `git` subprocesses per cwd; cache the result per cwd with a
 // short TTL so a 5s poll doesn't re-fork for every session every time. Branch/worktree
 // staleness up to the TTL is fine for a dashboard.
-static GIT_CACHE: LazyLock<Mutex<HashMap<String, (Instant, Value, Value)>>> =
+// cwd → (cached-at, branch, worktree); entries expire after GIT_TTL.
+type GitEntry = (Instant, Value, Value);
+static GIT_CACHE: LazyLock<Mutex<HashMap<String, GitEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const GIT_TTL: Duration = Duration::from_secs(15);
 
@@ -142,7 +144,7 @@ fn extract_pr_urls(text: &str) -> Vec<String> {
                     || matches!(c, '"' | '\'' | '\\' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '|' | '`')
             })
             .unwrap_or(tail.len());
-        let url = tail[..end].trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '!'));
+        let url = tail[..end].trim_end_matches(['.', ',', ';', ':', '!']);
         if pull_number(url).is_some() {
             out.push(url.to_string());
         }

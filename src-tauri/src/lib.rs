@@ -757,6 +757,20 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // One-time startup diagnostic: a missing scan root means the app will
+            // silently show no sessions there — the #1 confusing first-run state.
+            // Surface it (don't fail) so a tester who skipped install.sh sees why.
+            let cfg = config::load();
+            for key in ["workRoot", "personalRoot"] {
+                if let Some(root) = cfg.get(key).and_then(serde_json::Value::as_str) {
+                    if !std::path::Path::new(root).exists() {
+                        eprintln!(
+                            "[ai-agents-orchestrator] configured {key} '{root}' does not exist — \
+                             sessions there won't be found (run scripts/install.sh, or set it in Settings)"
+                        );
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -796,9 +810,52 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_pr_url, set_pr_link_in_frontmatter, stamp_archived};
+    use super::{
+        is_pr_url, is_safe_branch, is_safe_category, is_ticket, set_pr_link_in_frontmatter,
+        stamp_archived,
+    };
 
     const LINE: &str = "- 2026-06-14 10:00 | ARCHIVED | archived from the dashboard";
+
+    // ── Injection-boundary allowlists ──────────────────────────────────────────
+    #[test]
+    fn safe_category_accepts_tokens_rejects_metachars() {
+        assert!(is_safe_category("FEAT"));
+        assert!(is_safe_category("bug-fix_2"));
+        assert!(!is_safe_category("")); // empty
+        assert!(!is_safe_category(&"x".repeat(21))); // > 20 chars
+        assert!(!is_safe_category("a b")); // space
+        assert!(!is_safe_category("a;rm")); // shell metachar
+        assert!(!is_safe_category("../x")); // path-traversal chars
+        assert!(!is_safe_category("café")); // non-ASCII
+    }
+
+    #[test]
+    fn ticket_accepts_project_keys_only() {
+        assert!(is_ticket("ABC-123"));
+        assert!(is_ticket("a1-9"));
+        assert!(!is_ticket("ABC")); // no dash / number
+        assert!(!is_ticket("-123")); // empty key
+        assert!(!is_ticket("ABC-")); // empty number
+        assert!(!is_ticket("1AB-2")); // key must start with a letter
+        assert!(!is_ticket("AB C-2")); // space in key
+        assert!(!is_ticket("ABC-12a")); // non-digit in number
+    }
+
+    #[test]
+    fn safe_branch_blocks_flags_traversal_and_ref_syntax() {
+        assert!(is_safe_branch("feat/checkout-redesign"));
+        assert!(is_safe_branch("release/1.2.x"));
+        assert!(!is_safe_branch("")); // empty
+        assert!(!is_safe_branch("-delete")); // leading dash = flag smuggling
+        assert!(!is_safe_branch("/abs")); // leading slash
+        assert!(!is_safe_branch("trailing/")); // trailing slash
+        assert!(!is_safe_branch("a..b")); // `..` revision range
+        assert!(!is_safe_branch("HEAD@{1}")); // `@{` reflog syntax
+        assert!(!is_safe_branch("a b")); // space
+        assert!(!is_safe_branch("a;rm -rf")); // shell metachars
+        assert!(!is_safe_branch(&"x".repeat(201))); // > 200 chars
+    }
 
     #[test]
     fn pr_url_accepts_canonical_and_suffixed() {

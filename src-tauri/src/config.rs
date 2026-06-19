@@ -17,8 +17,9 @@ pub fn home() -> PathBuf {
 // repeatedly (per command, per session-scan); re-reading + re-parsing + re-deriving
 // the file every time is wasted work. set_config changes the mtime, so the next
 // load() rebuilds automatically — no explicit invalidation needed.
-static CONFIG_CACHE: LazyLock<Mutex<Option<(Option<SystemTime>, Value)>>> =
-    LazyLock::new(|| Mutex::new(None));
+// (config.json mtime, derived config) — the cache validates on mtime equality.
+type CacheEntry = (Option<SystemTime>, Value);
+static CONFIG_CACHE: LazyLock<Mutex<Option<CacheEntry>>> = LazyLock::new(|| Mutex::new(None));
 
 fn config_path() -> PathBuf {
     home().join(".config").join("ai-agents-orchestrator").join("config.json")
@@ -63,10 +64,19 @@ pub fn load() -> Value {
 
 /// Read + merge + derive the config from disk (uncached).
 fn build_config(path: &Path) -> Value {
-    let user: Value = fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+    // Absent file = first run → defaults are expected (silent). A file that EXISTS
+    // but won't parse is a real misconfiguration: warn so a beta tester who broke
+    // their config.json sees why their categories silently reset to defaults.
+    let user: Value = match fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
+            eprintln!(
+                "[ai-agents-orchestrator] {} is not valid JSON ({e}); falling back to defaults",
+                path.display()
+            );
+            json!({})
+        }),
+        Err(_) => json!({}),
+    };
 
     let work_root = expand(user.get("workRoot").and_then(Value::as_str).unwrap_or("~/work"));
     let personal_root = expand(user.get("personalRoot").and_then(Value::as_str).unwrap_or("~"));

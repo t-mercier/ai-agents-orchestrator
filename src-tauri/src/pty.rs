@@ -204,7 +204,29 @@ pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::decode_chunk;
+    use super::{decode_chunk, shell_quote};
+
+    #[test]
+    fn shell_quote_wraps_plain_strings() {
+        assert_eq!(shell_quote("abc"), "'abc'");
+        assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("/Users/dev/work/FEAT/x"), "'/Users/dev/work/FEAT/x'");
+    }
+
+    #[test]
+    fn shell_quote_neutralizes_single_quotes() {
+        // The single quote is the ONLY char that can break out of a '…' context;
+        // it must become the canonical '\'' sequence.
+        assert_eq!(shell_quote("a'b"), "'a'\\''b'");
+    }
+
+    #[test]
+    fn shell_quote_leaves_other_metachars_literal() {
+        // $, backtick, ", \, ;, &, |, newline are all literal inside single quotes —
+        // with no single quote present, the output is just the input wrapped in '…'.
+        let s = "a $b `c` \"d\" \\e ; f & g | h\n";
+        assert_eq!(shell_quote(s), format!("'{s}'"));
+    }
 
     #[test]
     fn box_draw_split_across_chunks_is_not_corrupted() {
