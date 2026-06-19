@@ -33,6 +33,7 @@ impl PtyManager {
         if let Ok(mut sessions) = self.sessions.lock() {
             for s in sessions.values_mut() {
                 let _ = s.child.kill();
+                let _ = s.child.wait(); // reap so none linger as <defunct>
             }
             sessions.clear();
         }
@@ -197,8 +198,14 @@ pub fn pty_resize(state: tauri::State<PtyManager>, session_id: String, cols: u16
 
 #[tauri::command]
 pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
-    if let Some(mut s) = state.sessions.lock().unwrap().remove(&session_id) {
+    // Take the session out (releasing the lock at the end of THIS statement — binding
+    // to a local avoids holding the mutex across the blocking wait below).
+    let session = state.sessions.lock().unwrap().remove(&session_id);
+    if let Some(mut s) = session {
         let _ = s.child.kill();
+        // kill() only signals; wait() reaps it. Without this the SIGKILL'd shell
+        // lingers as a <defunct> zombie until app exit (one per open/close).
+        let _ = s.child.wait();
     }
 }
 
