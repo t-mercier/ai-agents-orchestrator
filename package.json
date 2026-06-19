@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Live mission control for all your parallel Claude Code sessions — a native macOS dashboard.",
   "main": "main.js",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://github.com/t-mercier/ai-agents-orchestrator",
   "repository": {
     "type": "git",

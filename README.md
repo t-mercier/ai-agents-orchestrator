@@ -3,7 +3,7 @@
 **Mission control for your parallel Claude Code sessions — a tiny native macOS dashboard that brings order to the chaos.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
 [![Made with Claude Code](https://img.shields.io/badge/Made%20with-Claude%20Code-000000)](https://claude.com/claude-code)
 
@@ -156,8 +156,10 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 
 ## Contributing
 
-Issues and PRs welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). The codebase is intentionally small: a Rust backend + vanilla-JS renderer, no framework. Any new command or network code requires an ADR ([`docs/adr`](docs/adr)).
+**Issues and suggestions are very welcome** — bug reports, feature ideas, rough edges. This is an opinionated, design-led project that I maintain solo, so I'm not taking outside code contributions for now (it keeps the UX coherent and the codebase cleanly mine). Open an issue and let's talk. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE). Built by an ADHD developer who loves parallel-tasking with Claude a little too much — for anyone juggling more parallel work than one brain can hold.
+**[PolyForm Noncommercial 1.0.0](LICENSE)** — free to use, modify, and share for any **non-commercial** purpose. Commercial use requires a separate licence; reach out if that's you.
+
+Built by an ADHD developer who loves parallel-tasking with Claude a little too much — for anyone juggling more parallel work than one brain can hold.
