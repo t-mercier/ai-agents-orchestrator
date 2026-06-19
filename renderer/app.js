@@ -715,6 +715,7 @@ window.reloadConfig = async () => {           // called by Settings after save
   if (window.applyCategoryColors) window.applyCategoryColors(window.CSM_CONFIG.colorMap)
   renderCategoryFilters()
   populateNewSessionCategories()
-  fetchAndRender(true)
+  fetchAndRender(true)   // refreshes the active tab + its badge
+  seedTabCounts()        // re-seed ALL tab badges — roots/categories may have changed
 }
 boot()
