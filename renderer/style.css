@@ -68,7 +68,10 @@ html, body {
    keep their focus-visible ring for keyboard a11y.) */
 .settings-tab:focus-visible,
 .view-btn:focus-visible,
-.tab-btn:focus-visible { outline: none; }
+.tab-btn:focus-visible,
+/* Modal buttons too: a dialog auto-focuses its first button on open, so the ring
+   popped onto Cancel as a heavy stray contour. The .primary fill is the anchor. */
+.modal-btn:focus-visible { outline: none; }
 
 /* Respect the OS "reduce motion" setting — neutralise transitions + animations. */
 @media (prefers-reduced-motion: reduce) {
