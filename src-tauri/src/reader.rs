@@ -745,9 +745,46 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        bucket_by_status, date_to_days, extract_pr_urls, pick_pr_url, session_history_info,
+        bucket_by_status, date_to_days, extract_pr_urls, lead_date, parse_frontmatter, pick_pr_url,
+        reopened_after_close, session_history_info, Transcript,
     };
     use serde_json::json;
+
+    #[test]
+    fn parse_frontmatter_strips_quotes_drops_empty_requires_closing() {
+        let fm = "---\nname: \"My Session\"\ncategory: FEAT\nempty: \nticket: 'ABC-1'\n---\nbody";
+        let m = parse_frontmatter(fm);
+        assert_eq!(m.get("name").map(String::as_str), Some("My Session"));
+        assert_eq!(m.get("category").map(String::as_str), Some("FEAT"));
+        assert_eq!(m.get("ticket").map(String::as_str), Some("ABC-1"));
+        assert!(!m.contains_key("empty")); // empty value → dropped (treated as absent)
+        assert!(parse_frontmatter("---\nname: x\nno closing marker").is_empty()); // no closing ---
+        assert!(parse_frontmatter("# just a heading\n").is_empty()); // no frontmatter
+    }
+
+    #[test]
+    fn lead_date_finds_first_date_with_optional_time() {
+        assert_eq!(lead_date("- 2026-06-10 14:43 | x").as_deref(), Some("2026-06-10 14:43"));
+        assert_eq!(lead_date("- 2026-06-10 | x").as_deref(), Some("2026-06-10"));
+        assert_eq!(lead_date("no date here"), None);
+    }
+
+    #[test]
+    fn reopened_after_close_is_strictly_a_later_day() {
+        use std::time::{Duration, UNIX_EPOCH};
+        let close = "2026-06-10";
+        let day = date_to_days(close).unwrap() as u64;
+        let with_mtime = |secs: u64| Transcript {
+            mtime: Some(UNIX_EPOCH + Duration::from_secs(secs)),
+            ..Default::default()
+        };
+        // same calendar day (a few hours later) → NOT reopened
+        assert!(!reopened_after_close(&with_mtime(day * 86400 + 5 * 3600), close));
+        // next day → reopened
+        assert!(reopened_after_close(&with_mtime((day + 1) * 86400), close));
+        // no transcript mtime → false
+        assert!(!reopened_after_close(&Transcript::default(), close));
+    }
 
     #[test]
     fn bucket_by_status_partitions_and_defaults_unknown_to_stale() {

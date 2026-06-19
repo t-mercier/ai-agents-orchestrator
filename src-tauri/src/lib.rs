@@ -812,9 +812,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_pr_url, is_safe_branch, is_safe_category, is_ticket, set_pr_link_in_frontmatter,
-        stamp_archived,
+        is_pr_url, is_safe_branch, is_safe_category, is_ticket, percent_encode,
+        set_pr_link_in_frontmatter, stamp_archived,
     };
+
+    #[test]
+    fn percent_encode_handles_multibyte_and_reserved() {
+        assert_eq!(percent_encode("café"), "caf%C3%A9"); // multibyte UTF-8
+        assert_eq!(percent_encode("a b/c"), "a%20b%2Fc"); // space + slash
+        assert_eq!(percent_encode("AZ09-_.~"), "AZ09-_.~"); // unreserved pass through
+    }
 
     const LINE: &str = "- 2026-06-14 10:00 | ARCHIVED | archived from the dashboard";
 

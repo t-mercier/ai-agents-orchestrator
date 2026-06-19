@@ -242,6 +242,11 @@ function computeChangedKeys(sessions) {
     if (!firstRender && before !== undefined && now > before) changed.add(key)
     prevActivity.set(key, now)
   }
+  // Prune sessions that vanished, so the Map can't grow unbounded over a long run.
+  if (prevActivity.size > sessions.length) {
+    const live = new Set(sessions.map(sessionKey))
+    for (const k of prevActivity.keys()) if (!live.has(k)) prevActivity.delete(k)
+  }
   return changed
 }
 
@@ -289,7 +294,7 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
   setHtml(document.getElementById('panel-list'), html)
 }
 
-// ── Cards view: full-width grid ── */
+// ── Cards view: full-width grid ──
 
 function renderSessionCard(s, selectedKey, changed) {
   const preview = escapeHtml(truncate(s.lastActivity || s.goal, 110))

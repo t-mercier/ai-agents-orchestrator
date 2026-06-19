@@ -7,6 +7,9 @@ use std::io::{Read, Write};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
+/// Model passed to `claude --model`. `[1m]` selects the 1M-context variant — it is
+/// NOT a glob/regex, so every command embedding this must shell-quote it (otherwise
+/// the shell tries to glob-expand the `[…]` and the launch fails).
 pub const CLAUDE_MODEL: &str = "opus[1m]";
 
 struct Session {
@@ -258,6 +261,28 @@ mod tests {
     fn complete_chunk_passes_through_and_carry_stays_empty() {
         let mut carry = Vec::new();
         assert_eq!(decode_chunk(&mut carry, "check dans".as_bytes()), "check dans");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn four_byte_emoji_split_across_chunks() {
+        // 😀 U+1F600 = F0 9F 98 80, split after the first two bytes.
+        let mut carry = Vec::new();
+        assert_eq!(decode_chunk(&mut carry, &[0xF0, 0x9F]), ""); // incomplete → nothing yet
+        assert_eq!(carry, vec![0xF0, 0x9F]);
+        assert_eq!(decode_chunk(&mut carry, &[0x98, 0x80]), "\u{1F600}");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn invalid_byte_does_not_carry_a_following_incomplete_tail() {
+        // 'a', 0xFF (invalid), 0xC3 (start of a 2-byte char, incomplete at EOF).
+        // The invalid byte forces a lossy conversion of the whole tail, so the trailing
+        // C3 is replaced rather than carried — guarantees no infinite carry/loop.
+        let mut carry = Vec::new();
+        let out = decode_chunk(&mut carry, &[0x61, 0xFF, 0xC3]);
+        assert!(out.starts_with('a'));
+        assert_eq!(out.matches('\u{FFFD}').count(), 2);
         assert!(carry.is_empty());
     }
 

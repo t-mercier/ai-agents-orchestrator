@@ -126,8 +126,7 @@
   // Per-column accent: each column scopes --accent to its own colour, so accent-tinted
   // bits inside it (＋ buttons, urgent bar, focus ring, group frame, next cue) take the
   // column's colour — a clear per-column identity. Falls back to the global accent.
-  const hexRgb = (hex) => { const n = parseInt(hex.slice(1), 16); return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}` }
-  const onAccentText = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150 ? '#16171b' : '#ffffff' }
+  // (rgb triplet + legible on-accent text reuse app.js's shared hexToRgbTriplet/onAccentText.)
 
   function columnHtml(col, index, total) {
     // Render in the column's manual order (urgent is now a highlight, not auto-float —
@@ -149,7 +148,7 @@
     const del = boardState.columns.length > 1
       ? `<button class="kb-col-del" data-col-del="${escapeHtml(col.id)}" title="Delete column (cards move to the first column)">✕</button>`
       : ''
-    const colStyle = color ? ` style="--accent:${color};--accent-rgb:${hexRgb(color)};--on-accent:${onAccentText(color)}"` : ''
+    const colStyle = color ? ` style="--accent:${color};--accent-rgb:${hexToRgbTriplet(color)};--on-accent:${onAccentText(color)}"` : ''
     return `<div class="kb-col"${colStyle} data-col="${escapeHtml(col.id)}">
       <div class="kb-col-head">
         <span class="kb-col-name" data-col-rename="${escapeHtml(col.id)}" title="Click to rename"${titleStyle}>${escapeHtml(col.name)}</span>
@@ -403,6 +402,10 @@
 
     host.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return
+      // Fresh interaction: clear any stale click-suppression. Guards the edge where a
+      // drag ended off-board (no trailing board click fired to reset it) → otherwise the
+      // next legit click would be wrongly swallowed.
+      suppressClick = false
       // Group header → drag the whole group as a unit (but not its chevron/name/ungroup).
       const ghead = e.target.closest('.kb-group-head')
       if (ghead && !e.target.closest('.kb-group-chev, .kb-group-name, .kb-group-x')) {

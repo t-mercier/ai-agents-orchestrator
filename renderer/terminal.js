@@ -88,7 +88,7 @@ window.api.onPtyExit((sessionId) => {
   }
 })
 
-function ensureTerminal(sessionId, cwd, restartSlug = '') {
+function ensureTerminal(sessionId, restartSlug = '') {
   if (terminals.has(sessionId)) return terminals.get(sessionId)
 
   const container = document.getElementById('detail-terminal-pane')
@@ -148,7 +148,7 @@ function showTerminal(sessionId, cwd, restartSlug = '') {
   document.querySelectorAll('.terminal-session-div').forEach(el => {
     el.style.display = 'none'
   })
-  const entry = ensureTerminal(sessionId, cwd, restartSlug)
+  const entry = ensureTerminal(sessionId, restartSlug)
   entry.div.style.display = 'flex'
   const fitSpawn = () => {
     if (!entry.opened) {
