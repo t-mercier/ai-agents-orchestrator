@@ -232,6 +232,7 @@ html, body {
 /* Name + scope are read-only labels (they mirror a real folder) — not editable fields. */
 .settings-cat-row .cat-name-label { flex: 1; min-width: 0; font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .settings-cat-row .cat-scope-label { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); flex-shrink: 0; }
+#set-add-cat-folder { margin-top: 10px; align-self: flex-start; }
 /* Category colour as a round pastille (not a square swatch). Same for the accent
    picker — round colour dots. The accent picker needs `.modal-field .accent-picker`
    specificity to beat the generic `.modal-field input` rule (else its padding
