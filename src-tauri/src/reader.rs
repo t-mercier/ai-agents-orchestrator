@@ -553,11 +553,18 @@ pub(crate) fn session_history_info(content: &str) -> (String, Option<String>) {
     if let Some(a) = lines.iter().find(|l| l.to_uppercase().contains("ARCHIVED")) {
         return ("archived".into(), lead_date(a));
     }
-    let last = lines[lines.len() - 1];
-    if is_wrapped_up(last) {
-        ("closed".into(), lead_date(last))
+    // The NEWEST-dated entry decides the state — not the last physical line. A session
+    // worked across several days can end up with history lines out of order (a later
+    // edit inserting an earlier-dated entry); taking the last physical line then reads
+    // a stale older date, which `reopened_after_close` mistakes for a post-close reopen
+    // and wrongly flips closed→stale. Ties (same day) → the later physical line.
+    let latest = lines[(0..lines.len())
+        .max_by_key(|&i| (lead_date(lines[i]).as_deref().and_then(date_to_days), i))
+        .unwrap()]; // lines is non-empty (checked above)
+    if is_wrapped_up(latest) {
+        ("closed".into(), lead_date(latest))
     } else {
-        ("stale".into(), lead_date(last))
+        ("stale".into(), lead_date(latest))
     }
 }
 
@@ -810,6 +817,19 @@ mod tests {
         assert_eq!(status("- 2026-06-19 | session=abc | done\n- ARCHIVED 2026-06-20"), "archived");
         // no history section → stale
         assert_eq!(session_history_info("## Goal\nx\n").0, "stale");
+    }
+
+    #[test]
+    fn session_history_info_uses_newest_dated_entry_not_last_physical_line() {
+        // Out-of-order history: the close (06-20) sits ABOVE an older entry (06-18).
+        // The state + date must come from the newest-dated line, else the stale 06-18
+        // date trips reopened_after_close and the session wrongly reads as stale.
+        let content = "## Session history\n\
+            - 2026-06-20 00:03 | session=abc | Closed for the weekend\n\
+            - 2026-06-18 16:01 | session=abc | earlier CI rerun note\n";
+        let (status, date) = session_history_info(content);
+        assert_eq!(status, "closed");
+        assert_eq!(date.as_deref(), Some("2026-06-20 00:03"));
     }
 
     #[test]
