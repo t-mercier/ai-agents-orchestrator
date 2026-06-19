@@ -105,6 +105,8 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 
 Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
+📖 **New to the lifecycle?** The **[Guide](docs/GUIDE.md)** explains the four session states (Active · Stale · Closed · Archived) and Start vs Resume vs Restart — in plain terms, no jargon.
+
 ## Customization
 
 Edit everything in the app's **Settings (⚙)** — categories & colours, scan roots, terminal app, themes/looks, density, keyboard shortcuts. It all persists to `~/.config/ai-agents-orchestrator/config.json` (which the skills read too):
