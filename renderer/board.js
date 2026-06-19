@@ -64,11 +64,19 @@
       (waiting ? '<span class="kb-badge waiting">WAIT</span>' : (stale ? '<span class="kb-badge stale">stale</span>' : ''))
     // Ticket / PR as clickable service icons (open via the global .pill / data-url handler).
     const icons = [
-      (window.ticketPill ? window.ticketPill(s.ticket) : ''),
       (window.prPill ? window.prPill(s.prLink) : ''),
     ].filter(Boolean).join('')
+    // The board is the at-a-glance view, so show the ticket as a number chip (not a
+    // bare icon). Clickable when a tracker URL is configured; a plain label otherwise.
+    const tbase = (window.CSM_CONFIG && window.CSM_CONFIG.ticketBaseUrl) || ''
+    const ticketChip = (s.ticket && /[a-z0-9]/i.test(s.ticket))
+      ? (tbase
+          ? `<button class="kb-chip kb-chip-ticket ticket-chip" data-url="${escapeHtml(tbase + s.ticket)}" data-tip="${escapeHtml(s.ticket)} · open ticket">${escapeHtml(s.ticket)}</button>`
+          : `<span class="kb-chip kb-chip-ticket" title="${escapeHtml(s.ticket)}">${escapeHtml(s.ticket)}</span>`)
+      : ''
     const chips = [
       s.category ? chip(s.category, { cat: true }) : '',
+      ticketChip,
       branch ? `<span class="kb-chip">${ICON_BRANCH}${escapeHtml(branch)}</span>` : '',
     ].filter(Boolean).join('')
     const metaInner = chips + (icons ? `<span class="card-icons">${icons}</span>` : '')

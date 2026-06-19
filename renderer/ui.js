@@ -416,9 +416,11 @@ const ICON_GITHUB = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="t
 function ticketPill(ticket) {
   // Guard against junk values (e.g. a frontmatter `ticket: ""` that survived as quotes)
   if (!ticket || !/[a-z0-9]/i.test(ticket)) return ''
-  // Link only if a tracker base URL is configured (Jira, Linear, GitHub Issues, Azure DevOps…).
+  // Only show the icon when it can actually open something — i.e. a tracker base URL
+  // is configured (Jira, Linear, GitHub Issues, Azure DevOps…). Without one, a dead
+  // icon just confuses; the ticket id still shows in the detail meta row.
   const base = (window.CSM_CONFIG && window.CSM_CONFIG.ticketBaseUrl) || ''
-  if (!base) return `<span class="act pill-static" data-tip="${escapeHtml(ticket)}">${ICON_TICKET}</span>`
+  if (!base) return ''
   const url = escapeHtml(base + ticket)
   return `<button class="act pill" data-url="${url}" aria-label="${escapeHtml(ticket)}" data-tip="${escapeHtml(ticket)} · open ticket">${ICON_TICKET}</button>`
 }
@@ -841,7 +843,7 @@ function installDelegatedHandlers() {
   if (delegationInstalled) return
   delegationInstalled = true
   document.body.addEventListener('click', e => {
-    const url = e.target.closest('.pill[data-url]')
+    const url = e.target.closest('.pill[data-url], .ticket-chip[data-url]')
     if (url) { window.api.openExternal(url.dataset.url); return }
 
     const infoBtn = e.target.closest('[data-info-pop]')

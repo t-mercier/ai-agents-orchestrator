@@ -337,6 +337,12 @@ html, body {
 .kb-foot-acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .kb-card-foot .kb-flag, .kb-card-foot .kb-x, .kb-card-foot .kb-goto, .kb-card-foot .archive-btn { margin-top: 0; }
 .kb-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--text-tertiary); background: rgba(var(--tint), 0.07); border-radius: 4px; padding: 1px 6px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Ticket number chip (board). A <button> when clickable — reset native chrome to
+   match the span chips; the clickable variant gets a pointer + accent hover. */
+button.kb-chip { border: none; font-family: inherit; line-height: inherit; }
+.kb-chip-ticket { font-weight: 600; letter-spacing: 0.01em; }
+.ticket-chip { cursor: pointer; }
+.ticket-chip:hover { color: var(--accent); background: rgba(var(--accent-rgb), 0.13); }
 .kb-chip svg { width: 10px; height: 10px; flex: none; }
 .kb-chip-cat { font-weight: 700; background: rgba(var(--tint), 0.1); }
 .kb-chip-pr { color: var(--accent); background: rgba(var(--accent-rgb), 0.14); font-weight: 700; }
