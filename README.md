@@ -42,6 +42,10 @@ Terminal tabs don't scale. You need mission control.
 | ![Cards view](docs/media/cards.png) | ![Kanban board](docs/media/board.png) |
 | Full-width grid — every session at a glance. | Kanban with groups, attached notes, urgent flags, and generative column colours. |
 
+Click any session for a **detail slide-over** — goal, branch, links, and one-click Resume / Restart — without leaving the grid:
+
+![Detail slide-over over the cards grid](docs/media/cards-detail.png)
+
 Make it yours — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, density, dark **and** light themes:
 
 | Appearance settings | A colour "look" — Rose Poudré |
