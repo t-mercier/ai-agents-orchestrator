@@ -752,6 +752,19 @@ function renderAll(sessions, selectedKey, tab = 'running', resort = false) {
   // the terminal pane rendered until the user closes it (also survives a manual
   // tab switch, which nulls selectedKey).
   const termOpen = window.getTerminalVisible && window.getTerminalVisible()
+  // The remembered terminal session is only a snapshot taken when the terminal
+  // opened — re-resolve it from the freshly-fetched list every render so its
+  // status dot (busy/waiting/idle) tracks the 5s poll instead of freezing on the
+  // value it had at open time. Keyed by sessionKey, with a sessionId fallback
+  // (a `--resume`d session keeps its id but runs under a new pid).
+  if (window._terminalSession) {
+    const pool = window._lastSessions || sessions
+    const tKey = sessionKey(window._terminalSession)
+    const tSid = window._terminalSession.sessionId
+    const fresh = pool.find(s => sessionKey(s) === tKey) ||
+                  (tSid ? pool.find(s => s.sessionId === tSid) : null)
+    if (fresh) window._terminalSession = fresh
+  }
   if (!selected && termOpen && window._terminalSession) selected = window._terminalSession
   renderDetailPanel(selected, tab)
   // In cards mode the detail panel is a drawer: keep it open while a session is
@@ -794,17 +807,23 @@ function routeResume(sid, cwd) {
     if (live) warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — opening it in your terminal starts a second instance on the same session.`, open)
     else open()
   } else if (window.toggleEmbeddedTerminal) {
-    const go = () => window.toggleEmbeddedTerminal(sid, cwd, '')
+    const go = () => { toListForEmbedded(); window.toggleEmbeddedTerminal(sid, cwd, '') }
     const alreadyEmbedded = window.hasLiveTerminal && window.hasLiveTerminal(sid)
     if (!alreadyEmbedded && window.isSessionLive && window.isSessionLive(sid)) {
       warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — opening it in the embedded terminal starts a second instance on the same session.`, go)
     } else { go() }
   }
 }
+// The embedded terminal lives in the List view's detail panel — not the cramped
+// cards/board slide-over. So before opening it, leave any other view for List.
+// (External-terminal resumes never call this — they open their own window.)
+function toListForEmbedded() {
+  if (window.viewMode && window.viewMode !== 'list' && window.setViewMode) window.setViewMode('list')
+}
 function routeRestart(slug, sid, cwd) {
   const dest = window.getOpenIn ? window.getOpenIn() : 'embedded'
   if (dest === 'terminal') window.api.restoreSession(slug, sid)
-  else if (window.toggleEmbeddedTerminal) window.toggleEmbeddedTerminal(sid || slug, cwd, slug)
+  else if (window.toggleEmbeddedTerminal) { toListForEmbedded(); window.toggleEmbeddedTerminal(sid || slug, cwd, slug) }
 }
 // Pick the right verb for a session (Resume when possible, else Restart from notes)
 // and route per the destination pref. Used by Enter + hover quick-actions.
@@ -956,7 +975,8 @@ function installDelegatedHandlers() {
     const boardMenu = e.target.closest('[data-board-menu]')
     if (boardMenu && window.CSMBoard) {
       e.stopPropagation()
-      openBoardMenu(boardMenu, boardMenu.dataset.boardMenu)
+      if (document.getElementById('board-menu')) closeBoardMenu()   // re-click toggles closed
+      else openBoardMenu(boardMenu, boardMenu.dataset.boardMenu)
       return
     }
 

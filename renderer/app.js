@@ -316,7 +316,21 @@ function cycleTab(dir) {
   switchTab(tabs[(i + dir + tabs.length) % tabs.length])
 }
 
+// Re-reveal a backgrounded embedded terminal for the still-selected session — used
+// when arriving at the List view (e.g. from Board, which hides the terminal pane).
+// Idempotent: bails if a terminal is already showing or nothing live is selected.
+function restoreTerminalForSelected() {
+  if (window.getTerminalVisible && window.getTerminalVisible()) return
+  if (!selectedKey) return
+  const sel = sessions.find(s => sessionKey(s) === selectedKey)
+  const sid = sel && sel.sessionId
+  if (sid && window.hasLiveTerminal && window.hasLiveTerminal(sid) && window.openTerminalPane) {
+    window.openTerminalPane(sid, sel.cwd || '')
+  }
+}
+
 function setViewMode(mode) {
+  const prevMode = viewMode
   viewMode = mode
   window.viewMode = mode   // exposed for settings.js (refresh board after column edits)
   document.body.classList.toggle('mode-cards', mode === 'cards')
@@ -335,6 +349,9 @@ function setViewMode(mode) {
     return
   }
   renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, false)
+  // Arriving at List from another view (Board hides the terminal pane on the way
+  // out) → bring the selected session's live terminal back into view.
+  if (mode === 'list' && prevMode !== 'list') restoreTerminalForSelected()
 }
 
 // Close the cards-mode drawer
