@@ -76,9 +76,13 @@
     padding: 8px 16px; border-radius: 10px; font-weight: 600; color: #0c0d11 !important;
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
     box-shadow: 0 6px 18px -6px rgba(155, 140, 255, 0.6);
+    white-space: nowrap; align-self: center;
   }
   .nav-cta:hover { filter: brightness(1.06); }
-  @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
+  @media (max-width: 720px) {
+    .nav-links a:not(.nav-cta) { display: none; }
+    .nav-cta { padding: 7px 14px; }
+  }
 
   /* ── Hero ── */
   header { padding: 92px 0 24px; text-align: center; }
