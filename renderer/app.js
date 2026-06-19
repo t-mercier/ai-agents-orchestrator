@@ -312,6 +312,12 @@ function switchTab(tab) {
   fetchAndRender(true)  // tab switch → fresh sort
 }
 
+function cycleTab(dir) {
+  const tabs = ['running', 'closed', 'archived']
+  const i = tabs.indexOf(activeTab)
+  switchTab(tabs[(i + dir + tabs.length) % tabs.length])
+}
+
 function setViewMode(mode) {
   viewMode = mode
   window.viewMode = mode   // exposed for settings.js (refresh board after column edits)
@@ -612,6 +618,9 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { window.boardOpenFocused && window.boardOpenFocused(); e.preventDefault(); return }
     return
   }
+  // ←/→ cycle the Running/Closed/Archived tab (list + cards views — board owns ←/→).
+  if (e.key === 'ArrowLeft') { cycleTab(-1); e.preventDefault(); return }
+  if (e.key === 'ArrowRight') { cycleTab(1); e.preventDefault(); return }
   // Arrow / vim selection + Enter to launch — list view only (cards opens a drawer).
   if (viewMode === 'list') {
     if (e.key === 'ArrowDown' || e.key === 'j') { moveSelection(1); e.preventDefault(); return }

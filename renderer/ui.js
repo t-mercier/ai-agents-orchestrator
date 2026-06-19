@@ -540,7 +540,7 @@ function boardPill(s) {
   if (!key) return ''
   const placed = !!(window.CSMBoard && CSMBoard.load().placements[key])
   return `<button class="act ${placed ? 'act-primary' : ''}" data-board-menu="${escapeHtml(key)}"
-           aria-label="${placed ? 'On the board' : 'Add to board'}" data-tip="${placed ? 'On the board — click to move or remove' : 'Add to a board column'}">${svgIcon('<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>')}</button>`
+           aria-label="${placed ? 'On the board' : 'Add to board'}" data-tip="${placed ? 'On the board — click to move or remove' : 'Add to a board column'}">${svgIcon('<path d="M6 5v11"/><path d="M12 5v6"/><path d="M18 5v14"/>')}</button>`
 }
 
 // Popover menu anchored under the board button: lists the visible columns (current
