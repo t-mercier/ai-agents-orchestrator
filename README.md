@@ -1,10 +1,10 @@
 <div align="center">
 
-<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/banner.png" alt="AI Agents Orchestrator — mission control for your parallel Claude Code sessions" width="820"></a>
+<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/banner.png" alt="AI Agents Orchestrator — mission control for your AI development sessions" width="820"></a>
 
 # AI Agents Orchestrator
 
-**Mission control for your parallel Claude Code sessions — a tiny native macOS dashboard that brings order to the chaos.**
+**Mission control for your AI development sessions — a tiny native macOS dashboard that brings order to the chaos.**
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
@@ -15,11 +15,13 @@
 
 </div>
 
-> **It doesn't orchestrate your agents — it orchestrates your work with them.** Each Claude Code session is a living workspace (its own agents, a repo, weeks of history), and you've got a dozen going at once. Claude Code runs the task; this is **mission control for the sessions** — across every project, in one place. _Not another agent-spawner._
+> AI coding sessions don't last minutes anymore. They last **days, weeks, sometimes entire projects** — each accumulating context, decisions, repositories, tasks and agents. Before long, you're juggling dozens of parallel workstreams.
+>
+> **AI Agents Orchestrator gives you a unified view of every session, across every project** — so you can stay focused instead of getting lost in the chaos.
 
 ## The problem
 
-You're running a dozen Claude Code sessions in parallel — across tickets, projects, branches. Each is a buried terminal tab. Which are running? Which are **waiting for you**? Which finished an hour ago? Where is each one?
+Today each session is a buried terminal tab. Which are running? Which are **waiting for you**? Which finished an hour ago? Where did you leave each one?
 
 Terminal tabs don't scale. You need mission control.
 
