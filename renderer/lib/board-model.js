@@ -23,8 +23,10 @@
   const groupRef = (gid) => GROUP_PREFIX + gid
   const isGroupRef = (id) => typeof id === 'string' && id.startsWith(GROUP_PREFIX)
 
+  const COLOR_SCHEMES = ['spectrum', 'shades', 'analogous']
+
   function emptyState() {
-    return { columns: DEFAULT_COLUMNS.map(c => ({ ...c })), placements: {}, notes: [], urgent: [], order: {}, groups: [] }
+    return { columns: DEFAULT_COLUMNS.map(c => ({ ...c })), placements: {}, notes: [], urgent: [], order: {}, groups: [], colorSeed: '', colorScheme: 'spectrum' }
   }
 
   function normalize(obj) {
@@ -61,7 +63,11 @@
       ? s.groups.filter(g => g && g.id && g.columnId)
         .map(g => ({ id: g.id, name: String(g.name || 'Group'), columnId: g.columnId, collapsed: !!g.collapsed }))
       : []
-    return { columns, placements, notes, urgent, order, groups }
+    // Generative column colouring: one seed hex + a scheme derives per-column colours
+    // on the fly (works for any column count); a column's own .color overrides it.
+    const colorSeed = /^#[0-9a-fA-F]{6}$/.test(s.colorSeed || '') ? s.colorSeed : ''
+    const colorScheme = COLOR_SCHEMES.includes(s.colorScheme) ? s.colorScheme : 'spectrum'
+    return { columns, placements, notes, urgent, order, groups, colorSeed, colorScheme }
   }
 
   function clone(state) {
@@ -74,6 +80,8 @@
       urgent: Array.isArray(state.urgent) ? [...state.urgent] : [],
       order,
       groups: Array.isArray(state.groups) ? state.groups.map(g => ({ ...g })) : [],
+      colorSeed: state.colorSeed || '',
+      colorScheme: state.colorScheme || 'spectrum',
     }
   }
   function firstColumnId(state) { return state.columns.length ? state.columns[0].id : null }
@@ -147,6 +155,62 @@
     full.splice(i, 0, id)
     removeFromOrder(s, id)
     s.order[columnId] = full
+  }
+  // ── Generative column colour (1 seed + scheme → N hex colours, recomputed live) ──
+  function hexToHsl(hex) {
+    const n = parseInt(hex.slice(1), 16)
+    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b)
+    let h = 0, s = 0; const l = (mx + mn) / 2
+    if (mx !== mn) {
+      const d = mx - mn
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn)
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4
+      h /= 6
+    }
+    return [h * 360, s * 100, l * 100]
+  }
+  function hslToHex(h, s, l) {
+    h = ((h % 360) + 360) % 360; s /= 100; l /= 100
+    const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2
+    const seg = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(h / 60) % 6]
+    const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')
+    return `#${to(seg[0])}${to(seg[1])}${to(seg[2])}`
+  }
+  // The effective colour (hex) for a column: its own .color wins, else the scheme-derived
+  // colour for its index, or '' when there's no seed (manual mode).
+  function colorForColumn(state, col, index, total) {
+    if (col && /^#[0-9a-fA-F]{6}$/.test(col.color || '')) return col.color
+    const seed = state.colorSeed
+    if (!seed) return ''
+    const [h, sRaw, lRaw] = hexToHsl(seed)
+    const i = index || 0, n = Math.max(1, total || 1)
+    // Carry the seed's own saturation + lightness (clamped to a legible band) so each
+    // seed keeps its character — vivid seed → vivid set, muted seed → muted set.
+    const S = Math.min(72, Math.max(42, sRaw))
+    const L = Math.min(66, Math.max(52, lRaw))
+    const scheme = state.colorScheme || 'spectrum'
+    if (scheme === 'shades') {
+      const L2 = n <= 1 ? L : (L + 22) - i * (44 / (n - 1))   // light → dark, same hue
+      return hslToHex(h, S, Math.min(82, Math.max(32, L2)))
+    }
+    // Both vary hue AROUND the seed (seed-centred), bounded arc — analogous is narrow,
+    // spectrum is wider; neither sweeps the full wheel (which ignored the seed).
+    const step = n <= 1 ? 0 : Math.min(scheme === 'analogous' ? 22 : 48, (scheme === 'analogous' ? 110 : 210) / (n - 1))
+    return hslToHex(h + (i - (n - 1) / 2) * step, S, L)
+  }
+  // Drop every column's manual colour (so they fall back to the scheme-derived one).
+  function clearColumnColors(state) {
+    const s = clone(state)
+    s.columns.forEach(c => { delete c.color })
+    return s
+  }
+  // Board-level generative colour: a seed hex ('' = none/off) + a scheme.
+  function setColorScheme(state, seed, scheme) {
+    const s = clone(state)
+    s.colorSeed = /^#[0-9a-fA-F]{6}$/.test(seed || '') ? seed : ''
+    if (COLOR_SCHEMES.includes(scheme)) s.colorScheme = scheme
+    return s
   }
   function placeSession(state, sessionKey, columnId) {
     const s = clone(state)
@@ -345,6 +409,7 @@
   return {
     STORAGE_KEY, DEFAULT_COLUMNS, emptyState, normalize,
     addColumn, renameColumn, removeColumn, moveColumn, setColumnHidden, setColumnColor,
+    setColorScheme, COLOR_SCHEMES, colorForColumn, clearColumnColors,
     placeSession, unplaceSession, addNote, updateNote, removeNote, moveItem,
     toggleUrgent, isUrgent, itemsByColumn, orderedItems, orderedIds,
     createGroup, addToGroup, removeFromGroup, ungroup, renameGroup, setGroupCollapsed, groupMembers, findGroupOf, moveGroup,

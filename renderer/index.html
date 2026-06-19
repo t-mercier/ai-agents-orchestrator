@@ -180,9 +180,9 @@
                 <span>Card density</span>
                 <div class="density-layout">
                   <div class="density-choices">
-                    <button type="button" class="density-opt" data-density-choice="detailed">Detailed<small>tout + icônes</small></button>
-                    <button type="button" class="density-opt" data-density-choice="compact">Compact<small>titre + icônes</small></button>
-                    <button type="button" class="density-opt" data-density-choice="minimal">Minimal<small>titre seul</small></button>
+                    <button type="button" class="density-opt" data-density-choice="detailed">Detailed<small>everything + icons</small></button>
+                    <button type="button" class="density-opt" data-density-choice="compact">Compact<small>title + icons</small></button>
+                    <button type="button" class="density-opt" data-density-choice="minimal">Minimal<small>title only</small></button>
                   </div>
                   <div class="density-preview-col">
                     <div class="density-preview" aria-hidden="true">
@@ -263,6 +263,20 @@
 
           <!-- Board: Kanban columns — apply live (localStorage), independent of Save. -->
           <section class="settings-panel" data-settings-panel="board">
+            <div class="settings-section">
+              <div class="modal-field">
+                <span>Column colors <em>— a seed colour, auto-spread across however many columns you have</em></span>
+                <div id="set-board-seed" class="look-grid"></div>
+              </div>
+              <label class="modal-field inline-field">
+                <span>Scheme</span>
+                <div class="view-toggle scheme-toggle">
+                  <button type="button" class="view-btn" data-scheme="spectrum">Spectrum</button>
+                  <button type="button" class="view-btn" data-scheme="shades">Shades</button>
+                  <button type="button" class="view-btn" data-scheme="analogous">Analogous</button>
+                </div>
+              </label>
+            </div>
             <div class="settings-section">
               <div class="settings-section-head">
                 <span>Kanban columns</span>

@@ -211,3 +211,14 @@ test('an attached note whose parent is gone falls back to a loose note', () => {
   expect(B.orderedItems(s, col).some(i => i.kind === 'note')).toBe(true)   // now loose
   expect(B.notesFor(s, 'card')).toEqual([])
 })
+
+test('setColorScheme stores a valid seed + scheme, survives clone, rejects junk', () => {
+  let s = B.emptyState()
+  expect(s.colorScheme).toBe('spectrum')
+  s = B.setColorScheme(s, '#7E93B8', 'shades')
+  expect(s.colorSeed).toBe('#7E93B8'); expect(s.colorScheme).toBe('shades')
+  s = B.placeSession(s, 'k', s.columns[0].id)        // unrelated mutation
+  expect(s.colorSeed).toBe('#7E93B8'); expect(s.colorScheme).toBe('shades')
+  s = B.setColorScheme(s, 'not-a-hex', 'bogus')      // junk → seed cleared, scheme kept
+  expect(s.colorSeed).toBe(''); expect(s.colorScheme).toBe('shades')
+})

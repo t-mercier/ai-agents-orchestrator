@@ -120,10 +120,16 @@
         <span class="kb-group-n">${members.length}</span>
         <button class="kb-group-x" data-group-ungroup="${escapeHtml(gid)}" title="Ungroup">⊟</button>
       </div>
-      <div class="kb-group-body" data-group-drop="${escapeHtml(gid)}">${inner}${attachedNotesHtml(gid, g.columnId, 'note au groupe')}</div>
+      <div class="kb-group-body" data-group-drop="${escapeHtml(gid)}">${inner}${attachedNotesHtml(gid, g.columnId, 'note to group')}</div>
     </div>`
   }
-  function columnHtml(col) {
+  // Per-column accent: each column scopes --accent to its own colour, so accent-tinted
+  // bits inside it (＋ buttons, urgent bar, focus ring, group frame, next cue) take the
+  // column's colour — a clear per-column identity. Falls back to the global accent.
+  const hexRgb = (hex) => { const n = parseInt(hex.slice(1), 16); return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}` }
+  const onAccentText = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 150 ? '#16171b' : '#ffffff' }
+
+  function columnHtml(col, index, total) {
     // Render in the column's manual order (urgent is now a highlight, not auto-float —
     // priority is set by dragging cards up/down).
     const items = CSMBoard.orderedItems(boardState, col.id)
@@ -131,20 +137,26 @@
     const cards = count === 0
       ? `<button class="kb-empty" data-add-session="${escapeHtml(col.id)}">＋ Add a session</button>`
       : items.map(renderItem).join('')
-    // col.color is validated to #rrggbb by the model — safe to inline in style.
-    const titleStyle = /^#[0-9a-fA-F]{6}$/.test(col.color || '') ? ` style="color:${col.color}"` : ''
+    // Effective colour: the column's own .color wins, else the generative seed+scheme.
+    // Guard to a strict hex here too (belt-and-suspenders) before it's inlined into a
+    // style="" attribute — never trust it could carry a quote and break out.
+    const raw = CSMBoard.colorForColumn(boardState, col, index || 0, total || 1)
+    const color = /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : ''
+    const titleStyle = color ? ` style="color:${color}"` : ''
+    const barStyle = ` style="border-top-color:${color || 'transparent'}"`
     // Only offer delete when there's more than one column (the model has no last-column
     // guard — removing the only column would leave the board empty).
     const del = boardState.columns.length > 1
       ? `<button class="kb-col-del" data-col-del="${escapeHtml(col.id)}" title="Delete column (cards move to the first column)">✕</button>`
       : ''
-    return `<div class="kb-col" data-col="${escapeHtml(col.id)}">
+    const colStyle = color ? ` style="--accent:${color};--accent-rgb:${hexRgb(color)};--on-accent:${onAccentText(color)}"` : ''
+    return `<div class="kb-col"${colStyle} data-col="${escapeHtml(col.id)}">
       <div class="kb-col-head">
         <span class="kb-col-name" data-col-rename="${escapeHtml(col.id)}" title="Click to rename"${titleStyle}>${escapeHtml(col.name)}</span>
         <span class="kb-col-n">${count}</span>
         ${del}
       </div>
-      <div class="kb-col-body" data-col-drop="${escapeHtml(col.id)}">${cards}
+      <div class="kb-col-body" data-col-drop="${escapeHtml(col.id)}"${barStyle}>${cards}
         <div class="kb-col-foot">
           <button class="kb-add-btn" data-add-session="${escapeHtml(col.id)}">＋ session</button>
           <button class="kb-add-btn" data-add-note="${escapeHtml(col.id)}">＋ note</button>
@@ -157,7 +169,8 @@
     const host = document.getElementById('board-view')
     if (!host) return
     boardState = CSMBoard.load()
-    const cols = boardState.columns.filter(c => !c.hidden).map(c => columnHtml(c)).join('')
+    const visible = boardState.columns.filter(c => !c.hidden)
+    const cols = visible.map((c, i) => columnHtml(c, i, visible.length)).join('')
     host.innerHTML = `<div class="kb-board">${cols}<button class="kb-add-col" id="kb-add-col" title="Add a column">＋</button></div>`
     installBoardHandlers()
     applyBoardFocus()   // re-apply the keyboard focus ring after a re-render
