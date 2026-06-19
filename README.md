@@ -15,7 +15,7 @@
 
 </div>
 
-> **Claude Code runs the task. AI Agents Orchestrator runs the operation** — every session (and the agents inside it), across every project, in one place. **Not another agent-spawner** — it's the cockpit for the Claude Code sessions you're _already_ running.
+> **It doesn't orchestrate your agents — it orchestrates your work with them.** Each Claude Code session is a living workspace (its own agents, a repo, weeks of history), and you've got a dozen going at once. Claude Code runs the task; this is **mission control for the sessions** — across every project, in one place. _Not another agent-spawner._
 
 ## The problem
 
