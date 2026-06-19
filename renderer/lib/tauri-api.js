@@ -11,6 +11,8 @@
       invoke('set_config', { cfg }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     // Native folder picker for Settings; resolves to the chosen path or null (cancelled).
     pickDirectory: () => invoke('pick_directory').catch(() => null),
+    exportSettings: (json) => invoke('export_settings', { json }).then((saved) => ({ ok: true, saved })).catch((e) => ({ ok: false, error: String(e) })),
+    importSettings: () => invoke('import_settings').then((content) => ({ ok: true, content })).catch((e) => ({ ok: false, error: String(e) })),
     getSessions: () => invoke('get_sessions'),
     getHistoricalSessions: (status) => invoke('get_historical_sessions', { status }),
     openExternal: (url) => invoke('open_external', { url }),

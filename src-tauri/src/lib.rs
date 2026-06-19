@@ -695,6 +695,55 @@ fn pick_directory(app: tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Export all UI settings (a JSON object built by the renderer from its localStorage
+/// `csm.*` keys) to a user-chosen file. The app never writes settings on its own —
+/// this is the explicit, manual backup the user takes before a reinstall.
+#[tauri::command(async)]
+fn export_settings(app: tauri::AppHandle, json: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    // Refuse to write anything that isn't a JSON object (guards against junk on disk).
+    if !serde_json::from_str::<serde_json::Value>(&json).map(|v| v.is_object()).unwrap_or(false) {
+        return Err("settings payload is not a JSON object".into());
+    }
+    let path = app
+        .dialog()
+        .file()
+        .set_file_name("agents-orchestrator-settings.json")
+        .add_filter("JSON", &["json"])
+        .blocking_save_file()
+        .and_then(|p| p.into_path().ok());
+    match path {
+        Some(p) => {
+            std::fs::write(&p, json).map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+        None => Ok(false), // user cancelled
+    }
+}
+
+/// Let the user pick a previously-exported settings file; return its contents for the
+/// renderer to load back into localStorage. Validated to be a JSON object.
+#[tauri::command(async)]
+fn import_settings(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let path = app
+        .dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .blocking_pick_file()
+        .and_then(|p| p.into_path().ok());
+    match path {
+        Some(p) => {
+            let content = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+            if !serde_json::from_str::<serde_json::Value>(&content).map(|v| v.is_object()).unwrap_or(false) {
+                return Err("that file isn't a valid settings export".into());
+            }
+            Ok(Some(content))
+        }
+        None => Ok(None), // cancelled
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -723,6 +772,8 @@ pub fn run() {
             detach_session,
             set_always_on_top,
             pick_directory,
+            export_settings,
+            import_settings,
             archive_session,
             set_pr_link,
             can_reveal_terminal,

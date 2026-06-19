@@ -276,6 +276,40 @@
   $('set-cancel').addEventListener('click', () => modal.close())
   $('set-add-cat').addEventListener('click', () => addCatRow())
 
+  // ── Backup: export / import all UI settings (manual, file the user keeps) ──
+  function allCsmKeys() {
+    const out = {}
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.indexOf('csm.') === 0) out[k] = localStorage.getItem(k)
+    }
+    return out
+  }
+  if ($('set-export')) $('set-export').addEventListener('click', async () => {
+    if (!window.api || !window.api.exportSettings) return
+    const res = await window.api.exportSettings(JSON.stringify(allCsmKeys(), null, 2))
+    if (res && res.ok === false && window.confirmAction) {
+      window.confirmAction({ title: 'Export failed', body: res.error || 'unknown error', confirmLabel: 'OK' })
+    } else if (res && res.saved && window.confirmAction) {
+      window.confirmAction({ title: 'Settings exported', body: 'Your settings were saved. Import this file after a reinstall.', confirmLabel: 'OK' })
+    }
+  })
+  if ($('set-import')) $('set-import').addEventListener('click', async () => {
+    if (!window.api || !window.api.importSettings) return
+    const res = await window.api.importSettings()
+    if (!res || !res.ok) { if (res && window.confirmAction) window.confirmAction({ title: 'Import failed', body: res.error || 'unknown error', confirmLabel: 'OK' }); return }
+    if (!res.content) return   // cancelled
+    let parsed
+    try { parsed = JSON.parse(res.content) } catch { return }
+    if (!parsed || typeof parsed !== 'object') return
+    const go = window.confirmAction
+      ? await window.confirmAction({ title: 'Import settings', body: 'Replace your current settings (board, looks, shortcuts…) with the imported ones? The window reloads.', confirmLabel: 'Import' }).then(c => c === 'confirm')
+      : true
+    if (!go) return
+    Object.keys(parsed).forEach(k => { if (k.indexOf('csm.') === 0 && typeof parsed[k] === 'string') localStorage.setItem(k, parsed[k]) })
+    window.location.reload()
+  })
+
   // Appearance — apply live + persist (localStorage), independent of Save/Cancel.
   document.querySelectorAll('.theme-toggle [data-theme-choice]').forEach(btn => {
     btn.addEventListener('click', () => {
