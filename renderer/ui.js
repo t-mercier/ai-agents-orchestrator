@@ -675,11 +675,11 @@ function renderDetailPanel(s, tab = 'running') {
   // the dot colour already conveys it; busy/waiting + historical CLOSED/ARCHIVED stay).
   // The terminal toggle now lives in Actions as an icon; detach/close show in cards mode.
   // While the embedded terminal covers the info pane, the reference actions (ticket /
-  // PR / notes) ride on the title line; the name (flex:1) ellipsizes to make room.
+  // PR / notes / board) ride on the title line; the name (flex:1) ellipsizes to make room.
   const showBadge = isHistorical || (!!s.status && s.status !== 'idle')
   const termOpen = window.getTerminalVisible && window.getTerminalVisible()
   const headerActions = termOpen
-    ? [infoPill(), ticketPill(s.ticket), prControl(s), notesPill(s.notesPath)].filter(Boolean).join('')
+    ? [infoPill(), ticketPill(s.ticket), prControl(s), notesPill(s.notesPath), boardPill(s)].filter(Boolean).join('')
     : ''
   setHtml(headerEl, `
     <div class="detail-header-row">
