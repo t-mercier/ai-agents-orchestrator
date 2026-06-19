@@ -561,12 +561,24 @@ pub(crate) fn session_history_info(content: &str) -> (String, Option<String>) {
     }
 }
 
-/// A `/close` history line carries a `HH:MM → HH:MM` (or `?? → HH:MM`) time range —
-/// that's the only reliable "wrapped up" signal. `/save` writes `(in progress)` and
-/// `/start` writes a bootstrap line (`/start — …`); neither has the close arrow with
-/// a time on its left, so both stay `stale`. A `→` buried in free-text summary (e.g.
-/// "ADR 0028→0026") isn't preceded by a HH:MM, so it doesn't false-positive.
+/// Does a `## Session history` line mark a wrap-up (`/close`)?
+///
+/// `/close` stamps a summary entry tagged `… | session=<id> | …` with NO in-progress
+/// marker. `/save` writes the same shape but flagged `(in progress)` (still open), and
+/// `/start` writes a bootstrap line without `session=` — both stay `stale`. Older
+/// `/close` output used a `HH:MM → HH:MM` (or `?? → HH:MM`) time range instead of the
+/// `session=` tag; still honoured for back-compat. (A `→` buried in a free-text summary
+/// like "ADR 0028→0026" isn't preceded by HH:MM, so it doesn't false-positive.)
 fn is_wrapped_up(line: &str) -> bool {
+    // `/save` checkpoints are explicitly mid-session — never a close.
+    if line.contains("(in progress)") {
+        return false;
+    }
+    // Current `/close` format: a summary entry carrying `session=<id>`.
+    if line.contains("session=") {
+        return true;
+    }
+    // Legacy `/close` format: a leading "HH:MM → HH:MM" (or "?? → HH:MM") time range.
     let Some(pos) = line.find('→') else {
         return false;
     };
@@ -767,6 +779,37 @@ mod tests {
         assert_eq!(lead_date("- 2026-06-10 14:43 | x").as_deref(), Some("2026-06-10 14:43"));
         assert_eq!(lead_date("- 2026-06-10 | x").as_deref(), Some("2026-06-10"));
         assert_eq!(lead_date("no date here"), None);
+    }
+
+    #[test]
+    fn session_history_info_recognises_close_save_start_archive() {
+        let status = |hist: &str| {
+            let content = format!("## Goal\nx\n\n## Session history\n{hist}\n");
+            session_history_info(&content).0
+        };
+        // /close — current format: `… | session=<id> | summary`, no (in progress)
+        assert_eq!(
+            status("- 2026-06-19 21:11 | session=abc | transcript=/p.jsonl | Merged the fix"),
+            "closed"
+        );
+        // /save checkpoint — same shape but explicitly mid-session
+        assert_eq!(
+            status("- 2026-06-19 19:22 (in progress) | session=abc | transcript=/p.jsonl | Triaged"),
+            "stale"
+        );
+        // /start bootstrap — no session= marker
+        assert_eq!(status("- 2026-06-18 16:53 — session started (BUG | slug | TICKET)."), "stale");
+        // legacy /close — leading "HH:MM → HH:MM" time range
+        assert_eq!(status("- 2026-06-10 | 09:00 → 11:30 | wrapped up"), "closed");
+        // a /save AFTER a close (reopened, last line in progress) → stale
+        assert_eq!(
+            status("- 2026-06-18 | session=abc | closed it\n- 2026-06-19 (in progress) | session=abc | back at it"),
+            "stale"
+        );
+        // ARCHIVED marker wins regardless of position
+        assert_eq!(status("- 2026-06-19 | session=abc | done\n- ARCHIVED 2026-06-20"), "archived");
+        // no history section → stale
+        assert_eq!(session_history_info("## Goal\nx\n").0, "stale");
     }
 
     #[test]
