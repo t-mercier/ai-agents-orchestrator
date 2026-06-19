@@ -15,6 +15,8 @@
 
 </div>
 
+> **Claude Code runs the task. AI Agents Orchestrator runs the operation** — every session (and the agents inside it), across every project, in one place. **Not another agent-spawner** — it's the cockpit for the Claude Code sessions you're _already_ running.
+
 ## The problem
 
 You're running a dozen Claude Code sessions in parallel — across tickets, projects, branches. Each is a buried terminal tab. Which are running? Which are **waiting for you**? Which finished an hour ago? Where is each one?
@@ -49,6 +51,12 @@ Make it yours — curated colour "looks" (accent + a subtle surface ambiance), a
 …and the same dashboard in the light theme:
 
 ![Light theme](docs/media/light.png)
+
+### Resume right in the app
+
+![Embedded terminal resuming a Claude Code session in place](docs/media/terminal.png)
+
+Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pick the exact conversation back up where you left it, or pop it into its own always-on-top window.
 
 ## How it works
 

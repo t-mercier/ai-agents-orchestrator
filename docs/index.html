@@ -96,7 +96,9 @@
     background: linear-gradient(120deg, var(--accent) 10%, var(--accent-2) 55%, var(--accent-3));
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
-  .sub { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 56ch; margin: 0 auto 34px; }
+  .vs { font-size: clamp(16px, 2.1vw, 20px); color: var(--text); max-width: 62ch; margin: 0 auto 14px; line-height: 1.45; }
+  .vs strong { color: var(--accent); }
+  .sub { font-size: clamp(16px, 2.1vw, 19px); color: var(--muted); max-width: 58ch; margin: 0 auto 34px; }
   .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   .btn {
     display: inline-flex; align-items: center; gap: 9px; padding: 13px 24px;
@@ -217,7 +219,8 @@
   <div class="wrap">
     <span class="pill"><span class="dot"></span> Local-first · macOS · source-available</span>
     <h1>Mission control for your <span class="grad">parallel Claude&nbsp;Code</span> sessions</h1>
-    <p class="sub">A dozen agents running at once shouldn't mean a dozen buried terminal tabs. See every session — what's running, what's <em>waiting for you</em>, what's done — in one calm native dashboard.</p>
+    <p class="vs">Claude&nbsp;Code runs the task. <strong>AI Agents Orchestrator runs the operation</strong> — every session (and the agents inside it), across every project, in one place.</p>
+    <p class="sub"><strong>Not another agent-spawner</strong> — the cockpit for the Claude&nbsp;Code sessions you're <em>already</em> running. See which are busy, which are <em>waiting on you</em>, which are done — and jump back into any of them.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/t-mercier/ai-agents-orchestrator">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.9c-2.78.62-3.37-1.22-3.37-1.22-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
@@ -327,6 +330,22 @@
       <div class="shot reveal">
         <div class="bar"><i></i><i></i><i></i><span class="t">Board</span></div>
         <img src="media/board.png" alt="Kanban board" loading="lazy" />
+      </div>
+    </div>
+
+    <div class="feature flip">
+      <div class="copy reveal">
+        <h3>The embedded terminal</h3>
+        <p>Resume any session <strong>in place</strong> — a real terminal (xterm.js + a Rust pty) right inside the app. No window-juggling; pick the exact conversation back up where you left it.</p>
+        <ul>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> Resume, or restart-from-notes when the transcript's gone</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> Or open in your own terminal — and detach it to an always-on-top window</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> Configurable font, size &amp; colours</li>
+        </ul>
+      </div>
+      <div class="shot reveal">
+        <div class="bar"><i></i><i></i><i></i><span class="t">Embedded terminal</span></div>
+        <img src="media/terminal.png" alt="Embedded terminal resuming a Claude Code session in place" loading="lazy" />
       </div>
     </div>
   </div>
