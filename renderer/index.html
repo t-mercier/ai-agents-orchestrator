@@ -300,8 +300,12 @@
             <div class="settings-section">
               <div class="settings-section-head">
                 <span>Categories</span>
-                <button type="button" class="modal-btn" id="set-add-cat">＋ Add</button>
+                <div class="settings-section-head-actions">
+                  <button type="button" class="modal-btn" id="set-add-cat-folder" title="Register an existing folder (under a root) as a category">📁 From folder…</button>
+                  <button type="button" class="modal-btn" id="set-add-cat" title="Add a category by name (the folder is created when you /start in it)">＋ Add</button>
+                </div>
               </div>
+              <p class="modal-hint">A category maps to <code>&lt;root&gt;/&lt;NAME&gt;</code>. The app never creates folders — “From folder” registers one you already made; “＋ Add” defines the name and the folder appears when you <code>/start</code> there.</p>
               <div id="set-cat-list" class="settings-cat-list"></div>
             </div>
           </section>

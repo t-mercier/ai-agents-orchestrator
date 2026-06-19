@@ -276,6 +276,36 @@
   $('set-cancel').addEventListener('click', () => modal.close())
   $('set-add-cat').addEventListener('click', () => addCatRow())
 
+  // Add a category from an EXISTING folder (read-only-consistent: the user makes the
+  // folder, the app just registers it). The folder must sit directly under workRoot or
+  // personalRoot, since a category maps to <root>/<NAME>; we derive name=basename and
+  // scope=which root it's in. Creating folders from scratch stays a future feature.
+  $('set-add-cat-folder').addEventListener('click', async () => {
+    if (!window.api.pickDirectory) return
+    const picked = await window.api.pickDirectory()
+    if (!picked) return
+    clearError()
+    const parts = picked.replace(/\/+$/, '').split('/')
+    const base = parts.pop() || ''
+    const parent = parts.join('/')
+    const c = window.CSM_CONFIG || {}
+    const scope = parent === (c.workRoot || '\0') ? 'work'
+      : parent === (c.personalRoot || '\0') ? 'personal' : null
+    if (!scope) {
+      showError(`Pick a folder directly inside your work (${c.workRoot || '—'}) or personal (${c.personalRoot || '—'}) root.`)
+      return
+    }
+    if (!NAME_RE.test(base)) {
+      showError(`"${base}" isn't a valid category name (letters, digits, _ or -, max 20).`)
+      return
+    }
+    if ([...catList.querySelectorAll('.cat-name')].some(i => i.value.trim().toLowerCase() === base.toLowerCase())) {
+      showError(`Category "${base}" is already in the list.`)
+      return
+    }
+    addCatRow({ name: base, scope, color: '#8fd9ff' })
+  })
+
   // ── Backup: export / import all UI settings (manual, file the user keeps) ──
   function allCsmKeys() {
     const out = {}
