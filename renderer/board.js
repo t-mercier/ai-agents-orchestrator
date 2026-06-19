@@ -22,8 +22,6 @@
     return `<span class="kb-chip${opts.cat ? ' kb-chip-cat' : ''}"${color}>${escapeHtml(text)}</span>`
   }
 
-  // Git-branch glyph (replaces the 🌿 emoji — consistent with the app's SVG icons).
-  const ICON_BRANCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'
   // Remove-from-board glyph (replaces the bare ✕ — a trash icon reads as "remove").
   const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>'
   const isUrgent = (id) => Array.isArray(boardState.urgent) && boardState.urgent.includes(id)
@@ -56,7 +54,6 @@
     const waiting = s.state === 'active' && s.status === 'waiting'
     const urgent = isUrgent(key)
     const dotClass = stale ? 'stale' : status
-    const branch = s.gitBranch || s.branch
     const next = (window.firstNextStep ? window.firstNextStep(s.nextSteps) : '') || ''
     const nextTrim = next.length > 64 ? next.slice(0, 63) + '…' : next
     const badges =
@@ -77,7 +74,6 @@
     const chips = [
       s.category ? chip(s.category, { cat: true }) : '',
       ticketChip,
-      branch ? `<span class="kb-chip">${ICON_BRANCH}${escapeHtml(branch)}</span>` : '',
     ].filter(Boolean).join('')
     const metaInner = chips + (icons ? `<span class="card-icons">${icons}</span>` : '')
     const cls = ['kb-card', escapeHtml(dotClass), urgent ? 'urgent' : '', waiting ? 'waiting' : ''].filter(Boolean).join(' ')
