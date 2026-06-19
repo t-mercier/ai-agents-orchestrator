@@ -104,14 +104,30 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 | Skill | What it does |
 |---|---|
 | `/start <CAT> <ticket> <name>` | Create a session workspace + `notes.md` under the category's folder, register it, sync the repo |
-| `/close` | Wrap up the session: summarise into `notes.md` + append a history entry |
-| `/restart <slug>` | Reload a session's context from its notes into a fresh session |
+| `/close` | Wrap up the session: summarise into `notes.md` + append a history entry tagged with the session id |
+| `/restart <slug>` | Reload a session's notes **and its recorded session id** into a fresh session (history stays linked) |
 | `/archive <slug>` | Mark a session archived (drops it from the active list) |
 | `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
 
 Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
-📖 **New to the lifecycle?** The **[Guide](docs/GUIDE.md)** explains the four session states (Active · Stale · Closed · Archived) and Start vs Resume vs Restart — in plain terms, no jargon.
+### Memory that beats compaction
+
+Long sessions force the assistant to **compact** its own history — silently dropping older context until it loses the thread. This app keeps what matters in `notes.md` on disk instead: `/close` records the goal, decisions and next steps **plus the session id**; `/restart` loads all of it — and that id — into a fresh conversation, so the chain back to the original is never broken. Need the literal transcript? `claude --resume <id>` replays it verbatim.
+
+```mermaid
+flowchart LR
+    S1(["Session 1<br/>you + Claude"]) -->|/close| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
+    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>full context loaded"])
+    N -->|"claude --resume &lt;id&gt;"| R(["The exact original<br/>transcript, replayed"])
+    S2 -->|/close| N
+    classDef disk fill:#1e2230,stroke:#9b8cff,stroke-width:2px,color:#fff;
+    class N disk;
+```
+
+Everything stays linked — **notes → session id → transcript** — so nothing important lives only in a context window.
+
+📖 **New to the lifecycle?** The **[Guide](docs/GUIDE.md)** explains the four session states (Active · Stale · Closed · Archived), Start vs Resume vs Restart, and how the notes beat compaction — in plain terms, no jargon.
 
 ## Customization
 

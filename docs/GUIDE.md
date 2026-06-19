@@ -30,11 +30,39 @@ The one thing worth getting straight:
 
 - **Start** — begin a **brand-new** session (fresh folder + notes). Nothing existed before.
 - **Resume** — continue an **existing** conversation *exactly* where it stopped; Claude replays the full history. Needs that recorded history to still be around.
-- **Restart** — reopen a session from its **notes** (the summary) in a **fresh** conversation. Use it when the original history is gone, or when you want a clean slate that still knows the plan.
+- **Restart** — reopen a session from its **notes** in a **fresh** conversation. You get the full plan back *plus* the recorded **session id of the original**, so the new chat knows the whole story and the link back to the old conversation is never lost. Use it for a clean slate that still remembers everything.
 
-> Rule of thumb: **Resume** = same conversation · **Restart** = same project, fresh conversation · **Start** = new project.
+> Rule of thumb: **Resume** = same conversation · **Restart** = same project, fresh conversation, history still linked · **Start** = new project.
 
 Each can open **in the app's embedded terminal** or **in your own terminal** — your choice, with the toggle next to the button.
+
+## Why this matters: notes that beat "compaction"
+
+Long AI sessions hit a wall. To keep going, the assistant **compacts** its own history — squeezing or quietly dropping older turns. It's silent and lossy: a decision from day one, *why* you picked a branch, that one ticket link — any of it can fall out of the window, and the model loses the thread.
+
+This app sidesteps that by keeping the important stuff **on disk**, not just in the conversation:
+
+- **`/close`** writes the durable record into `notes.md` — goal, decisions, files touched, open questions, next steps — and stamps a **Session history** line tagged with that conversation's **session id**.
+- **`/restart`** reads it back into a *fresh* conversation. You get the notes **and** every past session id, so the chain from today's work back to the original conversation is never broken.
+- Need the *exact* original transcript? Because the session id is recorded, you can always `claude --resume <id>` and replay it verbatim.
+
+Nothing important gets compacted away, because the source of truth is a **file you own** — not a context window. Everything stays linked: **notes → session id → transcript.**
+
+```mermaid
+flowchart LR
+    S1(["Session 1<br/>you + Claude"]) -->|/close| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
+    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>full context loaded"])
+    N -->|"claude --resume &lt;id&gt;"| R(["The exact original<br/>transcript, replayed"])
+    S2 -->|/close| N
+    classDef disk fill:#1e2230,stroke:#9b8cff,stroke-width:2px,color:#fff;
+    class N disk;
+```
+
+| Step | Command | What it preserves | Lives where |
+|---|---|---|---|
+| **Wrap up** | `/close` | Goal, decisions, files, open questions, next steps — **+ the session id** | `notes.md`, on disk |
+| **Pick back up (fresh)** | `/restart <slug>` | All of the above, loaded into a new conversation — **+ the link to past sessions** | new session, notes re-loaded |
+| **Replay verbatim** | `claude --resume <id>` | The **entire** original transcript, turn for turn | Claude Code's own history |
 
 ## The skills
 
@@ -43,8 +71,8 @@ You run these inside Claude Code (the dashboard buttons trigger them for you). C
 | Skill | What it does |
 |---|---|
 | **`/start <CATEGORY> <ticket> <name>`** | Creates the session: a workspace + `notes.md` under the category's folder, registers it, and syncs the git repo. |
-| **`/close`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry. → *Closed* |
-| **`/restart <slug>`** | Reloads a session's notes into a fresh conversation and checks out its branch. |
+| **`/close`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry **tagged with the session id**. → *Closed* |
+| **`/restart <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |
 | **`/archive <slug>`** | Marks a session archived and drops it from the active list (the notes file is kept). → *Archived* |
 | **`/rename-category <OLD> <NEW>`** | Renames a category everywhere — moves its folder, re-tags every `notes.md`, updates the config. (The app is read-only, so renaming *there* alone would orphan sessions — this skill does the real move.) |
 
