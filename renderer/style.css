@@ -229,19 +229,9 @@ html, body {
 .path-browse { white-space: nowrap; flex-shrink: 0; }
 .settings-cat-list { display: flex; flex-direction: column; gap: 6px; }
 .settings-cat-row { display: flex; gap: 6px; align-items: center; }
-.settings-cat-row .cat-name {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--text-primary);
-  background: rgba(var(--tint), 0.07);
-  border: 0.5px solid var(--card-border);
-  border-radius: 7px;
-  padding: 7px 10px;
-  outline: none;
-}
-.settings-cat-row .cat-name:focus { border-color: var(--accent); background: rgba(var(--tint), 0.1); }
+/* Name + scope are read-only labels (they mirror a real folder) — not editable fields. */
+.settings-cat-row .cat-name-label { flex: 1; min-width: 0; font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.settings-cat-row .cat-scope-label { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); flex-shrink: 0; }
 /* Category colour as a round pastille (not a square swatch). Same for the accent
    picker — round colour dots. The accent picker needs `.modal-field .accent-picker`
    specificity to beat the generic `.modal-field input` rule (else its padding
@@ -269,17 +259,6 @@ html, body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-}
-.settings-cat-row .cat-scope {
-  font-family: var(--font);
-  font-size: 12px;
-  color: var(--text-primary);
-  background: rgba(var(--tint), 0.07);
-  border: 0.5px solid var(--card-border);
-  border-radius: 7px;
-  padding: 7px 6px;
-  outline: none;
-  flex-shrink: 0;
 }
 .checkbox-field { flex-direction: row; align-items: center; gap: 8px; }
 .checkbox-field input[type="checkbox"] { width: auto; padding: 0; }

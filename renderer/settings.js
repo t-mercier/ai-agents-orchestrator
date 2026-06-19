@@ -19,20 +19,24 @@
   function showError(msg) { errEl.textContent = msg; errEl.hidden = false }
   function clearError() { errEl.hidden = true; errEl.textContent = '' }
 
+  // Name + scope are READ-ONLY labels: they mirror a real folder on disk
+  // (<root>/<NAME>), so editing them here would drift from reality (the app never
+  // moves folders). Renaming goes through the /rename-category skill, which moves the
+  // folder + retags everything. Only the colour (a pure display preference) is editable.
   function addCatRow(cat = {}) {
+    const name = cat.name || ''
+    const scope = cat.scope === 'personal' ? 'personal' : 'work'
     const row = document.createElement('div')
     row.className = 'settings-cat-row'
+    row.dataset.name = name
+    row.dataset.scope = scope
     row.innerHTML = `
-      <input class="cat-name" type="text" maxlength="20" placeholder="NAME" spellcheck="false" autocomplete="off">
       <input class="cat-color" type="color">
-      <select class="cat-scope">
-        <option value="work">work</option>
-        <option value="personal">personal</option>
-      </select>
-      <button type="button" class="icon-btn cat-remove" title="Remove category">✕</button>`
-    row.querySelector('.cat-name').value = cat.name || ''
+      <span class="cat-name-label"></span>
+      <span class="cat-scope-label">${scope}</span>
+      <button type="button" class="icon-btn cat-remove" title="Remove from the dashboard (the folder on disk is left untouched)">✕</button>`
     row.querySelector('.cat-color').value = COLOR_RE.test(cat.color || '') ? cat.color : '#8fd9ff'
-    row.querySelector('.cat-scope').value = cat.scope === 'personal' ? 'personal' : 'work'
+    row.querySelector('.cat-name-label').textContent = name || '(unnamed)'
     row.querySelector('.cat-remove').addEventListener('click', () => row.remove())
     catList.appendChild(row)
   }
@@ -193,9 +197,9 @@
   // scanDirs/order/colorMap/home, which Rust regenerates on load.
   function collect() {
     const categories = [...catList.querySelectorAll('.settings-cat-row')].map(row => ({
-      name: row.querySelector('.cat-name').value.trim(),
+      name: row.dataset.name,
       color: row.querySelector('.cat-color').value,
-      scope: row.querySelector('.cat-scope').value,
+      scope: row.dataset.scope,
     }))
     return {
       version: 1,
@@ -274,36 +278,38 @@
     settingsSaved = false
   })
   $('set-cancel').addEventListener('click', () => modal.close())
-  $('set-add-cat').addEventListener('click', () => addCatRow())
 
-  // Add a category from an EXISTING folder (read-only-consistent: the user makes the
-  // folder, the app just registers it). The folder must sit directly under workRoot or
-  // personalRoot, since a category maps to <root>/<NAME>; we derive name=basename and
-  // scope=which root it's in. Creating folders from scratch stays a future feature.
+  // Categories are added by picking EXISTING folder(s) — the app never creates or
+  // renames folders (that stays in your hands / the /rename-category skill). Each
+  // chosen folder must sit directly under workRoot/personalRoot (a category maps to
+  // <root>/<NAME>); we derive name=basename + scope=which root. Multi-select adds
+  // several at once; anything outside a root, invalid, or already present is skipped
+  // with a summary.
   $('set-add-cat-folder').addEventListener('click', async () => {
-    if (!window.api.pickDirectory) return
-    const picked = await window.api.pickDirectory()
-    if (!picked) return
+    if (!window.api.pickDirectories) return
+    const picked = await window.api.pickDirectories()
+    if (!picked || !picked.length) return
     clearError()
-    const parts = picked.replace(/\/+$/, '').split('/')
-    const base = parts.pop() || ''
-    const parent = parts.join('/')
     const c = window.CSM_CONFIG || {}
-    const scope = parent === (c.workRoot || '\0') ? 'work'
-      : parent === (c.personalRoot || '\0') ? 'personal' : null
-    if (!scope) {
-      showError(`Pick a folder directly inside your work (${c.workRoot || '—'}) or personal (${c.personalRoot || '—'}) root.`)
-      return
+    const have = new Set([...catList.querySelectorAll('.settings-cat-row')].map(r => (r.dataset.name || '').toLowerCase()))
+    let added = 0
+    const skipped = []
+    for (const path of picked) {
+      const parts = path.replace(/\/+$/, '').split('/')
+      const base = parts.pop() || ''
+      const parent = parts.join('/')
+      const scope = parent === (c.workRoot || '\0') ? 'work'
+        : parent === (c.personalRoot || '\0') ? 'personal' : null
+      if (!scope) { skipped.push(`${base} (not under a root)`); continue }
+      if (!NAME_RE.test(base)) { skipped.push(`${base} (invalid name)`); continue }
+      if (have.has(base.toLowerCase())) { skipped.push(`${base} (already added)`); continue }
+      have.add(base.toLowerCase())
+      addCatRow({ name: base, scope, color: '#8fd9ff' })
+      added += 1
     }
-    if (!NAME_RE.test(base)) {
-      showError(`"${base}" isn't a valid category name (letters, digits, _ or -, max 20).`)
-      return
+    if (skipped.length) {
+      showError(`Added ${added}. Skipped: ${skipped.join(', ')}. Pick folders directly inside ${c.workRoot || '—'} or ${c.personalRoot || '—'}.`)
     }
-    if ([...catList.querySelectorAll('.cat-name')].some(i => i.value.trim().toLowerCase() === base.toLowerCase())) {
-      showError(`Category "${base}" is already in the list.`)
-      return
-    }
-    addCatRow({ name: base, scope, color: '#8fd9ff' })
   })
 
   // ── Backup: export / import all UI settings (manual, file the user keeps) ──

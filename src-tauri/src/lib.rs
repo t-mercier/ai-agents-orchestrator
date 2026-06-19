@@ -732,6 +732,25 @@ fn pick_directory(app: tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Multi-folder picker (Settings → add several categories at once). Same `async`
+/// requirement as `pick_directory`. Returns the chosen absolute paths (empty if
+/// cancelled).
+#[tauri::command(async)]
+fn pick_directories(app: tauri::AppHandle) -> Vec<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog()
+        .file()
+        .blocking_pick_folders()
+        .map(|paths| {
+            paths
+                .into_iter()
+                .filter_map(|p| p.into_path().ok())
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Export all UI settings (a JSON object built by the renderer from its localStorage
 /// `csm.*` keys) to a user-chosen file. The app never writes settings on its own —
 /// this is the explicit, manual backup the user takes before a reinstall.
@@ -824,6 +843,7 @@ pub fn run() {
             detach_session,
             set_always_on_top,
             pick_directory,
+            pick_directories,
             export_settings,
             import_settings,
             archive_session,

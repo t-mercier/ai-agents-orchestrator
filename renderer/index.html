@@ -300,12 +300,9 @@
             <div class="settings-section">
               <div class="settings-section-head">
                 <span>Categories</span>
-                <div class="settings-section-head-actions">
-                  <button type="button" class="modal-btn" id="set-add-cat-folder" title="Register an existing folder (under a root) as a category">📁 From folder…</button>
-                  <button type="button" class="modal-btn" id="set-add-cat" title="Add a category by name (the folder is created when you /start in it)">＋ Add</button>
-                </div>
+                <button type="button" class="modal-btn" id="set-add-cat-folder" title="Register existing folder(s) — pick one or several">📁 Add folder(s)…</button>
               </div>
-              <p class="modal-hint">A category maps to <code>&lt;root&gt;/&lt;NAME&gt;</code>. The app never creates folders — “From folder” registers one you already made; “＋ Add” defines the name and the folder appears when you <code>/start</code> there.</p>
+              <p class="modal-hint">A category mirrors a real folder at <code>&lt;root&gt;/&lt;NAME&gt;</code>. Pick existing folder(s) under your work/personal root (multi-select to add several). The app never creates or renames folders — name &amp; scope are read-only here; only the colour is editable. To rename a category (and move its folder) use the <code>/rename-category</code> skill; removing a row just drops it from the dashboard, the folder stays.</p>
               <div id="set-cat-list" class="settings-cat-list"></div>
             </div>
           </section>
