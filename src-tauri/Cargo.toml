@@ -1,10 +1,10 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Mission control for your parallel Claude Code sessions — a native macOS dashboard."
+authors = ["Timothée Mercier"]
 license = "PolyForm-Noncommercial-1.0.0"
-repository = ""
+repository = "https://github.com/t-mercier/ai-agents-orchestrator"
 edition = "2021"
 rust-version = "1.82"
 

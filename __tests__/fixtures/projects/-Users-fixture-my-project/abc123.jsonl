@@ -1,3 +1,0 @@
-{"type":"user","message":{"role":"user","content":[{"type":"text","text":"fix the compile error"}]},"uuid":"u1","timestamp":"2026-06-01T09:05:00.000Z"}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I found the issue in CI — TC8 compile error is caused by a missing import."}]},"uuid":"a1","timestamp":"2026-06-01T09:05:30.000Z","gitBranch":"feat/PROJ-1234-my-feature"}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fix applied. Running tests now."}]},"uuid":"a2","timestamp":"2026-06-01T10:00:00.000Z","gitBranch":"feat/PROJ-1234-my-feature","prLink":"https://github.com/org/repo/pull/4892"}

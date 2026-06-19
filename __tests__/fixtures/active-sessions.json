@@ -1,9 +1,0 @@
-{
-  "abc123": {
-    "notes_path": "__FIXTURES_DIR__/notes.md",
-    "category": "FEAT",
-    "ticket": "PROJ-1234",
-    "name": "my-feature",
-    "started_at": "2026-06-01 09:00"
-  }
-}

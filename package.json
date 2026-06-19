@@ -2,7 +2,6 @@
   "name": "ai-agents-orchestrator",
   "version": "1.0.0",
   "description": "Live mission control for all your parallel Claude Code sessions — a native macOS dashboard.",
-  "main": "main.js",
   "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://github.com/t-mercier/ai-agents-orchestrator",
   "repository": {
@@ -10,21 +9,12 @@
     "url": "https://github.com/t-mercier/ai-agents-orchestrator.git"
   },
   "scripts": {
-    "start": "npm run build:xterm && electron .",
-    "demo": "npm run build:xterm && node scripts/seed-demo.js && HOME=/tmp/ai-agents-orchestrator-demo electron .",
-    "demo:clean": "node scripts/seed-demo.js --clean",
     "install:skills": "bash scripts/install.sh",
     "build:xterm": "esbuild build/xterm-entry.js --bundle --format=iife --global-name=XtermBundle --outfile=renderer/xterm-bundle.js",
-    "rebuild": "electron-rebuild",
     "test": "jest",
-    "check:secrets": "bash scripts/check-no-secrets.sh",
-    "dist": "npm run build:xterm && electron-builder --config build/electron-builder.yml",
-    "dist:arm64": "npm run build:xterm && electron-builder --arm64 --config build/electron-builder.yml",
-    "dist:x64": "npm run build:xterm && electron-builder --x64 --config build/electron-builder.yml"
+    "check:secrets": "bash scripts/check-no-secrets.sh"
   },
   "devDependencies": {
-    "electron": "^35.0.0",
-    "electron-builder": "^25.1.8",
     "esbuild": "^0.28.0",
     "jest": "^29.0.0"
   },
@@ -35,10 +25,8 @@
     ]
   },
   "dependencies": {
-    "@electron/rebuild": "^3.7.2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
-    "node-pty": "^1.1.0",
     "xterm": "^5.3.0",
     "xterm-addon-canvas": "^0.5.0",
     "xterm-addon-webgl": "^0.16.0"

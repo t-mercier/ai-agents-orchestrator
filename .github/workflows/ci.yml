@@ -6,22 +6,38 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: Test & build
-    runs-on: macos-14   # arm64 runner with Xcode (node-pty needs it)
+  js:
+    name: Renderer logic + secret scan
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
       - name: No committed secrets
         run: npm run check:secrets
-      - name: Unit tests
+      - name: Unit tests (renderer/lib)
         run: npm test
       - name: Build xterm bundle
         run: npm run build:xterm
-      - name: Rebuild native node-pty (compiles against Electron)
-        run: npm run rebuild
+
+  rust:
+    name: Rust backend (clippy + tests)
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Clippy (warnings = errors)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test

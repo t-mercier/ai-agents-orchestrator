@@ -140,7 +140,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Jest (118) + Rust unit tests (33) |
+| Tests | Rust unit tests (34, `cargo test`) + Jest (56, renderer logic) |
 
 ## Roadmap
 
