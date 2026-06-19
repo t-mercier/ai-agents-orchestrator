@@ -1,0 +1,8 @@
+{
+  "sessionId": "abc123",
+  "name": "FEAT | my-feature",
+  "cwd": "/Users/fixture/my-project",
+  "pid": 12345,
+  "status": "busy",
+  "updatedAt": "2026-06-01T10:00:00.000Z"
+}

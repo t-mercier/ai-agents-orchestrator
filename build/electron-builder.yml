@@ -1,0 +1,45 @@
+# electron-builder config — macOS .dmg, code-signed + notarized.
+# Signing/notarization activate only when the CI secrets are present (see
+# .env.example); local `npm run dist` produces an unsigned .dmg for testing.
+appId: com.agentsorchestrator.app
+productName: Agents Orchestrator
+copyright: Copyright © 2026
+
+directories:
+  output: dist
+  buildResources: build
+
+# Production deps are bundled automatically; dev deps (electron, esbuild, jest,
+# electron-builder, @electron/rebuild) are excluded by electron-builder.
+files:
+  - main.js
+  - preload.js
+  - data/**/*
+  - renderer/**/*        # includes the esbuild-built xterm-bundle.js (run build:xterm first)
+  - package.json
+
+# node-pty ships a native .node binary that cannot be loaded from inside the
+# asar archive — unpack it so dlopen can find it at runtime.
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+
+mac:
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Separate per-arch DMGs (Universal + native node-pty needs lipo gymnastics;
+  # two clean downloads is the honest, reliable choice for v1.0).
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # Notarization is OFF here so local/PR builds (no Apple creds) succeed unsigned.
+  # The release workflow turns it on:  electron-builder --config.mac.notarize.teamId=$APPLE_TEAM_ID
+  # Code-signing auto-activates when CSC_LINK / CSC_KEY_PASSWORD are in the env.
+  notarize: false
+
+dmg:
+  sign: false   # the .app inside is signed; the DMG wrapper need not be

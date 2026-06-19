@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output / generated
+dist/
+out/
+build/Release/
+renderer/xterm-bundle.js
+*.dmg
+*.zip
+*.app
+
+# Logs
+*.log
+npm-debug.log*
+
+# Secrets & per-user config — NEVER commit (see ADR-002)
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.mobileprovision
+secrets.json
+*.secret
+
+# macOS
+.DS_Store
+
+# Editor / tooling
+.vscode/
+.idea/
+
+# Local scratch
+.superpowers/
+
+# Python bytecode
+__pycache__/
+*.pyc

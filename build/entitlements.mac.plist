@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened-runtime entitlements for notarization. We do NOT enable the App
+    Sandbox (no com.apple.security.app-sandbox), so file access is unrestricted
+    by default — the app reads ~/.claude and spawns a login shell (node-pty).
+
+    JIT + unsigned executable memory are REQUIRED by Electron's V8 under the
+    hardened runtime; without them the notarized app crashes on launch.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Load the unsigned native module (node-pty pty.node) bundled in the app. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!--
+    ZERO-NETWORK identity (ADR-001/008): the v1.0 core makes no network calls,
+    so network.client stays false. Revisit only behind the configurator ADR
+    boundary if a future version tests MCP connectivity in-app.
+  -->
+  <key>com.apple.security.network.client</key>
+  <false/>
+</dict>
+</plist>

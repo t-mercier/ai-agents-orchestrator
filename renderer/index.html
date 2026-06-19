@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Agents</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="xterm.css">
+  <!-- Apply saved theme + accent before first paint (no flash). Full logic in app.js. -->
+  <script>
+    try {
+      var t = localStorage.getItem('csm.theme'); if (t) document.documentElement.dataset.theme = t
+      var d = localStorage.getItem('csm.density'); if (d) document.documentElement.dataset.density = d
+      var lt = localStorage.getItem('csm.lookTint'); if (lt) document.documentElement.style.setProperty('--look-tint', lt)
+      var la = localStorage.getItem('csm.lookTintA'); if (la) document.documentElement.style.setProperty('--look-tint-a', la)
+      if (localStorage.getItem('csm.compactChrome') === '1') document.documentElement.classList.add('compact-chrome')
+      var a = localStorage.getItem('csm.accent')
+      if (a && /^#[0-9a-f]{6}$/i.test(a)) {
+        var n = parseInt(a.slice(1), 16)
+        document.documentElement.style.setProperty('--accent', a)
+        document.documentElement.style.setProperty('--accent-rgb', ((n>>16)&255) + ', ' + ((n>>8)&255) + ', ' + (n&255))
+        var lum = 0.299*((n>>16)&255) + 0.587*((n>>8)&255) + 0.114*(n&255)
+        document.documentElement.style.setProperty('--on-accent', lum > 150 ? '#16171b' : '#ffffff')
+      }
+    } catch (e) { /* ignore */ }
+  </script>
+</head>
+<body class="mode-list">
+  <div class="titlebar" data-tauri-drag-region>
+    <span class="titlebar-title" data-tauri-drag-region>Agents Orchestrator</span>
+    <div class="titlebar-actions">
+      <button class="new-session-btn" id="new-session-btn" title="Start a new session">＋ <span class="btn-label">New</span></button>
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="list" title="List view">☰ <span class="btn-label">List</span></button>
+        <button class="view-btn" data-view="cards" title="Cards view">▦ <span class="btn-label">Cards</span></button>
+        <button class="view-btn" data-view="board" title="Board view">▥ <span class="btn-label">Board</span></button>
+      </div>
+      <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg></button>
+    </div>
+  </div>
+
+  <!-- New-session backoffice: collects inputs, then launches `claude` + /start
+       in iTerm. The app writes nothing itself (ADR-001/012). -->
+  <dialog id="new-session-modal" class="modal">
+    <form method="dialog" class="modal-form" id="new-session-form">
+      <h2 class="modal-title">Start a new session</h2>
+      <p class="modal-hint">Launches <code>claude</code> in iTerm and runs <code>/start</code>. The session files are created by Claude Code, not this app.</p>
+
+      <!-- Root/scope picker — shown only when both work & personal roots are set
+           (toggled in app.js). Filters the category list to that scope's categories. -->
+      <label class="modal-field" id="ns-scope-field" hidden>
+        <span>Root</span>
+        <div class="view-toggle ns-scope-toggle">
+          <button type="button" class="view-btn active" data-scope="work" id="ns-scope-work">Work</button>
+          <button type="button" class="view-btn" data-scope="personal" id="ns-scope-personal">Personal</button>
+        </div>
+      </label>
+
+      <label class="modal-field">
+        <span>Category</span>
+        <!-- Options are populated from config at boot (populateNewSessionCategories) -->
+        <select id="ns-category" required></select>
+      </label>
+
+      <label class="modal-field">
+        <span>Title</span>
+        <input id="ns-name" type="text" placeholder="what this session is about" maxlength="120" required autocomplete="off" spellcheck="false">
+      </label>
+
+      <label class="modal-field">
+        <span>Ticket <em>(optional)</em></span>
+        <input id="ns-ticket" type="text" placeholder="PROJ-1234" autocomplete="off" spellcheck="false">
+      </label>
+
+      <!-- Optional: start the session ON an existing branch in an existing repo.
+           /start then detects the checked-out branch and syncs it. -->
+      <label class="modal-field">
+        <span>Repo <em>(optional — start from an existing checkout)</em></span>
+        <div class="path-row">
+          <input id="ns-repo" type="text" placeholder="(none — uses the category root)" autocomplete="off" spellcheck="false">
+          <button type="button" class="modal-btn path-browse" data-browse="ns-repo">Browse…</button>
+        </div>
+      </label>
+
+      <label class="modal-field">
+        <span>Branch <em>(optional — checked out in that repo)</em></span>
+        <input id="ns-branch" type="text" placeholder="feat/my-branch" autocomplete="off" spellcheck="false">
+      </label>
+
+      <!-- REVIEW only: the GitHub PR being reviewed → shows a GitHub icon to open it. -->
+      <label class="modal-field" id="ns-pr-field" hidden>
+        <span>PR to review <em>(GitHub PR URL)</em></span>
+        <input id="ns-pr" type="text" placeholder="https://github.com/owner/repo/pull/123" autocomplete="off" spellcheck="false">
+      </label>
+
+      <div id="ns-error" class="modal-error" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="ns-cancel">Cancel</button>
+        <button type="submit" class="modal-btn primary" id="ns-start">Start ↗</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings: edits the shared config (roots, categories, Obsidian, Jira). The
+       app DOES write here (~/.config/agents-orchestrator/config.json) — this is the
+       one write the dashboard makes; session files under ~/.claude stay read-only. -->
+  <dialog id="settings-modal" class="modal modal-wide">
+    <form method="dialog" class="modal-form" id="settings-form">
+      <h2 class="modal-title">Settings</h2>
+
+      <div class="settings-tabs">
+        <nav class="settings-nav">
+          <button type="button" class="settings-tab active" data-settings-tab="general">General</button>
+          <button type="button" class="settings-tab" data-settings-tab="appearance">Appearance</button>
+          <button type="button" class="settings-tab" data-settings-tab="shortcuts">Shortcuts</button>
+          <button type="button" class="settings-tab" data-settings-tab="terminal">Terminal</button>
+          <button type="button" class="settings-tab" data-settings-tab="board">Board</button>
+          <button type="button" class="settings-tab" data-settings-tab="categories">Categories</button>
+          <button type="button" class="settings-tab" data-settings-tab="integrations">Integrations</button>
+        </nav>
+
+        <div class="settings-panels">
+          <!-- General: scan roots -->
+          <section class="settings-panel active" data-settings-panel="general">
+            <p class="modal-hint">Where the dashboard scans for sessions — each category maps to <code>&lt;root&gt;/&lt;CATEGORY&gt;</code>.</p>
+            <div class="settings-section">
+              <label class="modal-field">
+                <span>Work root</span>
+                <div class="path-row">
+                  <input id="set-work-root" type="text" placeholder="~/work" autocomplete="off" spellcheck="false">
+                  <button type="button" class="modal-btn path-browse" data-browse="set-work-root">Browse…</button>
+                </div>
+              </label>
+              <label class="modal-field">
+                <span>Personal root</span>
+                <div class="path-row">
+                  <input id="set-personal-root" type="text" placeholder="~" autocomplete="off" spellcheck="false">
+                  <button type="button" class="modal-btn path-browse" data-browse="set-personal-root">Browse…</button>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <!-- Appearance: theme + palette + accent apply live (localStorage / colorMap),
+               reverted on Cancel via the live-prefs snapshot. -->
+          <section class="settings-panel" data-settings-panel="appearance">
+            <div class="settings-section">
+              <label class="modal-field inline-field">
+                <span>Theme</span>
+                <div class="view-toggle theme-toggle">
+                  <button type="button" class="view-btn" data-theme-choice="dark">Dark</button>
+                  <button type="button" class="view-btn" data-theme-choice="light">Light</button>
+                </div>
+              </label>
+              <div class="modal-field">
+                <span>Look <em>— accent + a subtle surface ambiance; or pick Custom</em></span>
+                <div id="look-grid" class="look-grid"></div>
+              </div>
+              <label class="modal-field inline-field">
+                <span>Accent color</span>
+                <input id="set-accent" type="color" class="accent-picker">
+              </label>
+              <div class="modal-field">
+                <span>Chrome <em>— icons + labels, or icons only</em></span>
+                <div class="chrome-row">
+                  <div class="view-toggle compact-toggle">
+                    <button type="button" class="view-btn" data-compact-choice="0">Labels</button>
+                    <button type="button" class="view-btn" data-compact-choice="1">Icons</button>
+                  </div>
+                  <!-- Schematic dummy: an icon + "Label". The label hides live under the
+                       global .compact-chrome class → shows what Icons mode does. -->
+                  <div class="chrome-preview" aria-hidden="true">
+                    <span class="cp-dummy"><svg class="cp-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg><span class="btn-label">Label</span></span>
+                  </div>
+                </div>
+              </div>
+              <!-- Density: choices on the left (1/3), a live sample card on the right
+                   (2/3) that inherits the global data-density and morphs on click. -->
+              <div class="modal-field">
+                <span>Card density</span>
+                <div class="density-layout">
+                  <div class="density-choices">
+                    <button type="button" class="density-opt" data-density-choice="detailed">Detailed<small>tout + icônes</small></button>
+                    <button type="button" class="density-opt" data-density-choice="compact">Compact<small>titre + icônes</small></button>
+                    <button type="button" class="density-opt" data-density-choice="minimal">Minimal<small>titre seul</small></button>
+                  </div>
+                  <div class="density-preview-col">
+                    <div class="density-preview" aria-hidden="true">
+                      <div class="session-card idle">
+                        <div class="session-card-head">
+                          <span class="status-dot idle"></span>
+                          <span class="session-card-name">refactor-auth-flow</span>
+                          <span class="session-card-cat" data-cat="FEAT">FEAT</span>
+                        </div>
+                        <div class="session-card-activity">Implemented token refresh; tests green</div>
+                        <div class="session-card-next">↪ wire up the logout redirect</div>
+                        <div class="session-card-foot">
+                          <div class="card-icons">
+                            <span class="act"><img src="icons/jira.svg" alt="Jira"></span>
+                            <span class="act"><img src="icons/github.svg" alt="PR"></span>
+                            <span class="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg></span>
+                          </div>
+                          <span class="session-card-upd">↻ 14:32</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Shortcuts: remap the single-key actions (localStorage, applies live). -->
+          <section class="settings-panel" data-settings-panel="shortcuts">
+            <p class="modal-hint">Click a key, then press the new one. Arrows · Enter · Esc · j/k stay fixed.</p>
+            <div class="settings-section">
+              <div id="set-keys" class="keys-list"></div>
+              <button type="button" class="modal-btn" id="set-keys-reset">Reset to defaults</button>
+            </div>
+          </section>
+
+          <!-- Terminal: external launcher app (config) + embedded-terminal appearance
+               (localStorage, applies live). -->
+          <section class="settings-panel" data-settings-panel="terminal">
+            <div class="settings-section">
+              <label class="modal-field inline-field">
+                <span>Terminal app</span>
+                <!-- Which terminal "Resume" / +New / Restart launch into. Blank = system
+                     default (iTerm if installed, else Terminal.app). -->
+                <select id="set-terminal">
+                  <option value="">System default</option>
+                  <option value="terminal">Terminal</option>
+                  <option value="iterm">iTerm</option>
+                </select>
+              </label>
+              <p class="modal-hint">Which app “Resume” / ＋ New / Restart open into. The settings below style the in-app embedded terminal.</p>
+            </div>
+            <div class="settings-section">
+              <label class="modal-field inline-field">
+                <span>Font</span>
+                <select id="set-term-font">
+                  <option value="fira">Fira Code</option>
+                  <option value="jetbrains">JetBrains Mono</option>
+                  <option value="sfmono">SF Mono</option>
+                  <option value="menlo">Menlo</option>
+                  <option value="monaco">Monaco</option>
+                </select>
+              </label>
+              <label class="modal-field inline-field">
+                <span>Font size</span>
+                <input id="set-term-size" type="number" min="9" max="20" step="1">
+              </label>
+              <label class="modal-field inline-field">
+                <span>Background</span>
+                <input id="set-term-bg" type="color" class="accent-picker">
+              </label>
+              <label class="modal-field inline-field">
+                <span>Text color</span>
+                <input id="set-term-fg" type="color" class="accent-picker">
+              </label>
+            </div>
+          </section>
+
+          <!-- Board: Kanban columns — apply live (localStorage), independent of Save. -->
+          <section class="settings-panel" data-settings-panel="board">
+            <div class="settings-section">
+              <div class="settings-section-head">
+                <span>Kanban columns</span>
+                <button type="button" class="modal-btn" id="set-add-col">＋ Add</button>
+              </div>
+              <div id="set-col-list" class="settings-col-list"></div>
+            </div>
+          </section>
+
+          <!-- Categories -->
+          <section class="settings-panel" data-settings-panel="categories">
+            <div class="settings-section">
+              <div class="settings-section-head">
+                <span>Categories</span>
+                <button type="button" class="modal-btn" id="set-add-cat">＋ Add</button>
+              </div>
+              <div id="set-cat-list" class="settings-cat-list"></div>
+            </div>
+          </section>
+
+          <!-- Integrations: Jira + Obsidian -->
+          <section class="settings-panel" data-settings-panel="integrations">
+            <div class="settings-section">
+              <label class="modal-field">
+                <span>Jira base URL <em>(optional)</em></span>
+                <input id="set-jira" type="text" placeholder="https://yourcompany.atlassian.net/browse/" autocomplete="off" spellcheck="false">
+              </label>
+            </div>
+            <div class="settings-section">
+              <label class="modal-field checkbox-field">
+                <input id="set-obsidian-enabled" type="checkbox">
+                <span>Enable Obsidian vault links</span>
+              </label>
+              <label class="modal-field">
+                <span>Work vault path <em>(optional)</em></span>
+                <div class="path-row">
+                  <input id="set-work-vault" type="text" placeholder="(none)" autocomplete="off" spellcheck="false">
+                  <button type="button" class="modal-btn path-browse" data-browse="set-work-vault">Browse…</button>
+                </div>
+              </label>
+              <label class="modal-field">
+                <span>Personal vault path <em>(optional)</em></span>
+                <div class="path-row">
+                  <input id="set-personal-vault" type="text" placeholder="(none)" autocomplete="off" spellcheck="false">
+                  <button type="button" class="modal-btn path-browse" data-browse="set-personal-vault">Browse…</button>
+                </div>
+              </label>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div id="set-error" class="modal-error" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="set-cancel">Cancel</button>
+        <button type="submit" class="modal-btn primary" id="set-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Generic confirm dialog (window.confirmAction) — used e.g. to warn before
+       resuming a session that's already running. -->
+  <dialog id="confirm-modal" class="modal">
+    <div class="modal-form">
+      <h2 class="modal-title" id="confirm-title">Heads up</h2>
+      <p class="modal-hint" id="confirm-body"></p>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="confirm-cancel">Cancel</button>
+        <button type="button" class="modal-btn" id="confirm-extra" hidden></button>
+        <button type="button" class="modal-btn primary" id="confirm-ok">Continue</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="layout">
+    <!-- ── List view: sidebar + detail ── -->
+    <div class="panel-left" id="panel-left">
+      <div class="panel-tabs">
+        <button class="tab-btn active" data-tab="running">Running</button>
+        <button class="tab-btn" data-tab="closed">Closed</button>
+        <button class="tab-btn" data-tab="archived">Archived</button>
+      </div>
+      <div class="search-wrap">
+        <input class="search-field" id="search-field" type="search" placeholder="Search sessions…" spellcheck="false">
+      </div>
+      <div class="cat-filter" id="cat-filter-list"></div>
+      <div class="panel-list" id="panel-list"></div>
+    </div>
+    <div class="resize-handle" id="resize-handle"></div>
+
+    <!-- ── Cards view: full-width grid ── -->
+    <div class="cards-view" id="cards-view">
+      <div class="cards-topbar">
+        <div class="panel-tabs">
+          <button class="tab-btn active" data-tab="running">Running</button>
+          <button class="tab-btn" data-tab="closed">Closed</button>
+          <button class="tab-btn" data-tab="archived">Archived</button>
+        </div>
+        <input class="search-field cards-search" id="cards-search" type="search" placeholder="Search sessions…" spellcheck="false">
+      </div>
+      <div class="cat-filter" id="cat-filter-cards"></div>
+      <div class="cards-grid" id="cards-grid"></div>
+    </div>
+
+    <!-- ── Board view: full-width kanban (global, all states) ── -->
+    <div class="board-view" id="board-view"></div>
+
+    <!-- Detail panel: inline (list mode) or sliding drawer (cards mode) -->
+    <div class="panel-detail" id="panel-detail">
+      <div id="detail-header"></div>
+      <div id="detail-info-pane"><div class="detail-empty">← Select a session</div></div>
+      <div id="detail-terminal-pane">
+        <div class="terminal-toolbar">
+          <span class="terminal-toolbar-title">Terminal</span>
+          <button class="terminal-close-btn" title="Ends the process and closes the terminal"
+                  onclick="window.closeTerminalPane()">End session ✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scrim behind the drawer (cards mode only) -->
+  <div class="scrim" id="scrim"></div>
+
+  <script src="lib/tauri-api.js"></script>
+  <script src="xterm-bundle.js"></script>
+  <script src="lib/formatters.js"></script>
+  <script src="lib/markdown.js"></script>
+  <script src="lib/categories.js"></script>
+  <script src="lib/board-model.js"></script>
+  <script src="ui.js"></script>
+  <script src="terminal.js"></script>
+  <script src="app.js"></script>
+  <script src="board.js"></script>
+  <script src="looks.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

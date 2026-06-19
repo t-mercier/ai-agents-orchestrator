@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Session</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="xterm.css">
+  <!-- Match the main window's theme + accent before first paint (no flash). -->
+  <script>
+    try {
+      var t = localStorage.getItem('csm.theme'); if (t) document.documentElement.dataset.theme = t
+      var a = localStorage.getItem('csm.accent')
+      if (a && /^#[0-9a-f]{6}$/i.test(a)) {
+        var n = parseInt(a.slice(1), 16)
+        document.documentElement.style.setProperty('--accent', a)
+        document.documentElement.style.setProperty('--accent-rgb', ((n>>16)&255) + ', ' + ((n>>8)&255) + ', ' + (n&255))
+      }
+    } catch (e) { /* ignore */ }
+  </script>
+</head>
+<body class="mode-detached">
+  <div class="titlebar" data-tauri-drag-region>
+    <span class="titlebar-title" id="win-title" data-tauri-drag-region>Session</span>
+    <button class="pin-window-btn" id="pin-window-btn" title="Keep this window on top">📌</button>
+  </div>
+  <div class="detached-detail" id="panel-detail">
+    <div id="detail-header"></div>
+    <div id="detail-info-pane"><div class="detail-empty">Loading…</div></div>
+    <div id="detail-terminal-pane">
+      <div class="terminal-toolbar">
+        <span class="terminal-toolbar-title">Terminal</span>
+        <button class="terminal-close-btn" title="Ends the process and closes the terminal"
+                onclick="window.closeTerminalPane()">End session ✕</button>
+      </div>
+    </div>
+  </div>
+  <script src="lib/tauri-api.js"></script>
+  <script src="xterm-bundle.js"></script>
+  <script src="lib/formatters.js"></script>
+  <script src="lib/markdown.js"></script>
+  <script src="lib/categories.js"></script>
+  <script src="ui.js"></script>
+  <script src="terminal.js"></script>
+  <script src="detail-window.js"></script>
+</body>
+</html>

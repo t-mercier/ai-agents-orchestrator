@@ -1,0 +1,55 @@
+name: Release
+
+# Tag a version (e.g. `git tag v1.0.0 && git push --tags`) to build, sign,
+# notarize and publish per-arch DMGs. Requires these repo secrets:
+#   CSC_LINK                   base64 of the Developer ID Application .p12
+#   CSC_KEY_PASSWORD           password for that .p12
+#   APPLE_ID                   Apple account email
+#   APPLE_APP_SPECIFIC_PASSWORD  app-specific password for notarization
+#   APPLE_TEAM_ID              10-char Apple team id
+# Without these, the build still runs but produces an UNSIGNED dmg.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # to create the GitHub Release
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Rebuild node-pty for ${{ matrix.arch }}
+        run: npx electron-rebuild --arch=${{ matrix.arch }}
+      - name: Build, sign & notarize DMG
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          npm run build:xterm
+          if [ -n "$APPLE_TEAM_ID" ]; then
+            npx electron-builder --${{ matrix.arch }} --config build/electron-builder.yml \
+              --config.mac.notarize.teamId="$APPLE_TEAM_ID"
+          else
+            echo "::warning::No Apple credentials — producing an UNSIGNED build."
+            npx electron-builder --${{ matrix.arch }} --config build/electron-builder.yml
+          fi
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          fail_on_unmatched_files: true

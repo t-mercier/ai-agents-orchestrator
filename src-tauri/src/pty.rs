@@ -1,0 +1,244 @@
+//! Embedded terminal backend (port of data/pty-manager.js).
+//! One pty per session running `claude --resume <id>`; output is streamed to the
+//! renderer via the `pty-data` event, input/resize/kill come back as commands.
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter};
+
+pub const CLAUDE_MODEL: &str = "opus[1m]";
+
+struct Session {
+    master: Box<dyn MasterPty + Send>,
+    writer: Box<dyn Write + Send>,
+    child: Box<dyn Child + Send + Sync>,
+}
+
+#[derive(Default)]
+pub struct PtyManager {
+    sessions: Mutex<HashMap<String, Session>>,
+}
+
+impl PtyManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Kill every embedded child. Called on app exit so the `claude` processes we
+    /// spawned in embedded terminals don't orphan and keep the session "running"
+    /// (with no terminal) after the app reopens — they die with the app, then show
+    /// up cleanly as `stale` in the Running tab.
+    pub fn kill_all(&self) {
+        if let Ok(mut sessions) = self.sessions.lock() {
+            for s in sessions.values_mut() {
+                let _ = s.child.kill();
+            }
+            sessions.clear();
+        }
+    }
+}
+
+/// Wrap a string in single quotes for safe interpolation into a shell command.
+pub fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Decode one pty read into a String, carrying any incomplete trailing UTF-8
+/// sequence (a multibyte char split across read() boundaries) in `carry` for the
+/// next call. The pty reader gets fixed 8192-byte chunks; `from_utf8_lossy` per
+/// chunk turns a boundary-split box-draw glyph (─ = E2 94 80) or accented char
+/// (é = C3 A9) into U+FFFD, which corrupts Claude Code's separator lines and any
+/// non-ASCII output in the embedded terminal. Genuinely invalid bytes (not a
+/// boundary split) are still replaced, so we never loop forever on garbage.
+pub fn decode_chunk(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
+    let mut bytes = std::mem::take(carry);
+    bytes.extend_from_slice(chunk);
+    match std::str::from_utf8(&bytes) {
+        Ok(s) => s.to_string(),
+        Err(e) => {
+            let valid = e.valid_up_to();
+            // SAFETY: valid_up_to() is, by definition, a valid UTF-8 boundary.
+            let mut out = unsafe { std::str::from_utf8_unchecked(&bytes[..valid]) }.to_string();
+            match e.error_len() {
+                // None = the tail is an incomplete multibyte char → carry it.
+                None => *carry = bytes[valid..].to_vec(),
+                // Some = genuinely invalid bytes mid-stream → replace, don't carry.
+                Some(_) => out.push_str(&String::from_utf8_lossy(&bytes[valid..])),
+            }
+            out
+        }
+    }
+}
+
+#[tauri::command]
+pub fn pty_spawn(
+    app: AppHandle,
+    state: tauri::State<PtyManager>,
+    session_id: String,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+    // When non-empty, restart the session via the /restart skill (rebuild from
+    // notes) instead of --resume. Used for sessions whose transcript is gone, so
+    // --resume can't find the conversation. Validated as a folder-slug.
+    restart_slug: String,
+) -> Result<(), String> {
+    let restart_slug = restart_slug.trim().to_string();
+    if !restart_slug.is_empty()
+        && !restart_slug.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+    {
+        return Err("invalid slug".into());
+    }
+    let mut sessions = state.sessions.lock().unwrap();
+    if sessions.contains_key(&session_id) {
+        return Ok(()); // already attached
+    }
+
+    // Spawn at the size the renderer already measured, so claude renders at the
+    // right width from the first line (it won't reflow earlier output on resize).
+    let size = PtySize {
+        rows: if rows == 0 { 24 } else { rows },
+        cols: if cols == 0 { 80 } else { cols },
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+    let pair = native_pty_system().openpty(size).map_err(|e| e.to_string())?;
+
+    // Resume the session in a login shell (so PATH/etc. are set, claude is found),
+    // from the session's recorded cwd (Claude Code keys --resume by directory).
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let inner = if restart_slug.is_empty() {
+        format!(
+            "cd {} && claude --resume {} --model {}",
+            shell_quote(&cwd),
+            shell_quote(&session_id),
+            shell_quote(CLAUDE_MODEL),
+        )
+    } else {
+        // /restart rebuilds from notes — no transcript needed.
+        format!(
+            "cd {} && claude --model {} {}",
+            shell_quote(&cwd),
+            shell_quote(CLAUDE_MODEL),
+            shell_quote(&format!("/restart {restart_slug}")),
+        )
+    };
+    let mut cmd = CommandBuilder::new(&shell);
+    cmd.arg("-lc");
+    cmd.arg(&inner);
+    for (k, v) in std::env::vars() {
+        // Don't leak the HOST terminal's identity into the embedded pty. Launched
+        // from iTerm (e.g. `cargo tauri dev`), the app inherits TERM_PROGRAM=iTerm.app
+        // + ITERM_*/LC_TERMINAL — which makes the resumed `claude` emit iTerm-
+        // proprietary escape sequences (the title-badge) that xterm.js can't parse,
+        // so they render as stray on-screen artifacts. Present a plain xterm instead.
+        if matches!(
+            k.as_str(),
+            "TERM_PROGRAM" | "TERM_PROGRAM_VERSION" | "TERM_SESSION_ID"
+                | "LC_TERMINAL" | "LC_TERMINAL_VERSION"
+        ) || k.starts_with("ITERM")
+        {
+            continue;
+        }
+        cmd.env(k, v);
+    }
+    // xterm.js is an xterm-256color terminal — say so explicitly (rather than
+    // inheriting whatever the host advertised).
+    cmd.env("TERM", "xterm-256color");
+    if let Some(home) = dirs::home_dir() {
+        cmd.cwd(home);
+    }
+
+    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    drop(pair.slave); // close our handle to the slave so the child owns it
+
+    // Reader thread → stream output to the renderer; emit pty-exit on EOF.
+    let app2 = app.clone();
+    let sid = session_id.clone();
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        let mut carry: Vec<u8> = Vec::new(); // incomplete trailing UTF-8 across reads
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let data = decode_chunk(&mut carry, &buf[..n]);
+                    if data.is_empty() {
+                        continue; // whole chunk was an incomplete multibyte tail
+                    }
+                    let _ = app2.emit("pty-data", serde_json::json!({ "sessionId": sid, "data": data }));
+                }
+            }
+        }
+        let _ = app2.emit("pty-exit", serde_json::json!({ "sessionId": sid }));
+    });
+
+    sessions.insert(session_id, Session { master: pair.master, writer, child });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn pty_input(state: tauri::State<PtyManager>, session_id: String, data: String) {
+    if let Some(s) = state.sessions.lock().unwrap().get_mut(&session_id) {
+        let _ = s.writer.write_all(data.as_bytes());
+        let _ = s.writer.flush();
+    }
+}
+
+#[tauri::command]
+pub fn pty_resize(state: tauri::State<PtyManager>, session_id: String, cols: u16, rows: u16) {
+    if let Some(s) = state.sessions.lock().unwrap().get(&session_id) {
+        let _ = s.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
+    }
+}
+
+#[tauri::command]
+pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
+    if let Some(mut s) = state.sessions.lock().unwrap().remove(&session_id) {
+        let _ = s.child.kill();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_chunk;
+
+    #[test]
+    fn box_draw_split_across_chunks_is_not_corrupted() {
+        // ─ (U+2500) = E2 94 80, split after the first byte across two reads.
+        let mut carry = Vec::new();
+        assert_eq!(decode_chunk(&mut carry, &[0xE2]), ""); // nothing emittable yet
+        assert_eq!(carry, vec![0xE2]); // incomplete tail carried
+        assert_eq!(decode_chunk(&mut carry, &[0x94, 0x80]), "\u{2500}");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn accented_char_split_keeps_ascii_then_completes() {
+        // "c" + start of é (C3) in one read; A9 in the next.
+        let mut carry = Vec::new();
+        assert_eq!(decode_chunk(&mut carry, &[0x63, 0xC3]), "c");
+        assert_eq!(carry, vec![0xC3]);
+        assert_eq!(decode_chunk(&mut carry, &[0xA9]), "\u{e9}"); // é
+    }
+
+    #[test]
+    fn complete_chunk_passes_through_and_carry_stays_empty() {
+        let mut carry = Vec::new();
+        assert_eq!(decode_chunk(&mut carry, "check dans".as_bytes()), "check dans");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn genuinely_invalid_bytes_are_replaced_not_carried() {
+        // 0xFF is never valid UTF-8 — must be replaced, never carried (no infinite loop).
+        let mut carry = Vec::new();
+        let out = decode_chunk(&mut carry, &[0x61, 0xFF, 0x62]);
+        assert!(carry.is_empty());
+        assert!(out.starts_with('a') && out.ends_with('b'));
+        assert!(out.contains('\u{FFFD}'));
+    }
+}

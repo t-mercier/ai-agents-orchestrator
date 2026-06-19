@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    name: Test & build
+    runs-on: macos-14   # arm64 runner with Xcode (node-pty needs it)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: No committed secrets
+        run: npm run check:secrets
+      - name: Unit tests
+        run: npm test
+      - name: Build xterm bundle
+        run: npm run build:xterm
+      - name: Rebuild native node-pty (compiles against Electron)
+        run: npm run rebuild
