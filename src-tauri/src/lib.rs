@@ -778,6 +778,7 @@ pub fn run() {
             config::set_config,
             reader::get_sessions,
             reader::get_historical_sessions,
+            reader::get_historical_sessions_all,
             open_external,
             open_path,
             open_in_terminal,

@@ -244,14 +244,12 @@ window.openBoardDetail = (key) => {
 window._boardIndex = {}
 async function buildBoardIndex() {
   try {
-    const [running, stale, closed, archived] = await Promise.all([
+    const [running, hist] = await Promise.all([
       window.api.getSessions(),
-      window.api.getHistoricalSessions('stale'),
-      window.api.getHistoricalSessions('closed'),
-      window.api.getHistoricalSessions('archived'),
+      window.api.getHistoricalAll(),   // {stale, closed, archived} in one scan
     ])
     const idx = {}
-    for (const s of [...running, ...stale, ...closed, ...archived]) idx[sessionKey(s)] = s
+    for (const s of [...running, ...hist.stale, ...hist.closed, ...hist.archived]) idx[sessionKey(s)] = s
     window._boardIndex = idx
   } catch (err) { console.error('board index fetch failed:', err) }
 }
@@ -676,16 +674,14 @@ document.addEventListener('mouseup', () => {
 // via the poll; closed/archived counts refresh on visit (they change slowly).
 async function seedTabCounts() {
   try {
-    const [active, stale, closed, archived] = await Promise.all([
+    const [active, hist] = await Promise.all([
       window.api.getSessions(),
-      window.api.getHistoricalSessions('stale'),
-      window.api.getHistoricalSessions('closed'),
-      window.api.getHistoricalSessions('archived'),
+      window.api.getHistoricalAll(),   // {stale, closed, archived} in one scan
     ])
     window._tabCounts = {
-      running: active.length + stale.length,
-      closed: closed.length,
-      archived: archived.length,
+      running: active.length + hist.stale.length,
+      closed: hist.closed.length,
+      archived: hist.archived.length,
     }
     window._waitingCount = active.filter(s => s.status === 'waiting').length
     if (window.updateTabBadges) window.updateTabBadges()

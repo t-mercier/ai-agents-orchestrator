@@ -587,8 +587,11 @@ fn fv(fm: &HashMap<String, String>, key: &str) -> Value {
     fm.get(key).map(|s| Value::String(s.clone())).unwrap_or(Value::Null)
 }
 
-#[tauri::command(async)]
-pub fn get_historical_sessions(status: String) -> Vec<Value> {
+/// One pass over every category dir → all historical (non-running) sessions, each
+/// tagged with its `historyStatus` bucket. Callers filter (one status) or partition
+/// (all three) — doing the scan ONCE is the win: boot's badge-seed and every board
+/// poll need all three buckets at once (previously 3 separate full scans each time).
+fn scan_historical() -> Vec<Value> {
     let cfg = crate::config::load();
     let scan_dirs = cfg.get("scanDirs").and_then(Value::as_array).cloned().unwrap_or_default();
 
@@ -633,12 +636,9 @@ pub fn get_historical_sessions(status: String) -> Vec<Value> {
                     }
                 }
             }
-            // One bucket per lifecycle state: closed | stale | archived. Stale is
-            // requested by the Running tab (active ∪ stale); Closed is now only
-            // genuinely-wrapped-up sessions.
-            if hist_status != status {
-                continue;
-            }
+            // Lifecycle bucket (closed | stale | archived) is carried on each session
+            // as `historyStatus`; the caller filters/partitions. Exclude live sessions
+            // (the Running tab owns them) regardless of bucket.
             if let Some(sid) = fm.get("session_id") {
                 if running_ids.contains(sid) {
                     continue;
@@ -710,9 +710,65 @@ pub fn get_historical_sessions(status: String) -> Vec<Value> {
     out
 }
 
+/// Sessions in a single lifecycle bucket (stale | closed | archived). One scan,
+/// filtered — used when a single tab is visited.
+#[tauri::command(async)]
+pub fn get_historical_sessions(status: String) -> Vec<Value> {
+    scan_historical()
+        .into_iter()
+        .filter(|s| s.get("historyStatus").and_then(Value::as_str) == Some(status.as_str()))
+        .collect()
+}
+
+/// All three buckets from ONE scan: `{ stale, closed, archived }`. Used by the boot
+/// badge-seed and the board index, which both need every bucket at once — replaces
+/// three separate full directory scans with one.
+#[tauri::command(async)]
+pub fn get_historical_sessions_all() -> Value {
+    bucket_by_status(scan_historical())
+}
+
+/// Partition tagged historical sessions into `{ stale, closed, archived }`. Pure (no
+/// I/O) → unit-tested. `stale` is the default bucket (open work, terminal gone).
+fn bucket_by_status(all: Vec<Value>) -> Value {
+    let (mut stale, mut closed, mut archived) = (Vec::new(), Vec::new(), Vec::new());
+    for s in all {
+        match s.get("historyStatus").and_then(Value::as_str) {
+            Some("closed") => closed.push(s),
+            Some("archived") => archived.push(s),
+            _ => stale.push(s),
+        }
+    }
+    json!({ "stale": stale, "closed": closed, "archived": archived })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{date_to_days, extract_pr_urls, pick_pr_url, session_history_info};
+    use super::{
+        bucket_by_status, date_to_days, extract_pr_urls, pick_pr_url, session_history_info,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn bucket_by_status_partitions_and_defaults_unknown_to_stale() {
+        let all = vec![
+            json!({ "name": "a", "historyStatus": "closed" }),
+            json!({ "name": "b", "historyStatus": "archived" }),
+            json!({ "name": "c", "historyStatus": "stale" }),
+            json!({ "name": "d", "historyStatus": "closed" }),
+            json!({ "name": "e" }), // no status → defaults to stale
+        ];
+        let out = bucket_by_status(all);
+        assert_eq!(out["closed"].as_array().unwrap().len(), 2);
+        assert_eq!(out["archived"].as_array().unwrap().len(), 1);
+        assert_eq!(out["stale"].as_array().unwrap().len(), 2); // c + the untagged e
+        // every input lands in exactly one bucket (no loss, no dupes)
+        let total = ["stale", "closed", "archived"]
+            .iter()
+            .map(|k| out[*k].as_array().unwrap().len())
+            .sum::<usize>();
+        assert_eq!(total, 5);
+    }
 
     #[test]
     fn date_to_days_is_monotonic_and_parses() {

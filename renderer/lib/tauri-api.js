@@ -15,6 +15,9 @@
     importSettings: () => invoke('import_settings').then((content) => ({ ok: true, content })).catch((e) => ({ ok: false, error: String(e) })),
     getSessions: () => invoke('get_sessions'),
     getHistoricalSessions: (status) => invoke('get_historical_sessions', { status }),
+    // All three lifecycle buckets ({stale, closed, archived}) from ONE backend scan —
+    // for callers that need every bucket at once (badge seed, board index).
+    getHistoricalAll: () => invoke('get_historical_sessions_all'),
     openExternal: (url) => invoke('open_external', { url }),
     openPath: (p) => invoke('open_path', { path: p }),
     openInTerminal: (cwd, sessionId) => invoke('open_in_terminal', { cwd: cwd || '', sessionId }),
