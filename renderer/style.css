@@ -357,7 +357,7 @@ html, body {
 /* Re-entry cue on board cards (where was I) — accent, 1 line. */
 .kb-next { font-size: 11px; color: var(--accent); opacity: 0.85; margin-top: 6px; padding-left: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Status / urgent badges on the card title line. */
-.kb-badge { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.04em; padding: 1px 5px; border-radius: 4px; align-self: center; }
+.kb-badge { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; align-self: center; line-height: 1.5; }
 .kb-badge.urgent { color: var(--on-accent); background: var(--accent); }
 .kb-badge.waiting { color: #1a1416; background: var(--status-waiting); }
 .kb-badge.stale { color: var(--text-secondary); background: rgba(var(--tint), 0.1); font-weight: 700; }

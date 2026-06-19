@@ -76,7 +76,6 @@
     // Title rides the top row on its own (full width, up to 2 lines) — the status
     // badges + action icons sit on a foot row so they never crowd the name.
     const footActs = urgentBtn(key) +
-      (window.archiveBtn ? window.archiveBtn(s) : '') +
       `<button class="kb-goto" data-board-goto="${escapeHtml(key)}" title="Show in list">↗</button>` +
       `<button class="kb-x" data-board-remove-session="${escapeHtml(key)}" title="Remove from board">${ICON_TRASH}</button>`
     return `<div class="${cls}" data-kind="session" data-id="${escapeHtml(key)}">
