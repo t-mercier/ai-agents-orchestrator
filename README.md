@@ -140,7 +140,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Jest (118) + Rust unit tests (27) |
+| Tests | Jest (118) + Rust unit tests (33) |
 
 ## Roadmap
 
@@ -150,6 +150,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 - [x] Export / import settings
 - [x] Tracker-agnostic ticket links (Jira, Linear, GitHub Issues, Azure DevOps)
 - [ ] **Beyond Claude Code** — GitHub Copilot, and other agent CLIs next (today it reads Claude Code's session state)
+- [ ] Standalone terminal tab — use the in-app terminal for ad-hoc commands, not just resuming a session
 - [ ] Signed + notarized `.dmg` releases
 - [ ] Homebrew cask · auto-update
 - [ ] Optional Obsidian integration (auto-distil notes)
