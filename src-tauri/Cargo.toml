@@ -27,3 +27,4 @@ dirs = "5"                     # cross-platform home dir
 libc = "0.2"                   # kill(pid, 0) — "is this process still alive?"
 portable-pty = "0.8"           # embedded terminal: spawn a pty per session
 tauri-plugin-dialog = "2.7.1"
+trash = "5"                    # move a deleted session folder to the OS Trash (recoverable)

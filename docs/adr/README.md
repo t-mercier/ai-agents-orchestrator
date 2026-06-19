@@ -16,5 +16,10 @@ _Generated from the adversarial expert-panel synthesis (6 personas, 3 rounds). E
 | [ADR-009](./ADR-009-v1-0-scope-defer-onboarding-settings-pages-mcp-edi.md) | v1.0 scope: defer onboarding, settings pages, MCP editor to v1.1; ship session viewer + terminal | APPROVED |
 | [ADR-010](./ADR-010-terminal-lifecycle-cache-xterm-instances-per-sessi.md) | Terminal lifecycle: cache xterm instances per sessionId, dispose on PTY death or app quit | APPROVED |
 | [ADR-011](./ADR-011-incremental-migration-plan-4-phases-pty-cleanup-te.md) | Incremental migration plan: 4 phases (PTY cleanup, tests, refactor, packaging) with buildable + green-test gates | APPROVED |
+| [ADR-012](./ADR-012-new-session-via-launcher-not-writer.md) | New session via launcher (open `claude` + `/start`), not an in-app writer | APPROVED |
+| [ADR-013](./ADR-013-archive-from-dashboard-bounded-source-of-truth-write.md) | Archive from the dashboard: one bounded source-of-truth write | APPROVED |
+| [ADR-014](./ADR-014-delete-archived-session-to-os-trash.md) | Delete an archived session by moving its folder to the OS Trash (recoverable, guarded) | APPROVED |
+
+> Note: ADR-001–011 predate the Electron→Tauri migration; they capture the original design + the migration plan (ADR-011). The current architecture is Tauri — see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the synthesized target architecture and invariants.

@@ -150,6 +150,16 @@ function archiveBtn(s) {
            title="Archive this session" aria-label="Archive this session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>`
 }
 
+// Archived sessions get a Trash button — moves the whole session folder to the macOS
+// Trash (recoverable from Finder), to declutter the disk. ONLY archived: running/closed
+// work is never deletable from the app (see delete_session's archived guard in Rust).
+function deleteBtn(s) {
+  if (s.historyStatus !== 'archived' || !s.notesPath) return ''
+  const id = s.sessionId || slugOf(s) || ''
+  return `<button class="delete-btn" data-delete-notes="${escapeHtml(s.notesPath)}" data-delete-name="${escapeHtml(s.name || '')}" data-delete-id="${escapeHtml(id)}"
+           title="Delete — move to the Trash" aria-label="Delete this session (move to Trash)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>`
+}
+
 // First "Next steps" line — the re-entry cue ("where was I"). Strips list bullets.
 function firstNextStep(nextSteps) {
   if (!nextSteps) return ''
@@ -192,6 +202,7 @@ function renderListCard(s, selectedKey, changed) {
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
         ${archiveBtn(s)}
+        ${deleteBtn(s)}
         ${pinBtn(s)}
       </div>
       ${preview ? `<div class="list-card-preview">${preview}</div>` : ''}
@@ -319,6 +330,7 @@ function renderSessionCard(s, selectedKey, changed) {
         ${badge}
         <span class="session-card-cat" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
         ${archiveBtn(s)}
+        ${deleteBtn(s)}
         ${pinBtn(s)}
       </div>
       <div class="session-card-activity">${preview || '—'}</div>
@@ -907,6 +919,32 @@ function installDelegatedHandlers() {
               if (window.refreshSessions) window.refreshSessions()
             } else if (window.confirmAction) {
               window.confirmAction({ title: '⚠️ Archive failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+            }
+          })
+        })
+      }
+      return
+    }
+
+    // Delete (archived only) — confirm, then move the session folder to the macOS Trash.
+    const del = e.target.closest('.delete-btn[data-delete-notes]')
+    if (del) {
+      e.stopPropagation()
+      const notes = del.dataset.deleteNotes
+      const name = del.dataset.deleteName || 'this session'
+      const id = del.dataset.deleteId || ''
+      if (window.confirmAction) {
+        window.confirmAction({
+          title: 'Move to Trash',
+          body: `Move "${name}"${id ? ` (${id})` : ''} to the macOS Trash? This removes its session folder from disk — you can still restore it from the Finder.`,
+          confirmLabel: 'Move to Trash',
+        }).then(choice => {
+          if (choice !== 'confirm') return
+          window.api.deleteSession(notes).then(res => {
+            if (res && res.ok) {
+              if (window.refreshSessions) window.refreshSessions()
+            } else if (window.confirmAction) {
+              window.confirmAction({ title: '⚠️ Delete failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
             }
           })
         })

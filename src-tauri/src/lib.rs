@@ -666,6 +666,43 @@ fn archive_session(notes_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Permanently remove an ARCHIVED session by moving its session folder to the OS Trash
+/// (recoverable from the Finder) — the disk-declutter action (ADR-014). Guards: the path
+/// must resolve to a real notes.md confined under a configured root (notes_md_under_root),
+/// AND the session must classify as archived — running/closed work is never deletable here.
+#[tauri::command(async)]
+fn delete_session(notes_path: String) -> Result<(), String> {
+    let abs = notes_md_under_root(&notes_path)?;
+    let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
+    if reader::session_history_info(&content).0 != "archived" {
+        return Err("only archived sessions can be deleted".into());
+    }
+    // Session folder = the notes.md's parent; notes_md_under_root already proved it's
+    // confined under a root, and the parent is the slug dir one level below that.
+    let dir = abs.parent().filter(|p| p.is_dir()).ok_or("session folder not found")?;
+    // Move to the OS Trash (recoverable) rather than an irreversible hard delete.
+    trash::delete(dir).map_err(|e| e.to_string())?;
+
+    // Defensive: drop any active-sessions.json entry pointing at this notes.md.
+    let active = config::home().join(".claude").join("active-sessions.json");
+    if let Ok(s) = std::fs::read_to_string(&active) {
+        if let Ok(serde_json::Value::Object(mut map)) = serde_json::from_str(&s) {
+            let canon = abs.to_string_lossy();
+            let before = map.len();
+            map.retain(|_, v| {
+                let np = v.get("notes_path").and_then(serde_json::Value::as_str);
+                np != Some(notes_path.as_str()) && np != Some(canon.as_ref())
+            });
+            if map.len() != before {
+                let body = serde_json::to_string_pretty(&serde_json::Value::Object(map))
+                    .map_err(|e| e.to_string())?;
+                atomic_write(&active, &body)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Set / update / clear the reviewed-PR link on a session (ADR-013 family — the app's
 /// 2nd bounded source-of-truth write). Validates a GitHub PR URL (empty = clear),
 /// then rewrites the `pr_link:` frontmatter line atomically, confined under a root.
@@ -790,6 +827,7 @@ pub fn run() {
             export_settings,
             import_settings,
             archive_session,
+            delete_session,
             set_pr_link,
             can_reveal_terminal,
             reveal_terminal,

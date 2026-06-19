@@ -541,7 +541,7 @@ fn lead_date(line: &str) -> Option<String> {
 /// - `stale`: open work whose terminal is gone — last entry still `(in progress)`, or
 ///   the section is empty/absent (never saved/closed). These belong in the Running
 ///   tab, not Closed.
-fn session_history_info(content: &str) -> (String, Option<String>) {
+pub(crate) fn session_history_info(content: &str) -> (String, Option<String>) {
     let history = match extract_section(content, "Session history") {
         Some(h) => h,
         None => return ("stale".into(), None),

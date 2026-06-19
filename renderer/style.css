@@ -1066,6 +1066,16 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .list-card:hover .archive-btn,
 .session-card:hover .archive-btn { opacity: 0.5; }
 .archive-btn:hover { opacity: 1 !important; color: var(--text-primary); }
+/* Trash button (archived sessions only) — same affordance as archive, red on hover (destructive). */
+.delete-btn {
+  display: inline-flex; align-items: center; background: none; border: none;
+  color: var(--text-secondary); cursor: pointer; padding: 0 2px; opacity: 0;
+  flex-shrink: 0; -webkit-app-region: no-drag; transition: opacity 0.1s, color 0.1s;
+}
+.delete-btn svg { width: 15px; height: 15px; display: block; }
+.list-card:hover .delete-btn,
+.session-card:hover .delete-btn { opacity: 0.5; }
+.delete-btn:hover { opacity: 1 !important; color: #ff6b6b; }
 .category-name[data-cat="PINNED"] { color: var(--text-secondary); }
 
 /* Status dot */

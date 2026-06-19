@@ -56,6 +56,12 @@
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
+    // ── Delete an archived session: move its folder to the OS Trash (recoverable) ──
+    deleteSession: (notesPath) =>
+      invoke('delete_session', { notesPath: notesPath || '' })
+        .then(() => ({ ok: true }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+
     // ── Reopen a closed/archived session via /restart (src-tauri/src/lib.rs) ──
     restoreSession: (slug, sessionId) =>
       invoke('restore_session', { slug: slug || '', sessionId: sessionId || '' })
