@@ -114,7 +114,15 @@
   .shot .bar i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
   .shot .bar i:nth-child(1) { background: #ff5f57; } .shot .bar i:nth-child(2) { background: #febc2e; } .shot .bar i:nth-child(3) { background: #28c840; }
   .shot .bar .t { margin-left: 12px; font-size: 12px; color: var(--faint); }
-  .shot img { display: block; width: 100%; height: auto; }
+  .shot img { display: block; width: 100%; height: auto; cursor: zoom-in; }
+
+  /* ── Lightbox (click a screenshot to enlarge) ── */
+  .lightbox { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 4vmin; background: rgba(8, 9, 12, 0.86); backdrop-filter: blur(8px); cursor: zoom-out; opacity: 0; transition: opacity 0.18s ease; }
+  .lightbox.open { display: flex; opacity: 1; }
+  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 12px; border: 1px solid var(--line-2); box-shadow: var(--shadow); }
+  .lightbox .x { position: absolute; top: 20px; right: 24px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-2); background: rgba(255,255,255,0.06); color: var(--text); font-size: 20px; line-height: 1; cursor: pointer; }
+  .lightbox .x:hover { background: rgba(255,255,255,0.12); }
+  @media (prefers-reduced-motion: reduce) { .lightbox { transition: none; } }
 
   .hero-shot { max-width: 1000px; margin: 56px auto 0; position: relative; }
   .hero-shot::after { content: ''; position: absolute; inset: -1px; border-radius: 15px; pointer-events: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
@@ -423,12 +431,27 @@
   </div>
 </footer>
 
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot">
+  <button class="x" aria-label="Close">&times;</button>
+  <img alt="" />
+</div>
+
 <script>
   // Subtle scroll-reveal — respects prefers-reduced-motion via CSS.
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
   }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
   document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+  // Lightbox: click any framed screenshot to enlarge; click / Esc to close.
+  const lb = document.getElementById('lightbox');
+  const lbImg = lb.querySelector('img');
+  const closeLb = () => { lb.classList.remove('open'); lbImg.src = ''; };
+  document.querySelectorAll('.shot img').forEach((img) => {
+    img.addEventListener('click', () => { lbImg.src = img.currentSrc || img.src; lbImg.alt = img.alt || ''; lb.classList.add('open'); });
+  });
+  lb.addEventListener('click', closeLb);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLb(); });
 </script>
 </body>
 </html>
