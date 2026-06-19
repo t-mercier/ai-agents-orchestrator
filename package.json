@@ -1,17 +1,17 @@
 {
-  "name": "agents-orchestrator",
+  "name": "ai-agents-orchestrator",
   "version": "1.0.0",
   "description": "Live mission control for all your parallel Claude Code sessions — a native macOS dashboard.",
   "main": "main.js",
   "license": "MIT",
-  "homepage": "https://github.com/t-mercier/agents-orchestrator",
+  "homepage": "https://github.com/t-mercier/ai-agents-orchestrator",
   "repository": {
     "type": "git",
-    "url": "https://github.com/t-mercier/agents-orchestrator.git"
+    "url": "https://github.com/t-mercier/ai-agents-orchestrator.git"
   },
   "scripts": {
     "start": "npm run build:xterm && electron .",
-    "demo": "npm run build:xterm && node scripts/seed-demo.js && HOME=/tmp/agents-orchestrator-demo electron .",
+    "demo": "npm run build:xterm && node scripts/seed-demo.js && HOME=/tmp/ai-agents-orchestrator-demo electron .",
     "demo:clean": "node scripts/seed-demo.js --clean",
     "install:skills": "bash scripts/install.sh",
     "build:xterm": "esbuild build/xterm-entry.js --bundle --format=iife --global-name=XtermBundle --outfile=renderer/xterm-bundle.js",

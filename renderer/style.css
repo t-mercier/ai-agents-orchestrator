@@ -150,6 +150,8 @@ html, body {
 .modal-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
 .modal-field > span { color: var(--text-secondary); font-weight: 600; }
 .modal-field em { color: var(--text-tertiary); font-style: normal; font-weight: 400; }
+.modal-field .field-hint { color: var(--text-tertiary); font-weight: 400; line-height: 1.5; margin-top: 2px; }
+.modal-field .field-hint code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; color: var(--text-secondary); background: rgba(var(--tint), 0.08); padding: 1px 4px; border-radius: 4px; }
 .modal-field select,
 .modal-field input {
   font-family: var(--font);
@@ -1397,9 +1399,11 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 /* Open actions (Option A): destination toggle + Resume/Restart verbs. */
-.open-toggle { display: inline-flex; background: rgba(var(--tint), 0.08); border-radius: 8px; padding: 2px; gap: 2px; }
-.open-dest { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; color: var(--text-secondary); font-family: var(--font); font-size: 11px; font-weight: 600; padding: 5px 9px; border-radius: 6px; cursor: pointer; }
-.open-dest svg { width: 13px; height: 13px; }
+/* Destination toggle sits in the Actions row beside the Resume/Restart verbs, so it
+   matches their height (32px), border & type — a segmented control in the same family. */
+.open-toggle { display: inline-flex; align-items: center; box-sizing: border-box; height: 32px; background: rgba(var(--tint), 0.08); border: 0.5px solid var(--card-border); border-radius: 9px; padding: 3px; gap: 2px; }
+.open-dest { display: inline-flex; align-items: center; gap: 5px; height: 26px; border: none; background: none; color: var(--text-secondary); font-family: var(--font); font-size: 12px; font-weight: 600; padding: 0 11px; border-radius: 6px; cursor: pointer; }
+.open-dest svg { width: 14px; height: 14px; }
 .open-dest:hover { color: var(--text-primary); }
 .open-dest.active { background: rgba(var(--tint), 0.16); color: var(--text-primary); }
 .act-verb { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border-radius: 9px; border: 0.5px solid var(--card-border); background: rgba(var(--tint), 0.05); color: var(--text-primary); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.12s, border-color 0.12s; }

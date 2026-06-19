@@ -390,20 +390,25 @@ function embeddedTerminalAction(s) {
   return ''
 }
 
+// Tracker-neutral tag glyph (currentColor → adapts to theme). Works for any
+// issue tracker — the link is just <ticketBaseUrl> + <ticket>.
+const ICON_TICKET = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.414 2.414 0 0 0 3.414 0l6.586-6.586a2.414 2.414 0 0 0 0-3.414z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>`
+// GitHub mark as currentColor (not a fixed-white asset) → legible on both light & dark themes.
+const ICON_GITHUB = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>`
+
 function ticketPill(ticket) {
   // Guard against junk values (e.g. a frontmatter `ticket: ""` that survived as quotes)
   if (!ticket || !/[a-z0-9]/i.test(ticket)) return ''
-  // Jira logo as the ticket glyph; link only if a tracker base URL is configured.
-  const logo = `<img src="icons/jira.svg" alt="Jira">`
-  const base = (window.CSM_CONFIG && window.CSM_CONFIG.jiraBaseUrl) || ''
-  if (!base) return `<span class="act pill-static" data-tip="${escapeHtml(ticket)}">${logo}</span>`
+  // Link only if a tracker base URL is configured (Jira, Linear, GitHub Issues, Azure DevOps…).
+  const base = (window.CSM_CONFIG && window.CSM_CONFIG.ticketBaseUrl) || ''
+  if (!base) return `<span class="act pill-static" data-tip="${escapeHtml(ticket)}">${ICON_TICKET}</span>`
   const url = escapeHtml(base + ticket)
-  return `<button class="act pill" data-url="${url}" aria-label="${escapeHtml(ticket)}" data-tip="${escapeHtml(ticket)} · open in Jira">${logo}</button>`
+  return `<button class="act pill" data-url="${url}" aria-label="${escapeHtml(ticket)}" data-tip="${escapeHtml(ticket)} · open ticket">${ICON_TICKET}</button>`
 }
 
 function prPill(prLink) {
   if (!prLink) return ''
-  return `<button class="act pill" data-url="${escapeHtml(prLink)}" aria-label="Pull request" data-tip="Open PR on GitHub"><img src="icons/github.svg" alt="GitHub"></button>`
+  return `<button class="act pill" data-url="${escapeHtml(prLink)}" aria-label="Pull request" data-tip="Open PR on GitHub">${ICON_GITHUB}</button>`
 }
 
 // The PR control. Non-REVIEW: just the GitHub link if one exists. REVIEW (with a
@@ -418,7 +423,7 @@ function prControl(s) {
       `<button class="act" data-pr-edit="${notes}" aria-label="Edit PR link" data-tip="Edit PR link">${editIcon}</button>`
   }
   // No link yet → a dimmed GitHub icon that opens the editor to attach one.
-  return `<button class="act pr-add" data-pr-edit="${notes}" aria-label="Add PR link" data-tip="Add PR to review"><img src="icons/github.svg" alt="GitHub"></button>`
+  return `<button class="act pr-add" data-pr-edit="${notes}" aria-label="Add PR link" data-tip="Add PR to review">${ICON_GITHUB}</button>`
 }
 
 // A session can only be resumed if it has a real session id (UUID-ish, no spaces).

@@ -14,7 +14,7 @@ argument-hint: "<CATEGORY> <TICKET-OR-NAME> [name]"
 
 Bootstraps a per-session workspace with a `notes.md`, registers the active
 session, and syncs the git repo. Categories and their folders come from your
-config (`~/.config/agents-orchestrator/config.json`) — edit them in the app's
+config (`~/.config/ai-agents-orchestrator/config.json`) — edit them in the app's
 Settings, not here.
 
 ## Step 0 — Mode check

@@ -13,7 +13,7 @@ migrates references so a rename doesn't orphan sessions.
 import sys, os, json, re, glob, tempfile, shutil
 
 HOME = os.path.expanduser('~')
-CONFIG = os.path.join(HOME, '.config', 'agents-orchestrator', 'config.json')
+CONFIG = os.path.join(HOME, '.config', 'ai-agents-orchestrator', 'config.json')
 ACTIVE = os.path.join(HOME, '.claude', 'active-sessions.json')
 SESSIONS = os.path.join(HOME, '.claude', 'sessions')
 NAME_RE = re.compile(r'^[A-Za-z0-9_-]{1,20}$')

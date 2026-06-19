@@ -13,10 +13,10 @@ FORCE=0; [ "${1:-}" = "--force" ] && FORCE=1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILLS_SRC="$HERE/skills"
 SKILLS_DST="$HOME/.claude/skills"
-CONFIG_DIR="$HOME/.config/agents-orchestrator"
+CONFIG_DIR="$HOME/.config/ai-agents-orchestrator"
 CONFIG="$CONFIG_DIR/config.json"
 
-echo "Agents Orchestrator — installing skills + config"
+echo "AI Agents Orchestrator — installing skills + config"
 echo
 
 # 1. Shared helper (always refreshed — not user-customised)

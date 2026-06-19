@@ -2,7 +2,7 @@
 # Signing/notarization activate only when the CI secrets are present (see
 # .env.example); local `npm run dist` produces an unsigned .dmg for testing.
 appId: com.agentsorchestrator.app
-productName: Agents Orchestrator
+productName: AI Agents Orchestrator
 copyright: Copyright © 2026
 
 directories:

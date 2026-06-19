@@ -16,7 +16,7 @@ const fs = require('fs')
 const path = require('path')
 const cp = require('child_process')
 
-const DEMO_HOME = process.env.DEMO_HOME || '/tmp/agents-orchestrator-demo'
+const DEMO_HOME = process.env.DEMO_HOME || '/tmp/ai-agents-orchestrator-demo'
 const WORKROOT = path.join(DEMO_HOME, 'work')
 const CLAUDE = path.join(DEMO_HOME, '.claude')
 const SESSIONS = path.join(CLAUDE, 'sessions')
@@ -44,11 +44,11 @@ if (process.argv.includes('--clean')) {
 // ---- fresh sandbox ----------------------------------------------------------
 killOldHelpers()
 fs.rmSync(DEMO_HOME, { recursive: true, force: true })
-;[path.join(DEMO_HOME, '.config', 'agents-orchestrator'), SESSIONS, PROJECTS, WORKROOT].forEach(mk)
+;[path.join(DEMO_HOME, '.config', 'ai-agents-orchestrator'), SESSIONS, PROJECTS, WORKROOT].forEach(mk)
 
 // ---- demo config: work-scope only → everything stays under WORKROOT ---------
 fs.writeFileSync(
-  path.join(DEMO_HOME, '.config', 'agents-orchestrator', 'config.json'),
+  path.join(DEMO_HOME, '.config', 'ai-agents-orchestrator', 'config.json'),
   JSON.stringify({
     version: 1,
     workRoot: WORKROOT,

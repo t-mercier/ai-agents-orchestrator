@@ -1,5 +1,5 @@
 //! Shared config (port of the Electron data/config.js).
-//! Reads/writes ~/.config/agents-orchestrator/config.json and derives the
+//! Reads/writes ~/.config/ai-agents-orchestrator/config.json and derives the
 //! scanDirs / order / colorMap the renderer expects (same shape as before, so
 //! the front-end code is unchanged).
 use serde_json::{json, Value};
@@ -21,7 +21,7 @@ static CONFIG_CACHE: LazyLock<Mutex<Option<(Option<SystemTime>, Value)>>> =
     LazyLock::new(|| Mutex::new(None));
 
 fn config_path() -> PathBuf {
-    home().join(".config").join("agents-orchestrator").join("config.json")
+    home().join(".config").join("ai-agents-orchestrator").join("config.json")
 }
 
 /// Expand a leading `~` / `~/` to the home directory (empty/other strings pass through).
@@ -85,7 +85,14 @@ fn build_config(path: &Path) -> Value {
         "personalVaultPath": expand(obs.get("personalVaultPath").and_then(Value::as_str).unwrap_or("")),
     });
 
-    let jira = user.get("jiraBaseUrl").and_then(Value::as_str).unwrap_or("").to_string();
+    // Tracker-neutral URL prefix for clickable ticket IDs (Jira, Linear, GitHub
+    // Issues, Azure DevOps…). Accept the legacy `jiraBaseUrl` key for old configs.
+    let ticket_base = user
+        .get("ticketBaseUrl")
+        .or_else(|| user.get("jiraBaseUrl"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     // Selector for which terminal "Resume"/+New/Restart launch into (matched to a
     // strict allowlist at launch in lib.rs; "" = system default). Passed through verbatim.
     let terminal_app = user.get("terminalApp").and_then(Value::as_str).unwrap_or("").to_string();
@@ -114,7 +121,7 @@ fn build_config(path: &Path) -> Value {
         "personalRoot": personal_root,
         "categories": categories,
         "obsidian": obsidian,
-        "jiraBaseUrl": jira,
+        "ticketBaseUrl": ticket_base,
         "terminalApp": terminal_app,
         "scanDirs": scan_dirs,
         "order": order,

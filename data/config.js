@@ -4,7 +4,7 @@ const os = require('os')
 
 // App preferences (NOT session state — this is the app's own config, so writing
 // it does not violate the read-only-of-~/.claude invariant, ADR-001/013).
-const DEFAULT_CONFIG_PATH = path.join(os.homedir(), '.config', 'agents-orchestrator', 'config.json')
+const DEFAULT_CONFIG_PATH = path.join(os.homedir(), '.config', 'ai-agents-orchestrator', 'config.json')
 
 // Generic shipped defaults — a sensible starting set, NOT user-specific. Personal
 // categories (e.g. CPM, AI-SYSTEM) are added by each user via Settings; the

@@ -21,7 +21,7 @@ and `~/.claude/active-sessions.json`.
 > there only edits the config, which makes old sessions vanish. This skill writes,
 > so it migrates the actual files + references.
 
-Config it reads/writes: `~/.config/agents-orchestrator/config.json`.
+Config it reads/writes: `~/.config/ai-agents-orchestrator/config.json`.
 
 Usage: `/rename-category FEAT FEATURE`
 

@@ -48,7 +48,7 @@
     $('set-work-vault').value = obs.workVaultPath || ''
     $('set-personal-vault').value = obs.personalVaultPath || ''
     $('set-terminal').value = c.terminalApp || ''
-    $('set-jira').value = c.jiraBaseUrl || ''
+    $('set-ticket').value = c.ticketBaseUrl || ''
     // Appearance reflects the current live state (localStorage), not the config.
     const theme = window.getTheme ? window.getTheme() : 'dark'
     document.querySelectorAll('.theme-toggle [data-theme-choice]').forEach(b =>
@@ -207,7 +207,7 @@
         workVaultPath: $('set-work-vault').value.trim(),
         personalVaultPath: $('set-personal-vault').value.trim(),
       },
-      jiraBaseUrl: $('set-jira').value.trim(),
+      ticketBaseUrl: $('set-ticket').value.trim(),
       terminalApp: $('set-terminal').value,
     }
   }

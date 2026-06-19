@@ -708,7 +708,7 @@ fn export_settings(app: tauri::AppHandle, json: String) -> Result<bool, String> 
     let path = app
         .dialog()
         .file()
-        .set_file_name("agents-orchestrator-settings.json")
+        .set_file_name("ai-agents-orchestrator-settings.json")
         .add_filter("JSON", &["json"])
         .blocking_save_file()
         .and_then(|p| p.into_path().ok());

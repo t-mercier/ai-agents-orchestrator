@@ -2,7 +2,7 @@
 """Config helper for the bundled session skills.
 
 Reads the shared config the dashboard app writes:
-  ~/.config/agents-orchestrator/config.json
+  ~/.config/ai-agents-orchestrator/config.json
 so the skills and the app agree on categories, note locations, and Obsidian vaults.
 
 Subcommands:
@@ -21,7 +21,7 @@ import os
 import sys
 
 HOME = os.path.expanduser('~')
-CONFIG = os.path.join(HOME, '.config', 'agents-orchestrator', 'config.json')
+CONFIG = os.path.join(HOME, '.config', 'ai-agents-orchestrator', 'config.json')
 DEFAULT_CATEGORIES = ['FEAT', 'BUG', 'REVIEW', 'CHORE', 'TEST', 'PERSO']
 
 
