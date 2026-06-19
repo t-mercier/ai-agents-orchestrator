@@ -1,122 +1,163 @@
-# Agents Orchestrator
+# AI Agents Orchestrator
 
-**Live mission control for all your parallel Claude Code sessions — a native macOS dashboard that brings order to the chaos.**
+**Mission control for your parallel Claude Code sessions — a tiny native macOS dashboard that brings order to the chaos.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/agents-orchestrator/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
 [![Made with Claude Code](https://img.shields.io/badge/Made%20with-Claude%20Code-000000)](https://claude.com/claude-code)
 
-<!-- HERO GIF — the #1 conversion lever. Record a ~5–10s looped demo (dashboard
-     with sessions in different states → toggle List/Cards → search/filter → open
-     the embedded terminal), save it to docs/media/hero.gif, then uncomment the
-     line below. Kept commented so the README never renders a broken image. -->
-<!-- ![Agents Orchestrator](docs/media/hero.gif) -->
+![AI Agents Orchestrator — list view with session detail](docs/media/hero.png)
 
 ## The problem
 
-You're running a dozen Claude Code sessions in parallel — across tickets, projects, branches. Each one is a buried terminal tab. Which are running? Which are *waiting for you*? Which finished an hour ago? Where is each one?
+You're running a dozen Claude Code sessions in parallel — across tickets, projects, branches. Each is a buried terminal tab. Which are running? Which are **waiting for you**? Which finished an hour ago? Where is each one?
 
 Terminal tabs don't scale. You need mission control.
 
 ## Features
 
-- **Live dashboard** — polled every 5s. Every session's status at a glance: **running** · **idle** · **waiting** (pulsing) · **background shell**.
-- **Two views** — flip between a grouped **List** and a full-width **Cards** view.
+- **Live dashboard** — polled every 5s. Every session's status at a glance: **busy** · **idle** · **waiting** (pulsing) · **stale** (terminal gone, work not wrapped up) · **background shell**.
+- **Three views** — a grouped **List**, a full-width **Cards** grid, and a **Board** (kanban).
+- **Kanban board** — drag to reorder (insertion line), **drop a card onto another to group** them (named, collapsible), **attach notes** to a card or group, flag **urgent**, and add sessions from the board itself. Generative **column colours** (pick one seed → a harmonious set across however many columns you have), with each column tinting its own accent.
+- **In-context detail** — click any card to open a **slide-over** with the session's goal, last activity, branch, Jira / PR links, and one-click **Resume / Restart / terminal** — without leaving the view.
+- **Embedded terminal** — resume a session in place (xterm.js + portable-pty), or **detach it into its own window** with an always-on-top pin.
+- **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` for view, `b` for board. **Remap any of it** in Settings → Shortcuts.
+- **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and **category filters**.
-- **Session detail** — goal, last activity, git branch, last-update time, clickable Jira & PR links.
-- **Embedded terminal** — resume a session in place (xterm.js + node-pty), or **detach it into its own window** with a pin / always-on-top toggle.
-- **One-click actions** — **New** session, **Resume** (full transcript), **Restart** (from notes), **Open notes** folder in Finder.
-- **Pin** the sessions that matter to the top.
-- **Customizable** — categories, colors, and work-root folder, all yours.
+- **Backup** — export / import all your settings to a file (handy before a reinstall).
+
+### Three ways to look at your work
+
+| Cards | Board |
+|:---:|:---:|
+| ![Cards view](docs/media/cards.png) | ![Kanban board](docs/media/board.png) |
+| Full-width grid — every session at a glance. | Kanban with groups, attached notes, urgent flags, and generative column colours. |
+
+Make it yours — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, density, dark **and** light themes:
+
+| Appearance settings | A colour "look" — Rose Poudré |
+|:---:|:---:|
+| ![Appearance settings](docs/media/settings.png) | ![Rose Poudré look](docs/media/look-rose.png) |
+
+…and the same dashboard in the light theme:
+
+![Light theme](docs/media/light.png)
 
 ## How it works
 
-**Local-first. Zero network. Read-only.**
+**Local-first. Zero network.**
 
-Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It **never** sends anything over the network, **never** writes your session state, and **never** stores secrets. It visualizes what's on disk and lets Claude Code do the rest.
+AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It **never** touches the network and **never** stores secrets — it visualizes what's on disk and lets Claude Code do the rest.
 
-Your data stays on your machine, under your OS's protection. The app is just a window into it. Privacy by design.
+It is **read-only on `~/.claude` by design**. The only writes it makes are two explicit actions you trigger — **archiving** a session and **saving a PR link** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
 
+**Requirements:** macOS 13+ · [Rust](https://rustup.rs) + the Tauri CLI (`cargo install tauri-cli`) · Xcode Command Line Tools (`xcode-select --install`) · [Claude Code](https://claude.com/claude-code).
+
 ```bash
-git clone https://github.com/t-mercier/agents-orchestrator.git
-cd agents-orchestrator
-npm install
-npm run rebuild     # compiles the node-pty native module against Electron
-npm start
+git clone https://github.com/t-mercier/ai-agents-orchestrator.git
+cd ai-agents-orchestrator
+
+# 1. Install the session skills + seed your config
+bash scripts/install.sh
+
+# 2. Run the app (system WebView — no Chromium bundled)
+cargo tauri dev
 ```
 
 The dashboard auto-discovers your sessions from `~/.claude`.
 
-**Build a signed DMG:**
+**Build a `.app` / `.dmg`:**
 
 ```bash
-npm run dist        # code-signed + notarized .dmg in dist/
+cargo tauri build      # bundle in src-tauri/target/release/bundle/
 ```
 
-**Requirements:** macOS 13+ · Node 20+ · Xcode Command Line Tools (`xcode-select --install`, for `node-pty`) · [Claude Code](https://claude.com/claude-code).
+> Built unsigned for now — on first launch, right-click the app → **Open** to get past Gatekeeper. Signed/notarized releases come once it's out of alpha.
+
+## Session skills
+
+The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a small set of Claude Code skills. `scripts/install.sh` copies them into `~/.claude/skills/`:
+
+| Skill | What it does |
+|---|---|
+| `/start <CAT> <ticket> <name>` | Create a session workspace + `notes.md` under the category's folder, register it, sync the repo |
+| `/close` | Wrap up the session: summarise into `notes.md` + append a history entry |
+| `/restart <slug>` | Reload a session's context from its notes into a fresh session |
+| `/archive <slug>` | Mark a session archived (drops it from the active list) |
+| `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
+
+Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
 ## Customization
 
-Settings live in `~/.config/agents-orchestrator/config.json`. Define your own categories (name, color, and whether they live under your work root or your home folder):
+Edit everything in the app's **Settings (⚙)** — categories & colours, scan roots, terminal app, themes/looks, density, keyboard shortcuts. It all persists to `~/.config/ai-agents-orchestrator/config.json` (which the skills read too):
 
 ```json
 {
   "version": 1,
   "workRoot": "~/work",
+  "personalRoot": "~",
   "categories": [
     { "name": "FEAT",   "color": "#7df0c0", "scope": "work" },
     { "name": "BUG",    "color": "#ff9eb1", "scope": "work" },
     { "name": "REVIEW", "color": "#d9a86e", "scope": "work" },
-    { "name": "CHORE",  "color": "#ffe17a", "scope": "work" },
-    { "name": "TEST",   "color": "#cdd0d6", "scope": "work" },
     { "name": "PERSO",  "color": "#8fd9ff", "scope": "personal" }
   ],
-  "obsidian": { "enabled": false, "vaultPath": "" },
-  "jiraBaseUrl": ""
+  "obsidian": { "enabled": false, "workVaultPath": "", "personalVaultPath": "" },
+  "ticketBaseUrl": ""
 }
 ```
 
-Set `jiraBaseUrl` to your tracker's browse prefix (e.g. `https://yourcompany.atlassian.net/browse/`) to make ticket IDs clickable; leave it empty for plain text.
+`scope: "work"` → the category folder lives under `workRoot`; `scope: "personal"` → under `personalRoot`.
 
-`scope: "work"` → the category folder lives under `workRoot`; `scope: "personal"` → under your home directory. Changes are picked up on the next refresh. *(An in-app Settings editor is on the roadmap — for now, edit the JSON.)*
+**Ticket tracking — any tracker, not just Jira.** `ticketBaseUrl` is just a URL prefix: the app appends each session's ticket ID to it to make the ID clickable. Point it at whatever you use:
+
+| Tracker | `ticketBaseUrl` |
+|---|---|
+| Jira | `https://yourcompany.atlassian.net/browse/` |
+| Linear | `https://linear.app/your-team/issue/` |
+| GitHub Issues | `https://github.com/owner/repo/issues/` |
+| Azure DevOps | `https://dev.azure.com/org/project/_workitems/edit/` |
+
+Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy key `jiraBaseUrl` is still read for backward compatibility.)*
 
 ## Security
 
-- Electron hardened: `contextIsolation: true`, `nodeIntegration: false`.
-- A small, validated IPC surface — every input is checked.
+- **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
+- Repo / branch / URL inputs are **allowlist-validated** (absolute path, real git repo, safe branch, `github.com/owner/repo/pull/N`).
+- The two filesystem writes (archive, PR link) are **atomic**, target a real `notes.md`, and are **confined under your configured roots** (canonicalized — no `../` escape).
 - External links open in your **system browser**, never inside the app.
-- **No secrets** stored or transmitted; nothing leaves your machine.
-- Releases are **code-signed and notarized**, so Gatekeeper won't block them.
+- Nothing is sent over the network; no secrets stored.
 
 ## Tech stack
 
 | Layer | Tool |
 |---|---|
-| Desktop | Electron |
+| Desktop | **Tauri v2** (Rust + the OS's WebView — ~8 MB app, no Chromium) |
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
-| Terminal | xterm.js + node-pty |
-| Build | esbuild, electron-builder |
-| Tests | Jest (90+) |
+| Terminal | xterm.js + portable-pty |
+| Backend | Rust (`config` · `reader` · `pty` · commands) |
+| Tests | Jest (118) + Rust unit tests (27) |
 
 ## Roadmap
 
-- [ ] In-app Settings UI for categories & colors (no more hand-editing JSON)
-- [ ] Bundled session skills (`/start`, `/close`, `/restart`, `/archive`) + one-command installer
-- [ ] Optional Obsidian integration (auto-distill notes)
-- [ ] Homebrew cask
-- [ ] Auto-update
+- [x] In-app Settings UI (categories, colours, roots, themes, shortcuts)
+- [x] Bundled session skills + one-command installer
+- [x] Kanban board (groups, attached notes, generative colours)
+- [x] Export / import settings
+- [x] Tracker-agnostic ticket links (Jira, Linear, GitHub Issues, Azure DevOps)
+- [ ] **Beyond Claude Code** — GitHub Copilot, and other agent CLIs next (today it reads Claude Code's session state)
+- [ ] Signed + notarized `.dmg` releases
+- [ ] Homebrew cask · auto-update
+- [ ] Optional Obsidian integration (auto-distil notes)
 
 ## Contributing
 
-Issues and PRs welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). The codebase is intentionally small: vanilla JS + Electron, no framework overhead. New IPC channels or any network code require an ADR (see [`docs/adr`](docs/adr)).
-
-## Why I built this
-
-> _<add your personal note here>_
+Issues and PRs welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). The codebase is intentionally small: a Rust backend + vanilla-JS renderer, no framework. Any new command or network code requires an ADR ([`docs/adr`](docs/adr)).
 
 ## License
 
-[MIT](LICENSE). Built for Claude Code users, by a Claude Code user.
+[MIT](LICENSE). Built by an ADHD developer who loves parallel-tasking with Claude a little too much — for anyone juggling more parallel work than one brain can hold.
