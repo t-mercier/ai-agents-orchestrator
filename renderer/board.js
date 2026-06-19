@@ -172,6 +172,13 @@
   function renderBoard() {
     const host = document.getElementById('board-view')
     if (!host) return
+    // Never rebuild the DOM out from under an open inline editor (column / group
+    // rename, note edit). The 5s poll calls renderBoard, and replacing innerHTML mid-
+    // typing destroyed the focused input — focus lost + uncommitted text gone after a
+    // couple of keystrokes. On commit (blur/Enter) focus has already left the input,
+    // so that re-render still goes through.
+    const ae = document.activeElement
+    if (ae && host.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return
     boardState = CSMBoard.load()
     const visible = boardState.columns.filter(c => !c.hidden)
     const cols = visible.map((c, i) => columnHtml(c, i, visible.length)).join('')
