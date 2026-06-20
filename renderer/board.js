@@ -108,6 +108,17 @@
     </div>`
   }
 
+  // Category-filter visibility — the board mirrors the list/cards filter. A session is
+  // hidden when its category isn't in the active filter; notes have no category so they
+  // always show; a group shows when at least one of its members is visible.
+  function visible(it) {
+    if (it.kind === 'session') {
+      const s = (window._boardIndex || {})[it.id]
+      return !window.passesCatFilter || window.passesCatFilter(s ? s.category : null)
+    }
+    if (it.kind === 'group') return CSMBoard.orderedItems(boardState, 'g:' + it.id).some(visible)
+    return true
+  }
   function renderItem(it) {
     if (it.kind === 'group') return groupHtml(it.id)
     if (it.kind === 'note') { const n = boardState.notes.find(x => x.id === it.id); return n ? noteCardHtml(n) : '' }
@@ -116,7 +127,7 @@
   function groupHtml(gid) {
     const g = boardState.groups.find(x => x.id === gid)
     if (!g) return ''
-    const members = CSMBoard.orderedItems(boardState, 'g:' + gid)
+    const members = CSMBoard.orderedItems(boardState, 'g:' + gid).filter(visible)
     const inner = members.map(renderItem).join('')
     return `<div class="kb-group ${g.collapsed ? 'collapsed' : ''}" data-group="${escapeHtml(gid)}">
       <div class="kb-group-head">
@@ -136,7 +147,7 @@
   function columnHtml(col, index, total) {
     // Render in the column's manual order (urgent is now a highlight, not auto-float —
     // priority is set by dragging cards up/down).
-    const items = CSMBoard.orderedItems(boardState, col.id)
+    const items = CSMBoard.orderedItems(boardState, col.id).filter(visible)
     const count = items.length
     const cards = count === 0
       ? `<button class="kb-empty" data-add-session="${escapeHtml(col.id)}">＋ Add a session</button>`

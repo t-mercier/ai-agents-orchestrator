@@ -472,12 +472,14 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
 .pr-editor-remove:hover { color: var(--danger); }
 
 /* Board mode: hide the tabbed list/cards UI; show the full-width board. */
-.board-view { display: none; }
+.board-wrap { display: none; }
 body.mode-board .panel-left,
 body.mode-board .resize-handle,
 body.mode-board .cards-view { display: none !important; }
+/* Board wrap stacks the category-filter bar above the scrolling board. */
+body.mode-board .board-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 /* The detail drawer + scrim are reused as a slide-over ON the board (open on card click). */
-body.mode-board .board-view { display: block; flex: 1; overflow: auto; }
+body.mode-board .board-view { display: block; flex: 1; min-height: 0; overflow: auto; }
 
 /* View toggle (List | Cards) segmented control */
 .view-toggle {

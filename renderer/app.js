@@ -150,12 +150,15 @@ function filterSessions(list, query) {
   }
   return out
 }
+// Same category predicate, exposed for the board renderer (which filters its cards
+// directly rather than going through filterSessions). Empty set = everything passes.
+window.passesCatFilter = (cat) => activeCatFilters.size === 0 || activeCatFilters.has(cat || 'OTHER')
 
 function renderCategoryFilters() {
   const chips = filterCategories().map(cat =>
     `<button class="cat-chip ${activeCatFilters.has(cat) ? 'active' : ''}" data-cat-filter="${cat}" data-cat="${cat}">${cat}</button>`
   ).join('')
-  for (const id of ['cat-filter-list', 'cat-filter-cards']) {
+  for (const id of ['cat-filter-list', 'cat-filter-cards', 'cat-filter-board']) {
     const el = document.getElementById(id)
     if (el) el.innerHTML = chips
   }
@@ -194,7 +197,8 @@ function toggleCategoryFilter(cat) {
   selectedKey = null
   window._lastSelectedKey = null
   renderCategoryFilters()
-  renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+  if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
+  else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
 }
 
 let fetchInFlight = false
