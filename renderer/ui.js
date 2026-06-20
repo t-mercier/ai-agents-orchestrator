@@ -494,7 +494,11 @@ function infoPopOutside(e) {
 function infoPopEsc(e) { if (e.key === 'Escape') closeInfoPopover() }
 function openInfoPopover(anchor) {
   closeInfoPopover()
-  const sel = (window._lastSessions || []).find(x => sessionKey(x) === window._lastSelectedKey)
+  // The ⓘ button lives in the header shown OVER the embedded terminal, where the
+  // selection may have fallen back to the terminal session (selectedKey cleared).
+  // Resolve by selectedKey first, then that fallback — else the button does nothing.
+  let sel = (window._lastSessions || []).find(x => sessionKey(x) === window._lastSelectedKey)
+  if (!sel && window._terminalSession) sel = window._terminalSession
   if (!sel) return
   const rows = buildMetaRows(sel, activeTab !== 'running')
   const pop = document.createElement('div')
