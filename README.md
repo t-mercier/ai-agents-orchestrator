@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha-9b8cff)](https://github.com/t-mercier/ai-agents-orchestrator/commits/master)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -204,6 +204,10 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 - [ ] Signed + notarized `.dmg` releases
 - [ ] Homebrew cask · auto-update
 - [ ] Optional Obsidian integration (auto-distil notes)
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for notable changes ([Keep a Changelog](https://keepachangelog.com/) format).
 
 ## Contributing
 
