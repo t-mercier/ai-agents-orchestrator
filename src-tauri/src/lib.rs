@@ -451,6 +451,54 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     launch_in_terminal(&cmd)
 }
 
+/// Import (adopt) an existing Claude Code session into management: `--resume` it and
+/// run the `/import` skill so it gets a notes.md + registration. The app only launches;
+/// the skill does the writing (ADR-012). cwd = the session's launch dir (where
+/// `--resume` must run). Category must be one the user configured.
+#[tauri::command(async)]
+fn import_session(session_id: String, category: String, name: String) -> Result<(), String> {
+    if session_id.is_empty()
+        || !session_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    {
+        return Err("invalid sessionId".into());
+    }
+    let category = category.trim().to_uppercase();
+    if !is_safe_category(&category) {
+        return Err("invalid category".into());
+    }
+    let cfg = config::load();
+    let known = cfg.get("categories").and_then(serde_json::Value::as_array).is_some_and(|arr| {
+        arr.iter().any(|c| c.get("name").and_then(serde_json::Value::as_str) == Some(&category))
+    });
+    if !known {
+        return Err("unknown category — add it in Settings first".into());
+    }
+    // Same safe-name set as /start (no shell / YAML-breaking chars); may be empty.
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || "-_.,'()".contains(*c))
+        .collect();
+    let safe_name = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    let safe_name: String = safe_name.chars().take(120).collect::<String>().trim().to_string();
+
+    let dir = reader::resolve_session_cwd(&session_id)
+        .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
+    let prompt = if safe_name.is_empty() {
+        format!("/import {category}")
+    } else {
+        format!("/import {category} {safe_name}")
+    };
+    let cmd = format!(
+        "cd {} && claude --resume {} --model {} {}",
+        pty::shell_quote(&dir),
+        pty::shell_quote(&session_id),
+        pty::shell_quote(pty::CLAUDE_MODEL),
+        pty::shell_quote(&prompt),
+    );
+    launch_in_terminal(&cmd)
+}
+
 /// True for a project-key ticket like `ABC-123` (letter, alnum*, dash, digits).
 fn is_ticket(t: &str) -> bool {
     let (key, num) = match t.split_once('-') {
@@ -841,6 +889,7 @@ pub fn run() {
             open_in_terminal,
             start_session,
             restore_session,
+            import_session,
             detach_session,
             set_always_on_top,
             pick_directory,

@@ -72,6 +72,12 @@
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
+    // ── Import an existing (unmanaged) session: --resume it + run /import to adopt it ──
+    importSession: (sessionId, category, name) =>
+      invoke('import_session', { sessionId: sessionId || '', category: category || '', name: name || '' })
+        .then(() => ({ ok: true }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+
     // ── Detach into its own window + pin (src-tauri/src/lib.rs) ──
     detachSession: (key) => invoke('detach_session', { key }),
     setAlwaysOnTop: (flag) => invoke('set_always_on_top', { flag }).catch(() => false),
