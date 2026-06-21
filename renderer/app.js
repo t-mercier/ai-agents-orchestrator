@@ -582,6 +582,9 @@ async function openImportModal() {
 }
 document.getElementById('import-session-btn').addEventListener('click', openImportModal)
 document.getElementById('import-cancel').addEventListener('click', () => importModal.close())
+// Escape closes the modal. The search field is type=search, which natively eats
+// Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
+importModal.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); importModal.close() } })
 document.getElementById('import-search').addEventListener('input', e => renderImportList(e.target.value))
 document.getElementById('import-list').addEventListener('click', (e) => {
   const row = e.target.closest('[data-import-sid]')

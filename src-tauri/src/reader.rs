@@ -281,8 +281,21 @@ pub fn resolve_session_cwd(sid: &str) -> Option<String> {
     read_transcript(sid).launch_cwd
 }
 
+/// Claude Code prepends machine context to the first user turn — skill bodies,
+/// slash-command echoes, system reminders, CLAUDE.md dumps, tool results. None of
+/// those make a useful session title, so skip them and take the first genuine prompt.
+fn is_title_noise(s: &str) -> bool {
+    let t = s.trim_start();
+    t.is_empty()
+        || t.starts_with('<') // <command-name> / <system-reminder> / <local-command-stdout> …
+        || t.starts_with("Caveat:")
+        || t.starts_with("Base directory for this skill")
+        || t.starts_with("Contents of ")
+        || t.to_lowercase().contains("system-reminder")
+}
+
 /// A transcript's de-facto title + launch dir, from its first lines — the first
-/// real user message (skipping command/tool-result/meta noise) and the first `cwd`.
+/// genuine user prompt (skipping the injected noise above) and the first `cwd`.
 /// Iterator-based + early-return so we don't load a huge .jsonl just for the header.
 fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>, Option<String>) {
     let mut title: Option<String> = None;
@@ -302,22 +315,19 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
         }
         if title.is_none() && ev.get("type").and_then(Value::as_str) == Some("user") {
             let content = ev.get("message").and_then(|m| m.get("content"));
-            let txt = match content {
-                Some(Value::String(s)) => Some(s.clone()),
+            // A user turn can be a string or an array of blocks; the real prompt may
+            // sit AFTER an injected block, so scan all text for the first non-noise one.
+            let texts: Vec<&str> = match content {
+                Some(Value::String(s)) => vec![s.as_str()],
                 Some(Value::Array(arr)) => arr
                     .iter()
                     .filter(|c| c.get("type").and_then(Value::as_str) == Some("text"))
-                    .find_map(|c| c.get("text").and_then(Value::as_str))
-                    .map(String::from),
-                _ => None,
+                    .filter_map(|c| c.get("text").and_then(Value::as_str))
+                    .collect(),
+                _ => Vec::new(),
             };
-            if let Some(s) = txt {
-                let s = s.trim();
-                // Skip slash-command echoes / tool-result / system-reminder noise
-                // ("<command-name>…", "<local-command-stdout>…") — not a real title.
-                if !s.is_empty() && !s.starts_with('<') {
-                    title = Some(s.chars().take(100).collect());
-                }
+            if let Some(t) = texts.into_iter().map(str::trim).find(|t| !is_title_noise(t)) {
+                title = Some(t.chars().take(100).collect());
             }
         }
         if title.is_some() && cwd.is_some() {
@@ -978,8 +988,14 @@ mod tests {
         let (title, cwd) = discover_meta_lines(lines.into_iter());
         assert_eq!(title.as_deref(), Some("Fix the checkout bug")); // command echo skipped
         assert_eq!(cwd.as_deref(), Some("/Users/dev/proj")); // FIRST cwd (launch dir)
-        // array-form user content also yields a title
-        let arr = vec![r#"{"type":"user","message":{"content":[{"type":"text","text":"hello there"}]}}"#.to_string()];
+        // injected noise (skill body, system-reminder) is skipped; real prompt wins
+        let noisy = vec![
+            r#"{"type":"user","message":{"content":"Base directory for this skill is /x"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"Generate the release notes"}}"#.to_string(),
+        ];
+        assert_eq!(discover_meta_lines(noisy.into_iter()).0.as_deref(), Some("Generate the release notes"));
+        // array with an injected block THEN the real prompt → picks the real one
+        let arr = vec![r#"{"type":"user","message":{"content":[{"type":"text","text":"<system-reminder>x</system-reminder>"},{"type":"text","text":"hello there"}]}}"#.to_string()];
         assert_eq!(discover_meta_lines(arr.into_iter()).0.as_deref(), Some("hello there"));
         // no real user message → no title
         let none = vec![r#"{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}"#.to_string()];

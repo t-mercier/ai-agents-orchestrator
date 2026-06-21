@@ -155,7 +155,7 @@ html, body {
 .modal-hint code { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; background: rgba(var(--tint), 0.08); padding: 1px 4px; border-radius: 3px; }
 /* ＋Import picker: scrollable list of discovered (unmanaged) sessions. The width
    goes on the dialog itself (the base .modal is 380px) so the form fits inside. */
-#import-modal { width: 460px; }
+#import-modal { width: 520px; }
 .import-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; border: 0.5px solid var(--card-border); border-radius: 8px; padding: 4px; }
 .import-row { display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border: none; cursor: pointer; font-family: var(--font); color: var(--text-primary); padding: 7px 9px; border-radius: 6px; }
 .import-row:hover { background: rgba(var(--tint), 0.07); }
