@@ -537,6 +537,78 @@ newSessionModal.addEventListener('click', async (e) => {
   if (picked) target.value = picked
 })
 
+// ── ＋Import: adopt an existing (unmanaged) Claude Code session ──
+const importModal = document.getElementById('import-modal')
+let importSelectedSid = null
+let importSessions = []
+const importEsc = (s) => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const showImportError = (m) => { const el = document.getElementById('import-error'); el.textContent = m; el.hidden = false }
+const hideImportError = () => { document.getElementById('import-error').hidden = true }
+function renderImportList(query) {
+  const list = document.getElementById('import-list')
+  const q = (query || '').toLowerCase()
+  const rows = importSessions.filter(s => !q ||
+    (s.title || '').toLowerCase().includes(q) || (s.cwd || '').toLowerCase().includes(q) || (s.sessionId || '').toLowerCase().includes(q))
+  if (!rows.length) {
+    list.innerHTML = `<div class="import-empty">${importSessions.length ? 'No match.' : 'No unmanaged sessions found.'}</div>`
+    return
+  }
+  list.innerHTML = rows.map(s => {
+    const when = s.mtime ? formatTimestamp(new Date(s.mtime * 1000).toISOString()) : ''
+    const title = importEsc(s.title || '(untitled session)')
+    return `<button type="button" class="import-row${s.sessionId === importSelectedSid ? ' selected' : ''}" data-import-sid="${importEsc(s.sessionId)}" data-title="${title}">
+      <span class="import-row-title">${title}</span>
+      <span class="import-row-meta">${importEsc(s.cwd || '')}${when ? ' · ' + when : ''}</span>
+    </button>`
+  }).join('')
+}
+async function openImportModal() {
+  importSelectedSid = null
+  importSessions = []
+  document.getElementById('import-search').value = ''
+  document.getElementById('import-name').value = ''
+  hideImportError()
+  const cats = ((window.CSM_CONFIG && window.CSM_CONFIG.categories) || []).map(c => c.name)
+  document.getElementById('import-category').innerHTML = cats.map(c => `<option value="${importEsc(c)}">${importEsc(c)}</option>`).join('')
+  const goBtn = document.getElementById('import-go')
+  goBtn.disabled = true
+  document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
+  importModal.showModal()
+  if (!cats.length) {
+    document.getElementById('import-list').innerHTML = ''
+    showImportError('Add a category in Settings first — a session needs one to live under.')
+    return
+  }
+  try { importSessions = await window.api.discoverSessions() } catch (_) { importSessions = [] }
+  renderImportList('')
+}
+document.getElementById('import-session-btn').addEventListener('click', openImportModal)
+document.getElementById('import-cancel').addEventListener('click', () => importModal.close())
+document.getElementById('import-search').addEventListener('input', e => renderImportList(e.target.value))
+document.getElementById('import-list').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-import-sid]')
+  if (!row) return
+  importSelectedSid = row.dataset.importSid
+  document.querySelectorAll('#import-list .import-row.selected').forEach(r => r.classList.remove('selected'))
+  row.classList.add('selected')
+  const nameEl = document.getElementById('import-name')
+  if (!nameEl.value.trim()) nameEl.value = (row.dataset.title || '').replace(/^\(untitled session\)$/, '').slice(0, 60)
+  document.getElementById('import-go').disabled = false
+  hideImportError()
+})
+document.getElementById('import-go').addEventListener('click', async () => {
+  if (!importSelectedSid) return
+  const category = document.getElementById('import-category').value
+  const name = document.getElementById('import-name').value.trim()
+  const goBtn = document.getElementById('import-go')
+  goBtn.disabled = true
+  const res = await window.api.importSession(importSelectedSid, category, name)
+  if (!res || !res.ok) { showImportError((res && res.error) || 'Import failed.'); goBtn.disabled = false; return }
+  importModal.close()
+  // It resumes in a terminal + becomes managed → shows up in Running on the next poll.
+  if (activeTab !== 'running') switchTab('running')
+})
+
 // Submit: validate, start (Rust pre-flights repo/branch), and ONLY close on
 // success — failures (bad branch/repo) surface inline since the iTerm tab can't.
 document.getElementById('new-session-form').addEventListener('submit', async (e) => {

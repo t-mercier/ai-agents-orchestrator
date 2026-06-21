@@ -121,6 +121,9 @@ html, body {
   transition: background 0.12s, border-color 0.12s;
 }
 .new-session-btn:hover { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent); }
+/* ＋Import: a quieter sibling of ＋New (secondary action). */
+.new-session-btn.ghost { background: transparent; border-color: var(--card-border); color: var(--text-secondary); }
+.new-session-btn.ghost:hover { background: rgba(var(--tint), 0.08); border-color: var(--text-tertiary); color: var(--text-primary); }
 
 /* New-session modal — centered with a subtle rise-in (like card hover lift) */
 .modal {
@@ -150,6 +153,15 @@ html, body {
 .modal-title { font-size: 15px; font-weight: 700; }
 .modal-hint { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; margin-top: -4px; }
 .modal-hint code { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; background: rgba(var(--tint), 0.08); padding: 1px 4px; border-radius: 3px; }
+/* ＋Import picker: scrollable list of discovered (unmanaged) sessions. */
+#import-modal .modal-form { width: 460px; max-width: 90vw; }
+.import-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; border: 0.5px solid var(--card-border); border-radius: 8px; padding: 4px; }
+.import-row { display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border: none; cursor: pointer; font-family: var(--font); color: var(--text-primary); padding: 7px 9px; border-radius: 6px; }
+.import-row:hover { background: rgba(var(--tint), 0.07); }
+.import-row.selected { background: rgba(var(--accent-rgb), 0.15); outline: 1px solid rgba(var(--accent-rgb), 0.5); }
+.import-row-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.import-row-meta { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.import-empty { font-size: 12px; color: var(--text-tertiary); padding: 14px; text-align: center; }
 .modal-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
 .modal-field > span { color: var(--text-secondary); font-weight: 600; }
 .modal-field em { color: var(--text-tertiary); font-style: normal; font-weight: 400; }

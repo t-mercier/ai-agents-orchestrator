@@ -30,6 +30,7 @@
     <span class="titlebar-title" data-tauri-drag-region>AI Agents Orchestrator</span>
     <div class="titlebar-actions">
       <button class="new-session-btn" id="new-session-btn" title="Start a new session">＋ <span class="btn-label">New</span></button>
+      <button class="new-session-btn ghost" id="import-session-btn" title="Import an existing Claude Code session into the dashboard">＋ <span class="btn-label">Import</span></button>
       <div class="view-toggle">
         <button class="view-btn active" data-view="list" title="List view">☰ <span class="btn-label">List</span></button>
         <button class="view-btn" data-view="cards" title="Cards view">▦ <span class="btn-label">Cards</span></button>
@@ -99,6 +100,31 @@
         <button type="submit" class="modal-btn primary" id="ns-start">Start ↗</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Import: adopt an existing (unmanaged) Claude Code session. Picks from the most
+       recent transcripts, then launches `claude --resume <id>` + /import (the skill
+       writes the notes.md; the app only launches — ADR-012). -->
+  <dialog id="import-modal" class="modal">
+    <div class="modal-form">
+      <h2 class="modal-title">Import a session</h2>
+      <p class="modal-hint">Adopt an existing Claude Code session the dashboard isn't tracking yet. Pick one — it resumes and gets a <code>notes.md</code> so it shows up like a managed session.</p>
+      <input id="import-search" class="search-field" type="search" placeholder="Search recent sessions…" spellcheck="false" autocomplete="off">
+      <div id="import-list" class="import-list"></div>
+      <label class="modal-field">
+        <span class="modal-label">Category</span>
+        <select id="import-category"></select>
+      </label>
+      <label class="modal-field">
+        <span class="modal-label">Name</span>
+        <input id="import-name" type="text" placeholder="short name for this session" maxlength="120" autocomplete="off" spellcheck="false">
+      </label>
+      <div id="import-error" class="modal-error" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="import-cancel">Cancel</button>
+        <button type="button" class="modal-btn primary" id="import-go" disabled>Import ↗</button>
+      </div>
+    </div>
   </dialog>
 
   <!-- Settings: edits the shared config (roots, categories, Obsidian, Jira). The
