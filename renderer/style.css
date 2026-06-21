@@ -441,6 +441,8 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
 /* Board-column picker popover (anchored under the board action button). */
 .board-menu { position: fixed; z-index: 1000; min-width: 184px; max-height: 60vh; overflow-y: auto; background: var(--surface-modal); border: 0.5px solid rgba(var(--tint), 0.14); border-radius: 10px; box-shadow: 0 16px 44px rgba(0,0,0,0.45); padding: 5px; }
 .board-menu-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); padding: 5px 8px 6px; }
+.board-menu-search { width: 100%; box-sizing: border-box; margin: 0 0 5px; padding: 6px 8px; font-family: var(--font); font-size: 12px; color: var(--text-primary); background: rgba(var(--tint), 0.06); border: 0.5px solid rgba(var(--tint), 0.14); border-radius: 6px; outline: none; }
+.board-menu-search:focus { border-color: rgba(var(--accent-rgb), 0.5); }
 .board-menu-item { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: none; border: none; cursor: pointer; font-family: var(--font); font-size: 12px; color: var(--text-primary); padding: 6px 8px; border-radius: 6px; }
 .board-menu-item:hover { background: rgba(var(--tint), 0.08); }
 .board-menu-item.active { background: rgba(var(--accent-rgb), 0.14); }

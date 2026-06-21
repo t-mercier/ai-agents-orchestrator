@@ -8,6 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha-9b8cff)](https://github.com/t-mercier/ai-agents-orchestrator/commits/master)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -118,7 +119,7 @@ Long sessions force the assistant to **compact** its own history — silently dr
 ```mermaid
 flowchart LR
     S1(["Session 1<br/>you + Claude"]) -->|/close| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
-    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>full context loaded"])
+    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>briefed from the notes"])
     N -->|"claude --resume &lt;id&gt;"| R(["The exact original<br/>transcript, replayed"])
     S2 -->|/close| N
     classDef disk fill:#1e2230,stroke:#9b8cff,stroke-width:2px,color:#fff;

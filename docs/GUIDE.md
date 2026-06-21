@@ -51,7 +51,7 @@ Nothing important gets compacted away, because the source of truth is a **file y
 ```mermaid
 flowchart LR
     S1(["Session 1<br/>you + Claude"]) -->|/close| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
-    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>full context loaded"])
+    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>briefed from the notes"])
     N -->|"claude --resume &lt;id&gt;"| R(["The exact original<br/>transcript, replayed"])
     S2 -->|/close| N
     classDef disk fill:#1e2230,stroke:#9b8cff,stroke-width:2px,color:#fff;

@@ -269,11 +269,35 @@
     menu.className = 'board-menu'
     menu.id = 'add-session-menu'
     menu.dataset.col = columnId   // so a re-click on this column's ＋ session toggles it closed
-    menu.innerHTML = `<div class="board-menu-head">Add a session</div>${items}`
+    const searchBox = entries.length
+      ? '<input class="board-menu-search" type="text" placeholder="Filter sessions…" spellcheck="false" autocomplete="off">'
+      : ''
+    menu.innerHTML = `<div class="board-menu-head">Add a session</div>${searchBox}<div class="board-menu-items">${items}</div>`
     document.body.appendChild(menu)
     const r = anchor.getBoundingClientRect()
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`
     menu.style.top = `${Math.min(r.bottom + 6, window.innerHeight - menu.offsetHeight - 8)}px`
+    // Type-to-filter: focus the box on open so you can search by keyboard immediately;
+    // Enter places the first still-visible match, Esc closes.
+    const search = menu.querySelector('.board-menu-search')
+    if (search) {
+      search.focus()
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase()
+        menu.querySelectorAll('.board-menu-item[data-add-place]').forEach((b) => {
+          const name = (b.querySelector('.board-menu-name')?.textContent || '').toLowerCase()
+          const cat = (b.querySelector('.board-menu-cat')?.textContent || '').toLowerCase()
+          b.style.display = !q || name.includes(q) || cat.includes(q) ? '' : 'none'
+        })
+      })
+      search.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); closeAddMenu(); return }
+        if (e.key === 'Enter') {
+          const first = [...menu.querySelectorAll('.board-menu-item[data-add-place]')].find((b) => b.style.display !== 'none')
+          if (first) { e.preventDefault(); applyBoard(CSMBoard.placeSession(CSMBoard.load(), first.dataset.addPlace, columnId)); closeAddMenu() }
+        }
+      })
+    }
     menu.addEventListener('click', (e) => {
       const it = e.target.closest('[data-add-place]')
       if (it) { applyBoard(CSMBoard.placeSession(CSMBoard.load(), it.dataset.addPlace, columnId)); closeAddMenu() }
