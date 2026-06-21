@@ -568,17 +568,15 @@ async function openImportModal() {
   document.getElementById('import-search').value = ''
   document.getElementById('import-name').value = ''
   hideImportError()
-  const cats = ((window.CSM_CONFIG && window.CSM_CONFIG.categories) || []).map(c => c.name)
+  // No categories yet? Don't send the user to Settings — offer a default UNNAMED
+  // bucket (created for real on import, so it's scanned + filterable afterwards).
+  let cats = ((window.CSM_CONFIG && window.CSM_CONFIG.categories) || []).map(c => c.name)
+  if (!cats.length) cats = ['UNNAMED']
   document.getElementById('import-category').innerHTML = cats.map(c => `<option value="${importEsc(c)}">${importEsc(c)}</option>`).join('')
   const goBtn = document.getElementById('import-go')
   goBtn.disabled = true
   document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
   importModal.showModal()
-  if (!cats.length) {
-    document.getElementById('import-list').innerHTML = ''
-    showImportError('Add a category in Settings first — a session needs one to live under.')
-    return
-  }
   try { importSessions = await window.api.discoverSessions() } catch (_) { importSessions = [] }
   renderImportList('')
 }
@@ -602,6 +600,16 @@ document.getElementById('import-go').addEventListener('click', async () => {
   const name = document.getElementById('import-name').value.trim()
   const goBtn = document.getElementById('import-go')
   goBtn.disabled = true
+  // If the chosen category doesn't exist yet (the UNNAMED fallback, or a one-off),
+  // create it in the config first so the backend recognises it + scans its folder.
+  const cfg = window.CSM_CONFIG || {}
+  const existing = cfg.categories || []
+  if (!existing.some(c => c.name === category)) {
+    const next = { ...cfg, categories: [...existing, { name: category, color: '#8a8f98', scope: 'work' }] }
+    const w = await window.api.setConfig(next)
+    if (!w || !w.ok) { showImportError((w && w.error) || 'Could not create the category.'); goBtn.disabled = false; return }
+    if (window.reloadConfig) await window.reloadConfig()
+  }
   const res = await window.api.importSession(importSelectedSid, category, name)
   if (!res || !res.ok) { showImportError((res && res.error) || 'Import failed.'); goBtn.disabled = false; return }
   importModal.close()

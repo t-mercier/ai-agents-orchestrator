@@ -204,52 +204,64 @@
     applyBoardFocus()   // re-apply the keyboard focus ring after a re-render
   }
 
-  // Inline note editing: swap the text span for an input, save on blur/Enter.
+  // Inline edit: swap a span for an input. Enter/blur commits, Escape cancels.
+  // commit(text) and cancel() each return the next board state, or null to just
+  // repaint (revert). NB: renderBoard() bails while an input is focused (the poll
+  // guard), so we blur the input BEFORE re-rendering — else a cancel wouldn't paint.
+  function inlineEdit(span, value, opts) {
+    const input = document.createElement('input')
+    input.className = opts.className || 'kb-note-input'
+    input.value = value
+    span.replaceWith(input)
+    input.focus()
+    if (opts.select) input.select()
+    let settled = false
+    const settle = (next) => {
+      if (settled) return
+      settled = true
+      if (document.activeElement === input) input.blur()
+      if (next) applyBoard(next)
+      else renderBoard()
+    }
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); settle(opts.commit(input.value)) }
+      else if (e.key === 'Escape') { e.preventDefault(); settle(opts.cancel()) }
+    })
+    input.addEventListener('blur', () => settle(opts.commit(input.value)))
+  }
+
+  // Inline note editing — empty text drops the note (no orphaned empties); Escape on
+  // a fresh empty note also drops it, on an existing one reverts.
   function startNoteEdit(span) {
     const id = span.dataset.noteEdit
     const current = (CSMBoard.load().notes.find(n => n.id === id) || {}).text || ''
-    const input = document.createElement('input')
-    input.className = 'kb-note-input'
-    input.value = current
-    span.replaceWith(input)
-    input.focus()
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); input.blur() }
-      if (e.key === 'Escape') renderBoard()
+    inlineEdit(span, current, {
+      className: 'kb-note-input',
+      commit: (t) => t.trim() ? CSMBoard.updateNote(CSMBoard.load(), id, t.trim()) : CSMBoard.removeNote(CSMBoard.load(), id),
+      cancel: () => current.trim() ? null : CSMBoard.removeNote(CSMBoard.load(), id),
     })
-    input.addEventListener('blur', () => applyBoard(CSMBoard.updateNote(CSMBoard.load(), id, input.value)), { once: true })
   }
 
-  // Inline column rename: swap the title span for an input.
+  // Inline column rename — empty keeps the old name.
   function startColumnRename(span) {
     const id = span.dataset.colRename
     const current = (CSMBoard.load().columns.find(c => c.id === id) || {}).name || ''
-    const input = document.createElement('input')
-    input.className = 'kb-col-name-input'
-    input.value = current
-    span.replaceWith(input)
-    input.focus(); input.select()
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); input.blur() }
-      if (e.key === 'Escape') renderBoard()
+    inlineEdit(span, current, {
+      className: 'kb-col-name-input', select: true,
+      commit: (t) => t.trim() ? CSMBoard.renameColumn(CSMBoard.load(), id, t.trim()) : null,
+      cancel: () => null,
     })
-    input.addEventListener('blur', () => applyBoard(CSMBoard.renameColumn(CSMBoard.load(), id, input.value)), { once: true })
   }
 
-  // Inline group rename: swap the group title span for an input.
+  // Inline group rename — empty keeps the old name.
   function startGroupRename(span) {
     const id = span.dataset.groupRename
     const current = (CSMBoard.load().groups.find(g => g.id === id) || {}).name || ''
-    const input = document.createElement('input')
-    input.className = 'kb-col-name-input'
-    input.value = current
-    span.replaceWith(input)
-    input.focus(); input.select()
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); input.blur() }
-      if (e.key === 'Escape') renderBoard()
+    inlineEdit(span, current, {
+      className: 'kb-col-name-input', select: true,
+      commit: (t) => t.trim() ? CSMBoard.renameGroup(CSMBoard.load(), id, t.trim()) : null,
+      cancel: () => null,
     })
-    input.addEventListener('blur', () => applyBoard(CSMBoard.renameGroup(CSMBoard.load(), id, input.value)), { once: true })
   }
 
   // Add-session picker: lists sessions not yet on the board; click places one in the column.
