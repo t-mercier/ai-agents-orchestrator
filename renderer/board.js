@@ -114,7 +114,13 @@
   function visible(it) {
     if (it.kind === 'session') {
       const s = (window._boardIndex || {})[it.id]
-      return !window.passesCatFilter || window.passesCatFilter(s ? s.category : null)
+      const catOk = !window.passesCatFilter || window.passesCatFilter(s ? s.category : null)
+      const searchOk = !window.passesSearch || !s || window.passesSearch(s)
+      return catOk && searchOk
+    }
+    if (it.kind === 'note') {
+      const n = boardState.notes.find((x) => x.id === it.id)
+      return !window.queryMatches || window.queryMatches(n ? n.text : '')
     }
     if (it.kind === 'group') return CSMBoard.orderedItems(boardState, 'g:' + it.id).some(visible)
     return true

@@ -131,28 +131,31 @@ window.setKey = (action, key) => {
 window.setKeys = (map) => { try { localStorage.setItem('csm.keys', JSON.stringify(map || {})) } catch { /* ignore */ } }
 window.resetKeys = () => { try { localStorage.removeItem('csm.keys') } catch { /* ignore */ } }
 
+// Does a session match a free-text query across its name/ticket/category/goal/path/branch?
+function matchesSearch(s, query) {
+  if (!query) return true
+  const q = query.toLowerCase()
+  return (
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.ticket || '').toLowerCase().includes(q) ||
+    (s.category || '').toLowerCase().includes(q) ||
+    (s.goal || '').toLowerCase().includes(q) ||
+    (s.cwd || '').toLowerCase().includes(q) ||
+    (s.gitBranch || s.branch || '').toLowerCase().includes(q)
+  )
+}
 function filterSessions(list, query) {
   let out = list
-  // Category filter (empty set = all)
-  if (activeCatFilters.size > 0) {
-    out = out.filter(s => activeCatFilters.has(s.category || 'OTHER'))
-  }
-  if (query) {
-    const q = query.toLowerCase()
-    out = out.filter(s =>
-      (s.name || '').toLowerCase().includes(q) ||
-      (s.ticket || '').toLowerCase().includes(q) ||
-      (s.category || '').toLowerCase().includes(q) ||
-      (s.goal || '').toLowerCase().includes(q) ||
-      (s.cwd || '').toLowerCase().includes(q) ||
-      (s.gitBranch || s.branch || '').toLowerCase().includes(q)
-    )
-  }
+  if (activeCatFilters.size > 0) out = out.filter(s => activeCatFilters.has(s.category || 'OTHER'))
+  if (query) out = out.filter(s => matchesSearch(s, query))
   return out
 }
-// Same category predicate, exposed for the board renderer (which filters its cards
-// directly rather than going through filterSessions). Empty set = everything passes.
+// Predicates exposed for the board renderer (which filters its cards directly rather
+// than going through filterSessions). Empty filter / empty query = everything passes.
 window.passesCatFilter = (cat) => activeCatFilters.size === 0 || activeCatFilters.has(cat || 'OTHER')
+window.passesSearch = (s) => matchesSearch(s, searchQuery)
+// Free-text match for arbitrary strings (board notes) against the current query.
+window.queryMatches = (text) => matchesSearch({ name: text || '' }, searchQuery)
 
 function renderCategoryFilters() {
   const chips = filterCategories().map(cat =>
@@ -348,6 +351,8 @@ function setViewMode(mode) {
   if (mode === 'board') {
     // Board is global; the terminal pane belongs to the detail panel (hidden here).
     if (window.getTerminalVisible && window.getTerminalVisible()) window.hideTerminalPane()
+    const bs = document.getElementById('board-search')   // reflect any active search
+    if (bs && bs.value !== searchQuery) bs.value = searchQuery
     if (window.renderBoard) window.renderBoard()     // columns now (don't wait on the fetch)
     if (window.refreshBoard) window.refreshBoard()   // then refresh card data from sessions
     return
@@ -368,17 +373,22 @@ function closeDrawer() {
 }
 
 // Search — both fields (sidebar + cards topbar) drive the same query
+const SEARCH_FIELD_IDS = ['search-field', 'cards-search', 'board-search']
 function onSearchInput(e) {
   searchQuery = e.target.value.trim()
   selectedKey = null
-  // keep the other field in sync
-  const other = e.target.id === 'search-field' ? 'cards-search' : 'search-field'
-  const otherEl = document.getElementById(other)
-  if (otherEl && otherEl.value !== e.target.value) otherEl.value = e.target.value
-  renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+  // keep all three search fields (list / cards / board) in sync
+  for (const id of SEARCH_FIELD_IDS) {
+    const el = document.getElementById(id)
+    if (el && el !== e.target && el.value !== e.target.value) el.value = e.target.value
+  }
+  if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
+  else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
 }
-document.getElementById('search-field').addEventListener('input', onSearchInput)
-document.getElementById('cards-search').addEventListener('input', onSearchInput)
+SEARCH_FIELD_IDS.forEach(id => {
+  const el = document.getElementById(id)
+  if (el) el.addEventListener('input', onSearchInput)
+})
 
 // When an embedded terminal opens, it resumes the session — which makes a Closed
 // session live. Remember the session (so renderAll keeps its panel + terminal
@@ -569,8 +579,9 @@ function isTypingTarget(el) {
 }
 function clearSearch() {
   searchQuery = ''
-  ;['search-field', 'cards-search'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
-  renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+  SEARCH_FIELD_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.value = '' })
+  if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
+  else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
 }
 // The visible session keys, in DOM/render order (respects groups, sort, filter).
 function visibleSessionKeys() {
@@ -619,7 +630,7 @@ document.addEventListener('keydown', (e) => {
     return key && (e.key === key || (e.key.length === 1 && key.length === 1 && e.key.toLowerCase() === key.toLowerCase()))
   }
   if (km('search')) {
-    const el = document.getElementById(viewMode === 'cards' ? 'cards-search' : 'search-field')
+    const el = document.getElementById(viewMode === 'cards' ? 'cards-search' : viewMode === 'board' ? 'board-search' : 'search-field')
     if (el) { el.focus(); el.select(); e.preventDefault() }
     return
   }
