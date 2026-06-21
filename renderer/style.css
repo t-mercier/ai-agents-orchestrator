@@ -366,7 +366,7 @@ button.kb-chip { border: none; font-family: inherit; line-height: inherit; }
 .kb-badge { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; align-self: center; line-height: 1.5; }
 .kb-badge.urgent { color: var(--on-accent); background: var(--accent); }
 .kb-badge.waiting { color: #1a1416; background: var(--status-waiting); }
-.kb-badge.stale { color: var(--text-secondary); background: rgba(var(--tint), 0.1); font-weight: 700; }
+.kb-badge.stale { color: var(--text-tertiary); background: rgba(var(--tint), 0.1); font-weight: 700; }
 /* ⚡ urgent toggle — faint, brightens on hover; gold when on. */
 .kb-flag { background: none; border: none; cursor: pointer; font-size: 11px; line-height: 1; opacity: 0.3; flex-shrink: 0; margin-top: 1px; filter: grayscale(1); transition: opacity 0.12s, filter 0.12s; }
 .kb-card:hover .kb-flag { opacity: 0.6; }
@@ -532,8 +532,10 @@ body.mode-cards .cards-view { display: flex; flex-direction: column; flex: 1; ov
 .cards-topbar .panel-tabs { padding: 0; border: none; flex: 1; }
 .cards-search { max-width: 260px; }
 /* Board search: a row above the category-filter bar (which carries the divider). */
-.board-topbar { display: flex; align-items: center; padding: 10px 16px 6px; flex-shrink: 0; }
-.board-search { max-width: 320px; width: 100%; }
+/* Board filter bar: category chips (left, can wrap) + search (right) on one row. */
+.board-filterbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 0.5px solid var(--card-border); flex-shrink: 0; }
+.board-filterbar .cat-filter-board { flex: 1; min-width: 0; border: none; padding: 0; }
+.board-search { max-width: 280px; flex: 0 0 auto; }
 
 .cards-grid {
   flex: 1;

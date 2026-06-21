@@ -163,6 +163,17 @@ Edit everything in the app's **Settings (⚙)** — categories & colours, scan r
 
 Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy key `jiraBaseUrl` is still read for backward compatibility.)*
 
+## FAQ
+
+**Does it show all my sessions, or only ones started with `/start`?** Two sources, both automatic:
+
+- **Running** — *every live Claude Code session* on your machine shows up, managed or not. Unmanaged ones just carry less metadata (no goal/category/ticket) until you `/start` or `/restart` them.
+- **Closed / Archived / Stale** — these list **managed** sessions: ones with a `notes.md` under your category roots (created by `/start`). That `notes.md` is what gives the dashboard the goal, history, and lifecycle state.
+
+**Can I import my existing / older Claude sessions?** Live ones need nothing — they're already in **Running**. Past sessions that were never `/start`-ed have no `notes.md`, so they don't show in the historical tabs. To bring one under management, run `/restart <slug>` (or `/start`) for that work — it creates the `notes.md` and registers it. Setting your category **root dir** only tells the app *where* to scan for managed sessions; it doesn't ingest arbitrary `~/.claude` transcripts on its own.
+
+> Auto-importing *any* past session (not just managed ones) isn't built yet — it's a great idea on the roadmap. Open an issue if you want it.
+
 ## Security
 
 - **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
