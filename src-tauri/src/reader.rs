@@ -281,6 +281,142 @@ pub fn resolve_session_cwd(sid: &str) -> Option<String> {
     read_transcript(sid).launch_cwd
 }
 
+/// A transcript's de-facto title + launch dir, from its first lines — the first
+/// real user message (skipping command/tool-result/meta noise) and the first `cwd`.
+/// Iterator-based + early-return so we don't load a huge .jsonl just for the header.
+fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>, Option<String>) {
+    let mut title: Option<String> = None;
+    let mut cwd: Option<String> = None;
+    for line in lines {
+        if line.is_empty() {
+            continue;
+        }
+        let ev: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if cwd.is_none() {
+            if let Some(c) = ev.get("cwd").and_then(Value::as_str) {
+                cwd = Some(c.to_string());
+            }
+        }
+        if title.is_none() && ev.get("type").and_then(Value::as_str) == Some("user") {
+            let content = ev.get("message").and_then(|m| m.get("content"));
+            let txt = match content {
+                Some(Value::String(s)) => Some(s.clone()),
+                Some(Value::Array(arr)) => arr
+                    .iter()
+                    .filter(|c| c.get("type").and_then(Value::as_str) == Some("text"))
+                    .find_map(|c| c.get("text").and_then(Value::as_str))
+                    .map(String::from),
+                _ => None,
+            };
+            if let Some(s) = txt {
+                let s = s.trim();
+                // Skip slash-command echoes / tool-result / system-reminder noise
+                // ("<command-name>…", "<local-command-stdout>…") — not a real title.
+                if !s.is_empty() && !s.starts_with('<') {
+                    title = Some(s.chars().take(100).collect());
+                }
+            }
+        }
+        if title.is_some() && cwd.is_some() {
+            break;
+        }
+    }
+    (title, cwd)
+}
+
+fn discover_meta(path: &std::path::Path) -> (Option<String>, Option<String>) {
+    use std::io::{BufRead, BufReader};
+    match fs::File::open(path) {
+        Ok(f) => discover_meta_lines(BufReader::new(f).lines().map_while(Result::ok)),
+        Err(_) => (None, None),
+    }
+}
+
+/// sessionIds the app already manages — registered in active-sessions.json OR carried
+/// in a notes.md frontmatter under the configured roots (covers running/closed/archived).
+/// Used to exclude already-managed transcripts from the import picker.
+fn managed_session_ids() -> HashSet<String> {
+    let claude = home().join(".claude");
+    let mut ids = HashSet::new();
+    if let Ok(s) = fs::read_to_string(claude.join("active-sessions.json")) {
+        if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&s) {
+            ids.extend(m.keys().cloned());
+        }
+    }
+    let cfg = crate::config::load();
+    if let Some(dirs) = cfg.get("scanDirs").and_then(Value::as_array) {
+        for sd in dirs {
+            let base = match sd.get("base").and_then(Value::as_str) {
+                Some(b) => b,
+                None => continue,
+            };
+            if let Ok(entries) = fs::read_dir(base) {
+                for e in entries.flatten() {
+                    if let Ok(c) = fs::read_to_string(e.path().join("notes.md")) {
+                        if let Some(sid) = parse_frontmatter(&c).get("session_id") {
+                            ids.insert(sid.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ids
+}
+
+/// The most-recent *unmanaged* Claude Code transcripts (`~/.claude/projects/**/<id>.jsonl`
+/// with no managing notes.md) — fuel for the "Import a session" picker. Capped to the
+/// 30 newest by mtime (the picker is for recent work; older ones aren't the use case).
+#[tauri::command(async)]
+pub fn discover_sessions() -> Vec<Value> {
+    let projects = home().join(".claude").join("projects");
+    let managed = managed_session_ids();
+    let mut rows: Vec<(u64, Value)> = Vec::new();
+    let dirs = match fs::read_dir(&projects) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    for d in dirs.flatten() {
+        let pdir = d.path();
+        if !pdir.is_dir() {
+            continue;
+        }
+        let files = match fs::read_dir(&pdir) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        for f in files.flatten() {
+            let path = f.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let sid = match path.file_stem().and_then(|s| s.to_str()) {
+                Some(s) => s.to_string(),
+                None => continue,
+            };
+            if managed.contains(&sid) {
+                continue;
+            }
+            let mtime = fs::metadata(&path)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|m| m.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let (title, cwd) = discover_meta(&path);
+            rows.push((
+                mtime,
+                json!({ "sessionId": sid, "title": title, "cwd": cwd, "mtime": mtime }),
+            ));
+        }
+    }
+    rows.sort_by_key(|(mtime, _)| std::cmp::Reverse(*mtime)); // newest first
+    rows.into_iter().take(30).map(|(_, v)| v).collect()
+}
+
 /// Extract a markdown section body: text between "## <heading>\n" and the next "## ".
 fn extract_section(content: &str, heading: &str) -> Option<String> {
     let marker = format!("## {heading}\n");
@@ -764,8 +900,8 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        bucket_by_status, date_to_days, extract_pr_urls, lead_date, parse_frontmatter, pick_pr_url,
-        reopened_after_close, session_history_info, Transcript,
+        bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, lead_date,
+        parse_frontmatter, pick_pr_url, reopened_after_close, session_history_info, Transcript,
     };
     use serde_json::json;
 
@@ -830,6 +966,24 @@ mod tests {
         let (status, date) = session_history_info(content);
         assert_eq!(status, "closed");
         assert_eq!(date.as_deref(), Some("2026-06-20 00:03"));
+    }
+
+    #[test]
+    fn discover_meta_lines_takes_first_real_user_msg_and_first_cwd() {
+        let lines = vec![
+            r#"{"type":"user","cwd":"/Users/dev/proj","message":{"content":"<command-name>/foo</command-name>"}}"#.to_string(),
+            r#"{"type":"assistant","cwd":"/Users/dev/proj","message":{"content":[{"type":"text","text":"working"}]}}"#.to_string(),
+            r#"{"type":"user","cwd":"/Users/dev/elsewhere","message":{"content":"Fix the checkout bug"}}"#.to_string(),
+        ];
+        let (title, cwd) = discover_meta_lines(lines.into_iter());
+        assert_eq!(title.as_deref(), Some("Fix the checkout bug")); // command echo skipped
+        assert_eq!(cwd.as_deref(), Some("/Users/dev/proj")); // FIRST cwd (launch dir)
+        // array-form user content also yields a title
+        let arr = vec![r#"{"type":"user","message":{"content":[{"type":"text","text":"hello there"}]}}"#.to_string()];
+        assert_eq!(discover_meta_lines(arr.into_iter()).0.as_deref(), Some("hello there"));
+        // no real user message → no title
+        let none = vec![r#"{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}"#.to_string()];
+        assert_eq!(discover_meta_lines(none.into_iter()).0, None);
     }
 
     #[test]

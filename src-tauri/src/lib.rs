@@ -835,6 +835,7 @@ pub fn run() {
             reader::get_sessions,
             reader::get_historical_sessions,
             reader::get_historical_sessions_all,
+            reader::discover_sessions,
             open_external,
             open_path,
             open_in_terminal,
