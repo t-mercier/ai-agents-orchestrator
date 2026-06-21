@@ -1,5 +1,8 @@
 # ADR-006 — Detail panel architecture: keep separate detail.html, extract shared rendering to renderer/lib/detail-lib.js
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

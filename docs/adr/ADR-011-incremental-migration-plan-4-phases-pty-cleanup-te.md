@@ -1,5 +1,8 @@
 # ADR-011 — Incremental migration plan: 4 phases (PTY cleanup, tests, refactor, packaging) with buildable + green-test gates
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

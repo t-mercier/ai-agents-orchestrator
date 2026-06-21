@@ -1,5 +1,8 @@
 # ADR-001 — Vanilla JS + Electron 35 macOS read-only ~/.claude projection (no network, no config writes)
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

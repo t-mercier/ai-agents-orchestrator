@@ -1,5 +1,8 @@
 # ADR-005 — IPC surface locked: 8 fixed channels, all inputs validated, no future expansion without security audit
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

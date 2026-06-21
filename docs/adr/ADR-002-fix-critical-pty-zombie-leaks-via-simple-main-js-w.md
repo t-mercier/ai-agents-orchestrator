@@ -1,5 +1,8 @@
 # ADR-002 — Fix critical PTY zombie leaks via simple main.js window-close handler (not SessionLifecycleManager abstraction)
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

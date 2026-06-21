@@ -1,5 +1,8 @@
 # ADR-003 — Renderer architecture: 2-3 files (app.js, ui.js, delegated-events.js) with extracted pure-function modules (not 7-module split)
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

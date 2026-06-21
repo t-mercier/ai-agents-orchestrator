@@ -1,5 +1,8 @@
 # ADR-008 — Secrets management: read-only from ~/.claude.json in v1.0, NO Keychain or in-app storage
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

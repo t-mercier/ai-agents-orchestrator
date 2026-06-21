@@ -1,5 +1,8 @@
 # ADR-009 — v1.0 scope: defer onboarding, settings pages, MCP editor to v1.1; ship session viewer + terminal
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

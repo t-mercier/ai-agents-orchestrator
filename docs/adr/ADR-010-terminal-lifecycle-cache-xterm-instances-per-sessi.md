@@ -1,5 +1,8 @@
 # ADR-010 — Terminal lifecycle: cache xterm instances per sessionId, dispose on PTY death or app quit
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

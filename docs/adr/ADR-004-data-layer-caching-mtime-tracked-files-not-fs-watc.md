@@ -1,5 +1,8 @@
 # ADR-004 — Data layer caching: mtime-tracked files (not fs.watch), 5s TTL invalidation on poll
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context

@@ -1,5 +1,8 @@
 # ADR-007 — Distribution: electron-builder + code-signing + notarization in v1.0, auto-update deferred to v1.1
 
+> ⚠️ **Historical — pre-Tauri (Electron era).** Kept as a decision record. The app has since migrated to Tauri; see [ARCHITECTURE.md](./ARCHITECTURE.md) for the current design.
+
+
 **Status:** APPROVED
 
 ## Context
