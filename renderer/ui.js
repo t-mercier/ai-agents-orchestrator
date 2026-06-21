@@ -172,7 +172,8 @@ function firstNextStep(nextSteps) {
 // (which return early → the card isn't also selected). Visible in detailed + compact
 // density, hidden in minimal (CSS). Returns '' when the session has none of the three.
 function cardIcons(s) {
-  const icons = [ticketPill(s.ticket), prPill(s.prLink), notesPill(s.notesPath)].filter(Boolean).join('')
+  // Ticket as a number label (consistent with the board); PR + notes stay as icons.
+  const icons = [ticketChip(s.ticket), prPill(s.prLink), notesPill(s.notesPath)].filter(Boolean).join('')
   return icons ? `<div class="card-icons">${icons}</div>` : ''
 }
 
@@ -423,6 +424,17 @@ function ticketPill(ticket) {
   if (!base) return ''
   const url = escapeHtml(base + ticket)
   return `<button class="act pill" data-url="${url}" aria-label="${escapeHtml(ticket)}" data-tip="${escapeHtml(ticket)} · open ticket">${ICON_TICKET}</button>`
+}
+
+// Ticket as a NUMBER label (e.g. FEAT-1842) for list + card views — the id reads at a
+// glance, matching the board's chip. Clickable when a tracker URL is configured, a
+// plain label otherwise (the detail toolbar still uses the compact icon, ticketPill).
+function ticketChip(ticket) {
+  if (!ticket || !/[a-z0-9]/i.test(ticket)) return ''
+  const label = escapeHtml(ticket)
+  const base = (window.CSM_CONFIG && window.CSM_CONFIG.ticketBaseUrl) || ''
+  if (!base) return `<span class="ticket-tag" title="${label}">${label}</span>`
+  return `<button class="ticket-tag ticket-chip" data-url="${escapeHtml(base + ticket)}" data-tip="${label} · open ticket">${label}</button>`
 }
 
 function prPill(prLink) {

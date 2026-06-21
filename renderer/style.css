@@ -941,6 +941,12 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .session-card-foot .card-icons { flex: 1; overflow: hidden; }
 .card-icons .act { width: 26px; height: 24px; border-radius: 7px; }
 .card-icons .act svg, .card-icons .act img { width: 14px; height: 14px; }
+/* Ticket number label (list + card views) — sized to match the row's icon buttons
+   (.card-icons .act: 24px tall, 7px radius). The clickable variant (.ticket-chip)
+   opens the tracker via the global data-url handler. */
+.ticket-tag { display: inline-flex; align-items: center; height: 24px; box-sizing: border-box; font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; color: var(--text-secondary); background: rgba(var(--tint), 0.08); border: none; border-radius: 7px; padding: 0 8px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+button.ticket-tag { cursor: pointer; }
+button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rgb), 0.14); }
 
 /* ── Card density (html[data-density]) — default/unset = detailed (full base CSS).
    Compact drops the prose (activity preview, next cue, update time) but keeps the
