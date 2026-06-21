@@ -62,7 +62,7 @@ pub fn load() -> Value {
     derived
 }
 
-/// Read + merge + derive the config from disk (uncached).
+/// Read + derive the config from disk (uncached).
 fn build_config(path: &Path) -> Value {
     // Absent file = first run → defaults are expected (silent). A file that EXISTS
     // but won't parse is a real misconfiguration: warn so a beta tester who broke
@@ -77,56 +77,96 @@ fn build_config(path: &Path) -> Value {
         }),
         Err(_) => json!({}),
     };
+    derive(&user)
+}
 
+/// Pure config derivation (no I/O) — merges over defaults and migrates v1 → v2.
+///
+/// **v2** generalises the old two-root model: `roots` is a named list (`{name,path}`)
+/// and each category names the root it lives under (`root`), so the same category name
+/// can exist under several roots. **v1** (`workRoot`/`personalRoot` + a category `scope`
+/// of work|personal) is migrated: roots → `Work` + `Perso`, `scope` → `root`. Legacy
+/// fields (workRoot/personalRoot, category `scope`) are kept in the output so existing
+/// renderer/skill code keeps working until it's moved over to roots.
+fn derive(user: &Value) -> Value {
     let work_root = expand(user.get("workRoot").and_then(Value::as_str).unwrap_or("~/work"));
     let personal_root = expand(user.get("personalRoot").and_then(Value::as_str).unwrap_or("~"));
 
-    let categories = match user.get("categories") {
-        Some(Value::Array(a)) if !a.is_empty() => Value::Array(a.clone()),
-        _ => default_categories(),
+    // Roots: explicit v2 list, else migrate the two v1 roots to Work + Perso.
+    let roots: Vec<(String, String)> = match user.get("roots").and_then(Value::as_array) {
+        Some(arr) if !arr.is_empty() => arr
+            .iter()
+            .filter_map(|r| {
+                let name = r.get("name").and_then(Value::as_str)?.trim().to_string();
+                if name.is_empty() {
+                    return None;
+                }
+                Some((name, expand(r.get("path").and_then(Value::as_str).unwrap_or(""))))
+            })
+            .collect(),
+        _ => vec![
+            ("Work".to_string(), work_root.clone()),
+            ("Perso".to_string(), personal_root.clone()),
+        ],
     };
+    let root_path = |name: &str| roots.iter().find(|(n, _)| n == name).map(|(_, p)| p.clone());
+
+    let cats_in = match user.get("categories") {
+        Some(Value::Array(a)) if !a.is_empty() => a.clone(),
+        _ => default_categories().as_array().unwrap().clone(),
+    };
+    // Each category gets a `root` (migrated from `scope` when absent); `scope` is kept.
+    let categories: Vec<Value> = cats_in
+        .iter()
+        .map(|c| {
+            let mut c = c.clone();
+            let has_root = c.get("root").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+            if !has_root {
+                let scope = c.get("scope").and_then(Value::as_str).unwrap_or("work");
+                c["root"] = json!(if scope == "personal" { "Perso" } else { "Work" });
+            }
+            c
+        })
+        .collect();
 
     let obs = user.get("obsidian").cloned().unwrap_or_else(|| json!({}));
     let obsidian = json!({
         "enabled": obs.get("enabled").and_then(Value::as_bool).unwrap_or(false),
-        // migrate the legacy single `vaultPath` → work vault
         "workVaultPath": expand(obs.get("workVaultPath").and_then(Value::as_str)
             .or_else(|| obs.get("vaultPath").and_then(Value::as_str)).unwrap_or("")),
         "personalVaultPath": expand(obs.get("personalVaultPath").and_then(Value::as_str).unwrap_or("")),
     });
 
-    // Tracker-neutral URL prefix for clickable ticket IDs (Jira, Linear, GitHub
-    // Issues, Azure DevOps…). Accept the legacy `jiraBaseUrl` key for old configs.
     let ticket_base = user
         .get("ticketBaseUrl")
         .or_else(|| user.get("jiraBaseUrl"))
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    // Selector for which terminal "Resume"/+New/Restart launch into (matched to a
-    // strict allowlist at launch in lib.rs; "" = system default). Passed through verbatim.
     let terminal_app = user.get("terminalApp").and_then(Value::as_str).unwrap_or("").to_string();
 
-    // Derive scanDirs (work → workRoot/<CAT>, personal → personalRoot/<CAT>), order, colorMap.
+    // Derive scanDirs (root's path + /<CAT>), order, colorMap.
     let mut scan_dirs = Vec::new();
     let mut order = Vec::new();
     let mut color_map = serde_json::Map::new();
-    if let Value::Array(cats) = &categories {
-        for c in cats {
-            let name = c.get("name").and_then(Value::as_str).unwrap_or("");
-            if name.is_empty() {
-                continue;
-            }
-            let scope = c.get("scope").and_then(Value::as_str).unwrap_or("work");
-            let root = if scope == "personal" { &personal_root } else { &work_root };
-            scan_dirs.push(json!({ "category": name, "base": format!("{root}/{name}") }));
-            order.push(Value::String(name.to_string()));
-            color_map.insert(name.to_string(), c.get("color").cloned().unwrap_or(Value::Null));
+    for c in &categories {
+        let name = c.get("name").and_then(Value::as_str).unwrap_or("");
+        if name.is_empty() {
+            continue;
         }
+        let root_name = c.get("root").and_then(Value::as_str).unwrap_or("Work");
+        let base_root = root_path(root_name).unwrap_or_else(|| work_root.clone());
+        scan_dirs.push(json!({ "category": name, "base": format!("{base_root}/{name}"), "root": root_name }));
+        order.push(Value::String(name.to_string()));
+        color_map.insert(name.to_string(), c.get("color").cloned().unwrap_or(Value::Null));
     }
 
+    let roots_out: Vec<Value> = roots.iter().map(|(n, p)| json!({ "name": n, "path": p })).collect();
+
     json!({
-        "version": 1,
+        "version": 2,
+        "roots": roots_out,
+        // Kept for back-compat with code not yet moved to `roots`.
         "workRoot": work_root,
         "personalRoot": personal_root,
         "categories": categories,
@@ -143,6 +183,15 @@ fn build_config(path: &Path) -> Value {
 
 /// Validate a config (mirrors the JS validate) — the regex gate is the real guard.
 fn validate(c: &Value) -> Result<(), String> {
+    // Roots (v2): each needs a non-empty label (the path is user-chosen, like workRoot).
+    if let Some(roots) = c.get("roots").and_then(Value::as_array) {
+        for r in roots {
+            let name = r.get("name").and_then(Value::as_str).unwrap_or("");
+            if name.trim().is_empty() || name.len() > 30 {
+                return Err(format!("bad root name: {name}"));
+            }
+        }
+    }
     let cats = c
         .get("categories")
         .and_then(Value::as_array)
@@ -163,9 +212,13 @@ fn validate(c: &Value) -> Result<(), String> {
         {
             return Err(format!("bad color: {color}"));
         }
-        match cat.get("scope").and_then(Value::as_str) {
-            Some("work") | Some("personal") => {}
-            other => return Err(format!("bad scope: {}", other.unwrap_or(""))),
+        // Location: a v2 `root` label, or a legacy `scope` of work|personal.
+        let has_root = cat.get("root").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
+        if !has_root {
+            match cat.get("scope").and_then(Value::as_str) {
+                Some("work") | Some("personal") => {}
+                other => return Err(format!("bad scope: {}", other.unwrap_or(""))),
+            }
         }
     }
     Ok(())
@@ -193,4 +246,54 @@ pub fn get_config() -> Value {
 #[tauri::command]
 pub fn set_config(cfg: Value) -> Result<(), String> {
     save(&cfg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{derive, validate};
+    use serde_json::json;
+
+    #[test]
+    fn derive_migrates_v1_scope_to_named_roots() {
+        let v1 = json!({
+            "workRoot": "/w", "personalRoot": "/p",
+            "categories": [
+                {"name":"FEAT","color":"#7df0c0","scope":"work"},
+                {"name":"PERSO","color":"#8fd9ff","scope":"personal"}
+            ]
+        });
+        let d = derive(&v1);
+        assert_eq!(d["version"], 2);
+        let roots = d["roots"].as_array().unwrap();
+        assert!(roots.iter().any(|r| r["name"] == "Work" && r["path"] == "/w"));
+        assert!(roots.iter().any(|r| r["name"] == "Perso" && r["path"] == "/p"));
+        // scope migrated to root + scanDirs use the matching root path
+        let sd = d["scanDirs"].as_array().unwrap();
+        let feat = sd.iter().find(|s| s["category"] == "FEAT").unwrap();
+        assert_eq!(feat["base"], "/w/FEAT");
+        assert_eq!(feat["root"], "Work");
+        let perso = sd.iter().find(|s| s["category"] == "PERSO").unwrap();
+        assert_eq!(perso["base"], "/p/PERSO");
+        assert_eq!(perso["root"], "Perso");
+        assert!(validate(&v1).is_ok());
+    }
+
+    #[test]
+    fn derive_v2_allows_same_category_under_two_roots() {
+        let v2 = json!({
+            "roots": [{"name":"Work","path":"/w"},{"name":"Perso","path":"/p"}],
+            "categories": [
+                {"name":"AI-SYSTEM","color":"#aaaaaa","root":"Work"},
+                {"name":"AI-SYSTEM","color":"#bbbbbb","root":"Perso"}
+            ]
+        });
+        let d = derive(&v2);
+        let bases: Vec<&str> = d["scanDirs"].as_array().unwrap().iter()
+            .filter(|s| s["category"] == "AI-SYSTEM")
+            .map(|s| s["base"].as_str().unwrap())
+            .collect();
+        assert!(bases.contains(&"/w/AI-SYSTEM"), "Work AI-SYSTEM scanned");
+        assert!(bases.contains(&"/p/AI-SYSTEM"), "Perso AI-SYSTEM scanned"); // same name, two roots
+        assert!(validate(&v2).is_ok());
+    }
 }
