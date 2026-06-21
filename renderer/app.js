@@ -541,6 +541,17 @@ newSessionModal.addEventListener('click', async (e) => {
 const importModal = document.getElementById('import-modal')
 let importSelectedSid = null
 let importSessions = []
+let importScope = 'work'   // which root (work/personal) the imported session goes under
+// Populate the category dropdown — filtered by the chosen root when both roots exist
+// (mirrors +New). Shows the scope toggle only then. Falls back to UNNAMED when empty.
+function populateImportCategories() {
+  const cfg = window.CSM_CONFIG || {}
+  const bothRoots = !!(cfg.workRoot && cfg.personalRoot)
+  document.getElementById('import-scope-field').hidden = !bothRoots
+  let cats = bothRoots ? categoriesForScope(importScope) : ((cfg.categories || []).map(c => c.name))
+  if (!cats.length) cats = ['UNNAMED']
+  document.getElementById('import-category').innerHTML = cats.map(c => `<option value="${importEsc(c)}">${importEsc(c)}</option>`).join('')
+}
 const importEsc = (s) => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const showImportError = (m) => { const el = document.getElementById('import-error'); el.textContent = m; el.hidden = false }
 const hideImportError = () => { document.getElementById('import-error').hidden = true }
@@ -556,9 +567,12 @@ function renderImportList(query) {
   list.innerHTML = rows.map(s => {
     const when = s.mtime ? formatTimestamp(new Date(s.mtime * 1000).toISOString()) : ''
     const title = importEsc(s.title || '(untitled session)')
-    return `<button type="button" class="import-row${s.sessionId === importSelectedSid ? ' selected' : ''}" data-import-sid="${importEsc(s.sessionId)}" data-title="${title}">
+    const cwd = importEsc(s.cwd || '')
+    // Full title + path in the native tooltip — the rows are ellipsis-truncated.
+    const tip = `${title}${cwd ? `\n${cwd}` : ''}`
+    return `<button type="button" class="import-row${s.sessionId === importSelectedSid ? ' selected' : ''}" data-import-sid="${importEsc(s.sessionId)}" data-title="${title}" title="${tip}">
       <span class="import-row-title">${title}</span>
-      <span class="import-row-meta">${importEsc(s.cwd || '')}${when ? ' · ' + when : ''}</span>
+      <span class="import-row-meta">${cwd}${when ? ' · ' + when : ''}</span>
     </button>`
   }).join('')
 }
@@ -568,11 +582,7 @@ async function openImportModal() {
   document.getElementById('import-search').value = ''
   document.getElementById('import-name').value = ''
   hideImportError()
-  // No categories yet? Don't send the user to Settings — offer a default UNNAMED
-  // bucket (created for real on import, so it's scanned + filterable afterwards).
-  let cats = ((window.CSM_CONFIG && window.CSM_CONFIG.categories) || []).map(c => c.name)
-  if (!cats.length) cats = ['UNNAMED']
-  document.getElementById('import-category').innerHTML = cats.map(c => `<option value="${importEsc(c)}">${importEsc(c)}</option>`).join('')
+  populateImportCategories()
   const goBtn = document.getElementById('import-go')
   goBtn.disabled = true
   document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
@@ -585,6 +595,14 @@ document.getElementById('import-cancel').addEventListener('click', () => importM
 // Escape closes the modal. The search field is type=search, which natively eats
 // Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
 importModal.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); importModal.close() } })
+// Root toggle (work/personal) → re-filter the category dropdown, like +New.
+document.querySelectorAll('.import-scope-toggle [data-scope]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    importScope = btn.dataset.scope
+    document.querySelectorAll('.import-scope-toggle [data-scope]').forEach(b => b.classList.toggle('active', b.dataset.scope === importScope))
+    populateImportCategories()
+  })
+})
 document.getElementById('import-search').addEventListener('input', e => renderImportList(e.target.value))
 document.getElementById('import-list').addEventListener('click', (e) => {
   const row = e.target.closest('[data-import-sid]')
@@ -608,7 +626,7 @@ document.getElementById('import-go').addEventListener('click', async () => {
   const cfg = window.CSM_CONFIG || {}
   const existing = cfg.categories || []
   if (!existing.some(c => c.name === category)) {
-    const next = { ...cfg, categories: [...existing, { name: category, color: '#8a8f98', scope: 'work' }] }
+    const next = { ...cfg, categories: [...existing, { name: category, color: '#8a8f98', scope: importScope }] }
     const w = await window.api.setConfig(next)
     if (!w || !w.ok) { showImportError((w && w.error) || 'Could not create the category.'); goBtn.disabled = false; return }
     if (window.reloadConfig) await window.reloadConfig()

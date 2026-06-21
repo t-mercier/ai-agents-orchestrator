@@ -294,12 +294,16 @@ fn is_title_noise(s: &str) -> bool {
         || t.to_lowercase().contains("system-reminder")
 }
 
-/// A transcript's de-facto title + launch dir, from its first lines — the first
-/// genuine user prompt (skipping the injected noise above) and the first `cwd`.
-/// Iterator-based + early-return so we don't load a huge .jsonl just for the header.
-fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>, Option<String>) {
+/// A transcript's title + launch dir + whether to skip it. The title is the first
+/// genuine user prompt (past the injected noise above); `skip` is set for transcripts
+/// that aren't real interactive sessions — slash-command / skill one-off runs (the
+/// first user turn carries `<command-name>` markup) and sub-agent sidechains. Iterator-
+/// based + early-return so we don't load a huge .jsonl just for the header.
+fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>, Option<String>, bool) {
     let mut title: Option<String> = None;
     let mut cwd: Option<String> = None;
+    let mut skip = false;
+    let mut seen_user = false;
     for line in lines {
         if line.is_empty() {
             continue;
@@ -308,12 +312,15 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
             Ok(v) => v,
             Err(_) => continue,
         };
+        if ev.get("isSidechain").and_then(Value::as_bool) == Some(true) {
+            skip = true; // sub-agent transcript, not a user session
+        }
         if cwd.is_none() {
             if let Some(c) = ev.get("cwd").and_then(Value::as_str) {
                 cwd = Some(c.to_string());
             }
         }
-        if title.is_none() && ev.get("type").and_then(Value::as_str) == Some("user") {
+        if ev.get("type").and_then(Value::as_str) == Some("user") {
             let content = ev.get("message").and_then(|m| m.get("content"));
             // A user turn can be a string or an array of blocks; the real prompt may
             // sit AFTER an injected block, so scan all text for the first non-noise one.
@@ -326,22 +333,32 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
                     .collect(),
                 _ => Vec::new(),
             };
-            if let Some(t) = texts.into_iter().map(str::trim).find(|t| !is_title_noise(t)) {
-                title = Some(t.chars().take(100).collect());
+            // The first user turn of a slash-command / skill run carries the command
+            // markup → it's a one-off, not a session to import.
+            if !seen_user {
+                seen_user = true;
+                if texts.iter().any(|t| t.contains("<command-name>") || t.contains("<command-message>")) {
+                    skip = true;
+                }
+            }
+            if title.is_none() {
+                if let Some(t) = texts.into_iter().map(str::trim).find(|t| !is_title_noise(t)) {
+                    title = Some(t.chars().take(100).collect());
+                }
             }
         }
-        if title.is_some() && cwd.is_some() {
+        if title.is_some() && cwd.is_some() && seen_user {
             break;
         }
     }
-    (title, cwd)
+    (title, cwd, skip)
 }
 
-fn discover_meta(path: &std::path::Path) -> (Option<String>, Option<String>) {
+fn discover_meta(path: &std::path::Path) -> (Option<String>, Option<String>, bool) {
     use std::io::{BufRead, BufReader};
     match fs::File::open(path) {
         Ok(f) => discover_meta_lines(BufReader::new(f).lines().map_while(Result::ok)),
-        Err(_) => (None, None),
+        Err(_) => (None, None, false),
     }
 }
 
@@ -416,7 +433,10 @@ pub fn discover_sessions() -> Vec<Value> {
                 .and_then(|m| m.duration_since(SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let (title, cwd) = discover_meta(&path);
+            let (title, cwd, skip) = discover_meta(&path);
+            if skip {
+                continue; // slash-command / skill one-off or sub-agent sidechain, not a session
+            }
             rows.push((
                 mtime,
                 json!({ "sessionId": sid, "title": title, "cwd": cwd, "mtime": mtime }),
@@ -981,13 +1001,21 @@ mod tests {
     #[test]
     fn discover_meta_lines_takes_first_real_user_msg_and_first_cwd() {
         let lines = vec![
-            r#"{"type":"user","cwd":"/Users/dev/proj","message":{"content":"<command-name>/foo</command-name>"}}"#.to_string(),
+            r#"{"type":"user","cwd":"/Users/dev/proj","message":{"content":"<system-reminder>ctx</system-reminder>"}}"#.to_string(),
             r#"{"type":"assistant","cwd":"/Users/dev/proj","message":{"content":[{"type":"text","text":"working"}]}}"#.to_string(),
             r#"{"type":"user","cwd":"/Users/dev/elsewhere","message":{"content":"Fix the checkout bug"}}"#.to_string(),
         ];
-        let (title, cwd) = discover_meta_lines(lines.into_iter());
-        assert_eq!(title.as_deref(), Some("Fix the checkout bug")); // command echo skipped
+        let (title, cwd, skip) = discover_meta_lines(lines.into_iter());
+        assert_eq!(title.as_deref(), Some("Fix the checkout bug")); // injected noise skipped
         assert_eq!(cwd.as_deref(), Some("/Users/dev/proj")); // FIRST cwd (launch dir)
+        assert!(!skip); // a plain session (no command markup) is kept
+        // slash-command run (first user turn carries <command-name>) → skipped
+        let cmd = vec![r#"{"type":"user","message":{"content":"<command-name>/release-notes</command-name>\n<command-args></command-args>"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"Generate the release notes for the current PR"}}"#.to_string()];
+        assert!(discover_meta_lines(cmd.into_iter()).2);
+        // sub-agent sidechain → skipped
+        let side = vec![r#"{"type":"user","isSidechain":true,"message":{"content":"do a thing"}}"#.to_string()];
+        assert!(discover_meta_lines(side.into_iter()).2);
         // injected noise (skill body, system-reminder) is skipped; real prompt wins
         let noisy = vec![
             r#"{"type":"user","message":{"content":"Base directory for this skill is /x"}}"#.to_string(),

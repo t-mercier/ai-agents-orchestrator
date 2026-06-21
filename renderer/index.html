@@ -111,6 +111,13 @@
       <p class="modal-hint">Adopt an existing Claude Code session the dashboard isn't tracking yet. Pick one — it resumes and gets a <code>notes.md</code> so it shows up like a managed session.</p>
       <input id="import-search" class="search-field" type="search" placeholder="Search recent sessions…" spellcheck="false" autocomplete="off">
       <div id="import-list" class="import-list"></div>
+      <label class="modal-field" id="import-scope-field" hidden>
+        <span class="modal-label">Root</span>
+        <div class="view-toggle import-scope-toggle">
+          <button type="button" class="view-btn active" data-scope="work" id="import-scope-work">Work</button>
+          <button type="button" class="view-btn" data-scope="personal" id="import-scope-personal">Personal</button>
+        </div>
+      </label>
       <label class="modal-field">
         <span class="modal-label">Category</span>
         <select id="import-category"></select>
