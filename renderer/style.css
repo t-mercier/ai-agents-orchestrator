@@ -255,9 +255,24 @@ html, body {
 }
 .settings-tab:hover { background: rgba(var(--tint), 0.06); color: var(--text-primary); }
 .settings-tab.active { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); }
-/* Fixed height (not max-height) so the modal doesn't jump in size between tabs;
-   shorter tabs just leave whitespace, taller ones scroll. ~Categories-tab height. */
-.settings-panels { flex: 1; min-width: 0; height: 60vh; overflow-y: auto; padding-right: 4px; }
+/* The panels fill the (resizable) modal's height and scroll; the modal itself sets the
+   height (drag-to-resize below). */
+.settings-panels { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
+
+/* The Settings modal is mouse-resizable from its corner: up to +20% wider (600→720px)
+   and taller until everything fits (~92vh). The form + tabs fill it so the panels grow. */
+#settings-modal {
+  resize: both;
+  overflow: hidden;
+  width: 600px;
+  min-width: 600px;
+  max-width: 720px;
+  height: 70vh;
+  min-height: 440px;
+  max-height: 92vh;
+}
+#settings-modal .modal-form { height: 100%; box-sizing: border-box; }
+#settings-modal .settings-tabs { flex: 1; min-height: 0; }
 .settings-panel { display: none; flex-direction: column; gap: 16px; }
 .settings-panel.active { display: flex; }
 .settings-section { display: flex; flex-direction: column; gap: 10px; }
