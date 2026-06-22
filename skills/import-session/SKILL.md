@@ -1,17 +1,17 @@
 ---
-name: import
+name: import-session
 description: >-
   Adopt the CURRENT (already-running) Claude Code session into management: writes
   a notes.md under a category's configured folder and registers the session in
   ~/.claude/active-sessions.json, so the dashboard tracks it like a /start-ed one.
   Meant to run right after `claude --resume <id>` (the dashboard's +Import does
-  this for you). Unlike /start it does NOT create a fresh workspace or sync a repo —
-  it binds the session you're already in. Trigger on "/import", "/import FEAT name".
+  this for you). Unlike /start-session it does NOT create a fresh workspace or sync a repo —
+  it binds the session you're already in. Trigger on "/import-session", "/import-session FEAT name".
 allowed-tools: Bash Read Write AskUserQuestion
 argument-hint: "<CATEGORY> [name]"
 ---
 
-# /import — adopt the current session
+# /import-session — adopt the current session
 
 Binds the session you're in (typically just `--resume`d) to a `notes.md` under a
 category folder + registers it, so it shows up managed in the dashboard. Categories
@@ -22,7 +22,7 @@ and their folders come from your config — edit them in Settings, not here.
 If plan mode is active (a `Plan mode is active` system reminder is present): stop and print:
 
 > ⚠️ Plan mode is active — this skill writes files and will be blocked.
-> Switch to auto mode, then re-run `/import`.
+> Switch to auto mode, then re-run `/import-session`.
 
 ## Step 1 — Parse arguments + validate category
 
@@ -76,7 +76,7 @@ TARGET_DIR=$(python3 ~/.claude/skills/lib/aoconfig.py dir "$CATEGORY" "$FOLDER")
 NOTES_PATH="$TARGET_DIR/notes.md"
 ```
 
-If `notes.md` already exists at `$NOTES_PATH`, abort: "Already managed at `$NOTES_PATH` — use `/restart $FOLDER` to reopen." Do NOT overwrite.
+If `notes.md` already exists at `$NOTES_PATH`, abort: "Already managed at `$NOTES_PATH` — use `/restart-session $FOLDER` to reopen." Do NOT overwrite.
 
 ## Step 4 — Resolve branch
 
@@ -156,4 +156,4 @@ EOF
 
 Print a short confirmation: imported `<NAME>` into `<CATEGORY>`, notes at `$NOTES_PATH`,
 registered. Remind the user the dashboard picks it up on its next 5-second poll (it's
-live now → **Running**), and that `/close` will file it under Closed when they're done.
+live now → **Running**), and that `/close-session` will file it under Closed when they're done.

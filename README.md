@@ -36,7 +36,7 @@ Terminal tabs don't scale. You need mission control.
 - **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` for view, `b` for board. **Remap any of it** in Settings → Shortcuts.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and **category filters**.
-- **Named roots** — group categories under multiple named roots (e.g. *Work*, *Perso*, a client) and scope the whole dashboard — List, Cards, Board and the category chips — to one root or to **All** from a titlebar selector. In **All** mode each card shows a small root badge so the same category name across roots is never ambiguous.
+- **Named roots** — group categories under multiple named roots (e.g. *Work*, *Perso*, a client) and scope the whole dashboard — List, Cards, Board and the category chips — to one root or to **All** from a titlebar selector. A session's root shows in its detail slide-over, so the cards stay uncluttered.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
 ### Three ways to look at your work
@@ -105,29 +105,29 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 
 | Skill | What it does |
 |---|---|
-| `/start <CAT> <ticket> <name>` | Create a session workspace + `notes.md` under the category's folder, register it, sync the repo |
-| `/close` | Wrap up the session: summarise into `notes.md` + append a history entry tagged with the session id |
-| `/restart <slug>` | Reload a session's notes **and its recorded session id** into a fresh session (history stays linked) |
-| `/archive <slug>` | Mark a session archived (drops it from the active list) |
+| `/start-session <CAT> <ticket> <name>` | Create a session workspace + `notes.md` under the category's folder, register it, sync the repo |
+| `/close-session` | Wrap up the session: summarise into `notes.md` + append a history entry tagged with the session id |
+| `/restart-session <slug>` | Reload a session's notes **and its recorded session id** into a fresh session (history stays linked) |
+| `/archive-session <slug>` | Mark a session archived (drops it from the active list) |
 | `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
 
 Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
-> ⚠️ **Updating from an earlier version?** This release makes the skills **root-aware** (they resolve a session's folder from its category's root, with the old work/personal layout still supported) and **fixes `/restart`** — its un-archive step used to over-match and could strip valid `notes.md` history lines. **Re-run the installer to pull the updated skills:**
+> ⚠️ **Updating from an earlier version?** This release makes the skills **root-aware** (they resolve a session's folder from its category's root, with the old work/personal layout still supported) and **fixes `/restart-session`** — its un-archive step used to over-match and could strip valid `notes.md` history lines. **Re-run the installer to pull the updated skills:**
 > ```bash
 > bash scripts/install.sh --force
 > ```
 
 ### Memory that beats compaction
 
-Long sessions force the assistant to **compact** its own history — silently dropping older context until it loses the thread. This app keeps what matters in `notes.md` on disk instead: `/close` records the goal, decisions and next steps **plus the session id**; `/restart` loads all of it — and that id — into a fresh conversation, so the chain back to the original is never broken. Need the literal transcript? `claude --resume <id>` replays it verbatim.
+Long sessions force the assistant to **compact** its own history — silently dropping older context until it loses the thread. This app keeps what matters in `notes.md` on disk instead: `/close-session` records the goal, decisions and next steps **plus the session id**; `/restart-session` loads all of it — and that id — into a fresh conversation, so the chain back to the original is never broken. Need the literal transcript? `claude --resume <id>` replays it verbatim.
 
 ```mermaid
 flowchart LR
-    S1(["Session 1<br/>you + Claude"]) -->|/close| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
-    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>briefed from the notes"])
+    S1(["Session 1<br/>you + Claude"]) -->|/close-session| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
+    N -->|"/restart-session &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>briefed from the notes"])
     N -->|"claude --resume &lt;id&gt;"| R(["The exact original<br/>transcript, replayed"])
-    S2 -->|/close| N
+    S2 -->|/close-session| N
     classDef disk fill:#1e2230,stroke:#9b8cff,stroke-width:2px,color:#fff;
     class N disk;
 ```
@@ -172,12 +172,12 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 
 ## FAQ
 
-**Does it show all my sessions, or only ones started with `/start`?** Two sources, both automatic:
+**Does it show all my sessions, or only ones started with `/start-session`?** Two sources, both automatic:
 
-- **Running** — *every live Claude Code session* on your machine shows up, managed or not. Unmanaged ones just carry less metadata (no goal/category/ticket) until you `/start` or `/restart` them.
-- **Closed / Archived / Stale** — these list **managed** sessions: ones with a `notes.md` under your category roots (created by `/start`). That `notes.md` is what gives the dashboard the goal, history, and lifecycle state.
+- **Running** — *every live Claude Code session* on your machine shows up, managed or not. Unmanaged ones just carry less metadata (no goal/category/ticket) until you `/start-session` or `/restart-session` them.
+- **Closed / Archived / Stale** — these list **managed** sessions: ones with a `notes.md` under your category roots (created by `/start-session`). That `notes.md` is what gives the dashboard the goal, history, and lifecycle state.
 
-**Can I import my existing / older Claude sessions?** Live ones need nothing — they're already in **Running**. Past sessions that were never `/start`-ed have no `notes.md`, so they don't show in the historical tabs. To bring one under management, run `/restart <slug>` (or `/start`) for that work — it creates the `notes.md` and registers it. Setting your category **root dir** only tells the app *where* to scan for managed sessions; it doesn't ingest arbitrary `~/.claude` transcripts on its own.
+**Can I import my existing / older Claude sessions?** Live ones need nothing — they're already in **Running**. Past sessions that were never `/start-session`-ed have no `notes.md`, so they don't show in the historical tabs. To bring one under management, run `/restart-session <slug>` (or `/start-session`) for that work — it creates the `notes.md` and registers it. Setting your category **root dir** only tells the app *where* to scan for managed sessions; it doesn't ingest arbitrary `~/.claude` transcripts on its own.
 
 > Auto-importing *any* past session (not just managed ones) isn't built yet — it's a great idea on the roadmap. Open an issue if you want it.
 

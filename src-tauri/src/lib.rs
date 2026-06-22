@@ -145,10 +145,10 @@ fn validate_repo(repo: &str) -> Result<std::path::PathBuf, String> {
     Ok(abs)
 }
 
-/// Launch a NEW session: open `claude` + the `/start` skill in a new iTerm tab.
+/// Launch a NEW session: open `claude` + the `/start-session` skill in a new iTerm tab.
 /// Launches from a chosen repo (cd + checkout the branch so the session starts on
 /// it) when given, else the category's scope root. The app writes nothing itself —
-/// /start creates the workspace (ADR-001/ADR-012). Category must pass the strict
+/// /start-session creates the workspace (ADR-001/ADR-012). Category must pass the strict
 /// token regex AND exist in config. Repo/branch are pre-flight-validated so errors
 /// surface in the form, not as a dead iTerm tab.
 #[tauri::command]
@@ -217,18 +217,18 @@ fn start_session(
     }
 
     // Optional reviewed-PR link (REVIEW sessions). Validated up front; appended as a
-    // `--pr <url>` token the /start skill recognises and writes to the frontmatter.
+    // `--pr <url>` token the /start-session skill recognises and writes to the frontmatter.
     let pr = pr_link.trim();
     if !pr.is_empty() && !is_pr_url(pr) {
         return Err("not a GitHub PR URL (https://github.com/owner/repo/pull/N)".into());
     }
 
-    // /start parses: <CATEGORY> [<TICKET>] <name> [--pr <url>]
+    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>]
     let parts: Vec<&str> = [category.as_str(), safe_ticket.as_str(), safe_name.as_str()]
         .into_iter()
         .filter(|p| !p.is_empty())
         .collect();
-    let mut prompt = format!("/start {}", parts.join(" "));
+    let mut prompt = format!("/start-session {}", parts.join(" "));
     if !pr.is_empty() {
         prompt.push_str(&format!(" --pr {pr}"));
     }
@@ -283,10 +283,10 @@ fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::Value) -> St
     cfg.get(root_key).and_then(serde_json::Value::as_str).unwrap_or(home).to_string()
 }
 
-/// Reopen a closed/archived session: launch `claude` + the `/restart` skill, which
+/// Reopen a closed/archived session: launch `claude` + the `/restart-session` skill, which
 /// reloads the session's notes into a fresh session and re-registers it as active
 /// (un-archiving it). Launcher only — the app writes nothing (ADR-001/ADR-012).
-/// Distinct from resume: `/restart` reloads the notes summary, not the raw transcript,
+/// Distinct from resume: `/restart-session` reloads the notes summary, not the raw transcript,
 /// so it works for sessions with no recorded sessionId (e.g. "to fill").
 #[tauri::command]
 fn restore_session(slug: String, session_id: String) -> Result<(), String> {
@@ -300,7 +300,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     {
         return Err("invalid sessionId".into());
     }
-    // cd into the session's launch dir (so /restart can check out its branch),
+    // cd into the session's launch dir (so /restart-session can check out its branch),
     // resolved from the transcript; fall back to home.
     let dir = if session_id.is_empty() {
         None
@@ -309,7 +309,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     }
     .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
 
-    let prompt = format!("/restart {slug}");
+    let prompt = format!("/restart-session {slug}");
     let cmd = format!(
         "cd {} && claude --model {} {}",
         pty::shell_quote(&dir),
@@ -320,7 +320,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
 }
 
 /// Import (adopt) an existing Claude Code session into management: `--resume` it and
-/// run the `/import` skill so it gets a notes.md + registration. The app only launches;
+/// run the `/import-session` skill so it gets a notes.md + registration. The app only launches;
 /// the skill does the writing (ADR-012). cwd = the session's launch dir (where
 /// `--resume` must run). Category must be one the user configured.
 #[tauri::command(async)]
@@ -341,7 +341,7 @@ fn import_session(session_id: String, category: String, name: String) -> Result<
     if !known {
         return Err("unknown category — add it in Settings first".into());
     }
-    // Same safe-name set as /start (no shell / YAML-breaking chars); may be empty.
+    // Same safe-name set as /start-session (no shell / YAML-breaking chars); may be empty.
     let cleaned: String = name
         .chars()
         .map(|c| if c.is_whitespace() { ' ' } else { c })
@@ -353,9 +353,9 @@ fn import_session(session_id: String, category: String, name: String) -> Result<
     let dir = reader::resolve_session_cwd(&session_id)
         .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
     let prompt = if safe_name.is_empty() {
-        format!("/import {category}")
+        format!("/import-session {category}")
     } else {
-        format!("/import {category} {safe_name}")
+        format!("/import-session {category} {safe_name}")
     };
     let cmd = format!(
         "cd {} && claude --resume {} --model {} {}",
@@ -491,7 +491,7 @@ fn notes_md_under_root(notes_path: &str) -> Result<std::path::PathBuf, String> {
 
 /// A GitHub pull-request URL: `https://github.com/<owner>/<repo>/pull/<number>`,
 /// optionally followed by `/…`, `#…` or `?…`. No whitespace (also keeps it safe to
-/// embed in the /start shell command, which we shell-quote anyway).
+/// embed in the /start-session shell command, which we shell-quote anyway).
 fn is_pr_url(url: &str) -> bool {
     if url.chars().any(|c| c.is_whitespace()) {
         return false;
@@ -536,7 +536,7 @@ fn set_pr_link_in_frontmatter(content: &str, url: &str) -> String {
 }
 
 /// Append an ARCHIVED bullet at the end of the `## Session history` section
-/// (creating the section if absent). Pure + unit-tested — mirrors what /archive
+/// (creating the section if absent). Pure + unit-tested — mirrors what /archive-session
 /// writes. The dashboard classifies a session as Archived from any history line
 /// containing "ARCHIVED" (reader.rs::session_history_info).
 fn stamp_archived(content: &str, line: &str) -> String {
@@ -559,7 +559,7 @@ fn stamp_archived(content: &str, line: &str) -> String {
 
 /// Archive a session FROM THE DASHBOARD (ADR-013 — the app's one source-of-truth
 /// write, a deliberate derogation from ADR-001): stamps ARCHIVED into notes.md and
-/// drops the session from active-sessions.json. Mirrors the /archive skill. Writes
+/// drops the session from active-sessions.json. Mirrors the /archive-session skill. Writes
 /// are atomic and confined to a real notes.md under a configured root.
 #[tauri::command(async)]
 fn archive_session(notes_path: String) -> Result<(), String> {

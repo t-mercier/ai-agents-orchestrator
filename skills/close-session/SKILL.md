@@ -1,16 +1,16 @@
 ---
-name: close
+name: close-session
 description: >-
   Wrap up the active session: resolve its registered notes.md, summarise what
   this session did (Decisions, Files touched, Open questions, Next steps), update
   those sections, and append a Session history entry. If Obsidian is enabled in
-  config, distils a short atomic note to the matching vault. Trigger on "/close",
+  config, distils a short atomic note to the matching vault. Trigger on "/close-session",
   "wrap up", "save session notes", "ferme la session".
 allowed-tools: Bash Read Edit Write
 argument-hint: ""
 ---
 
-# /close — wrap up the active session
+# /close-session — wrap up the active session
 
 Summarises the current session into its `notes.md` and stamps the Session history.
 Nothing is deleted; the session can be resumed later.
@@ -20,7 +20,7 @@ Nothing is deleted; the session can be resumed later.
 If plan mode is active (a `Plan mode is active` system reminder is present): stop and print:
 
 > ⚠️ Plan mode is active — this skill writes files and will be blocked.
-> Switch to auto mode, then re-run `/close`.
+> Switch to auto mode, then re-run `/close-session`.
 
 ## Step 1 — Resolve the current session ID
 
@@ -68,7 +68,7 @@ PY
 ```
 
 If `$NOTES_PATH` is empty: stop and tell the user there's no active session registered
-for this conversation — run `/start` (new) or `/restart <slug>` (resume) first.
+for this conversation — run `/start-session` (new) or `/restart-session <slug>` (resume) first.
 
 ## Step 3 — Read the notes + frontmatter
 
@@ -120,4 +120,4 @@ the Next steps, and a backlink line `Source: <NOTES_PATH>`. Create the
 
 Print a short confirmation: which sections were updated, the Session history line
 added, and (if applicable) the vault note written. Remind the user they can resume
-later with `/restart <slug>` or start fresh.
+later with `/restart-session <slug>` or start fresh.

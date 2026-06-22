@@ -1,20 +1,20 @@
 ---
-name: archive
+name: archive-session
 description: >-
   Archive a stale session without loading its context — stamps its notes.md as
   "archived" in the Session history and removes it from active-sessions.json.
   The note file is kept on disk. Use for sessions that are done or abandoned.
-  Trigger on "/archive <slug>", "archive session <slug>".
+  Trigger on "/archive-session <slug>", "archive session <slug>".
 allowed-tools: Bash Read Edit
 argument-hint: "<session-slug>"
 ---
 
-# /archive &lt;slug&gt; — archive a stale session
+# /archive-session &lt;slug&gt; — archive a stale session
 
 Marks a session archived without loading its full context. Nothing is deleted —
-the `notes.md` stays on disk and can be reopened later with `/restart <slug>`.
+the `notes.md` stays on disk and can be reopened later with `/restart-session <slug>`.
 
-Usage: `/archive my-feature` or `/archive PROJ-1234`
+Usage: `/archive-session my-feature` or `/archive-session PROJ-1234`
 
 ---
 
@@ -23,7 +23,7 @@ Usage: `/archive my-feature` or `/archive PROJ-1234`
 If plan mode is active (a `Plan mode is active` system reminder is present): stop and print:
 
 > ⚠️ Plan mode is active — this skill writes files and will be blocked.
-> Switch to auto mode, then re-run `/archive`.
+> Switch to auto mode, then re-run `/archive-session`.
 
 ## Step 1 — Resolve the slug
 
@@ -58,7 +58,7 @@ Archiving: <name> [<ticket>] — <NOTES_PATH>
 Append a line under `## Session history` (create the section if missing):
 
 ```
-- <YYYY-MM-DD HH:MM> | ARCHIVED | archived via /archive
+- <YYYY-MM-DD HH:MM> | ARCHIVED | archived via /archive-session
 ```
 
 Use `date +"%Y-%m-%d %H:%M"` for the timestamp.
@@ -90,4 +90,4 @@ Print:
   Removed from active sessions (note file kept).
 ```
 
-Nothing was deleted — reopen any time with `/restart <slug>`.
+Nothing was deleted — reopen any time with `/restart-session <slug>`.

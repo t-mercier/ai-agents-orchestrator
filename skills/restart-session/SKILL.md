@@ -1,34 +1,34 @@
 ---
-name: restart
+name: restart-session
 description: >-
-  Two modes. (1) No arg — wraps the current session via /close logic, verifies
+  Two modes. (1) No arg — wraps the current session via /close-session logic, verifies
   notes.md was saved (persistence gate), then prints fresh-start options. (2) With
   <session-slug> — loads an existing notes.md into the CURRENT fresh session,
   checks out the branch from its frontmatter, registers this session in
-  active-sessions.json, and suggests a /rename. Trigger on "/restart",
-  "/restart <slug>", "resume <slug>", "reprendre la session".
+  active-sessions.json, and suggests a /rename. Trigger on "/restart-session",
+  "/restart-session <slug>", "resume <slug>", "reprendre la session".
 allowed-tools: Bash Read Write Edit AskUserQuestion
 argument-hint: "[session-slug]"
 ---
 
-# /restart — wrap or resume a session
+# /restart-session — wrap or resume a session
 
 ## Step 0 — Mode check
 
 If plan mode is active (a `Plan mode is active` system reminder is present): stop and print:
 
 > ⚠️ Plan mode is active — this skill writes files and will be blocked.
-> Switch to auto mode, then re-run `/restart`.
+> Switch to auto mode, then re-run `/restart-session`.
 
 Two flows depending on `$ARGUMENTS`:
-- **Empty** → wrap the current session (run `/close`), gate, print fresh-start steps.
+- **Empty** → wrap the current session (run `/close-session`), gate, print fresh-start steps.
 - **Non-empty** → `$ARGUMENTS` is a past session's slug; load its notes.md here.
 
 ---
 
 ## Mode A: no arguments (wrap-and-prompt)
 
-Run the full `/close` skill steps (resolve session, summarise, update notes.md,
+Run the full `/close-session` skill steps (resolve session, summarise, update notes.md,
 append Session history).
 
 ### Persistence gate
@@ -36,7 +36,7 @@ After the writes, re-read `$NOTES_PATH` and verify the new Session history line
 (today's date + this session's summary) and any added bullets are present. If not,
 do **not** print fresh-start instructions — print:
 
-> `notes.md` missing expected update — re-run `/restart` or save manually before clearing context.
+> `notes.md` missing expected update — re-run `/restart-session` or save manually before clearing context.
 
 and stop.
 
@@ -50,7 +50,7 @@ Notes saved. Fresh start options:
 
 Option A — in-place (recommended):
   /clear
-  /restart <slug>
+  /restart-session <slug>
 
 Option B — full shell restart:
   exit
@@ -72,7 +72,7 @@ matches=$(python3 ~/.claude/skills/lib/aoconfig.py find "$SLUG")
 count=$(printf '%s' "$matches" | grep -c .)
 ```
 
-- **0** → abort: "No notes.md found for slug `$SLUG`. Did you `/start` it?"
+- **0** → abort: "No notes.md found for slug `$SLUG`. Did you `/start-session` it?"
 - **1** → `NOTES_PATH="$matches"`
 - **>1** → `AskUserQuestion` to pick (list full paths).
 
@@ -142,10 +142,10 @@ EOF
 If this session was previously archived, its `## Session history` has an `ARCHIVED`
 line — which makes the dashboard keep classifying it as Archived even after you
 close it again. Restarting revives the session, so strip that marker now; the next
-`/close` then files it under Closed (normal lifecycle). Idempotent — does nothing
+`/close-session` then files it under Closed (normal lifecycle). Idempotent — does nothing
 if the session wasn't archived.
 
-The genuine `/archive` marker is a Session-history bullet of the exact form
+The genuine `/archive-session` marker is a Session-history bullet of the exact form
 `- <YYYY-MM-DD HH:MM> | ARCHIVED | …` — i.e. a pipe-delimited line whose second
 field is exactly `ARCHIVED`. ONLY strip those. Do NOT match on the substring
 "ARCHIVED" anywhere in a line: many legitimate Decisions/Files bullets mention the

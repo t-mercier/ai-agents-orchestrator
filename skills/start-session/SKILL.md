@@ -1,16 +1,16 @@
 ---
-name: start
+name: start-session
 description: >-
   Open a new session: creates a workspace + notes.md under the category's
   configured folder, registers it in ~/.claude/active-sessions.json, syncs the
   git repo, and renames the session. Categories & note locations come from your
-  config. Aborts if the workspace already exists (use /restart instead).
-  Trigger on "/start", "start a session", "/start FEAT PROJ-123 short-name".
+  config. Aborts if the workspace already exists (use /restart-session instead).
+  Trigger on "/start-session", "start a session", "/start-session FEAT PROJ-123 short-name".
 allowed-tools: Bash Read Write AskUserQuestion
 argument-hint: "<CATEGORY> <TICKET-OR-NAME> [name]"
 ---
 
-# /start — open a session
+# /start-session — open a session
 
 Bootstraps a per-session workspace with a `notes.md`, registers the active
 session, and syncs the git repo. Categories and their folders come from your
@@ -22,7 +22,7 @@ Settings, not here.
 If plan mode is active (a `Plan mode is active` system reminder is present): stop and print:
 
 > ⚠️ Plan mode is active — this skill writes files and will be blocked.
-> Switch to auto mode, then re-run `/start`.
+> Switch to auto mode, then re-run `/start-session`.
 
 ## Step 1 — Parse arguments
 
@@ -52,7 +52,7 @@ NOTES_PATH="$TARGET_DIR/notes.md"
 
 If `notes.md` already exists at `$NOTES_PATH`, abort:
 
-> Already exists at `$NOTES_PATH`. Use `/restart $FOLDER` to reopen it in this session.
+> Already exists at `$NOTES_PATH`. Use `/restart-session $FOLDER` to reopen it in this session.
 
 Do NOT overwrite.
 

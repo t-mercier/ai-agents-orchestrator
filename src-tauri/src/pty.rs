@@ -83,7 +83,7 @@ pub fn pty_spawn(
     cwd: String,
     cols: u16,
     rows: u16,
-    // When non-empty, restart the session via the /restart skill (rebuild from
+    // When non-empty, restart the session via the /restart-session skill (rebuild from
     // notes) instead of --resume. Used for sessions whose transcript is gone, so
     // --resume can't find the conversation. Validated as a folder-slug.
     restart_slug: String,
@@ -120,12 +120,12 @@ pub fn pty_spawn(
             shell_quote(CLAUDE_MODEL),
         )
     } else {
-        // /restart rebuilds from notes — no transcript needed.
+        // /restart-session rebuilds from notes — no transcript needed.
         format!(
             "cd {} && claude --model {} {}",
             shell_quote(&cwd),
             shell_quote(CLAUDE_MODEL),
-            shell_quote(&format!("/restart {restart_slug}")),
+            shell_quote(&format!("/restart-session {restart_slug}")),
         )
     };
     let mut cmd = CommandBuilder::new(&shell);
@@ -207,7 +207,7 @@ pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
     if let Some(mut s) = session {
         let _ = s.child.kill();
         // kill() only signals; wait() reaps it. Without this the SIGKILL'd shell
-        // lingers as a <defunct> zombie until app exit (one per open/close).
+        // lingers as a <defunct> zombie until app exit (one per open/close-session).
         let _ = s.child.wait();
     }
 }

@@ -61,7 +61,7 @@ else
   echo "config exists (kept): $CONFIG"
 fi
 
-# 4. Create each category's folder (so /start has somewhere to write)
+# 4. Create each category's folder (so /start-session has somewhere to write)
 echo "creating category folders:"
 python3 "$SKILLS_DST/lib/aoconfig.py" categories | while IFS= read -r cat; do
   [ -z "$cat" ] && continue
@@ -73,4 +73,4 @@ echo
 echo "✓ Done. Edit categories/colors/paths in the app's Settings (⚙), or in $CONFIG."
 echo "→ Optional: install the Superpowers plugin for git-worktree support:"
 echo "    https://github.com/obra/superpowers"
-echo "Skills available now: /start  /close  /restart  /archive  /rename-category"
+echo "Skills available now: /start-session  /close-session  /restart-session  /archive-session  /rename-category"

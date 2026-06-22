@@ -55,10 +55,10 @@ struct Transcript {
     launch_cwd: Option<String>,
     // Whether the transcript .jsonl was actually found+read. A closed/archived
     // session whose transcript was deleted/rotated CANNOT be `--resume`d (the
-    // conversation no longer exists anywhere) — only `/restart`ed from notes.
+    // conversation no longer exists anywhere) — only `/restart-session`ed from notes.
     found: bool,
     // Last-modified time of the transcript file — used to detect a session that was
-    // reopened (resumed) and worked on after its last /close (transcript touched on a
+    // reopened (resumed) and worked on after its last /close-session (transcript touched on a
     // later day) → reclassify closed → stale.
     mtime: Option<SystemTime>,
 }
@@ -207,7 +207,7 @@ fn read_transcript(sid: &str) -> Transcript {
 }
 
 /// The directory `claude` was launched from for a session — what `--resume` and
-/// `/restart` must cd into (Claude Code keys resume by launch dir). Mirrors the
+/// `/restart-session` must cd into (Claude Code keys resume by launch dir). Mirrors the
 /// Electron resolveSessionCwd (which returned the transcript's first cwd).
 pub fn resolve_session_cwd(sid: &str) -> Option<String> {
     if sid.is_empty() || !sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
@@ -625,8 +625,8 @@ fn date_to_days(s: &str) -> Option<i64> {
 }
 
 /// True when the transcript was modified on a LATER calendar day than the session's
-/// last `/close` — i.e. the session was reopened (resumed) and worked on without a
-/// fresh `/close`. Day granularity sidesteps timezone/time parsing; strictly-later is
+/// last `/close-session` — i.e. the session was reopened (resumed) and worked on without a
+/// fresh `/close-session`. Day granularity sidesteps timezone/time parsing; strictly-later is
 /// conservative (a genuinely-closed, untouched session never trips it).
 fn reopened_after_close(tr: &Transcript, close_date: &str) -> bool {
     let close_days = match date_to_days(close_date) {
@@ -661,8 +661,8 @@ fn lead_date(line: &str) -> Option<String> {
 
 /// Work-lifecycle status from the `## Session history` section + the relevant date:
 /// - `archived`: an ARCHIVED line.
-/// - `closed`: wrapped up via `/close` — the LAST entry is a completed line (`/save`
-///   marks its entries `(in progress)`, `/close` does not).
+/// - `closed`: wrapped up via `/close-session` — the LAST entry is a completed line (`/save-session`
+///   marks its entries `(in progress)`, `/close-session` does not).
 /// - `stale`: open work whose terminal is gone — last entry still `(in progress)`, or
 ///   the section is empty/absent (never saved/closed). These belong in the Running
 ///   tab, not Closed.
@@ -693,24 +693,24 @@ pub(crate) fn session_history_info(content: &str) -> (String, Option<String>) {
     }
 }
 
-/// Does a `## Session history` line mark a wrap-up (`/close`)?
+/// Does a `## Session history` line mark a wrap-up (`/close-session`)?
 ///
-/// `/close` stamps a summary entry tagged `… | session=<id> | …` with NO in-progress
-/// marker. `/save` writes the same shape but flagged `(in progress)` (still open), and
-/// `/start` writes a bootstrap line without `session=` — both stay `stale`. Older
-/// `/close` output used a `HH:MM → HH:MM` (or `?? → HH:MM`) time range instead of the
+/// `/close-session` stamps a summary entry tagged `… | session=<id> | …` with NO in-progress
+/// marker. `/save-session` writes the same shape but flagged `(in progress)` (still open), and
+/// `/start-session` writes a bootstrap line without `session=` — both stay `stale`. Older
+/// `/close-session` output used a `HH:MM → HH:MM` (or `?? → HH:MM`) time range instead of the
 /// `session=` tag; still honoured for back-compat. (A `→` buried in a free-text summary
 /// like "ADR 0028→0026" isn't preceded by HH:MM, so it doesn't false-positive.)
 fn is_wrapped_up(line: &str) -> bool {
-    // `/save` checkpoints are explicitly mid-session — never a close.
+    // `/save-session` checkpoints are explicitly mid-session — never a close.
     if line.contains("(in progress)") {
         return false;
     }
-    // Current `/close` format: a summary entry carrying `session=<id>`.
+    // Current `/close-session` format: a summary entry carrying `session=<id>`.
     if line.contains("session=") {
         return true;
     }
-    // Legacy `/close` format: a leading "HH:MM → HH:MM" (or "?? → HH:MM") time range.
+    // Legacy `/close-session` format: a leading "HH:MM → HH:MM" (or "?? → HH:MM") time range.
     let Some(pos) = line.find('→') else {
         return false;
     };
@@ -770,8 +770,8 @@ fn scan_historical() -> Vec<Value> {
             let notes_path = notes.to_string_lossy().into_owned();
             let tr = fm.get("session_id").map(|sid| read_transcript(sid));
             // A "closed" session whose transcript was touched on a LATER day than its
-            // last /close was reopened (resumed) + worked on without re-closing →
-            // surface it as stale (open work) rather than closed. (Resume/restart don't
+            // last /close-session was reopened (resumed) + worked on without re-closing →
+            // surface it as stale (open work) rather than closed. (Resume/restart-session don't
             // write the notes, so this transcript-mtime check is the only reliable
             // signal; genuinely-closed sessions, untouched since, stay closed.)
             if hist_status == "closed" {
@@ -942,21 +942,21 @@ mod tests {
             let content = format!("## Goal\nx\n\n## Session history\n{hist}\n");
             session_history_info(&content).0
         };
-        // /close — current format: `… | session=<id> | summary`, no (in progress)
+        // /close-session — current format: `… | session=<id> | summary`, no (in progress)
         assert_eq!(
             status("- 2026-06-19 21:11 | session=abc | transcript=/p.jsonl | Merged the fix"),
             "closed"
         );
-        // /save checkpoint — same shape but explicitly mid-session
+        // /save-session checkpoint — same shape but explicitly mid-session
         assert_eq!(
             status("- 2026-06-19 19:22 (in progress) | session=abc | transcript=/p.jsonl | Triaged"),
             "stale"
         );
-        // /start bootstrap — no session= marker
+        // /start-session bootstrap — no session= marker
         assert_eq!(status("- 2026-06-18 16:53 — session started (BUG | slug | TICKET)."), "stale");
-        // legacy /close — leading "HH:MM → HH:MM" time range
+        // legacy /close-session — leading "HH:MM → HH:MM" time range
         assert_eq!(status("- 2026-06-10 | 09:00 → 11:30 | wrapped up"), "closed");
-        // a /save AFTER a close (reopened, last line in progress) → stale
+        // a /save-session AFTER a close (reopened, last line in progress) → stale
         assert_eq!(
             status("- 2026-06-18 | session=abc | closed it\n- 2026-06-19 (in progress) | session=abc | back at it"),
             "stale"
@@ -1073,7 +1073,7 @@ mod tests {
 
     #[test]
     fn history_stale_when_last_entry_is_in_progress() {
-        // /save leaves an "(in progress)" line; killing the terminal never closes it.
+        // /save-session leaves an "(in progress)" line; killing the terminal never closes it.
         let n = "## Session history\n- 2026-06-10 09:00 (in progress) | session=x | saved\n";
         assert_eq!(state_of(n), "stale");
     }
@@ -1092,28 +1092,28 @@ mod tests {
 
     #[test]
     fn history_stale_when_last_entry_is_a_start_bootstrap_line() {
-        // A /start bootstrap line is NOT a wrap-up (no HH:MM → time range).
-        let n = "## Session history\n- 2026-06-11: /start — workspace bootstrapped, context imported.\n";
+        // A /start-session bootstrap line is NOT a wrap-up (no HH:MM → time range).
+        let n = "## Session history\n- 2026-06-11: /start-session — workspace bootstrapped, context imported.\n";
         assert_eq!(state_of(n), "stale");
     }
 
     #[test]
     fn history_stale_when_arrow_is_free_text_not_a_time_range() {
-        // A "→" inside the summary must not be read as the /close time-range arrow.
+        // A "→" inside the summary must not be read as the /close-session time-range arrow.
         let n = "## Session history\n- 2026-06-11: note about ADR 0028→0026 migration\n";
         assert_eq!(state_of(n), "stale");
     }
 
     #[test]
     fn history_closed_with_unknown_start_time() {
-        // /close fallback "?? → HH:MM" still counts as wrapped up.
+        // /close-session fallback "?? → HH:MM" still counts as wrapped up.
         let n = "## Session history\n- 2026-06-11 ?? → 16:30 | session=x | wrapped up\n";
         assert_eq!(state_of(n), "closed");
     }
 
     #[test]
     fn history_closed_after_saves_then_close() {
-        // Several /save (in progress) lines, then a final /close completed line → closed.
+        // Several /save-session (in progress) lines, then a final /close-session completed line → closed.
         let n = "## Session history\n- 2026-06-09 (in progress) | s1\n- 2026-06-10 (in progress) | s2\n- 2026-06-11 10:00 → 10:30 | wrapped up\n";
         assert_eq!(state_of(n), "closed");
     }
