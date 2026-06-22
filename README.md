@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -29,7 +29,8 @@
 > [!NOTE]
 > Newest first — full history in the [changelog](CHANGELOG.md).
 
-- 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client) and scope the whole dashboard, list/cards/board, to one of them.
+- 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board gets its own space filter.
+- ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (one control across every view).
 - 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
 - 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
 - 📄 **Source-available licence** — free to use (incl. at work), no resale.
@@ -49,8 +50,8 @@ Terminal tabs don't scale. You need mission control.
 - **Resume your way** — pick a session back up in the **built-in terminal** (in the app, xterm.js + portable-pty) *or* in **your own terminal** (iTerm / Terminal) — your choice. Detach the built-in one into its own always-on-top window if you like.
 - **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` for view, `b` for board. **Remap any of it** in Settings → Shortcuts.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
-- **Lifecycle tabs** — Running · Closed · Archived, with live **search** and **category filters**.
-- **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client) and scope the whole dashboard — List, Cards, Board and the category chips — to one space or to **All** from a titlebar selector. A session's space shows in its detail slide-over, so the cards stay uncluttered.
+- **Lifecycle tabs** — Running · Closed · Archived, with live **search** and a **⚲ Filter** popover (category checkboxes, one control across every view).
+- **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client). **List & Cards** organise into collapsible **space sections** → category groups; the **Board** gets its own space filter next to its search; pinned / ⚡ waiting cards keep a small space tag. A single space configured ⇒ no space chrome at all.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
 ### Three ways to look at your work
