@@ -153,22 +153,10 @@
         <div class="settings-panels">
           <!-- General: scan roots -->
           <section class="settings-panel active" data-settings-panel="general">
-            <p class="modal-hint">Where the dashboard scans for sessions — each category maps to <code>&lt;root&gt;/&lt;CATEGORY&gt;</code>.</p>
+            <p class="modal-hint"><strong>Spaces</strong> are the top-level folders the dashboard scans — each category lives at <code>&lt;space&gt;/&lt;CATEGORY&gt;</code>. Rename a space and the categories under it follow; changing a path re-points where it scans.</p>
             <div class="settings-section">
-              <label class="modal-field">
-                <span>Work space</span>
-                <div class="path-row">
-                  <input id="set-work-root" type="text" placeholder="~/work" autocomplete="off" spellcheck="false">
-                  <button type="button" class="modal-btn path-browse" data-browse="set-work-root">Browse…</button>
-                </div>
-              </label>
-              <label class="modal-field">
-                <span>Personal space</span>
-                <div class="path-row">
-                  <input id="set-personal-root" type="text" placeholder="~" autocomplete="off" spellcheck="false">
-                  <button type="button" class="modal-btn path-browse" data-browse="set-personal-root">Browse…</button>
-                </div>
-              </label>
+              <div id="set-space-list" class="settings-space-list"></div>
+              <button type="button" class="modal-btn" id="set-add-space">＋ Space</button>
             </div>
             <div class="settings-section">
               <div class="modal-field">

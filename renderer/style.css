@@ -273,6 +273,13 @@ html, body {
 .path-row { display: flex; gap: 6px; }
 .path-row input { flex: 1; min-width: 0; }
 .path-browse { white-space: nowrap; flex-shrink: 0; }
+/* Spaces editor rows: [name] [path + browse] [remove]. */
+.settings-space-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.settings-space-row { display: flex; gap: 8px; align-items: center; }
+.settings-space-row .space-name { width: 110px; flex-shrink: 0; }
+.settings-space-row .path-row { flex: 1; min-width: 0; }
+.settings-space-row .space-remove { flex-shrink: 0; }
+
 .settings-cat-list { display: flex; flex-direction: column; gap: 6px; }
 .settings-cat-row { display: flex; gap: 6px; align-items: center; }
 /* Name + scope are read-only labels (they mirror a real folder) — not editable fields. */

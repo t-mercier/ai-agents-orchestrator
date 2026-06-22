@@ -8,6 +8,7 @@
   const form = document.getElementById('settings-form')
   const catList = document.getElementById('set-cat-list')
   const colList = document.getElementById('set-col-list')
+  const spaceList = document.getElementById('set-space-list')
   const errEl = document.getElementById('set-error')
   const $ = (id) => document.getElementById(id)
 
@@ -15,9 +16,36 @@
   // colors are #rrggbb. The <input type="color"> already guarantees the latter.
   const NAME_RE = /^[A-Za-z0-9_-]{1,20}$/
   const COLOR_RE = /^#[0-9a-fA-F]{6}$/
+  const escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
   function showError(msg) { errEl.textContent = msg; errEl.hidden = false }
   function clearError() { errEl.hidden = true; errEl.textContent = '' }
+
+  // ── Spaces editor: each row = {name, path}. Renaming a space (the name changed from
+  // its original) retags the categories under it on save; the path re-points scanning.
+  let spaceRowSeq = 0
+  function addSpaceRow(space = {}) {
+    const id = `set-space-path-${spaceRowSeq++}`
+    const row = document.createElement('div')
+    row.className = 'settings-space-row'
+    row.dataset.orig = space.name || ''   // original name → detect rename for category retag
+    row.innerHTML = `
+      <input class="space-name" type="text" placeholder="Name" value="${escAttr(space.name)}" spellcheck="false" autocomplete="off">
+      <div class="path-row">
+        <input class="space-path" id="${id}" type="text" placeholder="~/path" value="${escAttr(space.path)}" spellcheck="false" autocomplete="off">
+        <button type="button" class="modal-btn path-browse" data-browse="${id}">Browse…</button>
+      </div>
+      <button type="button" class="icon-btn space-remove" title="Remove this space (its folders on disk are left untouched)">✕</button>`
+    row.querySelector('.space-remove').addEventListener('click', () => row.remove())
+    spaceList.appendChild(row)
+  }
+  function renderSpaceRows() {
+    if (!spaceList) return
+    spaceList.innerHTML = ''
+    const roots = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.roots)) ? window.CSM_CONFIG.roots : []
+    if (!roots.length) addSpaceRow()
+    else roots.forEach(addSpaceRow)
+  }
 
   // Name + scope are READ-ONLY labels: they mirror a real folder on disk
   // (<root>/<NAME>), so editing them here would drift from reality (the app never
@@ -51,8 +79,7 @@
   function populate() {
     const c = window.CSM_CONFIG || {}
     const obs = c.obsidian || {}
-    $('set-work-root').value = c.workRoot || ''
-    $('set-personal-root').value = c.personalRoot || ''
+    renderSpaceRows()
     $('set-obsidian-enabled').checked = !!obs.enabled
     $('set-work-vault').value = obs.workVaultPath || ''
     $('set-personal-vault').value = obs.personalVaultPath || ''
@@ -201,30 +228,47 @@
   // Build a clean USER config (only editable fields) — never the derived
   // scanDirs/order/colorMap/home, which Rust regenerates on load.
   function collect() {
+    // Spaces (roots) from the editor. A row whose name changed from its original is a
+    // rename → remember old→new so the categories under it follow.
+    const rename = {}
+    const roots = []
+    for (const row of spaceList.querySelectorAll('.settings-space-row')) {
+      const name = row.querySelector('.space-name').value.trim()
+      const path = row.querySelector('.space-path').value.trim()
+      if (!name) continue
+      if (row.dataset.orig && row.dataset.orig !== name) rename[row.dataset.orig] = name
+      roots.push({ name, path })
+    }
+
     // Categories are folder-mirrored: only colour is editable here. PRESERVE every
     // other field from the loaded config — crucially the v2 `root` (and legacy
-    // `scope`). Rebuilding them as {name,color,scope} dropped `root`, so a Settings
-    // save silently reverted any custom-root assignment (audit finding #1).
+    // `scope`). Identity is (root, name) — the same name can live under two roots —
+    // so preserve per pair, not per name. A renamed space retags the category's root.
     const prevCats = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.categories))
       ? window.CSM_CONFIG.categories : []
-    // Identity is (root, name) — the same name can live under two roots — so preserve
-    // per pair, not per name (a name-keyed map collapses the duplicates).
     const rootOf = (c) => c.root || (c.scope === 'personal' ? 'Perso' : 'Work')
     const byKey = new Map(prevCats.map(c => [`${rootOf(c)}\0${c.name}`, c]))
     const categories = [...catList.querySelectorAll('.settings-cat-row')].map(row => {
-      const root = row.dataset.root || (row.dataset.scope === 'personal' ? 'Perso' : 'Work')
-      const prev = byKey.get(`${root}\0${row.dataset.name}`) || {}
+      const oldRoot = row.dataset.root || (row.dataset.scope === 'personal' ? 'Perso' : 'Work')
+      const prev = byKey.get(`${oldRoot}\0${row.dataset.name}`) || {}
       return {
         name: row.dataset.name,
         color: row.querySelector('.cat-color').value,
-        root,                                          // v2 — which named root it lives under
+        root: rename[oldRoot] || oldRoot,              // follow a space rename
         scope: prev.scope || row.dataset.scope,        // legacy — kept for back-compat / vault
       }
     })
-    const out = {
+
+    // Legacy workRoot/personalRoot, kept for back-compat (derive prefers `roots`):
+    // map them from the like-named spaces, else the first/second.
+    const byName = (re) => roots.find(r => re.test(r.name))
+    const workSpace = byName(/^work$/i) || roots[0]
+    const persoSpace = byName(/^(perso|personal|personnel)$/i) || roots[1] || roots[0]
+    return {
       version: 1,
-      workRoot: $('set-work-root').value.trim(),
-      personalRoot: $('set-personal-root').value.trim(),
+      roots,
+      workRoot: workSpace ? workSpace.path : '',
+      personalRoot: persoSpace ? persoSpace.path : '',
       categories,
       obsidian: {
         enabled: $('set-obsidian-enabled').checked,
@@ -234,32 +278,32 @@
       ticketBaseUrl: $('set-ticket').value.trim(),
       terminalApp: $('set-terminal').value,
     }
-    // Round-trip a CUSTOM named-roots list so a save never destroys it (audit #1/#4).
-    // The migrated default (exactly Work + Perso) is left out — derive() rebuilds it
-    // from the workRoot/personalRoot fields above, so those text inputs keep driving.
-    const roots = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.roots))
-      ? window.CSM_CONFIG.roots : []
-    const isDefault = roots.length === 2
-      && roots.some(r => r.name === 'Work') && roots.some(r => r.name === 'Perso')
-    if (roots.length && !isDefault) {
-      out.roots = roots.map(r => ({ name: r.name, path: r.path }))
-    }
-    return out
   }
 
   function validate(cfg) {
-    if (!cfg.workRoot) return 'Work root is required.'
-    if (!cfg.personalRoot) return 'Personal root is required.'
+    const roots = cfg.roots || []
+    if (!roots.length) return 'Add at least one space.'
+    const spaceNames = new Set()
+    for (const r of roots) {
+      if (!r.name || r.name.length > 30) return `Invalid space name "${r.name || '(empty)'}".`
+      if (!r.path) return `Space "${r.name}" needs a path.`
+      if (spaceNames.has(r.name)) return `Duplicate space "${r.name}".`
+      spaceNames.add(r.name)
+    }
     if (cfg.categories.length === 0) return 'Add at least one category.'
     const seen = new Set()
     for (const cat of cfg.categories) {
       if (!NAME_RE.test(cat.name)) {
         return `Invalid category "${cat.name || '(empty)'}" — up to 20 letters, digits, _ or -.`
       }
-      // Dedup on (root, name): the same name under two roots is legitimate (that's
-      // the whole point of named roots) — only the SAME pair twice is a real dup.
+      // A category's space must still exist (e.g. you removed it without moving the cat).
+      if (cat.root && !spaceNames.has(cat.root)) {
+        return `Category "${cat.name}" is in space "${cat.root}" which isn't in your spaces — re-add that space (or remove the category) first.`
+      }
+      // Dedup on (root, name): the same name under two spaces is legitimate — only the
+      // SAME pair twice is a real dup.
       const dkey = `${cat.root || cat.scope || ''}\0${cat.name}`
-      if (seen.has(dkey)) return `Duplicate category "${cat.name}" under the same root.`
+      if (seen.has(dkey)) return `Duplicate category "${cat.name}" under the same space.`
       seen.add(dkey)
       if (!COLOR_RE.test(cat.color)) return `Invalid color for "${cat.name}".`
     }
@@ -317,6 +361,8 @@
   // <root>/<NAME>); we derive name=basename + scope=which root. Multi-select adds
   // several at once; anything outside a root, invalid, or already present is skipped
   // with a summary.
+  if ($('set-add-space')) $('set-add-space').addEventListener('click', () => addSpaceRow())
+
   $('set-add-cat-folder').addEventListener('click', async () => {
     if (!window.api.pickDirectories) return
     const picked = await window.api.pickDirectories()
