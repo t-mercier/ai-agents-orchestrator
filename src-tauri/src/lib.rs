@@ -406,13 +406,35 @@ fn start_session(
             )
         }
     } else {
-        let scope = cat_def.get("scope").and_then(serde_json::Value::as_str).unwrap_or("work");
-        let root_key = if scope == "personal" { "personalRoot" } else { "workRoot" };
-        let home = cfg.get("home").and_then(serde_json::Value::as_str).unwrap_or("/");
-        let launch_dir = cfg.get(root_key).and_then(serde_json::Value::as_str).unwrap_or(home);
-        format!("cd {} && claude --model {} {}", pty::shell_quote(launch_dir), pty::shell_quote(model), pty::shell_quote(&prompt))
+        let launch_dir = category_root_dir(&cfg, cat_def);
+        format!("cd {} && claude --model {} {}", pty::shell_quote(&launch_dir), pty::shell_quote(model), pty::shell_quote(&prompt))
     };
     launch_in_terminal(&cmd)
+}
+
+/// Launch dir for a NEW session in this category: the path of the category's
+/// configured `root` (v2 — `derive()` sets `root` on every category). Falls back to
+/// the legacy `scope`→workRoot/personalRoot when the root can't be resolved (v1
+/// configs), then to home. Keeps a moved-to-a-custom-root category launching from
+/// the right place.
+fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::Value) -> String {
+    let home = cfg.get("home").and_then(serde_json::Value::as_str).unwrap_or("/");
+    // v2: resolve the category's root name → its path in cfg.roots.
+    if let Some(root_name) = cat_def.get("root").and_then(serde_json::Value::as_str) {
+        if let Some(roots) = cfg.get("roots").and_then(serde_json::Value::as_array) {
+            if let Some(path) = roots
+                .iter()
+                .find(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(root_name))
+                .and_then(|r| r.get("path").and_then(serde_json::Value::as_str))
+            {
+                return path.to_string();
+            }
+        }
+    }
+    // v1 fallback: scope → workRoot / personalRoot.
+    let scope = cat_def.get("scope").and_then(serde_json::Value::as_str).unwrap_or("work");
+    let root_key = if scope == "personal" { "personalRoot" } else { "workRoot" };
+    cfg.get(root_key).and_then(serde_json::Value::as_str).unwrap_or(home).to_string()
 }
 
 /// Reopen a closed/archived session: launch `claude` + the `/restart` skill, which
@@ -920,9 +942,28 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_pr_url, is_safe_branch, is_safe_category, is_ticket, percent_encode,
+        category_root_dir, is_pr_url, is_safe_branch, is_safe_category, is_ticket, percent_encode,
         set_pr_link_in_frontmatter, stamp_archived,
     };
+    use serde_json::json;
+
+    #[test]
+    fn category_root_dir_resolves_v2_root_then_falls_back_to_scope() {
+        let cfg = json!({
+            "home": "/home/u",
+            "workRoot": "/w", "personalRoot": "/p",
+            "roots": [{"name":"Work","path":"/w"},{"name":"Perso","path":"/p"},{"name":"Clients","path":"/c"}],
+        });
+        // v2: launch dir = the category's named root path.
+        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Clients"})), "/c");
+        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Perso"})), "/p");
+        // Unknown root name → v1 scope fallback (work).
+        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Ghost","scope":"work"})), "/w");
+        // No root field at all (v1) → scope fallback.
+        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","scope":"personal"})), "/p");
+        // No root, no scope → defaults to work root.
+        assert_eq!(category_root_dir(&cfg, &json!({"name":"X"})), "/w");
+    }
 
     #[test]
     fn percent_encode_handles_multibyte_and_reserved() {
