@@ -116,9 +116,8 @@
   function visible(it) {
     if (it.kind === 'session') {
       const s = (window._boardIndex || {})[it.id]
-      // Board's own space selector: 'All' = no filter; a space keeps matching + un-spaced.
-      const bs = window.boardSpace ? window.boardSpace() : 'All'
-      const spaceOk = !bs || bs === 'All' || !s || s.root == null || s.root === bs
+      // Space + category filters come from the shared ⚲ Filter popover (Spaces section).
+      const spaceOk = !window.passesSpaceFilter || window.passesSpaceFilter(s ? s.root : null)
       const catOk = !window.passesCatFilter || window.passesCatFilter(s ? s.category : null)
       const searchOk = !window.passesSearch || !s || window.passesSearch(s)
       return spaceOk && catOk && searchOk

@@ -988,6 +988,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-radius: 4px;
 }
 .space-sessions { overflow: hidden; }
+.space-pinned { padding-bottom: 2px; }
 .space-sessions.collapsed { display: none; }
 /* Indent the category groups nested inside a space so the hierarchy reads. */
 .space-sessions .category-header { padding-left: 24px; }
@@ -1043,8 +1044,9 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   flex: 1;
   min-width: 0;   /* let the flex item shrink so ellipsis clips to the real width */
 }
-/* List-card bottom row: the icons (left) + the STALE/WAIT badge pushed hard right. */
-.list-card-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-left: 12px; }
+/* List-card bottom row: the icons (left) + the STALE/WAIT badge pushed hard right.
+   No left indent — the icons sit flush under the title row's left edge. */
+.list-card-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-left: 0; }
 .list-card-foot .card-icons { margin-top: 0; padding-left: 0; }
 .list-card-foot .list-card-badge { margin-left: auto; }
 .list-card-badge {

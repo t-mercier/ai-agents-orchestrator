@@ -27,23 +27,11 @@ window.multiSpace = () => configRoots().length > 1
 // Distinct category names for the filter popover (a name living in 2 spaces → one entry).
 function rootCategoryNames() { return [...new Set(filterCategories())] }
 
-// Board-only space filter (a <select> by the board search). The list + cards group by
-// space via sections instead; the board is flat, so it gets a selector. 'All' = no
-// filter. Persisted. window.boardSpace() is read by board.js's visible().
-let boardSpace = 'All'
-try { boardSpace = localStorage.getItem('csm.boardSpace') || 'All' } catch { /* ignore */ }
-window.boardSpace = () => boardSpace
-function populateBoardSpaceSelector() {
-  const sel = document.getElementById('board-space-select')
-  if (!sel) return
-  const roots = configRoots()
-  if (roots.length <= 1) { sel.hidden = true; boardSpace = 'All'; return }
-  sel.hidden = false
-  if (boardSpace !== 'All' && !roots.includes(boardSpace)) boardSpace = 'All'
-  sel.innerHTML = ['<option value="All">📁 All spaces</option>']
-    .concat(roots.map(r => `<option value="${r}">${r}</option>`)).join('')
-  sel.value = boardSpace
-}
+// Active space filter — the ⚲ Filter popover's Spaces section (shown when >1 space).
+// Empty = all spaces. The list/cards also group by space sections; the board (flat)
+// relies on this filter for space scoping. window.passesSpaceFilter reads it (board).
+const activeSpaceFilters = new Set()
+window.passesSpaceFilter = (root) => activeSpaceFilters.size === 0 || root == null || activeSpaceFilters.has(root)
 
 // Pinned sessions float to the top. Capped (a grid screenful) and persisted
 // locally — these are app prefs, not session state, so no ~/.claude writes.
@@ -183,6 +171,7 @@ function matchesSearch(s, query) {
 }
 function filterSessions(list, query) {
   let out = list
+  if (activeSpaceFilters.size > 0) out = out.filter(s => window.passesSpaceFilter(s.root))
   if (activeCatFilters.size > 0) out = out.filter(s => activeCatFilters.has(s.category || 'OTHER'))
   if (query) out = out.filter(s => matchesSearch(s, query))
   return out
@@ -194,12 +183,12 @@ window.passesSearch = (s) => matchesSearch(s, searchQuery)
 // Free-text match for arbitrary strings (board notes) against the current query.
 window.queryMatches = (text) => matchesSearch({ name: text || '' }, searchQuery)
 
-// Category filter — a single "⚲ Filter" button per view bar that opens a checkbox
-// popover (replaces the old chip row: scales to any number of categories, stays out of
-// the way). activeCatFilters is the source of truth (filterSessions + board read it).
+// Filter — a single "⚲ Filter" button per view bar that opens a checkbox popover
+// (Spaces + Categories). Replaces the old chip row + the board space selector.
+// activeCatFilters / activeSpaceFilters are the source of truth (filterSessions + board).
 function renderCategoryFilters() {
-  const n = activeCatFilters.size
-  const btn = `<button class="filter-btn ${n ? 'active' : ''}" data-filter-open aria-label="Filter by category" title="Filter by category">⚲ <span class="btn-label">Filter</span>${n ? ` <span class="filter-count">${n}</span>` : ''}</button>`
+  const n = activeCatFilters.size + activeSpaceFilters.size
+  const btn = `<button class="filter-btn ${n ? 'active' : ''}" data-filter-open aria-label="Filter" title="Filter by space or category">⚲ <span class="btn-label">Filter</span>${n ? ` <span class="filter-count">${n}</span>` : ''}</button>`
   for (const id of ['cat-filter-list', 'cat-filter-cards', 'cat-filter-board']) {
     const el = document.getElementById(id)
     if (el) el.innerHTML = btn
@@ -217,20 +206,28 @@ function onFilterOutside(e) {
 }
 function onFilterEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeFilterMenu() } }
 
-// Build the filter popover anchored under the clicked button. Category names are
-// deduped (a name in 2 spaces → one row). Toggling updates activeCatFilters live.
+// Build the filter popover anchored under the clicked button. A Spaces section (when
+// >1 space) + a Categories section (deduped — a name in 2 spaces → one row). Toggling
+// updates activeSpaceFilters / activeCatFilters live.
 function openFilterMenu(anchor) {
   if (document.getElementById('filter-menu')) { closeFilterMenu(); return }
-  const names = rootCategoryNames()
-  const rows = names.map(cat =>
-    `<button class="filter-opt ${activeCatFilters.has(cat) ? 'on' : ''}" data-filter-cat="${escapeAttr(cat)}">
-       <span class="filter-box"></span><span class="filter-opt-name">${cat}</span></button>`).join('')
-  const clear = activeCatFilters.size
-    ? `<button class="filter-opt filter-clear" data-filter-clear>Clear (${activeCatFilters.size})</button>` : ''
+  const opt = (on, attr, label) =>
+    `<button class="filter-opt ${on ? 'on' : ''}" ${attr}><span class="filter-box"></span><span class="filter-opt-name">${label}</span></button>`
+  let spaceSection = ''
+  if (window.multiSpace && window.multiSpace()) {
+    const spaceRows = configRoots()
+      .map(sp => opt(activeSpaceFilters.has(sp), `data-filter-space="${escapeAttr(sp)}"`, sp)).join('')
+    spaceSection = `<div class="filter-menu-head">Spaces</div><div class="filter-menu-list">${spaceRows}</div>`
+  }
+  const catRows = rootCategoryNames()
+    .map(cat => opt(activeCatFilters.has(cat), `data-filter-cat="${escapeAttr(cat)}"`, cat)).join('')
+  const total = activeCatFilters.size + activeSpaceFilters.size
+  const clear = total
+    ? `<button class="filter-opt filter-clear" data-filter-clear>Clear (${total})</button>` : ''
   const menu = document.createElement('div')
   menu.id = 'filter-menu'
   menu.className = 'filter-menu'
-  menu.innerHTML = `<div class="filter-menu-head">Categories</div><div class="filter-menu-list">${rows}</div>${clear}`
+  menu.innerHTML = `${spaceSection}<div class="filter-menu-head">Categories</div><div class="filter-menu-list">${catRows}</div>${clear}`
   document.body.appendChild(menu)
   const r = anchor.getBoundingClientRect()
   menu.style.top = `${Math.round(r.bottom + 4)}px`
@@ -288,14 +285,20 @@ function populateNewSessionCategories() {
   syncPrField()   // selected category may have changed → toggle the PR field
 }
 
-function toggleCategoryFilter(cat) {
-  if (activeCatFilters.has(cat)) activeCatFilters.delete(cat)
-  else activeCatFilters.add(cat)
+function applyFilterChange() {
   selectedKey = null
   window._lastSelectedKey = null
   renderCategoryFilters()
   if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
   else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+}
+function toggleCategoryFilter(cat) {
+  if (activeCatFilters.has(cat)) activeCatFilters.delete(cat); else activeCatFilters.add(cat)
+  applyFilterChange()
+}
+function toggleSpaceFilter(space) {
+  if (activeSpaceFilters.has(space)) activeSpaceFilters.delete(space); else activeSpaceFilters.add(space)
+  applyFilterChange()
 }
 
 let fetchInFlight = false
@@ -582,16 +585,6 @@ document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
   btn.addEventListener('click', () => setViewMode(btn.dataset.view))
 })
 
-// Board-only space selector (next to the board search).
-{
-  const bs = document.getElementById('board-space-select')
-  if (bs) bs.addEventListener('change', () => {
-    boardSpace = bs.value
-    try { localStorage.setItem('csm.boardSpace', boardSpace) } catch { /* ignore */ }
-    if (window.renderBoard) window.renderBoard()
-  })
-}
-
 // New-session backoffice
 const newSessionModal = document.getElementById('new-session-modal')
 const nsError = document.getElementById('ns-error')
@@ -766,19 +759,18 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   newSessionModal.close()
 })
 
-// Category filter popover (delegated): open button, per-category toggle, clear-all.
+// Filter popover (delegated): open button, per-space + per-category toggle, clear-all.
 document.addEventListener('click', e => {
   const open = e.target.closest('[data-filter-open]')
   if (open) { e.stopPropagation(); openFilterMenu(open); return }
+  const sp = e.target.closest('[data-filter-space]')
+  if (sp) { toggleSpaceFilter(sp.dataset.filterSpace); sp.classList.toggle('on'); return }
   const opt = e.target.closest('[data-filter-cat]')
   if (opt) { toggleCategoryFilter(opt.dataset.filterCat); opt.classList.toggle('on'); return }
   const clear = e.target.closest('[data-filter-clear]')
   if (clear) {
-    activeCatFilters.clear()
-    selectedKey = null; window._lastSelectedKey = null
-    renderCategoryFilters(); closeFilterMenu()
-    if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
-    else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+    activeCatFilters.clear(); activeSpaceFilters.clear()
+    applyFilterChange(); closeFilterMenu()
   }
 })
 
@@ -945,7 +937,6 @@ async function boot() {
     console.error('config load failed, using fallbacks:', err)
   }
   window.installDelegatedHandlers()           // one delegated click handler on <body>
-  populateBoardSpaceSelector()                // board-only space selector (hidden if ≤1 space)
   renderCategoryFilters()                     // build the ⚲ Filter button (from config)
   populateNewSessionCategories()              // fill the +New dropdown (from config)
   fetchAndRender(true)                        // initial → sort
@@ -959,7 +950,6 @@ async function boot() {
 window.reloadConfig = async () => {           // called by Settings after save
   window.CSM_CONFIG = await window.api.getConfig()
   if (window.applyCategoryColors) window.applyCategoryColors(window.CSM_CONFIG.colorMap)
-  populateBoardSpaceSelector()                // spaces may have been added/removed/renamed
   renderCategoryFilters()
   populateNewSessionCategories()
   fetchAndRender(true)   // refreshes the active tab + its badge

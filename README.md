@@ -27,13 +27,13 @@
 ## What's new
 
 > [!NOTE]
-> Newest first — full history in the [changelog](CHANGELOG.md).
-
-- 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board gets its own space filter.
-- ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (one control across every view).
-- 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
-- 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
-- 📄 **Source-available licence** — free to use (incl. at work), no resale.
+> **Newest first** — full history in the [changelog](CHANGELOG.md).
+>
+> - 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board filters by space.
+> - ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (Spaces + Categories, one control across every view).
+> - 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
+> - 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
+> - 📄 **Source-available licence** — free to use (incl. at work), no resale.
 
 ## The problem
 
