@@ -309,6 +309,29 @@ mod tests {
     }
 
     #[test]
+    fn derive_same_name_two_roots_without_explicit_roots_list() {
+        // What the Settings UI saves for "AI-SYSTEM under both Work and Perso": two
+        // categories carrying `root`, NO explicit `roots` array — derive must migrate
+        // Work/Perso from workRoot/personalRoot and emit a scanDir for each.
+        let cfg = json!({
+            "workRoot": "/w", "personalRoot": "/p",
+            "categories": [
+                {"name":"AI-SYSTEM","color":"#aaaaaa","root":"Work"},
+                {"name":"AI-SYSTEM","color":"#bbbbbb","root":"Perso"}
+            ]
+        });
+        assert!(validate(&cfg).is_ok());   // no roots list ⇒ root not cross-checked
+        let d = derive(&cfg);
+        let dirs: Vec<(&str, &str)> = d["scanDirs"].as_array().unwrap().iter()
+            .filter(|s| s["category"] == "AI-SYSTEM")
+            .map(|s| (s["base"].as_str().unwrap(), s["root"].as_str().unwrap()))
+            .collect();
+        assert!(dirs.contains(&("/w/AI-SYSTEM", "Work")));
+        assert!(dirs.contains(&("/p/AI-SYSTEM", "Perso")));
+        assert_eq!(dirs.len(), 2);
+    }
+
+    #[test]
     fn validate_rejects_category_root_not_in_roots_list() {
         // A category referencing a root that isn't declared → rejected (would silently
         // tag sessions to a non-existent root and hide them under every filter).

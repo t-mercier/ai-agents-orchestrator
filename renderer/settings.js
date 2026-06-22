@@ -26,17 +26,22 @@
   function addCatRow(cat = {}) {
     const name = cat.name || ''
     const scope = cat.scope === 'personal' ? 'personal' : 'work'
+    // The named root the category lives under (its identity is (root, name), so the
+    // same name can exist under several roots). Falls back to the legacy scope mapping.
+    const root = cat.root || (scope === 'personal' ? 'Perso' : 'Work')
     const row = document.createElement('div')
     row.className = 'settings-cat-row'
     row.dataset.name = name
     row.dataset.scope = scope
+    row.dataset.root = root
     row.innerHTML = `
       <input class="cat-color" type="color">
       <span class="cat-name-label"></span>
-      <span class="cat-scope-label">${scope}</span>
+      <span class="cat-scope-label"></span>
       <button type="button" class="icon-btn cat-remove" title="Remove from the dashboard (the folder on disk is left untouched)">✕</button>`
     row.querySelector('.cat-color').value = COLOR_RE.test(cat.color || '') ? cat.color : '#8fd9ff'
     row.querySelector('.cat-name-label').textContent = name || '(unnamed)'
+    row.querySelector('.cat-scope-label').textContent = root   // show which root, not work/personal
     row.querySelector('.cat-remove').addEventListener('click', () => row.remove())
     catList.appendChild(row)
   }
@@ -202,13 +207,19 @@
     // save silently reverted any custom-root assignment (audit finding #1).
     const prevCats = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.categories))
       ? window.CSM_CONFIG.categories : []
-    const byName = new Map(prevCats.map(c => [c.name, c]))
+    // Identity is (root, name) — the same name can live under two roots — so preserve
+    // per pair, not per name (a name-keyed map collapses the duplicates).
+    const rootOf = (c) => c.root || (c.scope === 'personal' ? 'Perso' : 'Work')
+    const byKey = new Map(prevCats.map(c => [`${rootOf(c)}\0${c.name}`, c]))
     const categories = [...catList.querySelectorAll('.settings-cat-row')].map(row => {
-      const prev = byName.get(row.dataset.name) || {}
-      const cat = { name: row.dataset.name, color: row.querySelector('.cat-color').value }
-      if (prev.root) cat.root = prev.root             // v2 — which named root it lives under
-      cat.scope = prev.scope || row.dataset.scope      // legacy — kept for back-compat
-      return cat
+      const root = row.dataset.root || (row.dataset.scope === 'personal' ? 'Perso' : 'Work')
+      const prev = byKey.get(`${root}\0${row.dataset.name}`) || {}
+      return {
+        name: row.dataset.name,
+        color: row.querySelector('.cat-color').value,
+        root,                                          // v2 — which named root it lives under
+        scope: prev.scope || row.dataset.scope,        // legacy — kept for back-compat / vault
+      }
     })
     const out = {
       version: 1,
@@ -245,10 +256,11 @@
       if (!NAME_RE.test(cat.name)) {
         return `Invalid category "${cat.name || '(empty)'}" — up to 20 letters, digits, _ or -.`
       }
-      // Rust doesn't reject duplicates, but they collide in the derived colorMap/
-      // scanDirs (double chips, sessions listed twice) — block them here.
-      if (seen.has(cat.name)) return `Duplicate category "${cat.name}".`
-      seen.add(cat.name)
+      // Dedup on (root, name): the same name under two roots is legitimate (that's
+      // the whole point of named roots) — only the SAME pair twice is a real dup.
+      const dkey = `${cat.root || cat.scope || ''}\0${cat.name}`
+      if (seen.has(dkey)) return `Duplicate category "${cat.name}" under the same root.`
+      seen.add(dkey)
       if (!COLOR_RE.test(cat.color)) return `Invalid color for "${cat.name}".`
     }
     return null
@@ -311,24 +323,39 @@
     if (!picked || !picked.length) return
     clearError()
     const c = window.CSM_CONFIG || {}
-    const have = new Set([...catList.querySelectorAll('.settings-cat-row')].map(r => (r.dataset.name || '').toLowerCase()))
+    // The named root a picked folder's PARENT dir maps to: a v2 roots entry whose path
+    // matches, else the legacy workRoot/personalRoot → Work/Perso.
+    const rootForParent = (parent) => {
+      const roots = Array.isArray(c.roots) ? c.roots : []
+      const hit = roots.find(r => r.path === parent)
+      if (hit) return hit.name
+      if (parent === c.workRoot) return 'Work'
+      if (parent === c.personalRoot) return 'Perso'
+      return null
+    }
+    // Identity is (root, name) — so the SAME category name can be added under a second
+    // root (e.g. AI-SYSTEM under both Work and Perso). Dedup on the pair, not the name.
+    const key = (root, name) => `${root}\0${(name || '').toLowerCase()}`
+    const have = new Set([...catList.querySelectorAll('.settings-cat-row')]
+      .map(r => key(r.dataset.root, r.dataset.name)))
     let added = 0
     const skipped = []
     for (const path of picked) {
       const parts = path.replace(/\/+$/, '').split('/')
       const base = parts.pop() || ''
       const parent = parts.join('/')
-      const scope = parent === (c.workRoot || '\0') ? 'work'
-        : parent === (c.personalRoot || '\0') ? 'personal' : null
-      if (!scope) { skipped.push(`${base} (not under a root)`); continue }
+      const root = rootForParent(parent)
+      if (!root) { skipped.push(`${base} (not under a root)`); continue }
       if (!NAME_RE.test(base)) { skipped.push(`${base} (invalid name)`); continue }
-      if (have.has(base.toLowerCase())) { skipped.push(`${base} (already added)`); continue }
-      have.add(base.toLowerCase())
-      addCatRow({ name: base, scope, color: '#8fd9ff' })
+      if (have.has(key(root, base))) { skipped.push(`${base} (already in ${root})`); continue }
+      have.add(key(root, base))
+      const scope = root === 'Perso' ? 'personal' : 'work'   // legacy, drives vault choice
+      addCatRow({ name: base, scope, root, color: '#8fd9ff' })
       added += 1
     }
     if (skipped.length) {
-      showError(`Added ${added}. Skipped: ${skipped.join(', ')}. Pick folders directly inside ${c.workRoot || '—'} or ${c.personalRoot || '—'}.`)
+      const roots = (Array.isArray(c.roots) ? c.roots.map(r => r.path) : [c.workRoot, c.personalRoot]).filter(Boolean)
+      showError(`Added ${added}. Skipped: ${skipped.join(', ')}. Pick folders directly inside one of your roots: ${roots.join(', ') || '—'}.`)
     }
   })
 
