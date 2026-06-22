@@ -526,9 +526,27 @@ fn running_session_ids() -> (HashSet<String>, HashSet<String>) {
     (ids, notes)
 }
 
+/// The root name a notes.md belongs to, matched by the longest scanDir `base` it
+/// sits under. Null when no configured root contains it (e.g. an ad-hoc session
+/// outside every root) — the renderer treats Null as "shown under every root".
+fn root_for_notes_path(cfg: &Value, notes_path: &str) -> Value {
+    let mut best: Option<(usize, Value)> = None;
+    if let Some(dirs) = cfg.get("scanDirs").and_then(Value::as_array) {
+        for sd in dirs {
+            if let Some(base) = sd.get("base").and_then(Value::as_str) {
+                if notes_path.starts_with(base) && best.as_ref().map(|(l, _)| base.len() > *l).unwrap_or(true) {
+                    best = Some((base.len(), sd.get("root").cloned().unwrap_or(Value::Null)));
+                }
+            }
+        }
+    }
+    best.map(|(_, r)| r).unwrap_or(Value::Null)
+}
+
 #[tauri::command(async)]
 pub fn get_sessions() -> Vec<Value> {
     let claude = home().join(".claude");
+    let cfg = crate::config::load();
     let active: Value = fs::read_to_string(claude.join("active-sessions.json"))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
@@ -596,6 +614,11 @@ pub fn get_sessions() -> Vec<Value> {
             Value::Null
         };
 
+        let root = notes_path
+            .as_deref()
+            .map(|p| root_for_notes_path(&cfg, p))
+            .unwrap_or(Value::Null);
+
         out.push(json!({
             "sessionId": sid,
             "name": data.get("name").and_then(Value::as_str).unwrap_or(""),
@@ -605,6 +628,7 @@ pub fn get_sessions() -> Vec<Value> {
             "state": "active",   // lifecycle state: live pid (vs stale/closed/archived)
             "updatedAt": data.get("updatedAt").cloned().unwrap_or(Value::Null),
             "notesPath": notes_path,
+            "root": root,
             "category": entry_meta.get("category").cloned().unwrap_or(Value::Null),
             "ticket": entry_meta.get("ticket").cloned().unwrap_or(Value::Null),
             "goal": goal,
@@ -791,6 +815,7 @@ fn scan_historical() -> Vec<Value> {
             None => continue,
         };
         let category = sd.get("category").and_then(Value::as_str).unwrap_or("");
+        let root = sd.get("root").cloned().unwrap_or(Value::Null);
         let entries = match fs::read_dir(base) {
             Ok(e) => e,
             Err(_) => continue,
@@ -878,6 +903,7 @@ fn scan_historical() -> Vec<Value> {
                 "cwd": cwd,
                 "resumable": resumable,
                 "category": cat,
+                "root": root.clone(),
                 "ticket": fv(&fm, "ticket"),
                 "name": name,
                 "branch": fv(&fm, "branch"),
@@ -931,9 +957,30 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 mod tests {
     use super::{
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, lead_date,
-        parse_frontmatter, pick_pr_url, reopened_after_close, session_history_info, Transcript,
+        parse_frontmatter, pick_pr_url, reopened_after_close, root_for_notes_path,
+        session_history_info, Transcript,
     };
     use serde_json::json;
+
+    #[test]
+    fn root_for_notes_path_matches_longest_base_and_handles_unknown() {
+        let cfg = json!({
+            "scanDirs": [
+                { "category": "FEAT", "base": "/w/FEAT", "root": "Work" },
+                { "category": "PERSO", "base": "/p/PERSO", "root": "Perso" },
+                // Same category name under a second root — the longer base must win.
+                { "category": "AI-SYSTEM", "base": "/w/AI-SYSTEM", "root": "Work" },
+                { "category": "AI-SYSTEM", "base": "/p/AI-SYSTEM", "root": "Perso" },
+            ]
+        });
+        let root = |p: &str| root_for_notes_path(&cfg, p);
+        assert_eq!(root("/w/FEAT/my-slug/notes.md"), json!("Work"));
+        assert_eq!(root("/p/PERSO/x/notes.md"), json!("Perso"));
+        assert_eq!(root("/p/AI-SYSTEM/x/notes.md"), json!("Perso"));
+        assert_eq!(root("/w/AI-SYSTEM/x/notes.md"), json!("Work"));
+        // Outside every configured root → Null (renderer shows it under all roots).
+        assert_eq!(root("/tmp/elsewhere/notes.md"), json!(null));
+    }
 
     #[test]
     fn parse_frontmatter_strips_quotes_drops_empty_requires_closing() {
