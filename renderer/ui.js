@@ -83,6 +83,7 @@ function buildMetaRows(s, isHistorical) {
     (s.gitBranch || s.branch) ? metaRow('Branch', `🌿 ${escapeHtml(s.gitBranch || s.branch)}`) : '',
     !isHistorical && s.worktree ? metaRow('Worktree', pathLink(s.worktree, '🗂 ')) : '',
     s.category ? metaRow('Category', `${escapeHtml(s.category)}${s.ticket ? ` · ${escapeHtml(s.ticket)}` : ''}`) : '',
+    s.root ? metaRow('Root', escapeHtml(String(s.root))) : '',
     isHistorical && s.startedAt ? metaRow('Started', escapeHtml(s.startedAt)) : '',
     lastUpdate ? metaRow('Last update', escapeHtml(lastUpdate)) : '',
   ].filter(Boolean).join('')
@@ -173,15 +174,10 @@ function firstNextStep(nextSteps) {
 // density, hidden in minimal (CSS). Returns '' when the session has none of the three.
 function cardIcons(s) {
   // Ticket as a number label (consistent with the board); PR + notes stay as icons.
+  // (The session's root is shown in the detail slide-over, not on the card face —
+  // cards stay uncluttered.)
   const icons = [ticketChip(s.ticket), prPill(s.prLink), notesPill(s.notesPath)].filter(Boolean).join('')
   return icons ? `<div class="card-icons">${icons}</div>` : ''
-}
-
-// Root badge — shown only in "All" mode (window.showRootBadge), to disambiguate
-// which root a card belongs to when the same category name spans several roots.
-function rootBadge(s) {
-  if (!s.root || !window.showRootBadge || !window.showRootBadge()) return ''
-  return `<span class="root-badge" title="Root">${escapeHtml(String(s.root))}</span>`
 }
 
 function renderListCard(s, selectedKey, changed) {
@@ -209,7 +205,6 @@ function renderListCard(s, selectedKey, changed) {
         <span class="status-dot ${dotClass}"></span>
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
-        ${rootBadge(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
         ${pinBtn(s)}
@@ -337,7 +332,6 @@ function renderSessionCard(s, selectedKey, changed) {
         <span class="status-dot ${dotClass}"></span>
         <span class="session-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
-        ${rootBadge(s)}
         <span class="session-card-cat" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
         ${archiveBtn(s)}
         ${deleteBtn(s)}
