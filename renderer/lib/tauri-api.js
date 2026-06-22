@@ -31,8 +31,10 @@
       invoke('reveal_terminal', { pid: pid || 0 }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Embedded terminal (src-tauri/src/pty.rs) ──
-    ptySpawn: (sessionId, cwd, cols, rows, restartSlug) =>
-      invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '' }),
+    // command (optional): a full shell command from start_session(embedded=true), run
+    // verbatim to CREATE a new session in this pty; sessionId is then its notesPath.
+    ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command) =>
+      invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '' }),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
     ptyResize: (sessionId, cols, rows) => invoke('pty_resize', { sessionId, cols, rows }),
     ptyKill: (sessionId) => invoke('pty_kill', { sessionId }),

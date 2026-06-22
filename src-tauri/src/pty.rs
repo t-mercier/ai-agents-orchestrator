@@ -76,6 +76,7 @@ pub fn decode_chunk(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // pty knobs: size + the three launch variants
 pub fn pty_spawn(
     app: AppHandle,
     state: tauri::State<PtyManager>,
@@ -87,6 +88,10 @@ pub fn pty_spawn(
     // notes) instead of --resume. Used for sessions whose transcript is gone, so
     // --resume can't find the conversation. Validated as a folder-slug.
     restart_slug: String,
+    // When non-empty, a full shell command built + validated by start_session(embedded=true)
+    // — run verbatim to CREATE a new session in this pty (the embedded +New path). Wins over
+    // both branches below. session_id is then the new session's notesPath (the routing key).
+    command: String,
 ) -> Result<(), String> {
     let restart_slug = restart_slug.trim().to_string();
     if !restart_slug.is_empty()
@@ -112,7 +117,14 @@ pub fn pty_spawn(
     // Resume the session in a login shell (so PATH/etc. are set, claude is found),
     // from the session's recorded cwd (Claude Code keys --resume by directory).
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let inner = if restart_slug.is_empty() {
+    let command = command.trim().to_string();
+    let inner = if !command.is_empty() {
+        // Verbatim command from start_session(embedded=true): `cd <dir> && [git checkout
+        // <branch> && ] claude --model X '/start-session …'`. Every interpolation was
+        // shell_quote'd in lib.rs, so it's safe to run as-is — same shape as the
+        // /restart-session branch, which already runs a slash command in the pty.
+        command
+    } else if restart_slug.is_empty() {
         format!(
             "cd {} && claude --resume {} --model {}",
             shell_quote(&cwd),
