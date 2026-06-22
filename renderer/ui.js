@@ -177,6 +177,13 @@ function cardIcons(s) {
   return icons ? `<div class="card-icons">${icons}</div>` : ''
 }
 
+// Root badge — shown only in "All" mode (window.showRootBadge), to disambiguate
+// which root a card belongs to when the same category name spans several roots.
+function rootBadge(s) {
+  if (!s.root || !window.showRootBadge || !window.showRootBadge()) return ''
+  return `<span class="root-badge" title="Root">${escapeHtml(String(s.root))}</span>`
+}
+
 function renderListCard(s, selectedKey, changed) {
   // Full text — CSS (ellipsis) clips to the panel width, so widening the panel reveals more.
   const preview = escapeHtml(s.lastActivity || s.goal || '')
@@ -202,6 +209,7 @@ function renderListCard(s, selectedKey, changed) {
         <span class="status-dot ${dotClass}"></span>
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
+        ${rootBadge(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
         ${pinBtn(s)}
@@ -329,6 +337,7 @@ function renderSessionCard(s, selectedKey, changed) {
         <span class="status-dot ${dotClass}"></span>
         <span class="session-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
+        ${rootBadge(s)}
         <span class="session-card-cat" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
         ${archiveBtn(s)}
         ${deleteBtn(s)}

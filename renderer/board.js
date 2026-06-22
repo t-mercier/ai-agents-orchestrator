@@ -71,7 +71,12 @@
           ? `<button class="kb-chip kb-chip-ticket ticket-chip" data-url="${escapeHtml(tbase + s.ticket)}" data-tip="${escapeHtml(s.ticket)} · open ticket">${escapeHtml(s.ticket)}</button>`
           : `<span class="kb-chip kb-chip-ticket" title="${escapeHtml(s.ticket)}">${escapeHtml(s.ticket)}</span>`)
       : ''
+    // Root chip only in "All" mode (same gate as the list/cards root badge).
+    const rootChip = (s.root && window.showRootBadge && window.showRootBadge())
+      ? `<span class="kb-chip kb-chip-root" title="Root">${escapeHtml(String(s.root))}</span>`
+      : ''
     const chips = [
+      rootChip,
       s.category ? chip(s.category, { cat: true }) : '',
       ticketChip,
     ].filter(Boolean).join('')

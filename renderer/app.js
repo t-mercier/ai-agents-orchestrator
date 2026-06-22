@@ -43,6 +43,10 @@ function rootCategoryNames() {
 // A session passes the root filter when 'All', when it matches, or when it carries
 // no root (ad-hoc session outside every configured root → shown everywhere, never hidden).
 window.passesRootFilter = (root) => selectedRoot === 'All' || root === selectedRoot || root == null
+// Show a per-session root badge only in "All" mode AND only when >1 root exists —
+// that's when a card's root is ambiguous (same category name can span roots). A
+// single root selected ⇒ every card shares it ⇒ no badge (avoid clutter).
+window.showRootBadge = () => selectedRoot === 'All' && configRoots().length > 1
 
 // Pinned sessions float to the top. Capped (a grid screenful) and persisted
 // locally — these are app prefs, not session state, so no ~/.claude writes.

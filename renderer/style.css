@@ -955,6 +955,20 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-radius: 4px;
   text-transform: uppercase;
 }
+/* Root badge (list + cards) — quiet accent-tinted pill, shown only in "All" mode
+   to say which root a card lives under. Matches the board's .kb-chip-root. */
+.root-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.kb-chip-root { color: var(--accent); background: rgba(var(--accent-rgb), 0.12); font-weight: 700; }
 .list-card-preview {
   font-size: 11px;
   color: var(--text-secondary);
