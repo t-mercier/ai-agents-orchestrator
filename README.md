@@ -36,6 +36,7 @@ Terminal tabs don't scale. You need mission control.
 - **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` for view, `b` for board. **Remap any of it** in Settings → Shortcuts.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and **category filters**.
+- **Named roots** — group categories under multiple named roots (e.g. *Work*, *Perso*, a client) and scope the whole dashboard — List, Cards, Board and the category chips — to one root or to **All** from a titlebar selector. In **All** mode each card shows a small root badge so the same category name across roots is never ambiguous.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
 ### Three ways to look at your work
@@ -112,6 +113,11 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 
 Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
+> ⚠️ **Updating from an earlier version?** This release makes the skills **root-aware** (they resolve a session's folder from its category's root, with the old work/personal layout still supported) and **fixes `/restart`** — its un-archive step used to over-match and could strip valid `notes.md` history lines. **Re-run the installer to pull the updated skills:**
+> ```bash
+> bash scripts/install.sh --force
+> ```
+
 ### Memory that beats compaction
 
 Long sessions force the assistant to **compact** its own history — silently dropping older context until it loses the thread. This app keeps what matters in `notes.md` on disk instead: `/close` records the goal, decisions and next steps **plus the session id**; `/restart` loads all of it — and that id — into a fresh conversation, so the chain back to the original is never broken. Need the literal transcript? `claude --resume <id>` replays it verbatim.
@@ -136,21 +142,22 @@ Edit everything in the app's **Settings (⚙)** — categories & colours, scan r
 
 ```json
 {
-  "version": 1,
-  "workRoot": "~/work",
-  "personalRoot": "~",
+  "roots": [
+    { "name": "Work",  "path": "~/work" },
+    { "name": "Perso", "path": "~" }
+  ],
   "categories": [
-    { "name": "FEAT",   "color": "#7df0c0", "scope": "work" },
-    { "name": "BUG",    "color": "#ff9eb1", "scope": "work" },
-    { "name": "REVIEW", "color": "#d9a86e", "scope": "work" },
-    { "name": "PERSO",  "color": "#8fd9ff", "scope": "personal" }
+    { "name": "FEAT",   "color": "#7df0c0", "root": "Work" },
+    { "name": "BUG",    "color": "#ff9eb1", "root": "Work" },
+    { "name": "REVIEW", "color": "#d9a86e", "root": "Work" },
+    { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
   ],
   "obsidian": { "enabled": false, "workVaultPath": "", "personalVaultPath": "" },
   "ticketBaseUrl": ""
 }
 ```
 
-`scope: "work"` → the category folder lives under `workRoot`; `scope: "personal"` → under `personalRoot`.
+Each category names the **`root`** it lives under (its folder is `<root path>/<CATEGORY>`), so the *same* category name can exist under several roots — the titlebar root selector then scopes the view. *(Back-compat: the legacy `workRoot`/`personalRoot` + a category `scope` of `work`/`personal` are still read and auto-migrated to `Work`/`Perso` roots, so existing configs keep working untouched.)*
 
 **Ticket tracking — any tracker, not just Jira.** `ticketBaseUrl` is just a URL prefix: the app appends each session's ticket ID to it to make the ID clickable. Point it at whatever you use:
 
@@ -190,7 +197,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (34, `cargo test`) + Jest (56, renderer logic) |
+| Tests | Rust unit tests (47, `cargo test`) + Jest (56, renderer logic) |
 
 ## Roadmap
 
