@@ -71,14 +71,9 @@
           ? `<button class="kb-chip kb-chip-ticket ticket-chip" data-url="${escapeHtml(tbase + s.ticket)}" data-tip="${escapeHtml(s.ticket)} · open ticket">${escapeHtml(s.ticket)}</button>`
           : `<span class="kb-chip kb-chip-ticket" title="${escapeHtml(s.ticket)}">${escapeHtml(s.ticket)}</span>`)
       : ''
-    // Space chip only in "All" mode AND only when the category is ambiguous (exists in
-    // 2+ spaces) — otherwise the space adds no information on the card.
-    const rootChip = (s.root && window.showRootBadge && window.showRootBadge()
-        && window.ambiguousCategory && window.ambiguousCategory(s.category))
-      ? `<span class="kb-chip kb-chip-root" title="Space">${escapeHtml(String(s.root))}</span>`
-      : ''
+    // No per-card space chip on the board — the board's own space selector (next to
+    // its search) scopes it instead.
     const chips = [
-      rootChip,
       s.category ? chip(s.category, { cat: true }) : '',
       ticketChip,
     ].filter(Boolean).join('')
@@ -121,10 +116,12 @@
   function visible(it) {
     if (it.kind === 'session') {
       const s = (window._boardIndex || {})[it.id]
-      const rootOk = !window.passesRootFilter || window.passesRootFilter(s ? s.root : null)
+      // Board's own space selector: 'All' = no filter; a space keeps matching + un-spaced.
+      const bs = window.boardSpace ? window.boardSpace() : 'All'
+      const spaceOk = !bs || bs === 'All' || !s || s.root == null || s.root === bs
       const catOk = !window.passesCatFilter || window.passesCatFilter(s ? s.category : null)
       const searchOk = !window.passesSearch || !s || window.passesSearch(s)
-      return rootOk && catOk && searchOk
+      return spaceOk && catOk && searchOk
     }
     if (it.kind === 'note') {
       const n = boardState.notes.find((x) => x.id === it.id)

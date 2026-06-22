@@ -8,12 +8,8 @@ const activeCatFilters = new Set()  // empty = show all categories
 const filterCategories = () => window.CSMCategories.order()
 const POLL_INTERVAL = 5000
 
-// Selected root (global filter). 'All' = every root; otherwise a root name from
-// config.roots. Persisted — it's an app pref, not session state.
-let selectedRoot = 'All'
-try { selectedRoot = localStorage.getItem('csm.root') || 'All' } catch { /* ignore */ }
-
-// Root names from config: v2 `roots`, else migrate the legacy two roots to Work/Perso.
+// Root (space) names from config: v2 `roots`, else migrate the legacy two roots to
+// Work/Perso. Exposed so ui.js/board.js can order their space sections.
 function configRoots() {
   const cfg = window.CSM_CONFIG || {}
   if (Array.isArray(cfg.roots) && cfg.roots.length) {
@@ -24,38 +20,29 @@ function configRoots() {
   if (cfg.personalRoot) out.push('Perso')
   return out
 }
-// The root a category lives under: v2 `root`, else migrated from `scope`.
-function rootOfCategory(name) {
-  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
-  const c = cats.find(x => x.name === name)
-  if (!c) return null
-  return c.root || (c.scope === 'personal' ? 'Perso' : 'Work')
-}
-// Distinct category names visible under the selected root ('All' = every category).
-function rootCategoryNames() {
-  if (selectedRoot === 'All') return [...new Set(filterCategories())]  // a name in 2 spaces → one chip
-  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
-  const names = cats
-    .filter(c => (c.root || (c.scope === 'personal' ? 'Perso' : 'Work')) === selectedRoot)
-    .map(c => c.name)
-  return names.length ? [...new Set(names)] : filterCategories()
-}
-// A session passes the root filter when 'All', when it matches, or when it carries
-// no root (ad-hoc session outside every configured root → shown everywhere, never hidden).
-window.passesRootFilter = (root) => selectedRoot === 'All' || root === selectedRoot || root == null
-// Show a per-session root badge only in "All" mode AND only when >1 root exists —
-// that's when a card's root is ambiguous (same category name can span roots). A
-// single root selected ⇒ every card shares it ⇒ no badge (avoid clutter).
-window.showRootBadge = () => selectedRoot === 'All' && configRoots().length > 1
-// A category is "ambiguous" when its name exists under more than one root — only
-// then does a card need a space badge to disambiguate (cards/board show it then).
-window.ambiguousCategory = (name) => {
-  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
-  const roots = new Set()
-  for (const c of cats) {
-    if (c.name === name) roots.add(c.root || (c.scope === 'personal' ? 'Perso' : 'Work'))
-  }
-  return roots.size > 1
+window.configRoots = configRoots
+// More than one space configured ⇒ the list + cards group into space sections and the
+// board shows its own space selector. A single space ⇒ no space chrome at all.
+window.multiSpace = () => configRoots().length > 1
+// Distinct category names for the filter popover (a name living in 2 spaces → one entry).
+function rootCategoryNames() { return [...new Set(filterCategories())] }
+
+// Board-only space filter (a <select> by the board search). The list + cards group by
+// space via sections instead; the board is flat, so it gets a selector. 'All' = no
+// filter. Persisted. window.boardSpace() is read by board.js's visible().
+let boardSpace = 'All'
+try { boardSpace = localStorage.getItem('csm.boardSpace') || 'All' } catch { /* ignore */ }
+window.boardSpace = () => boardSpace
+function populateBoardSpaceSelector() {
+  const sel = document.getElementById('board-space-select')
+  if (!sel) return
+  const roots = configRoots()
+  if (roots.length <= 1) { sel.hidden = true; boardSpace = 'All'; return }
+  sel.hidden = false
+  if (boardSpace !== 'All' && !roots.includes(boardSpace)) boardSpace = 'All'
+  sel.innerHTML = ['<option value="All">📁 All spaces</option>']
+    .concat(roots.map(r => `<option value="${r}">${r}</option>`)).join('')
+  sel.value = boardSpace
 }
 
 // Pinned sessions float to the top. Capped (a grid screenful) and persisted
@@ -196,7 +183,6 @@ function matchesSearch(s, query) {
 }
 function filterSessions(list, query) {
   let out = list
-  if (selectedRoot !== 'All') out = out.filter(s => window.passesRootFilter(s.root))
   if (activeCatFilters.size > 0) out = out.filter(s => activeCatFilters.has(s.category || 'OTHER'))
   if (query) out = out.filter(s => matchesSearch(s, query))
   return out
@@ -208,43 +194,54 @@ window.passesSearch = (s) => matchesSearch(s, searchQuery)
 // Free-text match for arbitrary strings (board notes) against the current query.
 window.queryMatches = (text) => matchesSearch({ name: text || '' }, searchQuery)
 
+// Category filter — a single "⚲ Filter" button per view bar that opens a checkbox
+// popover (replaces the old chip row: scales to any number of categories, stays out of
+// the way). activeCatFilters is the source of truth (filterSessions + board read it).
 function renderCategoryFilters() {
-  const chips = rootCategoryNames().map(cat =>
-    `<button class="cat-chip ${activeCatFilters.has(cat) ? 'active' : ''}" data-cat-filter="${cat}" data-cat="${cat}">${cat}</button>`
-  ).join('')
+  const n = activeCatFilters.size
+  const btn = `<button class="filter-btn ${n ? 'active' : ''}" data-filter-open aria-label="Filter by category" title="Filter by category">⚲ <span class="btn-label">Filter</span>${n ? ` <span class="filter-count">${n}</span>` : ''}</button>`
   for (const id of ['cat-filter-list', 'cat-filter-cards', 'cat-filter-board']) {
     const el = document.getElementById(id)
-    if (el) el.innerHTML = chips
+    if (el) el.innerHTML = btn
   }
 }
 
-// Global root selector (titlebar). Shown only when >1 root is configured — with a
-// single root it's a no-op. 'All' is always first.
-function populateRootSelector() {
-  const sel = document.getElementById('root-select')
-  if (!sel) return
-  const roots = configRoots()
-  if (roots.length <= 1) { sel.hidden = true; selectedRoot = 'All'; return }
-  sel.hidden = false
-  // Drop a remembered root that no longer exists in config → fall back to All.
-  if (selectedRoot !== 'All' && !roots.includes(selectedRoot)) selectedRoot = 'All'
-  sel.innerHTML = [`<option value="All">📁 All</option>`]
-    .concat(roots.map(r => `<option value="${r}">${r}</option>`)).join('')
-  sel.value = selectedRoot
+function closeFilterMenu() {
+  const m = document.getElementById('filter-menu')
+  if (m) m.remove()
+  document.removeEventListener('mousedown', onFilterOutside, true)
+  document.removeEventListener('keydown', onFilterEsc, true)
 }
+function onFilterOutside(e) {
+  if (!e.target.closest('#filter-menu') && !e.target.closest('[data-filter-open]')) closeFilterMenu()
+}
+function onFilterEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeFilterMenu() } }
 
-function setSelectedRoot(root) {
-  selectedRoot = root || 'All'
-  try { localStorage.setItem('csm.root', selectedRoot) } catch { /* ignore */ }
-  // Prune category filters no longer visible under the new root.
-  const visible = new Set(rootCategoryNames())
-  for (const c of [...activeCatFilters]) if (!visible.has(c)) activeCatFilters.delete(c)
-  selectedKey = null
-  window._lastSelectedKey = null
-  renderCategoryFilters()
-  if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
-  else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+// Build the filter popover anchored under the clicked button. Category names are
+// deduped (a name in 2 spaces → one row). Toggling updates activeCatFilters live.
+function openFilterMenu(anchor) {
+  if (document.getElementById('filter-menu')) { closeFilterMenu(); return }
+  const names = rootCategoryNames()
+  const rows = names.map(cat =>
+    `<button class="filter-opt ${activeCatFilters.has(cat) ? 'on' : ''}" data-filter-cat="${escapeAttr(cat)}">
+       <span class="filter-box"></span><span class="filter-opt-name">${cat}</span></button>`).join('')
+  const clear = activeCatFilters.size
+    ? `<button class="filter-opt filter-clear" data-filter-clear>Clear (${activeCatFilters.size})</button>` : ''
+  const menu = document.createElement('div')
+  menu.id = 'filter-menu'
+  menu.className = 'filter-menu'
+  menu.innerHTML = `<div class="filter-menu-head">Categories</div><div class="filter-menu-list">${rows}</div>${clear}`
+  document.body.appendChild(menu)
+  const r = anchor.getBoundingClientRect()
+  menu.style.top = `${Math.round(r.bottom + 4)}px`
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`
+  setTimeout(() => {
+    document.addEventListener('mousedown', onFilterOutside, true)
+    document.addEventListener('keydown', onFilterEsc, true)
+  }, 0)
 }
+// Minimal attribute escaper (category names are validated tokens, but be safe).
+function escapeAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;') }
 
 // +New root/scope: when both work & personal roots are configured, a Root toggle
 // lets the user pick which scope's categories to show (and thus which root the
@@ -585,10 +582,14 @@ document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
   btn.addEventListener('click', () => setViewMode(btn.dataset.view))
 })
 
-// Global root selector (titlebar) — scopes list/cards/board + the category chips.
+// Board-only space selector (next to the board search).
 {
-  const rootSel = document.getElementById('root-select')
-  if (rootSel) rootSel.addEventListener('change', () => setSelectedRoot(rootSel.value))
+  const bs = document.getElementById('board-space-select')
+  if (bs) bs.addEventListener('change', () => {
+    boardSpace = bs.value
+    try { localStorage.setItem('csm.boardSpace', boardSpace) } catch { /* ignore */ }
+    if (window.renderBoard) window.renderBoard()
+  })
 }
 
 // New-session backoffice
@@ -765,10 +766,20 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   newSessionModal.close()
 })
 
-// Category filter chips (delegated — chips are rebuilt on toggle)
+// Category filter popover (delegated): open button, per-category toggle, clear-all.
 document.addEventListener('click', e => {
-  const chip = e.target.closest('.cat-chip[data-cat-filter]')
-  if (chip) toggleCategoryFilter(chip.dataset.catFilter)
+  const open = e.target.closest('[data-filter-open]')
+  if (open) { e.stopPropagation(); openFilterMenu(open); return }
+  const opt = e.target.closest('[data-filter-cat]')
+  if (opt) { toggleCategoryFilter(opt.dataset.filterCat); opt.classList.toggle('on'); return }
+  const clear = e.target.closest('[data-filter-clear]')
+  if (clear) {
+    activeCatFilters.clear()
+    selectedKey = null; window._lastSelectedKey = null
+    renderCategoryFilters(); closeFilterMenu()
+    if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
+    else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+  }
 })
 
 // Scrim click closes the drawer
@@ -934,8 +945,8 @@ async function boot() {
     console.error('config load failed, using fallbacks:', err)
   }
   window.installDelegatedHandlers()           // one delegated click handler on <body>
-  populateRootSelector()                      // titlebar root selector (hidden if ≤1 root)
-  renderCategoryFilters()                     // build the category filter chips (from config)
+  populateBoardSpaceSelector()                // board-only space selector (hidden if ≤1 space)
+  renderCategoryFilters()                     // build the ⚲ Filter button (from config)
   populateNewSessionCategories()              // fill the +New dropdown (from config)
   fetchAndRender(true)                        // initial → sort
   seedTabCounts()                             // fill ALL tab badges at launch (not just on visit)
@@ -948,7 +959,7 @@ async function boot() {
 window.reloadConfig = async () => {           // called by Settings after save
   window.CSM_CONFIG = await window.api.getConfig()
   if (window.applyCategoryColors) window.applyCategoryColors(window.CSM_CONFIG.colorMap)
-  populateRootSelector()                      // roots may have been added/removed/renamed
+  populateBoardSpaceSelector()                // spaces may have been added/removed/renamed
   renderCategoryFilters()
   populateNewSessionCategories()
   fetchAndRender(true)   // refreshes the active tab + its badge

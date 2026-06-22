@@ -29,7 +29,6 @@
   <div class="titlebar" data-tauri-drag-region>
     <span class="titlebar-title" data-tauri-drag-region>AI Agents Orchestrator</span>
     <div class="titlebar-actions">
-      <select class="root-select" id="root-select" title="Filter by space" aria-label="Filter by space" hidden></select>
       <button class="new-session-btn" id="new-session-btn" title="Start a new session">＋ <span class="btn-label">New</span></button>
       <button class="new-session-btn ghost" id="import-session-btn" title="Import an existing Claude Code session into the dashboard">＋ <span class="btn-label">Import</span></button>
       <div class="view-toggle">
@@ -428,6 +427,7 @@
     <div class="board-wrap" id="board-wrap">
       <div class="board-filterbar">
         <div class="cat-filter cat-filter-board" id="cat-filter-board"></div>
+        <select class="root-select board-space-select" id="board-space-select" title="Filter by space" aria-label="Filter the board by space" hidden></select>
         <input class="search-field board-search" id="board-search" type="search" placeholder="Search sessions…" spellcheck="false">
       </div>
       <div class="board-view" id="board-view"></div>
