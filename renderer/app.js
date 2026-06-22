@@ -758,8 +758,10 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   // Space the session launches under — only meaningful when >1 space (the picker is
   // shown); empty otherwise, in which case start_session uses the category's own root.
   const root = (configRoots().length > 1) ? nsRoot : ''
-  // Destination: shared sticky pref (csm.openIn). 'embedded' runs the new session in the
-  // in-app pty; 'terminal' (default for +New historically) launches an external iTerm tab.
+  // Destination: shared sticky pref (csm.openIn, same toggle as Resume/Restart). NOTE the
+  // pref defaults to 'embedded', so +New now defaults to the in-app terminal — a change
+  // from its historical always-iTerm behaviour. The modal toggle shows the current pick.
+  // 'terminal' = external iTerm tab (the old behaviour).
   const embedded = !!(window.getOpenIn && window.getOpenIn() === 'embedded')
   const res = await window.api.startSession({ category, name, ticket, repo, branch, prLink, root, embedded })
   if (!res || !res.ok) {
@@ -772,7 +774,15 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
     // is the session's eventual sessionKey, so when the poll discovers it the card links to
     // this same pty (no re-key; pty_spawn's guard blocks a double-client). Seed a synthetic
     // _terminalSession so the panel survives until renderAll re-resolves it by key (notesPath).
-    window._terminalSession = { notesPath: res.notesPath, name, category, cwd: '', status: 'busy', state: 'active' }
+    window._terminalSession = {
+      notesPath: res.notesPath, name, category, root,
+      cwd: '', status: 'busy', state: 'active',
+      // safe-empty defaults: the synthetic feeds renderDetailPanel (which fills the visible
+      // header) until the ~5s poll discovers the real session and renderAll re-resolves it
+      // by key — so no field deref can throw in the gap.
+      sessionId: '', ticket: '', prLink: '', branch: '', gitBranch: '',
+      goal: '', lastActivity: '', lastActivityAt: '', updatedAt: '', startedAt: '', nextSteps: '',
+    }
     selectedKey = res.notesPath
     window._lastSelectedKey = res.notesPath
     if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')   // embedded lives in List
