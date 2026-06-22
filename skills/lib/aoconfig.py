@@ -110,11 +110,12 @@ def base_for_entry(cfg, entry):
     name = entry.get('name', '')
     path = root_path(cfg, root_name_of(entry))
     if path is None:
-        # v1 fallback: resolve directly off the legacy roots by scope.
-        if entry.get('scope') == 'personal':
-            path = expand(cfg.get('personalRoot') or HOME)
-        else:
-            path = expand(cfg.get('workRoot') or os.path.join(HOME, 'work'))
+        # Root name not in the declared roots list — only reachable via a hand-edited
+        # config (the dashboard keeps roots + categories in sync). Fall back to workRoot
+        # to MATCH config.rs derive() (`root_path(...).unwrap_or(work_root)`). Diverging
+        # here (e.g. by scope) would point the scanner and the skills at different dirs,
+        # so a session created by a skill would vanish from the dashboard.
+        path = expand(cfg.get('workRoot') or os.path.join(HOME, 'work'))
     return os.path.join(path, name)
 
 

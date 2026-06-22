@@ -155,6 +155,9 @@ fn derive(user: &Value) -> Value {
             continue;
         }
         let root_name = c.get("root").and_then(Value::as_str).unwrap_or("Work");
+        // Unknown root name (only via a hand-edited config — the GUI keeps roots +
+        // categories in sync) → fall back to work_root. aoconfig.py base_for_entry MUST
+        // match this exactly, else the scanner and the skills resolve different dirs.
         let base_root = root_path(root_name).unwrap_or_else(|| work_root.clone());
         scan_dirs.push(json!({ "category": name, "base": format!("{base_root}/{name}"), "root": root_name }));
         order.push(Value::String(name.to_string()));

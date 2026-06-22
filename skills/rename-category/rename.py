@@ -92,10 +92,24 @@ def main():
     if not NAME_RE.match(NEW):
         print(f"ERROR: invalid new name '{NEW}' (letters/digits/_/-, max 20)")
         sys.exit(1)
-    cat = find_category(cfg, OLD)
-    if not cat:
+    matches = [c for c in cfg.get('categories', []) if c.get('name') == OLD]
+    if not matches:
         print(f"ERROR: category '{OLD}' not found in config")
         sys.exit(1)
+    # A name can live under several spaces (v2 roots). This skill resolves the folder by
+    # scope, not by root, so it can't safely disambiguate — renaming would touch only the
+    # first match and leave the config inconsistent. Refuse and point at the dashboard
+    # (its Settings rename is per-space). Insurance against silent config corruption.
+    if len(matches) > 1:
+        spaces = ', '.join(sorted({
+            c.get('root') or ('Perso' if c.get('scope') == 'personal' else 'Work')
+            for c in matches
+        }))
+        print(f"ERROR: category '{OLD}' exists under multiple spaces ({spaces}). "
+              f"Rename it from the dashboard's Settings (per-space), or remove the "
+              f"duplicate first — this skill can't tell which one you mean.")
+        sys.exit(1)
+    cat = matches[0]
     if find_category(cfg, NEW):
         print(f"ERROR: category '{NEW}' already exists")
         sys.exit(1)
