@@ -20,7 +20,6 @@ function configRoots() {
   if (cfg.personalRoot) out.push('Perso')
   return out
 }
-window.configRoots = configRoots
 // More than one space configured ⇒ the list + cards group into space sections and the
 // board shows its own space selector. A single space ⇒ no space chrome at all.
 window.multiSpace = () => configRoots().length > 1
@@ -239,11 +238,6 @@ function openFilterMenu(anchor) {
 }
 // Minimal attribute escaper (category names are validated tokens, but be safe).
 function escapeAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;') }
-
-// +New root/scope: when both work & personal roots are configured, a Root toggle
-// lets the user pick which scope's categories to show (and thus which root the
-// session launches from — the category's scope drives that in start_session).
-let nsScope = 'work'   // kept for the Import modal's work/personal toggle
 
 // Category names for a given scope (work/personal), from config — used by Import.
 function categoriesForScope(scope) {

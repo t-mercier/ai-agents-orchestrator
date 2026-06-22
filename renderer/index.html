@@ -40,12 +40,12 @@
     </div>
   </div>
 
-  <!-- New-session backoffice: collects inputs, then launches `claude` + /start
+  <!-- New-session backoffice: collects inputs, then launches `claude` + /start-session
        in iTerm. The app writes nothing itself (ADR-001/012). -->
   <dialog id="new-session-modal" class="modal">
     <form method="dialog" class="modal-form" id="new-session-form">
       <h2 class="modal-title">Start a new session</h2>
-      <p class="modal-hint">Launches <code>claude</code> in iTerm and runs <code>/start</code>. The session files are created by Claude Code, not this app.</p>
+      <p class="modal-hint">Launches <code>claude</code> in iTerm and runs <code>/start-session</code>. The session files are created by Claude Code, not this app.</p>
 
       <!-- Space picker — shown only when more than one space is configured (toggled in
            app.js). Filters the category list to that space's categories, and decides
@@ -72,7 +72,7 @@
       </label>
 
       <!-- Optional: start the session ON an existing branch in an existing repo.
-           /start then detects the checked-out branch and syncs it. -->
+           /start-session then detects the checked-out branch and syncs it. -->
       <label class="modal-field">
         <span>Repo <em>(optional — start from an existing checkout)</em></span>
         <div class="path-row">
@@ -101,7 +101,7 @@
   </dialog>
 
   <!-- Import: adopt an existing (unmanaged) Claude Code session. Picks from the most
-       recent transcripts, then launches `claude --resume <id>` + /import (the skill
+       recent transcripts, then launches `claude --resume <id>` + /import-session (the skill
        writes the notes.md; the app only launches — ADR-012). -->
   <dialog id="import-modal" class="modal">
     <div class="modal-form">

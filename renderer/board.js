@@ -72,8 +72,8 @@
           ? `<button class="kb-chip kb-chip-ticket ticket-chip" data-url="${escapeHtml(tbase + s.ticket)}" data-tip="${escapeHtml(s.ticket)} · open ticket">${escapeHtml(s.ticket)}</button>`
           : `<span class="kb-chip kb-chip-ticket" title="${escapeHtml(s.ticket)}">${escapeHtml(s.ticket)}</span>`)
       : ''
-    // No per-card space chip on the board — the board's own space selector (next to
-    // its search) scopes it instead.
+    // No per-card space chip on the board — the shared ⚲ Filter popover (Spaces
+    // section) scopes it instead.
     const chips = [
       s.category ? chip(s.category, { cat: true }) : '',
       ticketChip,

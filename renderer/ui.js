@@ -6,7 +6,7 @@ function applyCategoryColors(colorMap) {
   if (!colorMap) return
   const css = Object.entries(colorMap).map(([name, color]) => {
     const c = CSS.escape(name)
-    return `.session-card-cat[data-cat="${c}"],.category-name[data-cat="${c}"],.cat-chip.active[data-cat="${c}"]{color:${color}}`
+    return `.session-card-cat[data-cat="${c}"],.category-name[data-cat="${c}"]{color:${color}}`
   }).join('')
   let el = document.getElementById('cat-colors')
   if (!el) { el = document.createElement('style'); el.id = 'cat-colors'; document.head.appendChild(el) }

@@ -100,7 +100,6 @@ html, body {
   flex-shrink: 0;
 }
 .titlebar-title { font-size: 13px; font-weight: 600; }
-.titlebar-refresh { font-size: 11px; color: var(--text-tertiary); }
 
 .titlebar-actions {
   display: flex;
@@ -126,32 +125,6 @@ html, body {
 }
 .new-session-btn:hover { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent); }
 
-/* Global root filter (titlebar). Quiet chip styled like the other titlebar controls;
-   its own chevron (the modal selects draw theirs the same way). Hidden when ≤1 root. */
-.root-select {
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0.5px solid var(--card-border);
-  border-radius: 7px;
-  padding: 4px 26px 4px 10px;   /* matches .new-session-btn height; room for chevron */
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  -webkit-app-region: no-drag;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa1ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  transition: border-color 0.12s, color 0.12s;
-}
-.root-select:hover { border-color: var(--text-tertiary); color: var(--text-primary); }
-/* No lingering accent border after a mouse pick (the select keeps :focus until you
-   click away — reads as a stuck selection). Show the ring only for keyboard nav. */
-.root-select:focus { outline: none; }
-.root-select:focus-visible { border-color: var(--accent); }
-.root-select[hidden] { display: none; }
 /* ＋Import: a quieter sibling of ＋New (secondary action). */
 .new-session-btn.ghost { background: transparent; border-color: var(--card-border); color: var(--text-secondary); }
 .new-session-btn.ghost:hover { background: rgba(var(--tint), 0.08); border-color: var(--text-tertiary); color: var(--text-primary); }
@@ -314,7 +287,6 @@ html, body {
   color: var(--text-secondary);
   font-size: 12px;
 }
-.settings-space-row .space-remove { flex-shrink: 0; }
 
 .settings-cat-list { display: flex; flex-direction: column; gap: 6px; }
 .settings-cat-row { display: flex; gap: 6px; align-items: center; }
@@ -895,25 +867,6 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
-.cards-topbar .cat-filter { border: none; padding: 0; }
-.cat-chip {
-  font-family: var(--font);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--text-tertiary);
-  background: rgba(var(--tint), 0.05);
-  border: 0.5px solid transparent;
-  border-radius: 5px;
-  padding: 3px 7px;
-  cursor: pointer;
-  transition: color 0.1s, border-color 0.1s, background 0.1s;
-}
-.cat-chip:hover { color: var(--text-secondary); }
-/* Active chip takes its category color */
-/* active chip text color is injected per-config (cat-colors); border tint generic */
-.cat-chip.active { background: rgba(var(--tint), 0.1); border-color: rgba(var(--tint), 0.18); }
-
 /* ── Category filter: ⚲ button + checkbox popover (replaces the chip row) ── */
 .filter-btn {
   display: inline-flex; align-items: center; gap: 5px;
@@ -1114,21 +1067,6 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-radius: 4px;
   text-transform: uppercase;
 }
-/* Space badge — shown on a card (cards view) / board chip ONLY when the category is
-   ambiguous (lives in 2+ spaces) in All mode; otherwise the space lives in the detail
-   slide-over. Quiet accent-tinted pill. */
-.root-badge {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.12);
-  padding: 1px 6px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-.kb-chip-root { color: var(--accent); background: rgba(var(--accent-rgb), 0.12); font-weight: 700; }
 .list-card-preview {
   font-size: 11px;
   color: var(--text-secondary);

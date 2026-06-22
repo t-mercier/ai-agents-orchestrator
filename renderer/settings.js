@@ -455,7 +455,7 @@
       const base = parts.pop() || ''
       const parent = parts.join('/')
       const root = rootForParent(parent)
-      if (!root) { skipped.push(`${base} (not under a root)`); continue }
+      if (!root) { skipped.push(`${base} (not under a space)`); continue }
       if (!NAME_RE.test(base)) { skipped.push(`${base} (invalid name)`); continue }
       if (have.has(key(root, base))) { skipped.push(`${base} (already in ${root})`); continue }
       have.add(key(root, base))
@@ -465,7 +465,7 @@
     }
     if (skipped.length) {
       const roots = (Array.isArray(c.roots) ? c.roots.map(r => r.path) : [c.workRoot, c.personalRoot]).filter(Boolean)
-      showError(`Added ${added}. Skipped: ${skipped.join(', ')}. Pick folders directly inside one of your roots: ${roots.join(', ') || '—'}.`)
+      showError(`Added ${added}. Skipped: ${skipped.join(', ')}. Pick folders directly inside one of your spaces: ${roots.join(', ') || '—'}.`)
     }
   })
 

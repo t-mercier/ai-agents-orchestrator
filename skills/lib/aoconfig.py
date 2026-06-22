@@ -25,7 +25,7 @@ Subcommands:
   vault    <CAT>    → Obsidian vault path for the category's scope, or '' if
                       Obsidian is disabled / no vault set for that scope
   find     <SLUG>   → newline-separated notes.md paths matching <SLUG> across all
-                      (root, category) bases (for /restart, /close, /archive lookups)
+                      (root, category) bases (for /restart-session, /close-session, /archive-session lookups)
 """
 import json
 import os
