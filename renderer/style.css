@@ -274,10 +274,12 @@ html, body {
 .path-row input { flex: 1; min-width: 0; }
 .path-browse { white-space: nowrap; flex-shrink: 0; }
 /* Spaces editor rows: [name] [path + browse] [remove]. */
-.settings-space-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+/* Each space = a two-line item: [name] [Browse] [✕] on line 1, the selected path
+   on line 2. The inputs aren't in a .modal-field, so style them like the modal inputs. */
+.settings-space-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+.settings-space-item { display: flex; flex-direction: column; gap: 5px; }
 .settings-space-row { display: flex; gap: 8px; align-items: center; }
-/* These inputs aren't inside a .modal-field, so style them like the modal inputs. */
-.settings-space-row input {
+.settings-space-item input {
   font-family: var(--font);
   font-size: 13px;
   color: var(--text-primary);
@@ -287,10 +289,16 @@ html, body {
   padding: 7px 10px;
   outline: none;
 }
-.settings-space-row input:focus { border-color: var(--accent); background: rgba(var(--tint), 0.1); }
-.settings-space-row .space-name { width: 120px; flex-shrink: 0; }
-.settings-space-row .path-row { flex: 1; min-width: 0; }
-.settings-space-row .path-row input { flex: 1; min-width: 0; }
+.settings-space-row .space-name { flex: 1; min-width: 0; }
+.settings-space-row .space-name:focus { border-color: var(--accent); background: rgba(var(--tint), 0.1); }
+.settings-space-row .space-remove { flex-shrink: 0; }
+/* Line 2: the selected path — read-only display (set via Browse), muted + smaller. */
+.settings-space-item .space-path {
+  width: 100%;
+  cursor: default;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 .settings-space-row .space-remove { flex-shrink: 0; }
 
 .settings-cat-list { display: flex; flex-direction: column; gap: 6px; }

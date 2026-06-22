@@ -26,18 +26,20 @@
   let spaceRowSeq = 0
   function addSpaceRow(space = {}) {
     const id = `set-space-path-${spaceRowSeq++}`
-    const row = document.createElement('div')
-    row.className = 'settings-space-row'
-    row.dataset.orig = space.name || ''   // original name → detect rename for category retag
-    row.innerHTML = `
-      <input class="space-name" type="text" placeholder="Name" value="${escAttr(space.name)}" spellcheck="false" autocomplete="off">
-      <div class="path-row">
-        <input class="space-path" id="${id}" type="text" placeholder="~/path" value="${escAttr(space.path)}" spellcheck="false" autocomplete="off">
+    const item = document.createElement('div')
+    item.className = 'settings-space-item'
+    item.dataset.orig = space.name || ''   // original name → detect rename for category retag
+    // Line 1: name + Browse + remove. Line 2: the selected path (set via Browse only,
+    // read-only — the path input doubles as the display + the value collect() reads).
+    item.innerHTML = `
+      <div class="settings-space-row">
+        <input class="space-name" type="text" placeholder="Name" value="${escAttr(space.name)}" spellcheck="false" autocomplete="off">
         <button type="button" class="modal-btn path-browse" data-browse="${id}">Browse…</button>
+        <button type="button" class="icon-btn space-remove" title="Remove this space (its folders on disk are left untouched)">✕</button>
       </div>
-      <button type="button" class="icon-btn space-remove" title="Remove this space (its folders on disk are left untouched)">✕</button>`
-    row.querySelector('.space-remove').addEventListener('click', () => row.remove())
-    spaceList.appendChild(row)
+      <input class="space-path" id="${id}" type="text" placeholder="No folder selected — click Browse" value="${escAttr(space.path)}" readonly spellcheck="false" autocomplete="off" title="${escAttr(space.path)}">`
+    item.querySelector('.space-remove').addEventListener('click', () => item.remove())
+    spaceList.appendChild(item)
   }
   function renderSpaceRows() {
     if (!spaceList) return
@@ -294,11 +296,11 @@
     // rename → remember old→new so the categories under it follow.
     const rename = {}
     const roots = []
-    for (const row of spaceList.querySelectorAll('.settings-space-row')) {
-      const name = row.querySelector('.space-name').value.trim()
-      const path = row.querySelector('.space-path').value.trim()
+    for (const item of spaceList.querySelectorAll('.settings-space-item')) {
+      const name = item.querySelector('.space-name').value.trim()
+      const path = item.querySelector('.space-path').value.trim()
       if (!name) continue
-      if (row.dataset.orig && row.dataset.orig !== name) rename[row.dataset.orig] = name
+      if (item.dataset.orig && item.dataset.orig !== name) rename[item.dataset.orig] = name
       roots.push({ name, path })
     }
 
