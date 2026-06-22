@@ -71,8 +71,10 @@
           ? `<button class="kb-chip kb-chip-ticket ticket-chip" data-url="${escapeHtml(tbase + s.ticket)}" data-tip="${escapeHtml(s.ticket)} · open ticket">${escapeHtml(s.ticket)}</button>`
           : `<span class="kb-chip kb-chip-ticket" title="${escapeHtml(s.ticket)}">${escapeHtml(s.ticket)}</span>`)
       : ''
-    // Root chip only in "All" mode (same gate as the list/cards root badge).
-    const rootChip = (s.root && window.showRootBadge && window.showRootBadge())
+    // Space chip only in "All" mode AND only when the category is ambiguous (exists in
+    // 2+ spaces) — otherwise the space adds no information on the card.
+    const rootChip = (s.root && window.showRootBadge && window.showRootBadge()
+        && window.ambiguousCategory && window.ambiguousCategory(s.category))
       ? `<span class="kb-chip kb-chip-root" title="Space">${escapeHtml(String(s.root))}</span>`
       : ''
     const chips = [

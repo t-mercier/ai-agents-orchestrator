@@ -47,6 +47,16 @@ window.passesRootFilter = (root) => selectedRoot === 'All' || root === selectedR
 // that's when a card's root is ambiguous (same category name can span roots). A
 // single root selected ⇒ every card shares it ⇒ no badge (avoid clutter).
 window.showRootBadge = () => selectedRoot === 'All' && configRoots().length > 1
+// A category is "ambiguous" when its name exists under more than one root — only
+// then does a card need a space badge to disambiguate (cards/board show it then).
+window.ambiguousCategory = (name) => {
+  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
+  const roots = new Set()
+  for (const c of cats) {
+    if (c.name === name) roots.add(c.root || (c.scope === 'personal' ? 'Perso' : 'Work'))
+  }
+  return roots.size > 1
+}
 
 // Pinned sessions float to the top. Capped (a grid screenful) and persisted
 // locally — these are app prefs, not session state, so no ~/.claude writes.

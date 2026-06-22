@@ -908,6 +908,53 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .category-sessions { overflow: hidden; }
 .category-sessions.collapsed { display: none; }
 
+/* Space sections (All mode) — one level ABOVE categories: a touch more prominent,
+   with the nested category groups indented to read as children. */
+.space-group { margin-bottom: 6px; }
+.space-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px 5px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  border-top: 0.5px solid var(--card-border);
+}
+.space-group:first-child .space-header { border-top: none; }
+.space-chevron {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: inline-block;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+  line-height: 1;
+  width: 10px;
+  text-align: center;
+}
+.space-chevron.collapsed { transform: rotate(0deg); }
+.space-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.space-header:hover .space-name { opacity: 0.7; }
+.space-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(var(--accent-rgb), 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.space-sessions { overflow: hidden; }
+.space-sessions.collapsed { display: none; }
+/* Indent the category groups nested inside a space so the hierarchy reads. */
+.space-sessions .category-header { padding-left: 24px; }
+.space-sessions .list-card { margin-left: 10px; }
+
 /* ===== List Cards ===== */
 /* Compact list card */
 .list-card {
@@ -980,8 +1027,20 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-radius: 4px;
   text-transform: uppercase;
 }
-/* Board root chip (shown only in "All" mode) — the session's space lives on the card
-   face only on the board; list/cards show it in the detail slide-over instead. */
+/* Space badge — shown on a card (cards view) / board chip ONLY when the category is
+   ambiguous (lives in 2+ spaces) in All mode; otherwise the space lives in the detail
+   slide-over. Quiet accent-tinted pill. */
+.root-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .kb-chip-root { color: var(--accent); background: rgba(var(--accent-rgb), 0.12); font-weight: 700; }
 .list-card-preview {
   font-size: 11px;

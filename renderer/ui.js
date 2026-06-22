@@ -16,6 +16,8 @@ window.applyCategoryColors = applyCategoryColors
 
 // Persisted across re-renders — categories start expanded
 const collapsedCategories = new Set()
+// Same, for the space sections shown in All mode (list view groups by space → category).
+const collapsedSpaces = new Set()
 
 // Frozen sort order: rebuilt only on tab switch / search / manual refresh,
 // NOT on the 5s poll — so the list never reorders under the user's cursor.
@@ -174,10 +176,19 @@ function firstNextStep(nextSteps) {
 // density, hidden in minimal (CSS). Returns '' when the session has none of the three.
 function cardIcons(s) {
   // Ticket as a number label (consistent with the board); PR + notes stay as icons.
-  // (The session's root is shown in the detail slide-over, not on the card face —
-  // cards stay uncluttered.)
+  // (The session's space is in the detail slide-over; the cards view adds a space
+  // badge only for an AMBIGUOUS category — see ambiguousRootBadge.)
   const icons = [ticketChip(s.ticket), prPill(s.prLink), notesPill(s.notesPath)].filter(Boolean).join('')
   return icons ? `<div class="card-icons">${icons}</div>` : ''
+}
+
+// Space badge shown ONLY when the category is ambiguous (exists in 2+ spaces) and
+// we're in All mode — so the cards/board stay clean except where a space is the only
+// thing telling two same-named categories apart. The list disambiguates by grouping.
+function ambiguousRootBadge(s) {
+  if (!s.root || !window.showRootBadge || !window.showRootBadge()) return ''
+  if (!window.ambiguousCategory || !window.ambiguousCategory(s.category)) return ''
+  return `<span class="root-badge" title="Space">${escapeHtml(String(s.root))}</span>`
 }
 
 function renderListCard(s, selectedKey, changed) {
@@ -231,6 +242,43 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
       </div>
     </div>
   `
+}
+
+// A space section (All mode): an expandable header wrapping that space's category
+// groups. Ordered by the config's space order; sessions with no space fall under "—".
+function renderSpaceSection(space, sessions, selectedKey, changedKeys) {
+  const collapsed = collapsedSpaces.has(space)
+  const active = hasBusy(sessions)
+  const inner = groupByCategory(sessions)
+    .map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
+    .join('')
+  return `
+    <div class="space-group">
+      <div class="space-header ${active ? 'has-active' : ''}" data-space="${escapeHtml(space)}">
+        <span class="space-chevron ${collapsed ? 'collapsed' : ''}">›</span>
+        <span class="space-name">${escapeHtml(space)}</span>
+        <span class="space-count">${sessions.length}</span>
+      </div>
+      <div class="space-sessions ${collapsed ? 'collapsed' : ''}">${inner}</div>
+    </div>
+  `
+}
+
+// Group sessions by space, ordered by the config's roots order ("—" for un-spaced last).
+function groupBySpace(sessions) {
+  const groups = {}
+  for (const s of sessions) {
+    const sp = s.root || '—'
+    ;(groups[sp] = groups[sp] || []).push(s)
+  }
+  const order = ((window.CSM_CONFIG && window.CSM_CONFIG.roots) || []).map(r => r.name)
+  return Object.entries(groups).sort(([a], [b]) => {
+    const ai = order.indexOf(a), bi = order.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
 }
 
 // Empty / loading state for the session list + cards grid (shared). Distinguishes
@@ -302,9 +350,17 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
     pinned.sort((a, b) => rankOf(a) - rankOf(b))
     html += renderCategoryGroup('PINNED', pinned, selectedKey, changedKeys)
   }
-  html += groupByCategory(rest).map(([cat, sess]) =>
-    renderCategoryGroup(cat, sess, selectedKey, changedKeys)
-  ).join('')
+  // In All mode (>1 space), nest the rest under expandable space sections → category
+  // groups; otherwise (a single space selected) just category groups as before.
+  if (window.showRootBadge && window.showRootBadge()) {
+    html += groupBySpace(rest).map(([space, sess]) =>
+      renderSpaceSection(space, sess, selectedKey, changedKeys)
+    ).join('')
+  } else {
+    html += groupByCategory(rest).map(([cat, sess]) =>
+      renderCategoryGroup(cat, sess, selectedKey, changedKeys)
+    ).join('')
+  }
   // Skip DOM rewrite when unchanged — preserves hover/cursor between idle polls.
   setHtml(document.getElementById('panel-list'), html)
 }
@@ -333,6 +389,7 @@ function renderSessionCard(s, selectedKey, changed) {
         <span class="session-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
         <span class="session-card-cat" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
+        ${ambiguousRootBadge(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
         ${pinBtn(s)}
@@ -1004,6 +1061,19 @@ function installDelegatedHandlers() {
     // Pin toggle — must come before the card-select handler (it's inside a card).
     const pin = e.target.closest('.pin-btn[data-pin-key]')
     if (pin && window.togglePin) { e.stopPropagation(); window.togglePin(pin.dataset.pinKey); return }
+
+    const space = e.target.closest('.space-header[data-space]')
+    if (space) {
+      const sp = space.dataset.space
+      const nowCollapsed = !collapsedSpaces.has(sp)
+      if (nowCollapsed) collapsedSpaces.add(sp)
+      else collapsedSpaces.delete(sp)
+      const chevron = space.querySelector('.space-chevron')
+      const sessionsEl = space.parentElement && space.parentElement.querySelector('.space-sessions')
+      if (chevron) chevron.classList.toggle('collapsed', nowCollapsed)
+      if (sessionsEl) sessionsEl.classList.toggle('collapsed', nowCollapsed)
+      return
+    }
 
     const cat = e.target.closest('.category-header[data-category]')
     if (cat) {
