@@ -215,14 +215,13 @@ function renderListCard(s, selectedKey, changed) {
       <div class="list-card-header">
         <span class="status-dot ${dotClass}"></span>
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
-        ${badge}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
         ${pinBtn(s)}
       </div>
       ${preview ? `<div class="list-card-preview">${preview}</div>` : ''}
       ${next ? `<div class="list-card-next" title="Next: ${escapeHtml(next)}">↪ ${escapeHtml(truncate(next, 70))}</div>` : ''}
-      ${cardIcons(s)}
+      ${(cardIcons(s) || badge) ? `<div class="list-card-foot">${cardIcons(s)}${badge}</div>` : ''}
     </div>
   `
 }

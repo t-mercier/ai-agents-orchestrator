@@ -33,7 +33,7 @@ function rootOfCategory(name) {
 }
 // Distinct category names visible under the selected root ('All' = every category).
 function rootCategoryNames() {
-  if (selectedRoot === 'All') return filterCategories()
+  if (selectedRoot === 'All') return [...new Set(filterCategories())]  // a name in 2 spaces → one chip
   const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
   const names = cats
     .filter(c => (c.root || (c.scope === 'personal' ? 'Perso' : 'Work')) === selectedRoot)
