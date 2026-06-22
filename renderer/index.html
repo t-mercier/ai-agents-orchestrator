@@ -48,14 +48,12 @@
       <h2 class="modal-title">Start a new session</h2>
       <p class="modal-hint">Launches <code>claude</code> in iTerm and runs <code>/start</code>. The session files are created by Claude Code, not this app.</p>
 
-      <!-- Root/scope picker — shown only when both work & personal roots are set
-           (toggled in app.js). Filters the category list to that scope's categories. -->
-      <label class="modal-field" id="ns-scope-field" hidden>
+      <!-- Space picker — shown only when more than one space is configured (toggled in
+           app.js). Filters the category list to that space's categories, and decides
+           which space the new session launches under. Same <select> as Category. -->
+      <label class="modal-field" id="ns-space-field" hidden>
         <span>Space</span>
-        <div class="view-toggle ns-scope-toggle">
-          <button type="button" class="view-btn active" data-scope="work" id="ns-scope-work">Work</button>
-          <button type="button" class="view-btn" data-scope="personal" id="ns-scope-personal">Personal</button>
-        </div>
+        <select id="ns-space"></select>
       </label>
 
       <label class="modal-field">

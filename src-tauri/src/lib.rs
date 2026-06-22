@@ -159,11 +159,32 @@ fn start_session(
     repo: String,
     branch: String,
     pr_link: String,
+    root: String,
 ) -> Result<(), String> {
     let cfg = config::load();
+    // Optional space (root) override — disambiguates a category present in 2+ spaces,
+    // and decides the launch dir + the `--root` the skill writes under. Must be a
+    // declared root and a safe token (it rides the /start-session prompt).
+    let want_root = root.trim();
+    if !want_root.is_empty() {
+        let known = cfg.get("roots").and_then(serde_json::Value::as_array).is_some_and(|rs| {
+            rs.iter().any(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(want_root))
+        });
+        let safe = want_root.len() <= 30
+            && want_root.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+        if !known || !safe {
+            return Err("invalid space".into());
+        }
+    }
     let cats = cfg.get("categories").and_then(serde_json::Value::as_array);
+    // Match the category by (name, root) when a space is given, so the right entry
+    // (and thus the right launch dir) wins for a name that exists under several spaces.
     let cat_def = cats.and_then(|arr| {
-        arr.iter().find(|c| c.get("name").and_then(serde_json::Value::as_str) == Some(&category))
+        arr.iter().find(|c| {
+            c.get("name").and_then(serde_json::Value::as_str) == Some(&category)
+                && (want_root.is_empty()
+                    || c.get("root").and_then(serde_json::Value::as_str) == Some(want_root))
+        })
     });
     let cat_def = match cat_def {
         Some(c) if is_safe_category(&category) => c,
@@ -223,7 +244,7 @@ fn start_session(
         return Err("not a GitHub PR URL (https://github.com/owner/repo/pull/N)".into());
     }
 
-    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>]
+    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>] [--root <space>]
     let parts: Vec<&str> = [category.as_str(), safe_ticket.as_str(), safe_name.as_str()]
         .into_iter()
         .filter(|p| !p.is_empty())
@@ -231,6 +252,11 @@ fn start_session(
     let mut prompt = format!("/start-session {}", parts.join(" "));
     if !pr.is_empty() {
         prompt.push_str(&format!(" --pr {pr}"));
+    }
+    // Tell the skill which space to write under (only when one was chosen) — resolves
+    // a category that exists in several spaces. Validated as a safe token above.
+    if !want_root.is_empty() {
+        prompt.push_str(&format!(" --root {want_root}"));
     }
     let model = pty::CLAUDE_MODEL;
 

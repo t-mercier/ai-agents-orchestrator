@@ -40,10 +40,10 @@
     onPtyExit: (cb) => window.__TAURI__.event.listen('pty-exit', (e) => cb(e.payload.sessionId)),
 
     // ── New-session launcher (src-tauri/src/lib.rs) ──
-    startSession: ({ category, name, ticket, repo, branch, prLink } = {}) =>
+    startSession: ({ category, name, ticket, repo, branch, prLink, root } = {}) =>
       invoke('start_session', {
         category: category || '', name: name || '', ticket: ticket || '',
-        repo: repo || '', branch: branch || '', prLink: prLink || '',
+        repo: repo || '', branch: branch || '', prLink: prLink || '', root: root || '',
       })
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),

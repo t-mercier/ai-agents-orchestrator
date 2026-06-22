@@ -249,26 +249,44 @@ function setSelectedRoot(root) {
 // +New root/scope: when both work & personal roots are configured, a Root toggle
 // lets the user pick which scope's categories to show (and thus which root the
 // session launches from — the category's scope drives that in start_session).
-let nsScope = 'work'
+let nsScope = 'work'   // kept for the Import modal's work/personal toggle
 
-// Category names for a given scope, from config (falls back to all if none match).
+// Category names for a given scope (work/personal), from config — used by Import.
 function categoriesForScope(scope) {
   const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
   const names = cats.filter(c => (c.scope || 'work') === scope).map(c => c.name)
   return names.length ? names : filterCategories()
 }
 
-// Fill the +New modal's category dropdown from config (validated names, so
-// safe to interpolate). Shows the Root toggle only when both roots are set, and
-// filters categories to the selected scope.
+// +New: the selected space (a config root name). Both the category list AND the space
+// the session launches under derive from it.
+let nsRoot = ''
+// Distinct category names that live in a given space.
+function categoriesForRoot(rootName) {
+  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
+  const names = cats
+    .filter(c => (c.root || (c.scope === 'personal' ? 'Perso' : 'Work')) === rootName)
+    .map(c => c.name)
+  return names.length ? [...new Set(names)] : filterCategories()
+}
+
+// Fill the +New modal's category dropdown from config (validated names, so safe to
+// interpolate). Shows the Space <select> only when >1 space exists, and filters the
+// categories to the selected space.
 function populateNewSessionCategories() {
   const sel = document.getElementById('ns-category')
   if (!sel) return
-  const cfg = window.CSM_CONFIG || {}
-  const bothRoots = !!(cfg.workRoot && cfg.personalRoot)
-  const scopeField = document.getElementById('ns-scope-field')
-  if (scopeField) scopeField.hidden = !bothRoots
-  const list = bothRoots ? categoriesForScope(nsScope) : filterCategories()
+  const spaces = configRoots()
+  const multi = spaces.length > 1
+  const field = document.getElementById('ns-space-field')
+  const spaceSel = document.getElementById('ns-space')
+  if (field) field.hidden = !multi
+  if (multi && spaceSel) {
+    if (!spaces.includes(nsRoot)) nsRoot = spaces[0]
+    spaceSel.innerHTML = spaces.map(s => `<option value="${s}">${s}</option>`).join('')
+    spaceSel.value = nsRoot
+  }
+  const list = multi ? categoriesForRoot(nsRoot) : filterCategories()
   sel.innerHTML = list.map(cat => `<option value="${cat}">${cat}</option>`).join('')
   syncPrField()   // selected category may have changed → toggle the PR field
 }
@@ -602,15 +620,14 @@ document.getElementById('ns-cancel').addEventListener('click', () => newSessionM
 // Category change → show/hide the REVIEW-only PR field.
 document.getElementById('ns-category').addEventListener('change', syncPrField)
 
-// Root toggle: switch scope → re-filter the category dropdown.
-document.querySelectorAll('.ns-scope-toggle [data-scope]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    nsScope = btn.dataset.scope
-    document.querySelectorAll('.ns-scope-toggle [data-scope]').forEach(b =>
-      b.classList.toggle('active', b.dataset.scope === nsScope))
+// Space select: switch space → re-filter the category dropdown.
+{
+  const spaceSel = document.getElementById('ns-space')
+  if (spaceSel) spaceSel.addEventListener('change', () => {
+    nsRoot = spaceSel.value
     populateNewSessionCategories()
   })
-})
+}
 
 // Browse → native folder picker for the optional repo field (untouched on cancel).
 newSessionModal.addEventListener('click', async (e) => {
@@ -737,7 +754,10 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   if (!name) { showNsError('Title is required.'); return }
   if (branch && !repo) { showNsError('Pick a repo for the branch to be checked out in.'); return }
   if (prLink && !isPrUrl(prLink)) { showNsError('PR link must be a GitHub PR URL (…/owner/repo/pull/123).'); return }
-  const res = await window.api.startSession({ category, name, ticket, repo, branch, prLink })
+  // Space the session launches under — only meaningful when >1 space (the picker is
+  // shown); empty otherwise, in which case start_session uses the category's own root.
+  const root = (configRoots().length > 1) ? nsRoot : ''
+  const res = await window.api.startSession({ category, name, ticket, repo, branch, prLink, root })
   if (!res || !res.ok) {
     showNsError('Could not start: ' + ((res && res.error) || 'unknown error'))
     return
