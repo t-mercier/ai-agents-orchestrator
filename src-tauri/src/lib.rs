@@ -326,14 +326,13 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     {
         return Err("invalid sessionId".into());
     }
-    // cd into the session's launch dir (so /restart-session can check out its branch),
-    // resolved from the transcript; fall back to home.
-    let dir = if session_id.is_empty() {
-        None
-    } else {
-        reader::resolve_session_cwd(&session_id)
-    }
-    .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
+    // cd into the session's launch dir so /restart-session lands in the right place.
+    // Prefer the transcript's launch cwd; for closed/archived sessions (no transcript)
+    // fall back to the session's SPACE root resolved from its notes.md location — NOT
+    // $HOME, so a Work session restarts in Work. $HOME only if even that can't be found.
+    let dir = if session_id.is_empty() { None } else { reader::resolve_session_cwd(&session_id) }
+        .or_else(|| reader::resolve_slug_cwd(&slug))
+        .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
 
     let prompt = format!("/restart-session {slug}");
     let cmd = format!(

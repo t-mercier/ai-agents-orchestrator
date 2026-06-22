@@ -216,6 +216,32 @@ pub fn resolve_session_cwd(sid: &str) -> Option<String> {
     read_transcript(sid).launch_cwd
 }
 
+/// Fall-back launch dir for a slug when its transcript cwd is gone (closed/archived
+/// sessions usually have no live transcript): find its `notes.md` under a configured
+/// scanDir and return that SPACE's root — the scanDir base's parent, i.e. `<space>` in
+/// `<space>/<CATEGORY>/<slug>`. So a Work session restarts in Work, not in $HOME.
+pub fn resolve_slug_cwd(slug: &str) -> Option<String> {
+    if slug.is_empty()
+        || !slug.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-')
+    {
+        return None;
+    }
+    let cfg = crate::config::load();
+    let dirs = cfg.get("scanDirs").and_then(Value::as_array)?;
+    for sd in dirs {
+        let base = match sd.get("base").and_then(Value::as_str) {
+            Some(b) => b,
+            None => continue,
+        };
+        if std::path::Path::new(base).join(slug).join("notes.md").is_file() {
+            return std::path::Path::new(base)
+                .parent()
+                .map(|p| p.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
 /// Claude Code prepends machine context to the first user turn — skill bodies,
 /// slash-command echoes, system reminders, CLAUDE.md dumps, tool results. None of
 /// those make a useful session title, so skip them and take the first genuine prompt.
