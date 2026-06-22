@@ -6,7 +6,7 @@ A short tour of how AI Agents Orchestrator thinks — so the buttons and tabs ma
 
 A **session** is one Claude Code conversation, working in one folder — a ticket, a feature, an experiment. You usually have several going at once.
 
-- **You** run the skills (`/start`, `/close`, …) *inside Claude Code* to create and wrap up sessions.
+- **You** run the skills (`/start-session`, `/close-session`, …) *inside Claude Code* to create and wrap up sessions.
 - **The app** watches them all and shows you what's happening. It only *reads* your files — it never creates or moves your folders. (The launcher buttons just trigger the skills for you.)
 
 Each session keeps a **`notes.md`** next to its code: the goal, key decisions, next steps, and a short history. That file is the session's memory — it's what lets you walk away and pick up cleanly later.
@@ -19,8 +19,8 @@ Every session is in exactly one state. The tabs map to them:
 |---|---|---|
 | **Active** | A Claude Code session running right now. | Running |
 | **Stale** | Still open, but its window is gone — you left without wrapping up. A nudge to finish or close it. | Running (grey dot) |
-| **Closed** | Wrapped up with `/close`. Done for now, summarised in its notes. | Closed |
-| **Archived** | Put away with `/archive` to declutter. The notes file stays on disk. | Archived |
+| **Closed** | Wrapped up with `/close-session`. Done for now, summarised in its notes. | Closed |
+| **Archived** | Put away with `/archive-session` to declutter. The notes file stays on disk. | Archived |
 
 So **Closed** = "finished and tidied", **Archived** = "finished and filed away", **Stale** = "still open but unattended".
 
@@ -42,26 +42,26 @@ Long AI sessions hit a wall. To keep going, the assistant **compacts** its own h
 
 This app sidesteps that by keeping the important stuff **on disk**, not just in the conversation:
 
-- **`/close`** writes the durable record into `notes.md` — goal, decisions, files touched, open questions, next steps — and stamps a **Session history** line tagged with that conversation's **session id**.
-- **`/restart`** reads it back into a *fresh* conversation. You get the notes **and** every past session id, so the chain from today's work back to the original conversation is never broken.
+- **`/close-session`** writes the durable record into `notes.md` — goal, decisions, files touched, open questions, next steps — and stamps a **Session history** line tagged with that conversation's **session id**.
+- **`/restart-session`** reads it back into a *fresh* conversation. You get the notes **and** every past session id, so the chain from today's work back to the original conversation is never broken.
 - Need the *exact* original transcript? Because the session id is recorded, you can always `claude --resume <id>` and replay it verbatim.
 
 Nothing important gets compacted away, because the source of truth is a **file you own** — not a context window. Everything stays linked: **notes → session id → transcript.**
 
 ```mermaid
 flowchart LR
-    S1(["Session 1<br/>you + Claude"]) -->|/close| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
-    N -->|"/restart &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>briefed from the notes"])
+    S1(["Session 1<br/>you + Claude"]) -->|/close-session| N["notes.md<br/>goal · decisions · next steps<br/>+ session id"]
+    N -->|"/restart-session &lt;slug&gt;"| S2(["Session 2<br/>fresh chat,<br/>briefed from the notes"])
     N -->|"claude --resume &lt;id&gt;"| R(["The exact original<br/>transcript, replayed"])
-    S2 -->|/close| N
+    S2 -->|/close-session| N
     classDef disk fill:#1e2230,stroke:#9b8cff,stroke-width:2px,color:#fff;
     class N disk;
 ```
 
 | Step | Command | What it preserves | Lives where |
 |---|---|---|---|
-| **Wrap up** | `/close` | Goal, decisions, files, open questions, next steps — **+ the session id** | `notes.md`, on disk |
-| **Pick back up (fresh)** | `/restart <slug>` | All of the above, loaded into a new conversation — **+ the link to past sessions** | new session, notes re-loaded |
+| **Wrap up** | `/close-session` | Goal, decisions, files, open questions, next steps — **+ the session id** | `notes.md`, on disk |
+| **Pick back up (fresh)** | `/restart-session <slug>` | All of the above, loaded into a new conversation — **+ the link to past sessions** | new session, notes re-loaded |
 | **Replay verbatim** | `claude --resume <id>` | The **entire** original transcript, turn for turn | Claude Code's own history |
 
 ## The skills
@@ -70,16 +70,16 @@ You run these inside Claude Code (the dashboard buttons trigger them for you). C
 
 | Skill | What it does |
 |---|---|
-| **`/start <CATEGORY> <ticket> <name>`** | Creates the session: a workspace + `notes.md` under the category's folder, registers it, and syncs the git repo. |
-| **`/close`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry **tagged with the session id**. → *Closed* |
-| **`/restart <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |
-| **`/archive <slug>`** | Marks a session archived and drops it from the active list (the notes file is kept). → *Archived* |
+| **`/start-session <CATEGORY> <ticket> <name>`** | Creates the session: a workspace + `notes.md` under the category's folder, registers it, and syncs the git repo. |
+| **`/close-session`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry **tagged with the session id**. → *Closed* |
+| **`/restart-session <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |
+| **`/archive-session <slug>`** | Marks a session archived and drops it from the active list (the notes file is kept). → *Archived* |
 | **`/rename-category <OLD> <NEW>`** | Renames a category everywhere — moves its folder, re-tags every `notes.md`, updates the config. (The app is read-only, so renaming *there* alone would orphan sessions — this skill does the real move.) |
 
 ## A typical day
 
-1. **`/start FEAT 1842 checkout-redesign`** → new session, ready to work.
+1. **`/start-session FEAT 1842 checkout-redesign`** → new session, ready to work.
 2. Work with Claude; the dashboard shows it as **Active**, and flags it **waiting** when it needs you.
-3. **`/close`** when you're done for the day → it moves to **Closed**, notes summarised.
+3. **`/close-session`** when you're done for the day → it moves to **Closed**, notes summarised.
 4. Tomorrow, **Restart** it from the dashboard → fresh conversation, full context from the notes.
 5. Shipped? **Archive** it to clear it out — the folder and notes stay on disk.
