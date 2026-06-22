@@ -495,7 +495,11 @@ fn root_for_notes_path(cfg: &Value, notes_path: &str) -> Value {
     if let Some(dirs) = cfg.get("scanDirs").and_then(Value::as_array) {
         for sd in dirs {
             if let Some(base) = sd.get("base").and_then(Value::as_str) {
-                if notes_path.starts_with(base) && best.as_ref().map(|(l, _)| base.len() > *l).unwrap_or(true) {
+                // Component-aware: `/w/FEAT` must NOT match `/w/FEAT-bug/…`. A plain
+                // string prefix would (mirrors notes_md_under_root in lib.rs).
+                if std::path::Path::new(notes_path).starts_with(base)
+                    && best.as_ref().map(|(l, _)| base.len() > *l).unwrap_or(true)
+                {
                     best = Some((base.len(), sd.get("root").cloned().unwrap_or(Value::Null)));
                 }
             }
@@ -939,6 +943,9 @@ mod tests {
         assert_eq!(root("/p/PERSO/x/notes.md"), json!("Perso"));
         assert_eq!(root("/p/AI-SYSTEM/x/notes.md"), json!("Perso"));
         assert_eq!(root("/w/AI-SYSTEM/x/notes.md"), json!("Work"));
+        // Component-aware: a sibling that merely shares a string prefix with a base
+        // (FEAT vs FEAT-bug) must NOT be tagged — only a real path-component match counts.
+        assert_eq!(root("/w/FEAT-bug/x/notes.md"), json!(null));
         // Outside every configured root → Null (renderer shows it under all roots).
         assert_eq!(root("/tmp/elsewhere/notes.md"), json!(null));
     }
