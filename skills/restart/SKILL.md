@@ -145,13 +145,27 @@ close it again. Restarting revives the session, so strip that marker now; the ne
 `/close` then files it under Closed (normal lifecycle). Idempotent — does nothing
 if the session wasn't archived.
 
+The genuine `/archive` marker is a Session-history bullet of the exact form
+`- <YYYY-MM-DD HH:MM> | ARCHIVED | …` — i.e. a pipe-delimited line whose second
+field is exactly `ARCHIVED`. ONLY strip those. Do NOT match on the substring
+"ARCHIVED" anywhere in a line: many legitimate Decisions/Files bullets mention the
+word ("Running/Closed/Archived tabs", "stamps ARCHIVED + drops…") and a substring
+test silently deletes them.
+
 ```bash
 python3 - <<EOF
 import os
 p = "$NOTES_PATH"
 lines = open(p).read().splitlines()
-# Drop Session-history bullets marking the session ARCHIVED (case-insensitive).
-kept = [l for l in lines if not (l.lstrip().startswith('-') and 'ARCHIVED' in l.upper())]
+
+def is_archived_marker(l):
+    s = l.lstrip()
+    if not s.startswith('-'):
+        return False
+    # genuine marker = a pipe-delimited Session-history bullet with a field == "ARCHIVED"
+    return any(part.strip() == 'ARCHIVED' for part in s.split('|'))
+
+kept = [l for l in lines if not is_archived_marker(l)]
 if len(kept) != len(lines):
     tmp = p + '.tmp'
     open(tmp, 'w').write('\n'.join(kept) + '\n')
