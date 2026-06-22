@@ -264,27 +264,32 @@ fn start_session(
         prompt.push_str(&format!(" --root {want_root}"));
     }
     let model = pty::CLAUDE_MODEL;
+    // Start NEW sessions in auto mode. /start-session must WRITE notes.md + register the
+    // session in active-sessions.json — plan mode BLOCKS that (the skill aborts at its
+    // mode check), so a +New in plan mode silently does nothing. `--permission-mode auto`
+    // forces a writable mode regardless of the user's persisted default. (Resume/Restart
+    // keep the session's own mode — this is only for fresh sessions.) `auto` is a fixed
+    // literal, no quoting needed.
+    let claude = format!(
+        "claude --model {} --permission-mode auto {}",
+        pty::shell_quote(model),
+        pty::shell_quote(&prompt),
+    );
 
     // Launch dir: the repo (start ON the branch) when given, else the scope root.
     let cmd = if let Some(abs) = &repo_abs {
         let cd = pty::shell_quote(&abs.to_string_lossy());
         if branch.is_empty() {
-            format!("cd {} && claude --model {} {}", cd, pty::shell_quote(model), pty::shell_quote(&prompt))
+            format!("cd {cd} && {claude}")
         } else {
             // `git checkout <branch> --` — the trailing `--` stops the branch from
             // being reinterpreted as a pathspec; `&&` so a failed checkout aborts
             // (visible in iTerm) rather than starting on the wrong branch.
-            format!(
-                "cd {} && git checkout {} -- && claude --model {} {}",
-                cd,
-                pty::shell_quote(branch),
-                pty::shell_quote(model),
-                pty::shell_quote(&prompt),
-            )
+            format!("cd {} && git checkout {} -- && {}", cd, pty::shell_quote(branch), claude)
         }
     } else {
         let launch_dir = category_root_dir(&cfg, cat_def);
-        format!("cd {} && claude --model {} {}", pty::shell_quote(&launch_dir), pty::shell_quote(model), pty::shell_quote(&prompt))
+        format!("cd {} && {}", pty::shell_quote(&launch_dir), claude)
     };
     if embedded {
         // Embedded: the dashboard runs `cmd` itself in an in-app pty (not iTerm), so
