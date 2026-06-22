@@ -114,9 +114,10 @@
   function visible(it) {
     if (it.kind === 'session') {
       const s = (window._boardIndex || {})[it.id]
+      const rootOk = !window.passesRootFilter || window.passesRootFilter(s ? s.root : null)
       const catOk = !window.passesCatFilter || window.passesCatFilter(s ? s.category : null)
       const searchOk = !window.passesSearch || !s || window.passesSearch(s)
-      return catOk && searchOk
+      return rootOk && catOk && searchOk
     }
     if (it.kind === 'note') {
       const n = boardState.notes.find((x) => x.id === it.id)

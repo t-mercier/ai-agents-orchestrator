@@ -8,6 +8,42 @@ const activeCatFilters = new Set()  // empty = show all categories
 const filterCategories = () => window.CSMCategories.order()
 const POLL_INTERVAL = 5000
 
+// Selected root (global filter). 'All' = every root; otherwise a root name from
+// config.roots. Persisted — it's an app pref, not session state.
+let selectedRoot = 'All'
+try { selectedRoot = localStorage.getItem('csm.root') || 'All' } catch { /* ignore */ }
+
+// Root names from config: v2 `roots`, else migrate the legacy two roots to Work/Perso.
+function configRoots() {
+  const cfg = window.CSM_CONFIG || {}
+  if (Array.isArray(cfg.roots) && cfg.roots.length) {
+    return cfg.roots.map(r => r && r.name).filter(Boolean)
+  }
+  const out = []
+  if (cfg.workRoot) out.push('Work')
+  if (cfg.personalRoot) out.push('Perso')
+  return out
+}
+// The root a category lives under: v2 `root`, else migrated from `scope`.
+function rootOfCategory(name) {
+  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
+  const c = cats.find(x => x.name === name)
+  if (!c) return null
+  return c.root || (c.scope === 'personal' ? 'Perso' : 'Work')
+}
+// Distinct category names visible under the selected root ('All' = every category).
+function rootCategoryNames() {
+  if (selectedRoot === 'All') return filterCategories()
+  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
+  const names = cats
+    .filter(c => (c.root || (c.scope === 'personal' ? 'Perso' : 'Work')) === selectedRoot)
+    .map(c => c.name)
+  return names.length ? [...new Set(names)] : filterCategories()
+}
+// A session passes the root filter when 'All', when it matches, or when it carries
+// no root (ad-hoc session outside every configured root → shown everywhere, never hidden).
+window.passesRootFilter = (root) => selectedRoot === 'All' || root === selectedRoot || root == null
+
 // Pinned sessions float to the top. Capped (a grid screenful) and persisted
 // locally — these are app prefs, not session state, so no ~/.claude writes.
 const PIN_LIMIT = 8
@@ -146,6 +182,7 @@ function matchesSearch(s, query) {
 }
 function filterSessions(list, query) {
   let out = list
+  if (selectedRoot !== 'All') out = out.filter(s => window.passesRootFilter(s.root))
   if (activeCatFilters.size > 0) out = out.filter(s => activeCatFilters.has(s.category || 'OTHER'))
   if (query) out = out.filter(s => matchesSearch(s, query))
   return out
@@ -158,13 +195,41 @@ window.passesSearch = (s) => matchesSearch(s, searchQuery)
 window.queryMatches = (text) => matchesSearch({ name: text || '' }, searchQuery)
 
 function renderCategoryFilters() {
-  const chips = filterCategories().map(cat =>
+  const chips = rootCategoryNames().map(cat =>
     `<button class="cat-chip ${activeCatFilters.has(cat) ? 'active' : ''}" data-cat-filter="${cat}" data-cat="${cat}">${cat}</button>`
   ).join('')
   for (const id of ['cat-filter-list', 'cat-filter-cards', 'cat-filter-board']) {
     const el = document.getElementById(id)
     if (el) el.innerHTML = chips
   }
+}
+
+// Global root selector (titlebar). Shown only when >1 root is configured — with a
+// single root it's a no-op. 'All' is always first.
+function populateRootSelector() {
+  const sel = document.getElementById('root-select')
+  if (!sel) return
+  const roots = configRoots()
+  if (roots.length <= 1) { sel.hidden = true; selectedRoot = 'All'; return }
+  sel.hidden = false
+  // Drop a remembered root that no longer exists in config → fall back to All.
+  if (selectedRoot !== 'All' && !roots.includes(selectedRoot)) selectedRoot = 'All'
+  sel.innerHTML = [`<option value="All">📁 All</option>`]
+    .concat(roots.map(r => `<option value="${r}">${r}</option>`)).join('')
+  sel.value = selectedRoot
+}
+
+function setSelectedRoot(root) {
+  selectedRoot = root || 'All'
+  try { localStorage.setItem('csm.root', selectedRoot) } catch { /* ignore */ }
+  // Prune category filters no longer visible under the new root.
+  const visible = new Set(rootCategoryNames())
+  for (const c of [...activeCatFilters]) if (!visible.has(c)) activeCatFilters.delete(c)
+  selectedKey = null
+  window._lastSelectedKey = null
+  renderCategoryFilters()
+  if (viewMode === 'board') { if (window.renderBoard) window.renderBoard() }
+  else renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
 }
 
 // +New root/scope: when both work & personal roots are configured, a Root toggle
@@ -487,6 +552,12 @@ window.detachSession = (key) => {
 document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
   btn.addEventListener('click', () => setViewMode(btn.dataset.view))
 })
+
+// Global root selector (titlebar) — scopes list/cards/board + the category chips.
+{
+  const rootSel = document.getElementById('root-select')
+  if (rootSel) rootSel.addEventListener('change', () => setSelectedRoot(rootSel.value))
+}
 
 // New-session backoffice
 const newSessionModal = document.getElementById('new-session-modal')
@@ -829,6 +900,7 @@ async function boot() {
     console.error('config load failed, using fallbacks:', err)
   }
   window.installDelegatedHandlers()           // one delegated click handler on <body>
+  populateRootSelector()                      // titlebar root selector (hidden if ≤1 root)
   renderCategoryFilters()                     // build the category filter chips (from config)
   populateNewSessionCategories()              // fill the +New dropdown (from config)
   fetchAndRender(true)                        // initial → sort
@@ -842,6 +914,7 @@ async function boot() {
 window.reloadConfig = async () => {           // called by Settings after save
   window.CSM_CONFIG = await window.api.getConfig()
   if (window.applyCategoryColors) window.applyCategoryColors(window.CSM_CONFIG.colorMap)
+  populateRootSelector()                      // roots may have been added/removed/renamed
   renderCategoryFilters()
   populateNewSessionCategories()
   fetchAndRender(true)   // refreshes the active tab + its badge

@@ -121,6 +121,30 @@ html, body {
   transition: background 0.12s, border-color 0.12s;
 }
 .new-session-btn:hover { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent); }
+
+/* Global root filter (titlebar). Quiet chip styled like the other titlebar controls;
+   its own chevron (the modal selects draw theirs the same way). Hidden when ≤1 root. */
+.root-select {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0.5px solid var(--card-border);
+  border-radius: 7px;
+  padding: 4px 26px 4px 10px;   /* matches .new-session-btn height; room for chevron */
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-app-region: no-drag;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa1ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.12s, color 0.12s;
+}
+.root-select:hover { border-color: var(--text-tertiary); color: var(--text-primary); }
+.root-select:focus { border-color: var(--accent); outline: none; }
+.root-select[hidden] { display: none; }
 /* ＋Import: a quieter sibling of ＋New (secondary action). */
 .new-session-btn.ghost { background: transparent; border-color: var(--card-border); color: var(--text-secondary); }
 .new-session-btn.ghost:hover { background: rgba(var(--tint), 0.08); border-color: var(--text-tertiary); color: var(--text-primary); }
