@@ -783,10 +783,11 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
       sessionId: '', ticket: '', prLink: '', branch: '', gitBranch: '',
       goal: '', lastActivity: '', lastActivityAt: '', updatedAt: '', startedAt: '', nextSteps: '',
     }
+    if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')   // embedded lives in List
     selectedKey = res.notesPath
     window._lastSelectedKey = res.notesPath
-    if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')   // embedded lives in List
-    switchTab('running')
+    // openTerminalPane → onTerminalOpened flips to the Running tab WITHOUT nulling the
+    // selection (switchTab() would reset selectedKey, collapsing the panel — bug fixed).
     window.openTerminalPane(res.notesPath, '', '', res.command)
   }
 })
