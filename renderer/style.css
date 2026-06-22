@@ -1,3 +1,4 @@
+/* ===== Reset & CSS Variables ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -31,6 +32,7 @@
   --radius: 10px;
 }
 
+/* ===== Light Theme ===== */
 /* Light theme — flips the tint and redefines the few opaque dark surfaces.
    Everything built on rgba(var(--tint), α) + the --text-* vars inverts on its own.
    The embedded terminal stays dark by design (terminals read better dark). */
@@ -42,6 +44,7 @@
   --danger: #d70015;   /* darker red for contrast on light surfaces */
 }
 
+/* ===== Base Typography & Focus ===== */
 html, body {
   height: 100%;
   font-family: var(--font);
@@ -73,6 +76,7 @@ html, body {
    popped onto Cancel as a heavy stray contour. The .primary fill is the anchor. */
 .modal-btn:focus-visible { outline: none; }
 
+/* ===== Motion Preferences ===== */
 /* Respect the OS "reduce motion" setting — neutralise transitions + animations. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -83,7 +87,7 @@ html, body {
   }
 }
 
-/* Titlebar */
+/* ===== Titlebar ===== */
 .titlebar {
   height: var(--titlebar-h);
   display: flex;
@@ -152,6 +156,7 @@ html, body {
 .new-session-btn.ghost { background: transparent; border-color: var(--card-border); color: var(--text-secondary); }
 .new-session-btn.ghost:hover { background: rgba(var(--tint), 0.08); border-color: var(--text-tertiary); color: var(--text-primary); }
 
+/* ===== Modals ===== */
 /* New-session modal — centered with a subtle rise-in (like card hover lift) */
 .modal {
   position: fixed;
@@ -237,6 +242,7 @@ html, body {
 .modal-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .modal-btn.primary:hover { filter: brightness(1.1); color: var(--on-accent); }
 
+/* ===== Settings Modal ===== */
 /* Settings modal — tabbed: left nav rail + a scrollable panel per tab. */
 .modal-wide { width: 600px; }
 .settings-tabs { display: flex; gap: 18px; }
@@ -339,6 +345,7 @@ html, body {
 .settings-col-row .col-color::-webkit-color-swatch-wrapper { padding: 0; }
 .settings-col-row .col-color::-webkit-color-swatch { border: none; border-radius: 50%; }
 
+/* ===== Kanban Board ===== */
 /* ── Kanban board ── */
 .kb-board { display: flex; gap: 12px; padding: 16px; align-items: flex-start; min-height: 100%; }
 /* Columns share the window width evenly (min 200px → horizontal scroll if too many). */
@@ -448,6 +455,7 @@ button.kb-chip { border: none; font-family: inherit; line-height: inherit; }
 .kb-card.kb-merge { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.5); }
 .kb-card.kb-merge::after { content: "+ group"; position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-size: 9px; font-weight: 700; color: var(--accent); pointer-events: none; }
 
+/* ===== Kanban Notes ===== */
 /* Notes attached to a card or group (rendered under the card / in the group body). */
 .kb-cardnotes { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; padding-left: 15px; }
 .kb-group-body .kb-cardnotes { padding-left: 0; }
@@ -492,6 +500,7 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
 .board-menu-remove { color: var(--text-secondary); font-weight: 500; }
 .board-menu-remove:hover { color: var(--danger); }
 
+/* ===== Popovers & Editors ===== */
 /* Session-details popover (shown over the embedded terminal via the ⓘ action). */
 .info-pop { position: fixed; z-index: 1000; min-width: 280px; max-width: 440px; overflow-y: auto; background: var(--surface-modal); border: 0.5px solid rgba(var(--tint), 0.14); border-radius: 10px; box-shadow: 0 16px 44px rgba(0,0,0,0.45); padding: 10px 12px; }
 .info-pop-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); padding-bottom: 8px; }
@@ -513,6 +522,7 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
 .pr-editor-remove { color: var(--text-secondary); }
 .pr-editor-remove:hover { color: var(--danger); }
 
+/* ===== View Modes ===== */
 /* Board mode: hide the tabbed list/cards UI; show the full-width board. */
 .board-wrap { display: none; }
 body.mode-board .panel-left,
@@ -523,6 +533,7 @@ body.mode-board .board-wrap { display: flex; flex-direction: column; flex: 1; mi
 /* The detail drawer + scrim are reused as a slide-over ON the board (open on card click). */
 body.mode-board .board-view { display: block; flex: 1; min-height: 0; overflow: auto; }
 
+/* ===== View Toggle ===== */
 /* View toggle (List | Cards) segmented control */
 .view-toggle {
   display: flex;
@@ -546,6 +557,7 @@ body.mode-board .board-view { display: block; flex: 1; min-height: 0; overflow: 
 .view-btn.active { background: rgba(var(--tint), 0.16); color: var(--text-primary); }
 .view-btn .view-ico { width: 12px; height: 12px; vertical-align: -2px; }
 
+/* ===== Layout ===== */
 /* Layout: full height below titlebar */
 .layout {
   display: flex;
@@ -560,6 +572,7 @@ body.mode-cards .panel-left,
 body.mode-cards .resize-handle { display: none; }
 body.mode-cards .cards-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 
+/* ===== Cards Grid ===== */
 /* Cards grid */
 .cards-topbar {
   display: flex;
@@ -616,6 +629,8 @@ body.mode-cards .cards-view { display: flex; flex-direction: column; flex: 1; ov
 .session-card.historical .session-card-name { color: rgba(var(--tint), 0.72); font-weight: 500; }
 .session-card.historical:hover .session-card-name,
 .session-card.historical.selected .session-card-name { color: var(--text-primary); }
+
+/* ===== Card Interior ===== */
 .session-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-shrink: 0; }
 .session-card-name { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .session-card-cat { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0; }
@@ -629,6 +644,7 @@ body.mode-cards .cards-view { display: flex; flex-direction: column; flex: 1; ov
 .session-card-foot .pills { flex: 1; overflow: hidden; }
 .session-card-upd { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0; }
 
+/* ===== Drawer & Scrim ===== */
 /* Scrim + drawer (cards mode) */
 .scrim {
   position: fixed; inset: 0;
@@ -694,6 +710,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .pin-window-btn:hover { opacity: 0.7; }
 .pin-window-btn.active { opacity: 1; filter: none; }
 
+/* ===== Category Colors & Left Panel ===== */
 /* Per-category colors are injected at runtime from the shared config
    (see applyCategoryColors in ui.js → <style id="cat-colors">). Neutral default: */
 .session-card-cat { color: var(--text-tertiary); }
@@ -726,6 +743,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-right-color: var(--accent);
 }
 
+/* ===== Panel Tabs ===== */
 .panel-tabs {
   display: flex;
   padding: 6px 8px 0;
@@ -801,6 +819,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 /* Hide the native clear button on WebKit */
 .search-field::-webkit-search-cancel-button { display: none; }
 
+/* ===== List Panel ===== */
 .panel-list {
   flex: 1;
   overflow-y: auto;
@@ -808,6 +827,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   -webkit-app-region: no-drag;
 }
 
+/* ===== Category Filters ===== */
 /* Category filter chips */
 .cat-filter {
   display: flex;
@@ -837,6 +857,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 /* active chip text color is injected per-config (cat-colors); border tint generic */
 .cat-chip.active { background: rgba(var(--tint), 0.1); border-color: rgba(var(--tint), 0.18); }
 
+/* ===== Category Groups ===== */
 /* Category groups */
 .category-group { margin-bottom: 2px; }
 
@@ -887,6 +908,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .category-sessions { overflow: hidden; }
 .category-sessions.collapsed { display: none; }
 
+/* ===== List Cards ===== */
 /* Compact list card */
 .list-card {
   padding: 10px 14px;
@@ -992,6 +1014,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 .list-card-next { padding-left: 14px; margin-top: 2px; }
 .session-card-next { margin-top: 4px; margin-bottom: 10px; }   /* keep the foot icons off the cue */
 
+/* ===== Card Icons & Actions ===== */
 /* ── Card icon row (Jira ticket / PR / notes) — list + session cards ──
    Smaller hit area than the detail-panel .act buttons; the foot variant flexes to
    push the update time to the right. */
@@ -1007,6 +1030,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
 button.ticket-tag { cursor: pointer; }
 button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rgb), 0.14); }
 
+/* ===== Card Density ===== */
 /* ── Card density (html[data-density]) — default/unset = detailed (full base CSS).
    Compact drops the prose (activity preview, next cue, update time) but keeps the
    icon row; minimal is just the identity line (dot + name + stale/wait badge). The
@@ -1051,6 +1075,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .density-opt.active { border-color: var(--accent); color: var(--accent); background: rgba(var(--accent-rgb), 0.1); }
 .density-opt.active small { color: var(--accent); opacity: 0.8; }
 
+/* ===== Shortcuts & Appearance ===== */
 /* Shortcuts remap list. */
 .keys-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 12px; }
 .key-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
@@ -1092,6 +1117,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .look-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); padding: 0 8px 7px; text-align: left; }
 .look-card.active .look-name { color: var(--accent); }
 
+/* ===== Chrome & Buttons ===== */
 /* Compact chrome — icons-only titlebar controls (the glyph stays, label hidden). */
 .compact-chrome .btn-label { display: none; }
 .compact-chrome .new-session-btn { padding-left: 11px; padding-right: 11px; }
@@ -1103,6 +1129,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .cp-dummy { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border: 0.5px solid var(--card-border); border-radius: 7px; background: rgba(var(--tint), 0.05); font-size: 11px; font-weight: 600; color: var(--text-secondary); }
 .cp-ico { width: 15px; height: 15px; flex: none; color: var(--text-secondary); }
 
+/* ===== Pin & Archive Buttons ===== */
 /* Pin button on cards (list + grid) */
 .pin-btn {
   display: inline-flex;
@@ -1154,6 +1181,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .delete-btn:hover { opacity: 1 !important; color: #ff6b6b; }
 .category-name[data-cat="PINNED"] { color: var(--text-secondary); }
 
+/* ===== Status Indicators ===== */
 /* Status dot */
 .status-dot {
   width: 7px; height: 7px;
@@ -1176,6 +1204,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   50%      { box-shadow: 0 0 6px 2px rgba(var(--status-waiting-rgb), 0.9); }
 }
 
+/* ===== Detail Panel ===== */
 /* ── Right panel: session detail ── */
 .panel-detail {
   flex: 1;
@@ -1217,6 +1246,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   height: 100% !important;
 }
 
+/* ===== Terminal UI ===== */
 /* Terminal toggle button in detail header */
 .terminal-toggle-btn {
   background: none;
@@ -1286,6 +1316,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 }
 .list-empty-hint { display: block; margin-top: 6px; color: var(--text-tertiary); font-size: 12px; }
 
+/* ===== Detail Header & Metadata ===== */
 /* Detail header */
 .detail-header {
   flex-shrink: 0;
@@ -1361,6 +1392,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .meta-row .path-link { cursor: pointer; transition: color 0.12s; }
 .meta-row .path-link:hover { color: var(--accent); text-decoration: underline; }
 
+/* ===== Detail Sections ===== */
 /* Detail sections */
 .detail-section {
   margin-bottom: 18px;
@@ -1439,6 +1471,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   padding: 1px 4px;
 }
 
+/* ===== Completed Steps ===== */
 /* Completed steps — uniform "done" rendering (struck + green tag + date) */
 .detail-next-steps .step-done { color: var(--text-tertiary); }
 .detail-next-steps .step-done s { color: var(--text-tertiary); }
@@ -1457,6 +1490,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 }
 .done-date { font-size: 10px; color: var(--text-tertiary); margin-left: 4px; }
 
+/* ===== Pills & Controls ===== */
 /* Pills */
 .pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .pill {
@@ -1480,6 +1514,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .pill.iterm { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.35); }
 .pill.iterm:hover { border-color: var(--accent); }
 
+/* ===== Action Buttons & Tooltips ===== */
 /* Actions icon toolbar. .act overrides .pill box styling for buttons that carry
    both classes (kept for the delegated handlers' data-* selectors). */
 .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -1550,6 +1585,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
 }
 
+/* ===== Scrollbars ===== */
 /* Scrollbars */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
