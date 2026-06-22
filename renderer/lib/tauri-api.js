@@ -87,5 +87,7 @@
     // ── Detach into its own window + pin (src-tauri/src/lib.rs) ──
     detachSession: (key) => invoke('detach_session', { key }),
     setAlwaysOnTop: (flag) => invoke('set_always_on_top', { flag }).catch(() => false),
+    // Match the native window background to the theme (avoids a white flash on resize).
+    setWindowBg: (dark) => invoke('set_window_bg', { dark: !!dark }).catch(() => {}),
   }
 })()

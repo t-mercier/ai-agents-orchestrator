@@ -509,6 +509,21 @@ fn set_always_on_top(window: tauri::WebviewWindow, flag: bool) -> bool {
     flag
 }
 
+/// Match the native window background to the active theme, so a window RESIZE doesn't
+/// briefly flash the OS default (white) at the growing edge before the dark webview
+/// repaints. On macOS this sets the NSWindow layer (the webview layer is a no-op there) —
+/// exactly the layer drawn during a live resize. Called from applyTheme() at boot + on
+/// every theme toggle. Colours mirror `--bg` in style.css.
+#[tauri::command]
+fn set_window_bg(window: tauri::WebviewWindow, dark: bool) {
+    let c = if dark {
+        tauri::window::Color(28, 28, 30, 255)
+    } else {
+        tauri::window::Color(245, 245, 247, 255)
+    };
+    let _ = window.set_background_color(Some(c));
+}
+
 /// Write `body` to `path` atomically (tmp + rename), so a crash never leaves a
 /// half-written session file.
 fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), String> {
@@ -822,6 +837,12 @@ pub fn run() {
                     }
                 }
             }
+            // Paint the window dark from the first frame (the default theme), so the
+            // initial paint + any resize before the renderer's applyTheme() runs doesn't
+            // flash the OS-default white. applyTheme() corrects it if the saved theme is light.
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_background_color(Some(tauri::window::Color(28, 28, 30, 255)));
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -839,6 +860,7 @@ pub fn run() {
             import_session,
             detach_session,
             set_always_on_top,
+            set_window_bg,
             pick_directory,
             pick_directories,
             export_settings,
