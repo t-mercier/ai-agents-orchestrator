@@ -2,12 +2,13 @@
 //! Running sessions (sessions/*.json + active-sessions.json) + historical
 //! sessions (notes.md scan). Transcript-derived fields come with the terminal pass.
 use crate::config::home;
+use crate::git;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{SystemTime};
 
 // Transcript fold cache, keyed by sessionId and validated by the file's (len, mtime).
 // The poll re-reads transcripts every 5s; for idle/historical sessions the file is
@@ -17,15 +18,6 @@ use std::time::{Duration, Instant, SystemTime};
 type TranscriptEntry = (PathBuf, u64, Option<SystemTime>, Transcript);
 static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-
-// git_info spawns 2-3 `git` subprocesses per cwd; cache the result per cwd with a
-// short TTL so a 5s poll doesn't re-fork for every session every time. Branch/worktree
-// staleness up to the TTL is fine for a dashboard.
-// cwd → (cached-at, branch, worktree); entries expire after GIT_TTL.
-type GitEntry = (Instant, Value, Value);
-static GIT_CACHE: LazyLock<Mutex<HashMap<String, GitEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-const GIT_TTL: Duration = Duration::from_secs(15);
 
 /// Mirror of isProcessAlive: alive if kill(pid,0) succeeds, or EPERM (exists but
 /// we can't signal it).
@@ -41,63 +33,6 @@ fn alive(pid: i64) -> bool {
     }
 }
 
-/// Run a git command in `cwd`, returning trimmed stdout (None on error/empty).
-fn run_git(cwd: &str, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(cwd)
-        .args(args)
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
-}
-
-/// (branch, worktree-toplevel) for a session's cwd — cached per cwd with a short TTL.
-fn git_info(cwd: &str) -> (Value, Value) {
-    if cwd.is_empty() {
-        return (Value::Null, Value::Null);
-    }
-    if let Some((t, b, w)) = GIT_CACHE.lock().unwrap().get(cwd) {
-        if t.elapsed() < GIT_TTL {
-            return (b.clone(), w.clone());
-        }
-    }
-    let (b, w) = git_info_uncached(cwd);
-    GIT_CACHE
-        .lock()
-        .unwrap()
-        .insert(cwd.to_string(), (Instant::now(), b.clone(), w.clone()));
-    (b, w)
-}
-
-/// (branch, worktree-toplevel) for a session's cwd — both null if it isn't a repo.
-fn git_info_uncached(cwd: &str) -> (Value, Value) {
-    let branch = run_git(cwd, &["symbolic-ref", "--short", "HEAD"])
-        .or_else(|| run_git(cwd, &["rev-parse", "--abbrev-ref", "HEAD"]));
-    // Only surface "worktree" for a genuine LINKED worktree (`git worktree add`),
-    // not the main clone. A session that merely worked inside a normal repo didn't
-    // create a worktree, so it shouldn't show one. A linked worktree's per-worktree
-    // git dir (`.git/worktrees/<id>`) differs from the shared common dir; in the
-    // main working tree the two are identical.
-    let git_dir = run_git(cwd, &["rev-parse", "--absolute-git-dir"]);
-    let common_dir = run_git(cwd, &["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-    let worktree = match (git_dir, common_dir) {
-        (Some(g), Some(c)) if g != c => run_git(cwd, &["rev-parse", "--show-toplevel"]),
-        _ => None,
-    };
-    (
-        branch.map(Value::String).unwrap_or(Value::Null),
-        worktree.map(Value::String).unwrap_or(Value::Null),
-    )
-}
 
 /// Fields pulled from a session's transcript (jsonl). The transcript is the
 /// source of truth for where a session actually works + its branch + last reply.
@@ -595,7 +530,7 @@ pub fn get_sessions() -> Vec<Value> {
         // last activity / PR link from it too.
         let tr = read_transcript(&sid);
         let work_cwd = tr.cwd.clone().unwrap_or_else(|| launch_cwd.to_string());
-        let (branch_git, worktree) = git_info(&work_cwd);
+        let (branch_git, worktree) = git::git_info(&work_cwd);
         let git_branch = if branch_git.is_null() {
             tr.git_branch.map(Value::String).unwrap_or(Value::Null)
         } else {
