@@ -33,9 +33,10 @@
   // parent's column (where a new note is created), `parent` the card key or group id.
   function attachedNotesHtml(parent, col, addLabel) {
     const notes = CSMBoard.notesFor(boardState, parent)
+    // No trash on an empty (in-creation) note — click away or Escape drops it.
     const rows = notes.map(n => `<div class="kb-cardnote">
       <span class="kb-cardnote-text" data-note-edit="${escapeHtml(n.id)}">${escapeHtml(n.text) || '<em>empty</em>'}</span>
-      <button class="kb-x" data-board-remove-note="${escapeHtml(n.id)}" title="Delete note">${ICON_TRASH}</button>
+      ${(n.text && n.text.trim()) ? `<button class="kb-x" data-board-remove-note="${escapeHtml(n.id)}" title="Delete note">${ICON_TRASH}</button>` : ''}
     </div>`).join('')
     return `<div class="kb-cardnotes">${rows}<button class="kb-add-cardnote" data-add-note-parent="${escapeHtml(parent)}" data-add-note-col="${escapeHtml(col || '')}">＋ ${escapeHtml(addLabel || 'note')}</button></div>`
   }
@@ -105,7 +106,7 @@
         <span class="kb-name kb-note-text" data-note-edit="${escapeHtml(note.id)}">${escapeHtml(note.text) || '<em>empty</em>'}</span>
         ${urgent ? '<span class="kb-badge urgent">⚡ urgent</span>' : ''}
         ${urgentBtn(note.id)}
-        <button class="kb-x" data-board-remove-note="${escapeHtml(note.id)}" title="Delete note">${ICON_TRASH}</button>
+        ${(note.text && note.text.trim()) ? `<button class="kb-x" data-board-remove-note="${escapeHtml(note.id)}" title="Delete note">${ICON_TRASH}</button>` : ''}
       </div>
     </div>`
   }
