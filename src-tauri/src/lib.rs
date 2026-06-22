@@ -601,8 +601,10 @@ fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), String> {
 }
 
 /// Resolve a notes.md path the app is allowed to WRITE: a real `notes.md` file
-/// confined under a configured root (workRoot / personalRoot). Shared by the two
-/// source-of-truth writes (archive + pr_link) so the confinement rule lives once.
+/// confined under a configured root. Shared by the two source-of-truth writes
+/// (archive + pr_link) so the confinement rule lives once. Checks EVERY configured
+/// root — the v2 `roots` list plus the legacy workRoot/personalRoot — so a session
+/// under a custom root isn't wrongly rejected.
 fn notes_md_under_root(notes_path: &str) -> Result<std::path::PathBuf, String> {
     if notes_path.starts_with('-') {
         return Err("invalid path".into());
@@ -614,10 +616,24 @@ fn notes_md_under_root(notes_path: &str) -> Result<std::path::PathBuf, String> {
         return Err("not a notes.md file".into());
     }
     let cfg = config::load();
-    let under_root = ["workRoot", "personalRoot"].iter().any(|k| {
-        cfg.get(*k)
-            .and_then(serde_json::Value::as_str)
-            .and_then(|r| std::path::Path::new(r).canonicalize().ok())
+    // Candidate root paths: every entry in the v2 `roots` list + the legacy keys.
+    let mut roots: Vec<String> = Vec::new();
+    if let Some(arr) = cfg.get("roots").and_then(serde_json::Value::as_array) {
+        for r in arr {
+            if let Some(p) = r.get("path").and_then(serde_json::Value::as_str) {
+                roots.push(p.to_string());
+            }
+        }
+    }
+    for k in ["workRoot", "personalRoot"] {
+        if let Some(p) = cfg.get(k).and_then(serde_json::Value::as_str) {
+            roots.push(p.to_string());
+        }
+    }
+    let under_root = roots.iter().any(|r| {
+        std::path::Path::new(r)
+            .canonicalize()
+            .ok()
             .map(|root| abs.starts_with(&root))
             .unwrap_or(false)
     });

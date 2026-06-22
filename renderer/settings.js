@@ -196,12 +196,21 @@
   // Build a clean USER config (only editable fields) — never the derived
   // scanDirs/order/colorMap/home, which Rust regenerates on load.
   function collect() {
-    const categories = [...catList.querySelectorAll('.settings-cat-row')].map(row => ({
-      name: row.dataset.name,
-      color: row.querySelector('.cat-color').value,
-      scope: row.dataset.scope,
-    }))
-    return {
+    // Categories are folder-mirrored: only colour is editable here. PRESERVE every
+    // other field from the loaded config — crucially the v2 `root` (and legacy
+    // `scope`). Rebuilding them as {name,color,scope} dropped `root`, so a Settings
+    // save silently reverted any custom-root assignment (audit finding #1).
+    const prevCats = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.categories))
+      ? window.CSM_CONFIG.categories : []
+    const byName = new Map(prevCats.map(c => [c.name, c]))
+    const categories = [...catList.querySelectorAll('.settings-cat-row')].map(row => {
+      const prev = byName.get(row.dataset.name) || {}
+      const cat = { name: row.dataset.name, color: row.querySelector('.cat-color').value }
+      if (prev.root) cat.root = prev.root             // v2 — which named root it lives under
+      cat.scope = prev.scope || row.dataset.scope      // legacy — kept for back-compat
+      return cat
+    })
+    const out = {
       version: 1,
       workRoot: $('set-work-root').value.trim(),
       personalRoot: $('set-personal-root').value.trim(),
@@ -214,6 +223,17 @@
       ticketBaseUrl: $('set-ticket').value.trim(),
       terminalApp: $('set-terminal').value,
     }
+    // Round-trip a CUSTOM named-roots list so a save never destroys it (audit #1/#4).
+    // The migrated default (exactly Work + Perso) is left out — derive() rebuilds it
+    // from the workRoot/personalRoot fields above, so those text inputs keep driving.
+    const roots = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.roots))
+      ? window.CSM_CONFIG.roots : []
+    const isDefault = roots.length === 2
+      && roots.some(r => r.name === 'Work') && roots.some(r => r.name === 'Perso')
+    if (roots.length && !isDefault) {
+      out.roots = roots.map(r => ({ name: r.name, path: r.path }))
+    }
+    return out
   }
 
   function validate(cfg) {

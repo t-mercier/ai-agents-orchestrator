@@ -184,12 +184,16 @@ fn derive(user: &Value) -> Value {
 /// Validate a config (mirrors the JS validate) — the regex gate is the real guard.
 fn validate(c: &Value) -> Result<(), String> {
     // Roots (v2): each needs a non-empty label (the path is user-chosen, like workRoot).
+    // Collect the declared root names so a category can't reference a non-existent root.
+    let mut root_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let has_roots_list = c.get("roots").and_then(Value::as_array).is_some();
     if let Some(roots) = c.get("roots").and_then(Value::as_array) {
         for r in roots {
             let name = r.get("name").and_then(Value::as_str).unwrap_or("");
             if name.trim().is_empty() || name.len() > 30 {
                 return Err(format!("bad root name: {name}"));
             }
+            root_names.insert(name.to_string());
         }
     }
     let cats = c
@@ -213,12 +217,19 @@ fn validate(c: &Value) -> Result<(), String> {
             return Err(format!("bad color: {color}"));
         }
         // Location: a v2 `root` label, or a legacy `scope` of work|personal.
-        let has_root = cat.get("root").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty());
-        if !has_root {
-            match cat.get("scope").and_then(Value::as_str) {
+        let cat_root = cat.get("root").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+        match cat_root {
+            // A `root` must name a declared root (when a roots list is present) — a
+            // typo'd root would silently tag sessions to a non-existent root and hide
+            // them under every filter (audit finding #5).
+            Some(r) if has_roots_list && !root_names.contains(r) => {
+                return Err(format!("category '{name}' references unknown root '{r}'"));
+            }
+            Some(_) => {}
+            None => match cat.get("scope").and_then(Value::as_str) {
                 Some("work") | Some("personal") => {}
                 other => return Err(format!("bad scope: {}", other.unwrap_or(""))),
-            }
+            },
         }
     }
     Ok(())
@@ -295,5 +306,27 @@ mod tests {
         assert!(bases.contains(&"/w/AI-SYSTEM"), "Work AI-SYSTEM scanned");
         assert!(bases.contains(&"/p/AI-SYSTEM"), "Perso AI-SYSTEM scanned"); // same name, two roots
         assert!(validate(&v2).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_category_root_not_in_roots_list() {
+        // A category referencing a root that isn't declared → rejected (would silently
+        // tag sessions to a non-existent root and hide them under every filter).
+        let bad = json!({
+            "roots": [{"name":"Work","path":"/w"},{"name":"Perso","path":"/p"}],
+            "categories": [{"name":"FEAT","color":"#7df0c0","root":"Wok"}]
+        });
+        assert!(validate(&bad).is_err());
+        // The same config with the correct root name validates.
+        let good = json!({
+            "roots": [{"name":"Work","path":"/w"},{"name":"Perso","path":"/p"}],
+            "categories": [{"name":"FEAT","color":"#7df0c0","root":"Work"}]
+        });
+        assert!(validate(&good).is_ok());
+        // v1 (no roots list): a category root isn't cross-checked (back-compat).
+        let v1 = json!({
+            "categories": [{"name":"FEAT","color":"#7df0c0","scope":"work"}]
+        });
+        assert!(validate(&v1).is_ok());
     }
 }
