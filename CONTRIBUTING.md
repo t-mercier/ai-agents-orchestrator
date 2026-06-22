@@ -20,7 +20,7 @@ So please **open an issue before writing any code** — if an idea's a good fit 
 
 ## License
 
-The project is under the [PolyForm Noncommercial 1.0.0](LICENSE) licence — free for non-commercial use; commercial use needs a separate licence. By opening an issue you're just sharing feedback; nothing here asks you to assign rights.
+The project is under the [AI Agents Orchestrator Source Available License v1.0](LICENSE) — free to use and evaluate (including at work); reselling, redistributing, org-wide deployment, or SaaS offerings need written permission. By opening an issue you're just sharing feedback; nothing here asks you to assign rights.
 
 ## If you're poking around the code
 
