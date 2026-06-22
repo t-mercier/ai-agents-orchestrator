@@ -120,16 +120,18 @@ function ensureTerminal(sessionId, restartSlug = '', command = '') {
   // so FitAddon.fit() bails out (proposeDimensions returns undefined for a
   // zero cell width) and the terminal is stuck at its 80×24 default.
 
-  // Shift+Enter → insert a newline instead of submitting. We can't rely on a key
-  // escape: in iTerm Claude runs the kitty keyboard protocol (which xterm.js doesn't
-  // speak), so legacy key bytes (ESC+CR) no longer insert a newline here. Inject the
-  // newline as a *paste* via term.paste(): xterm wraps it in bracketed-paste markers
-  // (ESC[200~…ESC[201~) when Claude has paste mode on, and Claude inserts pasted
-  // newlines literally (multiline paste keeps its lines). Use '\n' (LF) — Claude
-  // treats a pasted CR ('\r') as submit, but LF as a line break.
+  // Shift+Enter → insert a newline instead of submitting. Two parts:
+  //  1) e.preventDefault(): returning false alone made xterm skip ITS handling but it
+  //     didn't preventDefault, so the browser still fired the Enter → a \r leaked through
+  //     and submitted (every injected sequence submitted because of this leak, even ones
+  //     with no \r). preventDefault on keydown kills that (and the keypress it spawns).
+  //  2) Send a bracketed paste of a literal LF — Claude inserts pasted newlines verbatim
+  //     (its multiline-paste behaviour), so this is a real line break, not a submit.
+  //     (NB: term.paste('\n') can't be used — it normalises \n → \r in its paste prep.)
   term.attachCustomKeyEventHandler(e => {
     if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      term.paste('\n')
+      e.preventDefault()
+      window.api.ptyInput(sessionId, '\x1b[200~\n\x1b[201~')
       return false
     }
     return true
