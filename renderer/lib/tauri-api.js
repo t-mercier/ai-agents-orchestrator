@@ -40,12 +40,16 @@
     onPtyExit: (cb) => window.__TAURI__.event.listen('pty-exit', (e) => cb(e.payload.sessionId)),
 
     // ── New-session launcher (src-tauri/src/lib.rs) ──
-    startSession: ({ category, name, ticket, repo, branch, prLink, root } = {}) =>
+    // embedded=false (default): launches an external iTerm tab, returns { ok }.
+    // embedded=true: launches NOTHING — returns { ok, command, notesPath } so the renderer
+    // can run the command in an in-app pty keyed by notesPath.
+    startSession: ({ category, name, ticket, repo, branch, prLink, root, embedded } = {}) =>
       invoke('start_session', {
         category: category || '', name: name || '', ticket: ticket || '',
         repo: repo || '', branch: branch || '', prLink: prLink || '', root: root || '',
+        embedded: !!embedded,
       })
-        .then(() => ({ ok: true }))
+        .then((res) => ({ ok: true, ...(res || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Set / update / clear a REVIEW session's reviewed-PR link (notes.md frontmatter) ──

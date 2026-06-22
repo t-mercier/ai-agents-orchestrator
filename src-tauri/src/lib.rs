@@ -145,13 +145,17 @@ fn validate_repo(repo: &str) -> Result<std::path::PathBuf, String> {
     Ok(abs)
 }
 
-/// Launch a NEW session: open `claude` + the `/start-session` skill in a new iTerm tab.
+/// Launch a NEW session: open `claude` + the `/start-session` skill. Default (external)
+/// opens a new iTerm tab; `embedded` instead returns the command + the notes.md path the
+/// skill will create, so the dashboard can run it in an in-app pty (the renderer keys the
+/// embedded terminal by that notesPath — see the embedded branch).
 /// Launches from a chosen repo (cd + checkout the branch so the session starts on
 /// it) when given, else the category's scope root. The app writes nothing itself —
 /// /start-session creates the workspace (ADR-001/ADR-012). Category must pass the strict
 /// token regex AND exist in config. Repo/branch are pre-flight-validated so errors
 /// surface in the form, not as a dead iTerm tab.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // tauri command: one param per form field
 fn start_session(
     category: String,
     name: String,
@@ -160,7 +164,8 @@ fn start_session(
     branch: String,
     pr_link: String,
     root: String,
-) -> Result<(), String> {
+    embedded: bool,
+) -> Result<serde_json::Value, String> {
     let cfg = config::load();
     // Optional space (root) override — disambiguates a category present in 2+ spaces,
     // and decides the launch dir + the `--root` the skill writes under. Must be a
@@ -281,7 +286,43 @@ fn start_session(
         let launch_dir = category_root_dir(&cfg, cat_def);
         format!("cd {} && claude --model {} {}", pty::shell_quote(&launch_dir), pty::shell_quote(model), pty::shell_quote(&prompt))
     };
-    terminal::launch_in_terminal(&cmd)
+    if embedded {
+        // Embedded: the dashboard runs `cmd` itself in an in-app pty (not iTerm), so
+        // return the command verbatim + the notes.md path the /start-session skill WILL
+        // create. The renderer keys the embedded terminal by that notesPath — which is
+        // the session's eventual sessionKey — so the card links to its terminal with no
+        // re-key, and pty_spawn's idempotency guard (keyed on it) blocks a double-client.
+        // notesPath MUST match the skill's TARGET_DIR (aoconfig.py `dir`):
+        // <category root>/<CATEGORY>/<folder>/notes.md, folder = ticket || slugify(name).
+        // slugify is byte-faithful to the skill's slug(); keep both in sync.
+        let folder = if safe_ticket.is_empty() { slugify(&safe_name) } else { safe_ticket.clone() };
+        let base = category_root_dir(&cfg, cat_def);
+        let notes_path = format!("{base}/{category}/{folder}/notes.md");
+        return Ok(serde_json::json!({ "command": cmd, "notesPath": notes_path }));
+    }
+    terminal::launch_in_terminal(&cmd)?;
+    Ok(serde_json::json!({}))
+}
+
+/// Slugify a session NAME into a folder slug, byte-faithful to the /start-session skill's
+/// `slug()` = `tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g'`.
+/// ASCII-ONLY on purpose (matches `sed` under the C locale): non-ASCII chars become a
+/// dash, e.g. "Café" → "caf", "réseau" → "r-seau". Used by embedded start_session to
+/// predict the skill's notes.md folder — must stay in lockstep with the skill's slug().
+fn slugify(name: &str) -> String {
+    let mut out = String::new();
+    let mut prev_dash = false;
+    for c in name.chars() {
+        let lc = c.to_ascii_lowercase(); // lowercases ASCII A-Z only; leaves others as-is
+        if lc.is_ascii_alphanumeric() {
+            out.push(lc);
+            prev_dash = false;
+        } else if !prev_dash {
+            out.push('-'); // collapse any run of non-[a-z0-9] to a single dash
+            prev_dash = true;
+        }
+    }
+    out.trim_matches('-').to_string()
 }
 
 /// Launch dir for a NEW session in this category: the path of the category's
@@ -822,9 +863,24 @@ pub fn run() {
 mod tests {
     use super::{
         category_root_dir, is_pr_url, is_safe_branch, is_safe_category, is_ticket, percent_encode,
-        set_pr_link_in_frontmatter, stamp_archived,
+        set_pr_link_in_frontmatter, slugify, stamp_archived,
     };
     use serde_json::json;
+
+    #[test]
+    fn slugify_is_byte_faithful_to_the_skill() {
+        // Mirrors the skill's slug(): tr lower + sed 's/[^a-z0-9]+/-/g; trim -'.
+        assert_eq!(slugify("Hello World"), "hello-world");
+        assert_eq!(slugify("  spaced  out  "), "spaced-out"); // runs collapse, ends trimmed
+        assert_eq!(slugify("UPPER_case-123"), "upper-case-123");
+        assert_eq!(slugify("Fix (bug) 2"), "fix-bug-2");
+        // ASCII-only, like `sed` in the C locale: non-ASCII becomes a dash, NOT kept.
+        // A Unicode-aware port (char::is_alphanumeric) would wrongly keep 'é' → "café".
+        assert_eq!(slugify("My Café Session"), "my-caf-session");
+        assert_eq!(slugify("réseau"), "r-seau");
+        assert_eq!(slugify(""), "");
+        assert_eq!(slugify("---"), "");
+    }
 
     #[test]
     fn category_root_dir_resolves_v2_root_then_falls_back_to_scope() {
