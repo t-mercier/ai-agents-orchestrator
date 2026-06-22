@@ -79,8 +79,9 @@
         .catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Import an existing (unmanaged) session: --resume it + run /import to adopt it ──
-    importSession: (sessionId, category, name) =>
-      invoke('import_session', { sessionId: sessionId || '', category: category || '', name: name || '' })
+    // root (optional): which space the imported session lands under, when >1 is configured.
+    importSession: (sessionId, category, name, root) =>
+      invoke('import_session', { sessionId: sessionId || '', category: category || '', name: name || '', root: root || '' })
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
 

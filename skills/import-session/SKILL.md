@@ -26,7 +26,7 @@ If plan mode is active (a `Plan mode is active` system reminder is present): sto
 
 ## Step 1 — Parse arguments + validate category
 
-Read `$ARGUMENTS`. Form: `<CATEGORY> [name]`.
+Read `$ARGUMENTS`. Form: `<CATEGORY> [name] [--root <space>]`.
 
 - `CATEGORY` — uppercase it; it must be one of the configured categories:
   ```bash
@@ -36,7 +36,8 @@ Read `$ARGUMENTS`. Form: `<CATEGORY> [name]`.
   > No categories configured. Add one in the app's **Settings** (or via **＋New**) first — a session needs a category folder to live under.
 
   If `CATEGORY` isn't in the list, prompt with `AskUserQuestion` (offer the listed categories).
-- `NAME` — everything after the category. If absent, derive a short slug from the session's first goal/topic, or ask with `AskUserQuestion` ("Short name for this session? 3–6 words").
+- `ROOT` — if a `--root <space>` token appears (the dashboard's Import passes it when more than one space is configured, to pick which space the imported session lands under), capture `<space>` as `ROOT` and **remove `--root <space>` from the args** before computing NAME. Else empty.
+- `NAME` — everything after the category (after stripping any `--root <space>`). If absent, derive a short slug from the session's first goal/topic, or ask with `AskUserQuestion` ("Short name for this session? 3–6 words").
 
 ## Step 2 — Resolve the CURRENT session ID
 
@@ -72,7 +73,9 @@ If empty, abort: "Couldn't resolve the current session id — is this running in
 slug() { echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g'; }
 FOLDER=$(slug "$NAME")
 [ -z "$FOLDER" ] && FOLDER="imported-$(echo "$SESSION_ID" | cut -c1-8)"
-TARGET_DIR=$(python3 ~/.claude/skills/lib/aoconfig.py dir "$CATEGORY" "$FOLDER")
+# A chosen space (ROOT, from the dashboard) disambiguates a category present under
+# several spaces; empty ROOT → aoconfig uses the category's own root.
+TARGET_DIR=$(python3 ~/.claude/skills/lib/aoconfig.py dir "$CATEGORY" "$FOLDER" ${ROOT:+"$ROOT"})
 NOTES_PATH="$TARGET_DIR/notes.md"
 ```
 

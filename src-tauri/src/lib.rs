@@ -395,7 +395,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
 /// the skill does the writing (ADR-012). cwd = the session's launch dir (where
 /// `--resume` must run). Category must be one the user configured.
 #[tauri::command(async)]
-fn import_session(session_id: String, category: String, name: String) -> Result<(), String> {
+fn import_session(session_id: String, category: String, name: String, root: String) -> Result<(), String> {
     if session_id.is_empty()
         || !session_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
     {
@@ -412,6 +412,20 @@ fn import_session(session_id: String, category: String, name: String) -> Result<
     if !known {
         return Err("unknown category — add it in Settings first".into());
     }
+    // Optional space (root): which space the imported session's notes.md lands under,
+    // for a category that exists in several. Must be a declared root + a safe token (it
+    // rides the /import-session prompt). Mirrors start_session.
+    let want_root = root.trim();
+    if !want_root.is_empty() {
+        let known_root = cfg.get("roots").and_then(serde_json::Value::as_array).is_some_and(|rs| {
+            rs.iter().any(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(want_root))
+        });
+        let safe = want_root.len() <= 30
+            && want_root.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+        if !known_root || !safe {
+            return Err("invalid space".into());
+        }
+    }
     // Same safe-name set as /start-session (no shell / YAML-breaking chars); may be empty.
     let cleaned: String = name
         .chars()
@@ -423,11 +437,14 @@ fn import_session(session_id: String, category: String, name: String) -> Result<
 
     let dir = reader::resolve_session_cwd(&session_id)
         .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
-    let prompt = if safe_name.is_empty() {
+    let mut prompt = if safe_name.is_empty() {
         format!("/import-session {category}")
     } else {
         format!("/import-session {category} {safe_name}")
     };
+    if !want_root.is_empty() {
+        prompt.push_str(&format!(" --root {want_root}"));
+    }
     let cmd = format!(
         "cd {} && claude --resume {} --model {} {}",
         pty::shell_quote(&dir),
