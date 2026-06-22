@@ -143,7 +143,10 @@ html, body {
   transition: border-color 0.12s, color 0.12s;
 }
 .root-select:hover { border-color: var(--text-tertiary); color: var(--text-primary); }
-.root-select:focus { border-color: var(--accent); outline: none; }
+/* No lingering accent border after a mouse pick (the select keeps :focus until you
+   click away — reads as a stuck selection). Show the ring only for keyboard nav. */
+.root-select:focus { outline: none; }
+.root-select:focus-visible { border-color: var(--accent); }
 .root-select[hidden] { display: none; }
 /* ＋Import: a quieter sibling of ＋New (secondary action). */
 .new-session-btn.ghost { background: transparent; border-color: var(--card-border); color: var(--text-secondary); }
