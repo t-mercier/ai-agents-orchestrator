@@ -366,9 +366,16 @@ function selectSession(key) {
   // running in the background). Only "End session ✕" kills.
   if (changing) {
     const sel = selectedKey && sessions.find(s => sessionKey(s) === selectedKey)
-    const sid = sel && sel.sessionId
-    if (sid && window.hasLiveTerminal && window.hasLiveTerminal(sid)) {
-      window.openTerminalPane(sid, sel.cwd || '')
+    // A session has at most one live embedded pty, keyed by notesPath (embedded +New) OR
+    // sessionId (Resume/Restart). Prefer notesPath so a +New session reveals its terminal.
+    const has = window.hasLiveTerminal
+    const tkey = sel && has && (
+      (sel.notesPath && has(sel.notesPath)) ? sel.notesPath
+        : (sel.sessionId && has(sel.sessionId)) ? sel.sessionId
+          : null
+    )
+    if (tkey) {
+      window.openTerminalPane(tkey, sel.cwd || '')
     } else if (window.getTerminalVisible && window.getTerminalVisible()) {
       window.hideTerminalPane()
     }
@@ -486,8 +493,11 @@ SEARCH_FIELD_IDS.forEach(id => {
 // alive across the Closed→Running migration) and flip the view to the Running tab,
 // keeping the session selected. The selection key (notesPath) is stable across
 // tabs, so once the resumed session registers in the running list it stays current.
-window.onTerminalOpened = (sessionId) => {
-  const s = sessions.find(x => x.sessionId === sessionId)
+window.onTerminalOpened = (key) => {
+  // `key` is a sessionId (Resume/Restart) or a notesPath (embedded +New). Match either —
+  // for a brand-new +New session not yet in the list, s is undefined and the synthetic
+  // _terminalSession seeded at submit stays put until the poll discovers the real one.
+  const s = sessions.find(x => x.sessionId === key || sessionKey(x) === key)
   if (s) window._terminalSession = s
   if (activeTab !== 'running') {
     activeTab = 'running'
@@ -601,6 +611,9 @@ document.getElementById('new-session-btn').addEventListener('click', () => {
   }
   hideNsError()
   populateNewSessionCategories()   // refresh (scope toggle + config may have changed)
+  // Render the Embedded/Terminal destination toggle reflecting the current pref.
+  const destEl = document.getElementById('ns-dest')
+  if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
   newSessionModal.showModal()
   document.getElementById('ns-name').focus()
 })
@@ -745,12 +758,27 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   // Space the session launches under — only meaningful when >1 space (the picker is
   // shown); empty otherwise, in which case start_session uses the category's own root.
   const root = (configRoots().length > 1) ? nsRoot : ''
-  const res = await window.api.startSession({ category, name, ticket, repo, branch, prLink, root })
+  // Destination: shared sticky pref (csm.openIn). 'embedded' runs the new session in the
+  // in-app pty; 'terminal' (default for +New historically) launches an external iTerm tab.
+  const embedded = !!(window.getOpenIn && window.getOpenIn() === 'embedded')
+  const res = await window.api.startSession({ category, name, ticket, repo, branch, prLink, root, embedded })
   if (!res || !res.ok) {
     showNsError('Could not start: ' + ((res && res.error) || 'unknown error'))
     return
   }
   newSessionModal.close()
+  if (embedded && res.command && res.notesPath && window.openTerminalPane) {
+    // Run it in the embedded terminal, keyed by the notesPath the skill WILL create — which
+    // is the session's eventual sessionKey, so when the poll discovers it the card links to
+    // this same pty (no re-key; pty_spawn's guard blocks a double-client). Seed a synthetic
+    // _terminalSession so the panel survives until renderAll re-resolves it by key (notesPath).
+    window._terminalSession = { notesPath: res.notesPath, name, category, cwd: '', status: 'busy', state: 'active' }
+    selectedKey = res.notesPath
+    window._lastSelectedKey = res.notesPath
+    if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')   // embedded lives in List
+    switchTab('running')
+    window.openTerminalPane(res.notesPath, '', '', res.command)
+  }
 })
 
 // Filter popover (delegated): open button, per-space + per-category toggle, clear-all.

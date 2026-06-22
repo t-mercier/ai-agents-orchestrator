@@ -927,6 +927,7 @@ function openSessionDefault(s) {
 window.routeResume = routeResume
 window.routeRestart = routeRestart
 window.openSessionDefault = openSessionDefault
+window.destinationToggle = destinationToggle   // reused by the +New modal (app.js)
 
 function installDelegatedHandlers() {
   if (delegationInstalled) return
@@ -956,6 +957,10 @@ function installDelegatedHandlers() {
     const destSeg = e.target.closest('[data-open-dest]')
     if (destSeg && window.setOpenIn) {
       window.setOpenIn(destSeg.dataset.openDest)
+      // Reflect the pick on every visible destination toggle — the detail-panel one AND
+      // the +New modal's (they share the csm.openIn pref).
+      document.querySelectorAll('.open-dest').forEach(b =>
+        b.classList.toggle('active', b.dataset.openDest === destSeg.dataset.openDest))
       const sel = (window._lastSessions || []).find(x => sessionKey(x) === window._lastSelectedKey)
       if (sel && window.renderDetailPanel) renderDetailPanel(sel, activeTab)   // refresh active segment + routing
       return

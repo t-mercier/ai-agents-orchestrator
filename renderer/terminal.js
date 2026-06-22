@@ -88,7 +88,7 @@ window.api.onPtyExit((sessionId) => {
   }
 })
 
-function ensureTerminal(sessionId, restartSlug = '') {
+function ensureTerminal(sessionId, restartSlug = '', command = '') {
   if (terminals.has(sessionId)) return terminals.get(sessionId)
 
   const container = document.getElementById('detail-terminal-pane')
@@ -139,16 +139,16 @@ function ensureTerminal(sessionId, restartSlug = '') {
     window.api.ptyInput(sessionId, data)
   })
 
-  const entry = { term, fitAddon, div, rendererAddon: null, spawned: false, opened: false, restartSlug }
+  const entry = { term, fitAddon, div, rendererAddon: null, spawned: false, opened: false, restartSlug, command }
   terminals.set(sessionId, entry)
   return entry  // term.open + pty spawn happen in showTerminal, once the div is visible
 }
 
-function showTerminal(sessionId, cwd, restartSlug = '') {
+function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
   document.querySelectorAll('.terminal-session-div').forEach(el => {
     el.style.display = 'none'
   })
-  const entry = ensureTerminal(sessionId, restartSlug)
+  const entry = ensureTerminal(sessionId, restartSlug, command)
   entry.div.style.display = 'flex'
   const fitSpawn = () => {
     if (!entry.opened) {
@@ -175,7 +175,7 @@ function showTerminal(sessionId, cwd, restartSlug = '') {
     if (!entry.spawned) {
       // Spawn at the measured size so the first render fills the width. A non-empty
       // restartSlug makes the pty run `/restart <slug>` instead of `--resume`.
-      window.api.ptySpawn(sessionId, cwd, entry.term.cols, entry.term.rows, entry.restartSlug)
+      window.api.ptySpawn(sessionId, cwd, entry.term.cols, entry.term.rows, entry.restartSlug, entry.command)
       entry.spawned = true
     } else {
       window.api.ptyResize(sessionId, entry.term.cols, entry.term.rows)
@@ -189,13 +189,13 @@ function showTerminal(sessionId, cwd, restartSlug = '') {
   activeTerminalSession = sessionId
 }
 
-function openTerminalPane(sessionId, cwd, restartSlug = '') {
+function openTerminalPane(sessionId, cwd, restartSlug = '', command = '') {
   const infoPane = document.getElementById('detail-info-pane')
   const termPane = document.getElementById('detail-terminal-pane')
   infoPane.style.display = 'none'
   termPane.style.display = 'flex'
   terminalVisible = true
-  showTerminal(sessionId, cwd, restartSlug)
+  showTerminal(sessionId, cwd, restartSlug, command)
   // Resuming makes the session live → let app.js remember it (so the panel
   // survives the Closed→Running migration) and flip the view to Running.
   if (window.onTerminalOpened) window.onTerminalOpened(sessionId)

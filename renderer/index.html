@@ -92,6 +92,13 @@
         <input id="ns-pr" type="text" placeholder="https://github.com/owner/repo/pull/123" autocomplete="off" spellcheck="false">
       </label>
 
+      <!-- Open destination: Embedded (in-app terminal) vs external Terminal. Shares the
+           same sticky pref (csm.openIn) as Resume/Restart; populated on open in app.js. -->
+      <div class="modal-field">
+        <span>Open in</span>
+        <div id="ns-dest"></div>
+      </div>
+
       <div id="ns-error" class="modal-error" hidden></div>
       <div class="modal-actions">
         <button type="button" class="modal-btn" id="ns-cancel">Cancel</button>
