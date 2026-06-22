@@ -106,8 +106,9 @@ def main():
             for c in matches
         }))
         print(f"ERROR: category '{OLD}' exists under multiple spaces ({spaces}). "
-              f"Rename it from the dashboard's Settings (per-space), or remove the "
-              f"duplicate first — this skill can't tell which one you mean.")
+              f"This skill renames by name and can't tell them apart — remove the "
+              f"duplicate first (the dashboard's Settings can drop a category; the "
+              f"folder on disk is left untouched), then re-run.")
         sys.exit(1)
     cat = matches[0]
     if find_category(cfg, NEW):
