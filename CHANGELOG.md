@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Start a new session in the embedded terminal** — ＋New now offers the same **Embedded / Terminal** destination toggle as Resume/Restart (shared `Open in` pref), so a brand-new session can open in the built-in terminal instead of an external iTerm tab.
+- New sessions launch in **auto mode** (`--permission-mode auto`) so `/start-session` can write its workspace without being blocked by plan mode.
+
+### Fixed
+- **rename-category** now refuses to rename a category that exists under multiple spaces (it would have renamed only one and left the config inconsistent) — remove the duplicate first.
+- **Session → space tagging** uses component-aware path matching, so a session under `FEAT-bug/` is no longer mis-tagged as belonging to `FEAT`.
+
 ## [0.2.1-alpha] - 2026-06-22
 
 ### Added

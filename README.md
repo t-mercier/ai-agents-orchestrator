@@ -30,6 +30,7 @@
 > ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
 >
+> - ⌨️ **Start a new session in the embedded terminal** — ＋New gets the same **Embedded / Terminal** toggle as Resume/Restart, so a brand-new session can open in the built-in terminal instead of an external tab. New sessions launch in *auto* mode so they're ready to work.
 > - 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board filters by space.
 > - ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (Spaces + Categories, one control across every view).
 > - 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
@@ -48,7 +49,7 @@ Terminal tabs don't scale. You need mission control.
 - **Three views** — a grouped **List**, a full-width **Cards** grid, and a **Board** (kanban).
 - **Kanban board** — drag to reorder (insertion line), **drop a card onto another to group** them (named, collapsible), **attach notes** to a card or group, flag **urgent**, and add sessions from the board itself. Generative **column colours** (pick one seed → a harmonious set across however many columns you have), with each column tinting its own accent.
 - **In-context detail** — click any card to open a **slide-over** with the session's goal, last activity, branch, Jira / PR links, and one-click **Resume / Restart / terminal** — without leaving the view.
-- **Resume your way** — pick a session back up in the **built-in terminal** (in the app, xterm.js + portable-pty) *or* in **your own terminal** (iTerm / Terminal) — your choice. Detach the built-in one into its own always-on-top window if you like.
+- **Start & resume your way** — open a **new** session or pick an existing one back up in the **built-in terminal** (in the app, xterm.js + portable-pty) *or* in **your own terminal** (iTerm / Terminal) — your choice, one toggle. Detach the built-in one into its own always-on-top window if you like.
 - **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` for view, `b` for board. **Remap any of it** in Settings → Shortcuts.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and a **⚲ Filter** popover (category checkboxes, one control across every view).
