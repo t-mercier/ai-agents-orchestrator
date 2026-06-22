@@ -36,7 +36,7 @@ Terminal tabs don't scale. You need mission control.
 - **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` for view, `b` for board. **Remap any of it** in Settings → Shortcuts.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and **category filters**.
-- **Named roots** — group categories under multiple named roots (e.g. *Work*, *Perso*, a client) and scope the whole dashboard — List, Cards, Board and the category chips — to one root or to **All** from a titlebar selector. A session's root shows in its detail slide-over, so the cards stay uncluttered.
+- **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client) and scope the whole dashboard — List, Cards, Board and the category chips — to one space or to **All** from a titlebar selector. A session's space shows in its detail slide-over, so the cards stay uncluttered.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
 ### Three ways to look at your work
@@ -157,7 +157,7 @@ Edit everything in the app's **Settings (⚙)** — categories & colours, scan r
 }
 ```
 
-Each category names the **`root`** it lives under (its folder is `<root path>/<CATEGORY>`), so the *same* category name can exist under several roots — the titlebar root selector then scopes the view. *(Back-compat: the legacy `workRoot`/`personalRoot` + a category `scope` of `work`/`personal` are still read and auto-migrated to `Work`/`Perso` roots, so existing configs keep working untouched.)*
+Each category names the **space** it lives under — the `root` key in the config (its folder is `<space path>/<CATEGORY>`), so the *same* category name can exist in several spaces, and the titlebar space selector scopes the view. *(Back-compat: the legacy `workRoot`/`personalRoot` + a category `scope` of `work`/`personal` are still read and auto-migrated to `Work`/`Perso` spaces, so existing configs keep working untouched.)*
 
 **Ticket tracking — any tracker, not just Jira.** `ticketBaseUrl` is just a URL prefix: the app appends each session's ticket ID to it to make the ID clickable. Point it at whatever you use:
 

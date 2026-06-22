@@ -73,7 +73,7 @@
       : ''
     // Root chip only in "All" mode (same gate as the list/cards root badge).
     const rootChip = (s.root && window.showRootBadge && window.showRootBadge())
-      ? `<span class="kb-chip kb-chip-root" title="Root">${escapeHtml(String(s.root))}</span>`
+      ? `<span class="kb-chip kb-chip-root" title="Space">${escapeHtml(String(s.root))}</span>`
       : ''
     const chips = [
       rootChip,

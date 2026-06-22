@@ -29,7 +29,7 @@
   <div class="titlebar" data-tauri-drag-region>
     <span class="titlebar-title" data-tauri-drag-region>AI Agents Orchestrator</span>
     <div class="titlebar-actions">
-      <select class="root-select" id="root-select" title="Filter by root" aria-label="Filter by root" hidden></select>
+      <select class="root-select" id="root-select" title="Filter by space" aria-label="Filter by space" hidden></select>
       <button class="new-session-btn" id="new-session-btn" title="Start a new session">＋ <span class="btn-label">New</span></button>
       <button class="new-session-btn ghost" id="import-session-btn" title="Import an existing Claude Code session into the dashboard">＋ <span class="btn-label">Import</span></button>
       <div class="view-toggle">
@@ -51,7 +51,7 @@
       <!-- Root/scope picker — shown only when both work & personal roots are set
            (toggled in app.js). Filters the category list to that scope's categories. -->
       <label class="modal-field" id="ns-scope-field" hidden>
-        <span>Root</span>
+        <span>Space</span>
         <div class="view-toggle ns-scope-toggle">
           <button type="button" class="view-btn active" data-scope="work" id="ns-scope-work">Work</button>
           <button type="button" class="view-btn" data-scope="personal" id="ns-scope-personal">Personal</button>
@@ -113,7 +113,7 @@
       <input id="import-search" class="search-field" type="search" placeholder="Search recent sessions…" spellcheck="false" autocomplete="off">
       <div id="import-list" class="import-list"></div>
       <label class="modal-field" id="import-scope-field" hidden>
-        <span class="modal-label">Root</span>
+        <span class="modal-label">Space</span>
         <div class="view-toggle import-scope-toggle">
           <button type="button" class="view-btn active" data-scope="work" id="import-scope-work">Work</button>
           <button type="button" class="view-btn" data-scope="personal" id="import-scope-personal">Personal</button>
@@ -159,14 +159,14 @@
             <p class="modal-hint">Where the dashboard scans for sessions — each category maps to <code>&lt;root&gt;/&lt;CATEGORY&gt;</code>.</p>
             <div class="settings-section">
               <label class="modal-field">
-                <span>Work root</span>
+                <span>Work space</span>
                 <div class="path-row">
                   <input id="set-work-root" type="text" placeholder="~/work" autocomplete="off" spellcheck="false">
                   <button type="button" class="modal-btn path-browse" data-browse="set-work-root">Browse…</button>
                 </div>
               </label>
               <label class="modal-field">
-                <span>Personal root</span>
+                <span>Personal space</span>
                 <div class="path-row">
                   <input id="set-personal-root" type="text" placeholder="~" autocomplete="off" spellcheck="false">
                   <button type="button" class="modal-btn path-browse" data-browse="set-personal-root">Browse…</button>
@@ -337,7 +337,7 @@
               </div>
               <p class="modal-hint">A category mirrors a real folder at <code>&lt;root&gt;/&lt;NAME&gt;</code>. Pick existing folder(s) under your work/personal root (multi-select to add several). The app never creates or renames folders — name &amp; scope are read-only here; only the colour is editable. To rename a category (and move its folder) use the <code>/rename-category</code> skill; removing a row just drops it from the dashboard, the folder stays.</p>
               <div id="set-cat-list" class="settings-cat-list"></div>
-              <button type="button" class="modal-btn" id="set-add-cat-folder" title="Pick existing folder(s) under a root to add as categories (multi-select)">＋ Category</button>
+              <button type="button" class="modal-btn" id="set-add-cat-folder" title="Pick existing folder(s) under a space to add as categories (multi-select)">＋ Category</button>
             </div>
           </section>
 

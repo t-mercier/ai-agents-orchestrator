@@ -83,7 +83,7 @@ function buildMetaRows(s, isHistorical) {
     (s.gitBranch || s.branch) ? metaRow('Branch', `🌿 ${escapeHtml(s.gitBranch || s.branch)}`) : '',
     !isHistorical && s.worktree ? metaRow('Worktree', pathLink(s.worktree, '🗂 ')) : '',
     s.category ? metaRow('Category', `${escapeHtml(s.category)}${s.ticket ? ` · ${escapeHtml(s.ticket)}` : ''}`) : '',
-    s.root ? metaRow('Root', escapeHtml(String(s.root))) : '',
+    s.root ? metaRow('Space', escapeHtml(String(s.root))) : '',
     isHistorical && s.startedAt ? metaRow('Started', escapeHtml(s.startedAt)) : '',
     lastUpdate ? metaRow('Last update', escapeHtml(lastUpdate)) : '',
   ].filter(Boolean).join('')
