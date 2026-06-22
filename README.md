@@ -20,6 +20,20 @@
 >
 > **AI Agents Orchestrator gives you a unified view of every session, across every project** — so you can stay focused instead of getting lost in the chaos.
 
+## Contents
+
+[What's new](#whats-new) · [The problem](#the-problem) · [Features](#features) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Session skills](#session-skills) · [Customization](#customization) · [FAQ](#faq) · [Security](#security) · [Tech stack](#tech-stack) · [Roadmap](#roadmap) · [Changelog](#changelog) · [Contributing](#contributing) · [License](#license)
+
+## What's new
+
+> [!NOTE]
+> Newest first — full history in the [changelog](CHANGELOG.md).
+
+- 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client) and scope the whole dashboard, list/cards/board, to one of them.
+- 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
+- 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
+- 📄 **Source-available licence** — free to use (incl. at work), no resale.
+
 ## The problem
 
 Today each session is a buried terminal tab. Which are running? Which are **waiting for you**? Which finished an hour ago? Where did you leave each one?
@@ -97,6 +111,7 @@ The dashboard auto-discovers your sessions from `~/.claude`.
 cargo tauri build      # bundle in src-tauri/target/release/bundle/
 ```
 
+> [!NOTE]
 > Built unsigned for now — on first launch, right-click the app → **Open** to get past Gatekeeper. Signed/notarized releases come once it's out of alpha.
 
 ## Session skills
@@ -113,7 +128,8 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 
 Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
-> ⚠️ **Updating from an earlier version?** This release makes the skills **root-aware** (they resolve a session's folder from its category's root, with the old work/personal layout still supported) and **fixes `/restart-session`** — its un-archive step used to over-match and could strip valid `notes.md` history lines. **Re-run the installer to pull the updated skills:**
+> [!IMPORTANT]
+> **Updating from an earlier version?** This release makes the skills **root-aware** (they resolve a session's folder from its category's root, with the old work/personal layout still supported) and **fixes `/restart-session`** — its un-archive step used to over-match and could strip valid `notes.md` history lines. **Re-run the installer to pull the updated skills:**
 > ```bash
 > bash scripts/install.sh --force
 > ```
@@ -179,6 +195,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 
 **Can I import my existing / older Claude sessions?** Live ones need nothing — they're already in **Running**. Past sessions that were never `/start-session`-ed have no `notes.md`, so they don't show in the historical tabs. To bring one under management, run `/restart-session <slug>` (or `/start-session`) for that work — it creates the `notes.md` and registers it. Setting your category **root dir** only tells the app *where* to scan for managed sessions; it doesn't ingest arbitrary `~/.claude` transcripts on its own.
 
+> [!TIP]
 > Auto-importing *any* past session (not just managed ones) isn't built yet — it's a great idea on the roadmap. Open an issue if you want it.
 
 ## Security
