@@ -134,6 +134,12 @@ fn read_transcript(sid: &str) -> Transcript {
     }
 
     let mut t = Transcript::default();
+    // KNOWN OVERHEAD (audit, deferred): a miss below is not cached, so every poll
+    // re-runs this read_dir + per-subdir stat for each sid whose .jsonl is gone
+    // (rotated/deleted historical sessions). Measured cost is small (one dir scan,
+    // VFS-cached), so it's left as-is. If it ever matters, the fix is a per-poll
+    // sid→path index built once (one read_dir, one pass) — NOT a TTL negative cache,
+    // which would hide a transcript that appears mid-session for up to the TTL.
     let projects = home().join(".claude").join("projects");
     let dirs = match fs::read_dir(&projects) {
         Ok(d) => d,
