@@ -16,6 +16,7 @@
 
 </div>
 
+
 > AI coding sessions don't last minutes anymore. They last **days, weeks, sometimes entire projects** — each accumulating context, decisions, repositories, tasks and agents. Before long, you're juggling dozens of parallel workstreams.
 >
 > **AI Agents Orchestrator gives you a unified view of every session, across every project** — so you can stay focused instead of getting lost in the chaos.
@@ -24,16 +25,15 @@
 
 [What's new](#whats-new) · [The problem](#the-problem) · [Features](#features) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Session skills](#session-skills) · [Customization](#customization) · [FAQ](#faq) · [Security](#security) · [Tech stack](#tech-stack) · [Roadmap](#roadmap) · [Changelog](#changelog) · [Contributing](#contributing) · [License](#license)
 
-## What's new
 
 > [!NOTE]
+> ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
-
-- 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board gets its own space filter.
-- ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (one control across every view).
-- 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
-- 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
-- 📄 **Source-available licence** — free to use (incl. at work), no resale.
+> - 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board gets its own space filter.
+> - ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (one control across every view).
+> - 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
+> - 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
+> - 📄 **Source-available licence** — free to use (incl. at work), no resale.
 
 ## The problem
 
