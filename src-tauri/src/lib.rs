@@ -582,6 +582,29 @@ fn stamp_archived(content: &str, line: &str) -> String {
     }
 }
 
+/// Drop any active-sessions.json entry pointing at this notes.md (atomic, rewritten
+/// only when something changed). Matches the path both as sent and canonicalized — the
+/// registry may store either form. Shared by archive_session and delete_session.
+fn remove_from_active_sessions(notes_path: &str, abs: &std::path::Path) -> Result<(), String> {
+    let active = config::home().join(".claude").join("active-sessions.json");
+    if let Ok(s) = std::fs::read_to_string(&active) {
+        if let Ok(serde_json::Value::Object(mut map)) = serde_json::from_str(&s) {
+            let canon = abs.to_string_lossy();
+            let before = map.len();
+            map.retain(|_, v| {
+                let np = v.get("notes_path").and_then(serde_json::Value::as_str);
+                np != Some(notes_path) && np != Some(canon.as_ref())
+            });
+            if map.len() != before {
+                let body = serde_json::to_string_pretty(&serde_json::Value::Object(map))
+                    .map_err(|e| e.to_string())?;
+                atomic_write(&active, &body)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Archive a session FROM THE DASHBOARD (ADR-013 — the app's one source-of-truth
 /// write, a deliberate derogation from ADR-001): stamps ARCHIVED into notes.md and
 /// drops the session from active-sessions.json. Mirrors the /archive-session skill. Writes
@@ -602,24 +625,8 @@ fn archive_session(notes_path: String) -> Result<(), String> {
     let line = format!("- {date} | ARCHIVED | archived from the dashboard");
     atomic_write(&abs, &stamp_archived(&content, &line))?;
 
-    // 2) Drop matching entries from active-sessions.json (atomic). Match the path
-    // both as sent and canonicalized (the registry may store either form).
-    let active = config::home().join(".claude").join("active-sessions.json");
-    if let Ok(s) = std::fs::read_to_string(&active) {
-        if let Ok(serde_json::Value::Object(mut map)) = serde_json::from_str(&s) {
-            let canon = abs.to_string_lossy();
-            let before = map.len();
-            map.retain(|_, v| {
-                let np = v.get("notes_path").and_then(serde_json::Value::as_str);
-                np != Some(notes_path.as_str()) && np != Some(canon.as_ref())
-            });
-            if map.len() != before {
-                let body = serde_json::to_string_pretty(&serde_json::Value::Object(map))
-                    .map_err(|e| e.to_string())?;
-                atomic_write(&active, &body)?;
-            }
-        }
-    }
+    // 2) Drop matching entries from active-sessions.json (atomic).
+    remove_from_active_sessions(&notes_path, &abs)?;
     Ok(())
 }
 
@@ -641,22 +648,7 @@ fn delete_session(notes_path: String) -> Result<(), String> {
     trash::delete(dir).map_err(|e| e.to_string())?;
 
     // Defensive: drop any active-sessions.json entry pointing at this notes.md.
-    let active = config::home().join(".claude").join("active-sessions.json");
-    if let Ok(s) = std::fs::read_to_string(&active) {
-        if let Ok(serde_json::Value::Object(mut map)) = serde_json::from_str(&s) {
-            let canon = abs.to_string_lossy();
-            let before = map.len();
-            map.retain(|_, v| {
-                let np = v.get("notes_path").and_then(serde_json::Value::as_str);
-                np != Some(notes_path.as_str()) && np != Some(canon.as_ref())
-            });
-            if map.len() != before {
-                let body = serde_json::to_string_pretty(&serde_json::Value::Object(map))
-                    .map_err(|e| e.to_string())?;
-                atomic_write(&active, &body)?;
-            }
-        }
-    }
+    remove_from_active_sessions(&notes_path, &abs)?;
     Ok(())
 }
 

@@ -508,6 +508,20 @@ fn root_for_notes_path(cfg: &Value, notes_path: &str) -> Value {
     best.map(|(_, r)| r).unwrap_or(Value::Null)
 }
 
+/// PR link for a session: explicit frontmatter wins; else (REVIEW only) the PR URL
+/// pasted into the transcript, disambiguated by the number in the session name.
+/// Shared by get_sessions (owned Transcript) and scan_historical (Option<Transcript>);
+/// callers pass the pr_urls slice (empty when there is no transcript).
+fn resolve_pr_link(explicit_fm: Value, category: &str, pr_urls: &[String], name: &str) -> Value {
+    if !explicit_fm.is_null() {
+        explicit_fm
+    } else if category == "REVIEW" {
+        pick_pr_url(pr_urls, name).map(Value::String).unwrap_or(Value::Null)
+    } else {
+        Value::Null
+    }
+}
+
 #[tauri::command(async)]
 pub fn get_sessions() -> Vec<Value> {
     let claude = home().join(".claude");
@@ -571,13 +585,7 @@ pub fn get_sessions() -> Vec<Value> {
         // into the transcript, disambiguated by the number in the session name.
         let category = entry_meta.get("category").and_then(Value::as_str).unwrap_or("");
         let name_str = data.get("name").and_then(Value::as_str).unwrap_or("");
-        let pr_link = if !pr_link_fm.is_null() {
-            pr_link_fm
-        } else if category == "REVIEW" {
-            pick_pr_url(&tr.pr_urls, name_str).map(Value::String).unwrap_or(Value::Null)
-        } else {
-            Value::Null
-        };
+        let pr_link = resolve_pr_link(pr_link_fm, category, &tr.pr_urls, name_str);
 
         let root = notes_path
             .as_deref()
@@ -847,19 +855,8 @@ fn scan_historical() -> Vec<Value> {
             let resumable = tr.as_ref().map(|t| t.found).unwrap_or(false);
             // PR link: explicit frontmatter wins; else (REVIEW only) the PR URL pasted
             // into the transcript, disambiguated by the number in the session name.
-            let pr_link = {
-                let explicit = fv(&fm, "pr_link");
-                if !explicit.is_null() {
-                    explicit
-                } else if cat == "REVIEW" {
-                    tr.as_ref()
-                        .and_then(|t| pick_pr_url(&t.pr_urls, name.as_str()))
-                        .map(Value::String)
-                        .unwrap_or(Value::Null)
-                } else {
-                    Value::Null
-                }
-            };
+            let pr_urls = tr.as_ref().map(|t| t.pr_urls.as_slice()).unwrap_or(&[]);
+            let pr_link = resolve_pr_link(fv(&fm, "pr_link"), &cat, pr_urls, name.as_str());
             let cwd = tr.and_then(|t| t.launch_cwd).unwrap_or(scope_root);
 
             out.push(json!({

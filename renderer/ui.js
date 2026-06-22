@@ -182,22 +182,26 @@ function cardIcons(s) {
   return icons ? `<div class="card-icons">${icons}</div>` : ''
 }
 
+// Status-derived render bits shared by the list + cards views: stale → grey dot +
+// "stale" badge; 'waiting' → a WAIT badge (the one state needing action — busy/idle
+// rely on the coloured dot alone, Tufte: no redundant ink); closed/archived →
+// greyed-white name via .historical (lighter than stale's fully-greyed).
+function statusBits(s) {
+  const stale = s.state === 'stale'
+  return {
+    dotClass: stale ? 'stale' : (s.status || 'idle'),
+    historical: (s.state === 'closed' || s.state === 'archived') ? 'historical' : '',
+    badge: stale
+      ? `<span class="list-card-badge stale">stale</span>`
+      : (s.status === 'waiting' ? `<span class="list-card-badge waiting">WAIT</span>` : ''),
+  }
+}
+
 function renderListCard(s, selectedKey, changed) {
   // Full text — CSS (ellipsis) clips to the panel width, so widening the panel reveals more.
   const preview = escapeHtml(s.lastActivity || s.goal || '')
   const next = firstNextStep(s.nextSteps)
-  // Only 'waiting' keeps a text badge (it's the one state needing action);
-  // for busy/idle the colored dot carries the meaning (Tufte: no redundant ink).
-  // Stale = open work whose terminal is gone (in the Running tab alongside active):
-  // grey dot + a "stale" badge so it reads as distinct from a live session.
-  const stale = s.state === 'stale'
-  const dotClass = stale ? 'stale' : (s.status || 'idle')
-  // Closed / archived: dim the name to a greyed white so it doesn't read as a live
-  // (bright-white) session — but lighter than stale (which is fully greyed).
-  const historical = (s.state === 'closed' || s.state === 'archived') ? 'historical' : ''
-  const badge = stale
-    ? `<span class="list-card-badge stale">stale</span>`
-    : (s.status === 'waiting' ? `<span class="list-card-badge waiting">WAIT</span>` : '')
+  const { dotClass, historical, badge } = statusBits(s)
   // Selection is keyed on sessionKey (unique per notes.md) — sessionId can be
   // null or duplicated across historical notes, which would select two cards at once.
   return `
@@ -372,15 +376,7 @@ function renderSessionCard(s, selectedKey, changed) {
   const next = firstNextStep(s.nextSteps)
   const cat = s.category || 'OTHER'
   const upd = formatDateTime(s.updatedAt || s.lastActivityAt)  // absolute, matches detail "Last update"
-  // Mirror the list card's lifecycle handling: stale = grey dot + badge; closed/
-  // archived = greyed-white name (via .historical). Without this, the cards view
-  // showed every Running session as live (its raw status) and historical ones bright.
-  const stale = s.state === 'stale'
-  const dotClass = stale ? 'stale' : (s.status || 'idle')
-  const historical = (s.state === 'closed' || s.state === 'archived') ? 'historical' : ''
-  const badge = stale
-    ? `<span class="list-card-badge stale">stale</span>`
-    : (s.status === 'waiting' ? `<span class="list-card-badge waiting">WAIT</span>` : '')
+  const { dotClass, historical, badge } = statusBits(s)
   return `
     <div class="session-card ${dotClass} ${historical} ${sessionKey(s) === selectedKey ? 'selected' : ''} ${changed ? 'just-updated' : ''} ${isPinnedSession(s) ? 'pinned' : ''}"
          data-key="${escapeHtml(sessionKey(s))}">
