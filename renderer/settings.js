@@ -103,6 +103,7 @@
     const cats = Array.isArray(c.categories) ? c.categories : []
     if (cats.length === 0) addCatRow()
     else cats.forEach(addCatRow)
+    renderCatSeed()
     renderColRows()
     renderBoardSeed()
     populateTerminalPrefs()
@@ -171,6 +172,67 @@
   }
   function refreshBoardIfOpen() {
     if (window.viewMode === 'board' && window.renderBoard) window.renderBoard()
+  }
+
+  // ── Category colours: the SAME seed + scheme system as the board. Picking a seed
+  // fills every category's colour input (generated via CSMBoard.paletteColor); the hex
+  // persists in config on save. Seed/scheme remembered in localStorage. "None" = manual.
+  const getCatSeed = () => { try { return localStorage.getItem('csm.catSeed') || '' } catch { return '' } }
+  const getCatScheme = () => { try { return localStorage.getItem('csm.catScheme') || 'spectrum' } catch { return 'spectrum' } }
+  function renderCatSeed() {
+    const grid = $('set-cat-seed')
+    if (!grid || !window.CSM_LOOKS || !window.CSMBoard) return
+    const seed = getCatSeed().toLowerCase()
+    const matchesLook = window.CSM_LOOKS.some(L => L.accent.toLowerCase() === seed)
+    const card = (val, name, swatch) =>
+      `<button type="button" class="look-card" data-cat-seed="${val}" title="${name}">${swatch}<span class="look-name">${name}</span></button>`
+    const looks = window.CSM_LOOKS.map(L => card(L.accent, L.name, `<span class="look-swatch" style="background:${L.accent}"></span>`)).join('')
+    const none = card('', 'None', '<span class="look-swatch" style="background:rgba(var(--tint),0.05)"></span>')
+    const cv = (seed && !matchesLook) ? getCatSeed() : '#7E93B8'
+    const custom = `<label class="look-card look-custom" data-cat-seed="custom" title="Custom seed">
+      <span class="look-swatch look-swatch-custom"><i></i></span><span class="look-name">Custom</span>
+      <input type="color" class="cat-seed-custom-input" value="${cv}">
+    </label>`
+    grid.innerHTML = none + looks + custom
+    grid.querySelectorAll('.look-card').forEach(b => {
+      const v = b.dataset.catSeed
+      const active = v === '' ? !seed : v === 'custom' ? (!!seed && !matchesLook) : v.toLowerCase() === seed
+      b.classList.toggle('active', active)
+    })
+    const scheme = getCatScheme()
+    document.querySelectorAll('.cat-scheme-toggle [data-cat-scheme]').forEach(b => b.classList.toggle('active', b.dataset.catScheme === scheme))
+  }
+  // Fill each category row's colour input from the seed+scheme (in row order). "None"
+  // seed → leave the existing manual colours untouched.
+  function regenerateCatColors() {
+    const seed = getCatSeed()
+    if (!seed) return
+    const scheme = getCatScheme()
+    const inputs = [...catList.querySelectorAll('.settings-cat-row .cat-color')]
+    inputs.forEach((input, i) => {
+      const hex = window.CSMBoard.paletteColor(seed, scheme, i, inputs.length)
+      if (hex) input.value = hex
+    })
+  }
+  function applyCatSeed(seed) {
+    try { localStorage.setItem('csm.catSeed', seed || '') } catch { /* ignore */ }
+    renderCatSeed(); regenerateCatColors()
+  }
+  {
+    const grid = $('set-cat-seed')
+    if (grid) {
+      grid.addEventListener('click', (e) => {
+        const b = e.target.closest('.look-card[data-cat-seed]')
+        if (b && b.dataset.catSeed !== 'custom') applyCatSeed(b.dataset.catSeed)
+      })
+      grid.addEventListener('input', (e) => {
+        if (e.target.classList.contains('cat-seed-custom-input')) applyCatSeed(e.target.value)
+      })
+    }
+    document.querySelectorAll('.cat-scheme-toggle [data-cat-scheme]').forEach(btn => btn.addEventListener('click', () => {
+      try { localStorage.setItem('csm.catScheme', btn.dataset.catScheme) } catch { /* ignore */ }
+      renderCatSeed(); regenerateCatColors()
+    }))
   }
 
   // ── Board column colours: a seed (reuses the Look swatches) + a scheme ──

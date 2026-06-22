@@ -177,27 +177,31 @@
     const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')
     return `#${to(seg[0])}${to(seg[1])}${to(seg[2])}`
   }
-  // The effective colour (hex) for a column: its own .color wins, else the scheme-derived
-  // colour for its index, or '' when there's no seed (manual mode).
-  function colorForColumn(state, col, index, total) {
-    if (col && /^#[0-9a-fA-F]{6}$/.test(col.color || '')) return col.color
-    const seed = state.colorSeed
-    if (!seed) return ''
+  // Generative palette: one seed hex + a scheme → the hex for item `index` of `total`.
+  // Reusable beyond the board (the Settings category colours use the same system).
+  function paletteColor(seed, scheme, index, total) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(seed || '')) return ''
     const [h, sRaw, lRaw] = hexToHsl(seed)
     const i = index || 0, n = Math.max(1, total || 1)
     // Carry the seed's own saturation + lightness (clamped to a legible band) so each
     // seed keeps its character — vivid seed → vivid set, muted seed → muted set.
     const S = Math.min(72, Math.max(42, sRaw))
     const L = Math.min(66, Math.max(52, lRaw))
-    const scheme = state.colorScheme || 'spectrum'
     if (scheme === 'shades') {
       const L2 = n <= 1 ? L : (L + 22) - i * (44 / (n - 1))   // light → dark, same hue
       return hslToHex(h, S, Math.min(82, Math.max(32, L2)))
     }
-    // Both vary hue AROUND the seed (seed-centred), bounded arc — analogous is narrow,
+    // Vary hue AROUND the seed (seed-centred), bounded arc — analogous is narrow,
     // spectrum is wider; neither sweeps the full wheel (which ignored the seed).
     const step = n <= 1 ? 0 : Math.min(scheme === 'analogous' ? 22 : 48, (scheme === 'analogous' ? 110 : 210) / (n - 1))
     return hslToHex(h + (i - (n - 1) / 2) * step, S, L)
+  }
+  // The effective colour (hex) for a column: its own .color wins, else the scheme-derived
+  // colour for its index, or '' when there's no seed (manual mode).
+  function colorForColumn(state, col, index, total) {
+    if (col && /^#[0-9a-fA-F]{6}$/.test(col.color || '')) return col.color
+    if (!state.colorSeed) return ''
+    return paletteColor(state.colorSeed, state.colorScheme || 'spectrum', index, total)
   }
   // Drop every column's manual colour (so they fall back to the scheme-derived one).
   function clearColumnColors(state) {
@@ -409,7 +413,7 @@
   return {
     STORAGE_KEY, DEFAULT_COLUMNS, emptyState, normalize,
     addColumn, renameColumn, removeColumn, moveColumn, setColumnHidden, setColumnColor,
-    setColorScheme, COLOR_SCHEMES, colorForColumn, clearColumnColors,
+    setColorScheme, COLOR_SCHEMES, colorForColumn, paletteColor, clearColumnColors,
     placeSession, unplaceSession, addNote, updateNote, removeNote, moveItem,
     toggleUrgent, isUrgent, itemsByColumn, orderedItems, orderedIds,
     createGroup, addToGroup, removeFromGroup, ungroup, renameGroup, setGroupCollapsed, groupMembers, findGroupOf, moveGroup,
