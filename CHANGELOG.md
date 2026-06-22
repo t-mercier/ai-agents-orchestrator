@@ -10,6 +10,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1-alpha] - 2026-06-22
+
+### Added
+- **Spaces editor in Settings** — rename a space, set its folder (Browse), add/remove. Renaming a space retags the categories under it; each space shows its selected path on its own line.
+- **Category colours from a seed + scheme** — the same generative system as the board (Spectrum / Shades / Analogous): pick a seed and the per-category colours fill from it.
+- **Resizable Settings modal** — drag the corner; up to +20% wider and taller until everything fits.
+- **Unified ⚲ Filter** — the filter popover now filters by **Space** *and* **Category** (the board's separate space selector was removed).
+
+### Changed
+- **List view** — pinned sessions float to the top of *each space* (no "PINNED" header); per-card space labels removed (the section header is the only space marker); the ticket/PR/notes icons sit flush-left under the title.
+
+### Fixed
+- **Restart** — closed/archived sessions restart in their **space root** (resolved from the session's `notes.md` location), not `$HOME`.
+- **Board** — an empty, in-creation note no longer shows a delete trash; Escape / click-away cancels it.
+
 ## [0.2.0-alpha] - 2026-06-22
 
 ### Added
@@ -37,5 +52,6 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - **Import picker** — Escape closes it; cleaner derived titles; modal width fixed.
 - **Mobile landing** — the "View on GitHub" button no longer wraps to two lines.
 
-[Unreleased]: https://github.com/t-mercier/ai-agents-orchestrator/compare/v0.2.0-alpha...HEAD
+[Unreleased]: https://github.com/t-mercier/ai-agents-orchestrator/compare/v0.2.1-alpha...HEAD
+[0.2.1-alpha]: https://github.com/t-mercier/ai-agents-orchestrator/compare/v0.2.0-alpha...v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/t-mercier/ai-agents-orchestrator/releases/tag/v0.2.0-alpha
