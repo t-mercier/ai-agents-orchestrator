@@ -5,16 +5,27 @@ Reads the shared config the dashboard app writes:
   ~/.config/ai-agents-orchestrator/config.json
 so the skills and the app agree on categories, note locations, and Obsidian vaults.
 
+Root model (v2). A category lives under a named **root** (`{name,path}` in
+`roots`); the category's `root` field names which one, so the SAME category name
+can exist under several roots — (root, name) is the identity. **v1** configs
+(`workRoot`/`personalRoot` + a category `scope` of work|personal) are still
+understood: roots migrate to `Work` + `Perso` and `scope` → root. This mirrors the
+Rust `derive()` — aoconfig reads the RAW config.json, it never sees derive()'s
+output, so it must do its own v1/v2 handling.
+
 Subcommands:
   categories        → newline-separated list of category names
-  scope    <CAT>    → 'work' | 'personal' (default 'work' if unknown)
-  base     <CAT>    → absolute base dir for a category
-                      (work → workRoot/<CAT>'s parent; personal → personalRoot)
-  dir      <CAT> <SLUG> → absolute workspace dir = base/<SLUG>
+  roots             → newline-separated list of root names
+  rootpath <ROOT>   → absolute path of a named root, or '' if unknown
+  root     <CAT>    → the root name a category lives under
+  scope    <CAT>    → 'work' | 'personal' (default 'work'; inferred from root if absent)
+  base     <CAT> [<ROOT>] → absolute base dir for a category (= <root path>/<CAT>);
+                      optional <ROOT> disambiguates a category present under several roots
+  dir      <CAT> <SLUG> [<ROOT>] → absolute workspace dir = base/<SLUG>
   vault    <CAT>    → Obsidian vault path for the category's scope, or '' if
                       Obsidian is disabled / no vault set for that scope
   find     <SLUG>   → newline-separated notes.md paths matching <SLUG> across all
-                      category bases (for /restart, /close, /archive lookups)
+                      (root, category) bases (for /restart, /close, /archive lookups)
 """
 import json
 import os
@@ -23,6 +34,8 @@ import sys
 HOME = os.path.expanduser('~')
 CONFIG = os.path.join(HOME, '.config', 'ai-agents-orchestrator', 'config.json')
 DEFAULT_CATEGORIES = ['FEAT', 'BUG', 'REVIEW', 'CHORE', 'TEST', 'PERSO']
+# Root names that map to the 'personal' scope (vault selection, v1 fallback).
+PERSONAL_ROOTS = ('perso', 'personal', 'personnel')
 
 
 def expand(p):
@@ -48,23 +61,80 @@ def categories(cfg):
 
 
 def category_names(cfg):
-    return [c['name'] for c in categories(cfg)] or list(DEFAULT_CATEGORIES)
+    # Distinct names, order-preserving (a name may repeat across roots).
+    out, seen = [], set()
+    for c in categories(cfg):
+        if c['name'] not in seen:
+            out.append(c['name'])
+            seen.add(c['name'])
+    return out or list(DEFAULT_CATEGORIES)
+
+
+def roots_list(cfg):
+    """[(name, path)] — explicit v2 `roots`, else migrate v1 workRoot/personalRoot
+    to Work + Perso. Mirrors config.rs derive()."""
+    rs = cfg.get('roots')
+    if isinstance(rs, list):
+        out = [(r['name'], expand(r.get('path') or HOME))
+               for r in rs if isinstance(r, dict) and r.get('name')]
+        if out:
+            return out
+    work = expand(cfg.get('workRoot') or os.path.join(HOME, 'work'))
+    perso = expand(cfg.get('personalRoot') or HOME)
+    return [('Work', work), ('Perso', perso)]
+
+
+def root_path(cfg, root_name):
+    for name, path in roots_list(cfg):
+        if name == root_name:
+            return path
+    return None
+
+
+def root_name_of(entry):
+    """The root a category entry lives under: v2 `root`, else migrated from `scope`."""
+    r = entry.get('root')
+    if isinstance(r, str) and r.strip():
+        return r.strip()
+    return 'Perso' if entry.get('scope') == 'personal' else 'Work'
+
+
+def find_entry(cfg, name, root=None):
+    for c in categories(cfg):
+        if c.get('name') == name and (root is None or root_name_of(c) == root):
+            return c
+    return None
+
+
+def base_for_entry(cfg, entry):
+    name = entry.get('name', '')
+    path = root_path(cfg, root_name_of(entry))
+    if path is None:
+        # v1 fallback: resolve directly off the legacy roots by scope.
+        if entry.get('scope') == 'personal':
+            path = expand(cfg.get('personalRoot') or HOME)
+        else:
+            path = expand(cfg.get('workRoot') or os.path.join(HOME, 'work'))
+    return os.path.join(path, name)
+
+
+def base_for(cfg, name, root=None):
+    entry = find_entry(cfg, name, root)
+    if entry is None:
+        # Unknown category — synthesise an entry, honouring an explicit root.
+        entry = {'name': name}
+        if root:
+            entry['root'] = root
+    return base_for_entry(cfg, entry)
 
 
 def scope_of(cfg, name):
-    for c in categories(cfg):
-        if c.get('name') == name:
-            return c.get('scope', 'work')
-    return 'work'
-
-
-def base_for(cfg, name):
-    # Matches the app's scanDirs: <root>/<CATEGORY>. Sessions live one level deeper.
-    if scope_of(cfg, name) == 'personal':
-        root = expand(cfg.get('personalRoot') or HOME)
-    else:
-        root = expand(cfg.get('workRoot') or os.path.join(HOME, 'work'))
-    return os.path.join(root, name)
+    entry = find_entry(cfg, name)
+    if entry is None:
+        return 'work'
+    if entry.get('scope'):
+        return entry['scope']
+    return 'personal' if root_name_of(entry).lower() in PERSONAL_ROOTS else 'work'
 
 
 def vault_for(cfg, name):
@@ -77,8 +147,9 @@ def vault_for(cfg, name):
 
 def find_notes(cfg, slug):
     out, seen = [], set()
-    for c in categories(cfg) or [{'name': n} for n in DEFAULT_CATEGORIES]:
-        p = os.path.join(base_for(cfg, c['name']), slug, 'notes.md')
+    entries = categories(cfg) or [{'name': n} for n in DEFAULT_CATEGORIES]
+    for c in entries:
+        p = os.path.join(base_for_entry(cfg, c), slug, 'notes.md')
         if p not in seen and os.path.isfile(p):
             out.append(p)
             seen.add(p)
@@ -89,18 +160,27 @@ def main():
     args = sys.argv[1:]
     cfg = load()
     if not args:
-        print("usage: aoconfig.py categories|scope|base|dir|vault|find [args]")
+        print("usage: aoconfig.py categories|roots|rootpath|root|scope|base|dir|vault|find [args]")
         return
     cmd = args[0]
     if cmd == 'categories':
         print('\n'.join(category_names(cfg)))
+    elif cmd == 'roots':
+        print('\n'.join(name for name, _ in roots_list(cfg)))
+    elif cmd == 'rootpath' and len(args) >= 2:
+        print(root_path(cfg, args[1]) or '')
     elif cmd == 'find' and len(args) >= 2:
         print('\n'.join(find_notes(cfg, args[1])))
-    elif cmd in ('scope', 'base', 'vault') and len(args) >= 2:
-        cat = args[1]
-        print({'scope': scope_of, 'base': base_for, 'vault': vault_for}[cmd](cfg, cat))
+    elif cmd == 'root' and len(args) >= 2:
+        entry = find_entry(cfg, args[1]) or {'name': args[1]}
+        print(root_name_of(entry))
+    elif cmd in ('scope', 'vault') and len(args) >= 2:
+        print({'scope': scope_of, 'vault': vault_for}[cmd](cfg, args[1]))
+    elif cmd == 'base' and len(args) >= 2:
+        print(base_for(cfg, args[1], args[2] if len(args) >= 3 else None))
     elif cmd == 'dir' and len(args) >= 3:
-        print(os.path.join(base_for(cfg, args[1]), args[2]))
+        root = args[3] if len(args) >= 4 else None
+        print(os.path.join(base_for(cfg, args[1], root), args[2]))
     else:
         print(f"bad usage for '{cmd}'", file=sys.stderr)
         sys.exit(1)
