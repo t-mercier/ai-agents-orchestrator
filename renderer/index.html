@@ -116,12 +116,17 @@
       <p class="modal-hint">Adopt an existing Claude Code session the dashboard isn't tracking yet. Pick one — it resumes and gets a <code>notes.md</code> so it shows up like a managed session.</p>
       <input id="import-search" class="search-field" type="search" placeholder="Search recent sessions…" spellcheck="false" autocomplete="off">
       <div id="import-list" class="import-list"></div>
-      <label class="modal-field" id="import-scope-field" hidden>
+      <!-- Import a session that isn't in the recent list — paste its ID directly. When
+           filled, it overrides the selection above (populated in app.js). -->
+      <label class="modal-field">
+        <span class="modal-label">…or paste a session ID</span>
+        <input id="import-uid" type="text" placeholder="session ID — imports one not listed above" autocomplete="off" spellcheck="false">
+      </label>
+      <!-- Space picker — shown only when more than one space is configured (toggled in
+           app.js). Filters the category list + decides which space the import lands under. -->
+      <label class="modal-field" id="import-space-field" hidden>
         <span class="modal-label">Space</span>
-        <div class="view-toggle import-scope-toggle">
-          <button type="button" class="view-btn active" data-scope="work" id="import-scope-work">Work</button>
-          <button type="button" class="view-btn" data-scope="personal" id="import-scope-personal">Personal</button>
-        </div>
+        <select id="import-space"></select>
       </label>
       <label class="modal-field">
         <span class="modal-label">Category</span>
@@ -131,6 +136,12 @@
         <span class="modal-label">Name</span>
         <input id="import-name" type="text" placeholder="short name for this session" maxlength="120" autocomplete="off" spellcheck="false">
       </label>
+      <!-- Open destination: Embedded (in-app terminal) vs external Terminal — shares the
+           same sticky pref (csm.openIn) as +New / Resume; populated on open in app.js. -->
+      <div class="modal-field">
+        <span class="modal-label">Open in</span>
+        <div id="import-dest"></div>
+      </div>
       <div id="import-error" class="modal-error" hidden></div>
       <div class="modal-actions">
         <button type="button" class="modal-btn" id="import-cancel">Cancel</button>

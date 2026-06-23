@@ -30,10 +30,10 @@
 > ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
 >
+> - 🔌 **Import, upgraded** — adopt a session into a chosen **space** (not just Work/Personal), **paste a session ID** to grab one that isn't in the recent list, and open it in the **embedded** terminal or an external one — full parity with ＋New.
 > - ⌨️ **Start a new session in the embedded terminal** — ＋New gets the same **Embedded / Terminal** toggle as Resume/Restart, so a brand-new session can open in the built-in terminal instead of an external tab. New sessions launch in *auto* mode so they're ready to work.
 > - 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board filters by space.
 > - ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (Spaces + Categories, one control across every view).
-> - 🔌 **Import existing sessions** — adopt any running Claude Code session into the dashboard from the `＋Import` picker.
 > - 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
 > - 📄 **Source-available licence** — free to use (incl. at work), no resale.
 

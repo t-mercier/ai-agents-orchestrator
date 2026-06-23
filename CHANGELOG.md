@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Import → v2 spaces** — the Import modal now picks a **space** (dropdown, like ＋New) instead of the old Work/Personal toggle, filters categories by space, and threads `--root` through `import_session` + the `/import-session` skill so the adopted notes.md lands under the chosen space.
+- **Import by session ID** — paste a session ID to import one that isn't in the recent-transcripts list.
+- **Import: Embedded / Terminal toggle** — adopt a session in the in-app terminal (keyed by its real id, links to the card with no re-key) or an external tab, sharing the `Open in` pref.
+
+### Fixed
+- **Import** launches the resumed session in **auto mode** (`--permission-mode auto`) so `/import-session` can write — plan mode was silently blocking the adoption.
+
 ## [0.2.2-alpha] - 2026-06-22
 
 ### Added

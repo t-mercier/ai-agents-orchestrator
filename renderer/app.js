@@ -242,13 +242,6 @@ function openFilterMenu(anchor) {
 // Minimal attribute escaper (category names are validated tokens, but be safe).
 function escapeAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;') }
 
-// Category names for a given scope (work/personal), from config — used by Import.
-function categoriesForScope(scope) {
-  const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
-  const names = cats.filter(c => (c.scope || 'work') === scope).map(c => c.name)
-  return names.length ? names : filterCategories()
-}
-
 // +New: the selected space (a config root name). Both the category list AND the space
 // the session launches under derive from it.
 let nsRoot = ''
@@ -647,20 +640,39 @@ newSessionModal.addEventListener('click', async (e) => {
 const importModal = document.getElementById('import-modal')
 let importSelectedSid = null
 let importSessions = []
-let importScope = 'work'   // which root (work/personal) the imported session goes under
-// Populate the category dropdown — filtered by the chosen root when both roots exist
-// (mirrors +New). Shows the scope toggle only then. Falls back to UNNAMED when empty.
+let importRoot = ''   // the chosen space (config root name); '' until populated
+// Populate the category dropdown — filtered by the chosen space when >1 exists (mirrors
+// +New's populateNewSessionCategories). Shows the Space <select> only then. UNNAMED fallback.
 function populateImportCategories() {
-  const cfg = window.CSM_CONFIG || {}
-  const bothRoots = !!(cfg.workRoot && cfg.personalRoot)
-  document.getElementById('import-scope-field').hidden = !bothRoots
-  let cats = bothRoots ? categoriesForScope(importScope) : ((cfg.categories || []).map(c => c.name))
+  const spaces = configRoots()
+  const multi = spaces.length > 1
+  const field = document.getElementById('import-space-field')
+  const spaceSel = document.getElementById('import-space')
+  if (field) field.hidden = !multi
+  if (multi && spaceSel) {
+    if (!spaces.includes(importRoot)) importRoot = spaces[0]
+    spaceSel.innerHTML = spaces.map(s => `<option value="${importEsc(s)}">${importEsc(s)}</option>`).join('')
+    spaceSel.value = importRoot
+  } else {
+    importRoot = ''
+  }
+  let cats = multi ? categoriesForRoot(importRoot) : filterCategories()
   if (!cats.length) cats = ['UNNAMED']
   document.getElementById('import-category').innerHTML = cats.map(c => `<option value="${importEsc(c)}">${importEsc(c)}</option>`).join('')
 }
 const importEsc = (s) => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const showImportError = (m) => { const el = document.getElementById('import-error'); el.textContent = m; el.hidden = false }
 const hideImportError = () => { document.getElementById('import-error').hidden = true }
+// A pasted session ID (overrides the list selection). Light format check; the backend
+// validates for real. Returns '' when the field is empty or malformed.
+function importValidUid() {
+  const u = (document.getElementById('import-uid').value || '').trim()
+  return /^[A-Za-z0-9_-]+$/.test(u) ? u : ''
+}
+// Import is enabled when there's an effective session id — a pasted UID OR a selected row.
+function updateImportGo() {
+  document.getElementById('import-go').disabled = !(importValidUid() || importSelectedSid)
+}
 function renderImportList(query) {
   const list = document.getElementById('import-list')
   const q = (query || '').toLowerCase()
@@ -686,9 +698,13 @@ async function openImportModal() {
   importSelectedSid = null
   importSessions = []
   document.getElementById('import-search').value = ''
+  document.getElementById('import-uid').value = ''
   document.getElementById('import-name').value = ''
   hideImportError()
   populateImportCategories()
+  // Render the Embedded/Terminal destination toggle reflecting the current pref (like +New).
+  const destEl = document.getElementById('import-dest')
+  if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
   const goBtn = document.getElementById('import-go')
   goBtn.disabled = true
   document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
@@ -701,14 +717,17 @@ document.getElementById('import-cancel').addEventListener('click', () => importM
 // Escape closes the modal. The search field is type=search, which natively eats
 // Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
 importModal.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); importModal.close() } })
-// Root toggle (work/personal) → re-filter the category dropdown, like +New.
-document.querySelectorAll('.import-scope-toggle [data-scope]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    importScope = btn.dataset.scope
-    document.querySelectorAll('.import-scope-toggle [data-scope]').forEach(b => b.classList.toggle('active', b.dataset.scope === importScope))
+// Space select → re-filter the category dropdown (mirrors +New).
+{
+  const spaceSel = document.getElementById('import-space')
+  if (spaceSel) spaceSel.addEventListener('change', () => {
+    importRoot = spaceSel.value
     populateImportCategories()
   })
-})
+}
+// Paste-a-session-ID field: a valid id enables Import even with no row selected (and
+// wins over the row when both are set — see the Import handler).
+document.getElementById('import-uid').addEventListener('input', () => { hideImportError(); updateImportGo() })
 document.getElementById('import-search').addEventListener('input', e => renderImportList(e.target.value))
 document.getElementById('import-list').addEventListener('click', (e) => {
   const row = e.target.closest('[data-import-sid]')
@@ -718,13 +737,18 @@ document.getElementById('import-list').addEventListener('click', (e) => {
   row.classList.add('selected')
   const nameEl = document.getElementById('import-name')
   if (!nameEl.value.trim()) nameEl.value = (row.dataset.title || '').replace(/^\(untitled session\)$/, '').slice(0, 60)
-  document.getElementById('import-go').disabled = false
   hideImportError()
+  updateImportGo()
 })
 document.getElementById('import-go').addEventListener('click', async () => {
-  if (!importSelectedSid) return
+  const sid = importValidUid() || importSelectedSid   // pasted ID wins over the selected row
+  if (!sid) return
   const category = document.getElementById('import-category').value
   const name = document.getElementById('import-name').value.trim()
+  // The space to import under: the chosen one (multi-space) else the only space.
+  const spaces = configRoots()
+  const space = spaces.length > 1 ? importRoot : (spaces[0] || '')
+  const embedded = !!(window.getOpenIn && window.getOpenIn() === 'embedded')
   const goBtn = document.getElementById('import-go')
   goBtn.disabled = true
   // If the chosen category doesn't exist yet (the UNNAMED fallback, or a one-off),
@@ -732,16 +756,34 @@ document.getElementById('import-go').addEventListener('click', async () => {
   const cfg = window.CSM_CONFIG || {}
   const existing = cfg.categories || []
   if (!existing.some(c => c.name === category)) {
-    const next = { ...cfg, categories: [...existing, { name: category, color: '#8a8f98', scope: importScope }] }
+    const newCat = { name: category, color: '#8a8f98' }
+    if (space) newCat.root = space
+    const next = { ...cfg, categories: [...existing, newCat] }
     const w = await window.api.setConfig(next)
     if (!w || !w.ok) { showImportError((w && w.error) || 'Could not create the category.'); goBtn.disabled = false; return }
     if (window.reloadConfig) await window.reloadConfig()
   }
-  const res = await window.api.importSession(importSelectedSid, category, name)
+  const res = await window.api.importSession(sid, category, name, space, embedded)
   if (!res || !res.ok) { showImportError((res && res.error) || 'Import failed.'); goBtn.disabled = false; return }
   importModal.close()
-  // It resumes in a terminal + becomes managed → shows up in Running on the next poll.
-  if (activeTab !== 'running') switchTab('running')
+  if (embedded && res.command && window.openTerminalPane) {
+    // Adopt in the embedded terminal, keyed by the session's REAL id (already known). When
+    // /import-session registers it, the card carries this sessionId → it reveals THIS pty
+    // (the normal sessionId reveal), no re-key. The synthetic keeps the panel alive until
+    // the poll discovers the real session (renderAll re-resolves by sessionId).
+    window._terminalSession = {
+      sessionId: sid, name, category, cwd: '', status: 'busy', state: 'active',
+      notesPath: '', ticket: '', prLink: '', branch: '', gitBranch: '',
+      goal: '', lastActivity: '', lastActivityAt: '', updatedAt: '', startedAt: '', nextSteps: '',
+    }
+    selectedKey = sid
+    window._lastSelectedKey = sid
+    if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')   // embedded lives in List
+    window.openTerminalPane(sid, '', '', res.command)
+  } else if (activeTab !== 'running') {
+    // External terminal: it resumes + becomes managed → shows up in Running on the next poll.
+    switchTab('running')
+  }
 })
 
 // Submit: validate, start (Rust pre-flights repo/branch), and ONLY close on

@@ -79,10 +79,11 @@
         .catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Import an existing (unmanaged) session: --resume it + run /import to adopt it ──
-    // root (optional): which space the imported session lands under, when >1 is configured.
-    importSession: (sessionId, category, name, root) =>
-      invoke('import_session', { sessionId: sessionId || '', category: category || '', name: name || '', root: root || '' })
-        .then(() => ({ ok: true }))
+    // root (optional): which space it lands under (when >1). embedded=true launches NOTHING
+    // and returns { ok, command } to run in an in-app pty; else it opens an external tab.
+    importSession: (sessionId, category, name, root, embedded) =>
+      invoke('import_session', { sessionId: sessionId || '', category: category || '', name: name || '', root: root || '', embedded: !!embedded })
+        .then((res) => ({ ok: true, ...(res || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Detach into its own window + pin (src-tauri/src/lib.rs) ──

@@ -395,7 +395,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
 /// the skill does the writing (ADR-012). cwd = the session's launch dir (where
 /// `--resume` must run). Category must be one the user configured.
 #[tauri::command(async)]
-fn import_session(session_id: String, category: String, name: String, root: String) -> Result<(), String> {
+fn import_session(session_id: String, category: String, name: String, root: String, embedded: bool) -> Result<serde_json::Value, String> {
     if session_id.is_empty()
         || !session_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
     {
@@ -445,14 +445,25 @@ fn import_session(session_id: String, category: String, name: String, root: Stri
     if !want_root.is_empty() {
         prompt.push_str(&format!(" --root {want_root}"));
     }
+    // --permission-mode auto: /import-session must WRITE the notes.md + register the
+    // session; plan mode blocks that (same wall +New hit). Force a writable mode on the
+    // resumed session so the adoption goes through. Resume cwd stays the session's own
+    // dir (claude --resume keys by directory); the space only decides where notes land.
     let cmd = format!(
-        "cd {} && claude --resume {} --model {} {}",
+        "cd {} && claude --resume {} --model {} --permission-mode auto {}",
         pty::shell_quote(&dir),
         pty::shell_quote(&session_id),
         pty::shell_quote(pty::CLAUDE_MODEL),
         pty::shell_quote(&prompt),
     );
-    terminal::launch_in_terminal(&cmd)
+    if embedded {
+        // Embedded: the dashboard runs this in an in-app pty (not iTerm). The session's
+        // real id is already known (it's what we --resume), so the renderer keys the pane
+        // by it → it links to the card via the normal sessionId reveal, no re-key needed.
+        return Ok(serde_json::json!({ "command": cmd }));
+    }
+    terminal::launch_in_terminal(&cmd)?;
+    Ok(serde_json::json!({}))
 }
 
 /// True for a project-key ticket like `ABC-123` (letter, alnum*, dash, digits).
