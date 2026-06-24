@@ -5,7 +5,8 @@ node_modules/
 dist/
 out/
 build/Release/
-renderer/xterm-bundle.js
+# NB: renderer/xterm-bundle.js IS committed (vendored) — a clone/build must have it or the
+# renderer crashes (XtermBundle undefined). Regenerate with `npm run build:xterm` on xterm bumps.
 *.dmg
 *.zip
 *.app
