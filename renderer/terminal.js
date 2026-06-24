@@ -1,5 +1,5 @@
 /* global XtermBundle */
-const { Terminal, FitAddon, WebLinksAddon, CanvasAddon } = XtermBundle
+const { Terminal, FitAddon, WebLinksAddon } = XtermBundle
 
 const terminals = new Map()  // sessionId → { term, fitAddon, div }
 let activeTerminalSession = null
@@ -175,20 +175,12 @@ function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
       // measures a real char-cell size and fit() can compute the right columns.
       entry.term.open(entry.div)
       entry.opened = true
-      // Renderer (MUST load after open() — the addon inspects term.element). Canvas
-      // rounds cell metrics to integer device pixels, fixing the DOM renderer's
-      // fractional-width glyph overlap in WKWebView on HiDPI. WebGL was tried but
-      // proved flaky in WKWebView (frozen canvas / broke WebLinksAddon cmd+click), so
-      // we stay on canvas. fontSize 12 already addresses the "bulky" look.
-      if (!entry.rendererAddon && CanvasAddon) {
-        try {
-          entry.rendererAddon = new CanvasAddon()
-          entry.term.loadAddon(entry.rendererAddon)
-        } catch (e) {
-          console.error('canvas renderer unavailable, staying on DOM renderer:', e)
-          entry.rendererAddon = null
-        }
-      }
+      // Renderer: xterm's default DOM renderer. The CanvasAddon renders crisper glyphs
+      // (integer-pixel cell metrics), but it PAUSES in WKWebView — it stops repainting
+      // until a redraw is forced (e.g. a drag-selection). That broke wheel-scroll (the
+      // position moved but the frozen canvas didn't show it) AND link hover/⌘-click (the
+      // link underline never repainted, so no link was "active" to open). The DOM renderer
+      // repaints on every change, so scroll + links work. (WebGL was even flakier here.)
     }
     entry.fitAddon.fit()
     if (!entry.spawned) {
