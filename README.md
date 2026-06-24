@@ -93,7 +93,14 @@ It is **read-only on `~/.claude` by design**. The only writes it makes are two e
 
 ## Quick start
 
-**Requirements:** macOS 13+ · [Rust](https://rustup.rs) + the Tauri CLI (`cargo install tauri-cli`) · Xcode Command Line Tools (`xcode-select --install`) · [Claude Code](https://claude.com/claude-code).
+**Requirements:** [Rust](https://rustup.rs) + the Tauri CLI (`cargo install tauri-cli`) · [Claude Code](https://claude.com/claude-code), plus your platform's WebView toolchain:
+
+- **macOS 13+** — Xcode Command Line Tools (`xcode-select --install`).
+- **Linux** — WebKitGTK + GTK dev libraries. On Debian/Ubuntu:
+  ```bash
+  sudo apt install libwebkit2gtk-4.1-dev libsoup-3.0-dev build-essential \
+    curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config
+  ```
 
 ```bash
 git clone https://github.com/t-mercier/ai-agents-orchestrator.git
@@ -108,14 +115,17 @@ cargo tauri dev
 
 The dashboard auto-discovers your sessions from `~/.claude`.
 
-**Build a `.app` / `.dmg`:**
+**Build an installable bundle:**
 
 ```bash
-cargo tauri build      # bundle in src-tauri/target/release/bundle/
+cargo tauri build      # macOS: .app/.dmg · Linux: .deb/.AppImage — in src-tauri/target/release/bundle/
 ```
 
 > [!NOTE]
-> Built unsigned for now — on first launch, right-click the app → **Open** to get past Gatekeeper. Signed/notarized releases come once it's out of alpha.
+> **macOS:** built unsigned for now — on first launch, right-click the app → **Open** to get past Gatekeeper. Signed/notarized releases come once it's out of alpha.
+
+> [!NOTE]
+> **Linux:** runs on X11 and Wayland (verified on GNOME/Wayland). One feature is macOS-only: *revealing* an existing external terminal window (there's no portable way to focus a window by tty on X11/Wayland), so that button is hidden on Linux. Opening a new terminal and the in-app embedded terminal both work.
 
 ## Session skills
 
