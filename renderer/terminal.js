@@ -115,6 +115,38 @@ function ensureTerminal(sessionId, restartSlug = '', command = '') {
   })
   term.loadAddon(fitAddon)
   term.loadAddon(webLinksAddon)
+  // Make absolute file paths ⌘-clickable too (the WebLinksAddon only does web URLs).
+  // ⌘+click opens the path in its default app (a folder opens in Finder) via open_path.
+  // NB: manual "is this part of a URL / mid-word?" check instead of a regex lookbehind —
+  // older WKWebView builds don't support lookbehind, and a regex syntax error there would
+  // break the whole renderer.
+  term.registerLinkProvider({
+    provideLinks(y, cb) {
+      const line = term.buffer.active.getLine(y - 1)   // provideLinks y is 1-based
+      if (!line) return cb(undefined)
+      const text = line.translateToString(true)
+      const re = /(?:~\/|\/)[\w@.+\-/]+/g
+      const links = []
+      let m
+      while ((m = re.exec(text)) !== null) {
+        const before = m.index > 0 ? text[m.index - 1] : ''
+        if (/[\w:/]/.test(before)) continue              // skip http(s):// + mid-word slashes
+        const path = m[0].replace(/[.,;:!?)\]}>]+$/, '')  // drop trailing punctuation
+        if (path.length < 3) continue
+        const startX = m.index + 1                        // 1-based column
+        links.push({
+          range: { start: { x: startX, y }, end: { x: startX + path.length - 1, y } },
+          text: path,
+          activate() {
+            const home = window.CSM_CONFIG && window.CSM_CONFIG.home
+            const abs = path.startsWith('~/') && home ? home + path.slice(1) : path
+            window.api.openPath(abs)
+          },
+        })
+      }
+      cb(links.length ? links : undefined)
+    },
+  })
   // NB: term.open() is deferred to showTerminal, once the div is visible.
   // Opening while the div is display:none makes xterm measure a 0×0 char cell,
   // so FitAddon.fit() bails out (proposeDimensions returns undefined for a
