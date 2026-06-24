@@ -141,22 +141,10 @@ function ensureTerminal(sessionId, restartSlug = '', command = '') {
     window.api.ptyInput(sessionId, data)
   })
 
-  // Scroll fix: WKWebView + the canvas renderer intermittently stop honouring the
-  // viewport's native wheel-scroll until a drag-selection forces a render (the "stuck
-  // scroll" bug). Own the wheel deterministically via xterm's scrollLines API — capture
-  // phase + stopPropagation so xterm's own (flaky-here) handler can't also fire/double it.
-  // Accumulate sub-line pixel deltas so trackpads still feel smooth.
-  let wheelAcc = 0
-  div.addEventListener('wheel', (e) => {
-    const el = term.element
-    if (!el) return                                   // not opened yet
-    const cell = term.rows > 0 ? el.clientHeight / term.rows : 17   // exact px per row
-    wheelAcc += (e.deltaMode === 1 ? e.deltaY * cell : e.deltaY)    // lines vs pixels
-    const lines = Math.trunc(wheelAcc / cell)
-    if (lines) { term.scrollLines(lines); wheelAcc -= lines * cell }
-    e.preventDefault()
-    e.stopPropagation()
-  }, { passive: false, capture: true })
+  // Wheel-scroll is left to the DOM renderer's native viewport. (An earlier custom
+  // wheel→scrollLines handler was a workaround for the canvas renderer freezing in
+  // WKWebView; now that we're on the DOM renderer the native scroll works, and the
+  // handler only got in the way — it preventDefault'd the native scroll.)
 
   const entry = { term, fitAddon, div, rendererAddon: null, spawned: false, opened: false, restartSlug, command }
   terminals.set(sessionId, entry)
