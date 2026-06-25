@@ -1270,6 +1270,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 }
 .status-dot.idle { background: var(--status-idle); opacity: 0.5; box-shadow: 0 0 5px var(--status-idle); }
 .status-dot.stale { background: var(--text-tertiary); opacity: 0.55; box-shadow: none; }
+.status-dot.historical { background: var(--text-tertiary); opacity: 0.5; box-shadow: none; }
 
 /* 'waiting' = needs you now → pulse so it reads as a call to action, not an error */
 @keyframes dot-pulse {

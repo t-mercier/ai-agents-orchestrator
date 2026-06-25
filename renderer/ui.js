@@ -188,9 +188,12 @@ function cardIcons(s) {
 // greyed-white name via .historical (lighter than stale's fully-greyed).
 function statusBits(s) {
   const stale = s.state === 'stale'
+  const historical = s.state === 'closed' || s.state === 'archived'
   return {
-    dotClass: stale ? 'stale' : (s.status || 'idle'),
-    historical: (s.state === 'closed' || s.state === 'archived') ? 'historical' : '',
+    // Closed/archived sessions have no live status → grey 'historical' dot, not the
+    // green 'idle' default (they aren't running).
+    dotClass: stale ? 'stale' : historical ? 'historical' : (s.status || 'idle'),
+    historical: historical ? 'historical' : '',
     badge: stale
       ? `<span class="list-card-badge stale">stale</span>`
       : (s.status === 'waiting' ? `<span class="list-card-badge waiting">WAIT</span>` : ''),

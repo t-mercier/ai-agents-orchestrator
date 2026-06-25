@@ -719,7 +719,11 @@ pub(crate) fn session_history_info(content: &str) -> (String, Option<String>) {
     if lines.is_empty() {
         return ("stale".into(), None);
     }
-    if let Some(a) = lines.iter().find(|l| l.to_uppercase().contains("ARCHIVED")) {
+    // A genuine archive is the pipe-delimited `| ARCHIVED |` token that
+    // /archive-session writes — NOT the word "archived" appearing in summary prose
+    // (the dashboard's own project notes discuss archiving constantly, which used to
+    // false-positive the whole session as Archived).
+    if let Some(a) = lines.iter().find(|l| l.split('|').any(|seg| seg.trim() == "ARCHIVED")) {
         return ("archived".into(), lead_date(a));
     }
     // The NEWEST-dated entry decides the state — not the last physical line. A session
@@ -997,8 +1001,16 @@ mod tests {
             status("- 2026-06-18 | session=abc | closed it\n- 2026-06-19 (in progress) | session=abc | back at it"),
             "stale"
         );
-        // ARCHIVED marker wins regardless of position
-        assert_eq!(status("- 2026-06-19 | session=abc | done\n- ARCHIVED 2026-06-20"), "archived");
+        // the genuine "| ARCHIVED |" marker wins regardless of position
+        assert_eq!(
+            status("- 2026-06-19 | session=abc | done\n- 2026-06-20 | ARCHIVED | archived via /archive-session"),
+            "archived"
+        );
+        // the WORD "archived" in summary prose must NOT classify the session as archived
+        assert_eq!(
+            status("- 2026-06-19 | session=abc | archived the old branch and shipped the fix"),
+            "closed"
+        );
         // no history section → stale
         assert_eq!(session_history_info("## Goal\nx\n").0, "stale");
     }
