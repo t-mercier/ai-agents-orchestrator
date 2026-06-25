@@ -13,13 +13,20 @@ fn open_external(url: String) -> Result<(), String> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err("only http(s) URLs are allowed".into());
     }
-    std::process::Command::new("open")
+    std::process::Command::new(OPEN_CMD)
         .arg("--")
         .arg(&url)
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
+
+/// The OS "open this URL/path in the default handler" command: `open` on macOS,
+/// `xdg-open` elsewhere. Both accept `--` to terminate option parsing.
+#[cfg(target_os = "macos")]
+const OPEN_CMD: &str = "open";
+#[cfg(not(target_os = "macos"))]
+const OPEN_CMD: &str = "xdg-open";
 
 /// Reveal a path (e.g. a session folder) in Finder. Reject leading-dash paths
 /// (argv flag smuggling), canonicalize to an absolute path, and pass `--` so a
@@ -32,7 +39,7 @@ fn open_path(path: String) -> Result<(), String> {
     let abs = std::path::PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| e.to_string())?;
-    std::process::Command::new("open")
+    std::process::Command::new(OPEN_CMD)
         .arg("--")
         .arg(&abs)
         .spawn()
@@ -519,14 +526,15 @@ fn detach_session(app: tauri::AppHandle, key: String) -> Result<(), String> {
         return Ok(());
     }
     let url = format!("detail.html?key={}", percent_encode(&key));
-    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+    let builder = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
         .title("")
         .inner_size(560.0, 720.0)
-        .min_inner_size(360.0, 420.0)
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .build()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .min_inner_size(360.0, 420.0);
+    // `title_bar_style` is a macOS-only builder method; on other platforms the
+    // Overlay style is implied by the config and this call would not compile.
+    #[cfg(target_os = "macos")]
+    let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
+    builder.build().map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// Toggle the calling window's always-on-top ("pin"). Acts only on the sender's
