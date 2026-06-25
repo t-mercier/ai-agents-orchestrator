@@ -20,8 +20,8 @@ jobs:
         run: npm run check:secrets
       - name: Unit tests (renderer/lib)
         run: npm test
-      - name: Build xterm bundle
-        run: npm run build:xterm
+      - name: Vendored xterm bundle is current
+        run: npm run check:bundle
 
   rust:
     name: Rust backend (clippy + tests)

@@ -12,7 +12,8 @@
     "install:skills": "bash scripts/install.sh",
     "build:xterm": "esbuild build/xterm-entry.js --bundle --format=iife --global-name=XtermBundle --outfile=renderer/xterm-bundle.js",
     "test": "jest",
-    "check:secrets": "bash scripts/check-no-secrets.sh"
+    "check:secrets": "bash scripts/check-no-secrets.sh",
+    "check:bundle": "bash scripts/check-bundle-current.sh"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",
