@@ -41,19 +41,21 @@ mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG" ]; then
   cat > "$CONFIG" <<'JSON'
 {
-  "version": 1,
-  "workRoot": "~/work",
-  "personalRoot": "~",
+  "version": 2,
+  "roots": [
+    { "name": "Work",  "path": "~/work" },
+    { "name": "Perso", "path": "~" }
+  ],
   "categories": [
-    { "name": "FEAT", "color": "#7df0c0", "scope": "work" },
-    { "name": "BUG", "color": "#ff9eb1", "scope": "work" },
-    { "name": "REVIEW", "color": "#d9a86e", "scope": "work" },
-    { "name": "CHORE", "color": "#ffe17a", "scope": "work" },
-    { "name": "TEST", "color": "#cdd0d6", "scope": "work" },
-    { "name": "PERSO", "color": "#8fd9ff", "scope": "personal" }
+    { "name": "FEAT",   "color": "#7df0c0", "root": "Work" },
+    { "name": "BUG",    "color": "#ff9eb1", "root": "Work" },
+    { "name": "REVIEW", "color": "#d9a86e", "root": "Work" },
+    { "name": "CHORE",  "color": "#ffe17a", "root": "Work" },
+    { "name": "TEST",   "color": "#cdd0d6", "root": "Work" },
+    { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
   ],
   "obsidian": { "enabled": false, "workVaultPath": "", "personalVaultPath": "" },
-  "jiraBaseUrl": ""
+  "ticketBaseUrl": ""
 }
 JSON
   echo "wrote default config: $CONFIG"
