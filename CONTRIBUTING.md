@@ -6,17 +6,19 @@ Thanks for your interest! 🙏
 
 **Issues and suggestions are very welcome** — bug reports, feature ideas, papercuts, "this felt off" notes. They genuinely shape the roadmap.
 
-- 🐛 **Bugs:** what you did, what happened, what you expected. macOS version + a screenshot help a lot.
+- 🐛 **Bugs:** what you did, what happened, what you expected. Your OS and version (macOS or Linux) + a screenshot help a lot.
 - 💡 **Ideas / UX feedback:** open an issue and describe the problem you're hitting — not just a proposed solution.
 
 ## About code contributions
 
-This is an opinionated, design-led project that I maintain **solo**, and for now I'm **not accepting outside code (pull requests)**. Two reasons:
+This is an opinionated, design-led project that I maintain **solo**, so I keep tight control over the direction and the UX. That said, I **do accept well-scoped pull requests on a case-by-case basis** — especially infrastructure and cross-platform work (Linux support landed as an external PR).
 
-1. The UX/UI is intentionally coherent and I want to keep it that way.
-2. Keeping the codebase 100% mine keeps the licensing clean.
+A couple of ground rules keep things coherent:
 
-So please **open an issue before writing any code** — if an idea's a good fit I'd rather we discuss it there. If the project grows real traction I may open up code contributions later (under a DCO sign-off); this file will say so when that happens.
+1. **Open an issue before writing any code.** Let's agree on the shape of a change first — it saves us both a wasted PR. UX/UI changes in particular I'll usually want to drive myself.
+2. **Sign off your commits** (`git commit -s`, [DCO](https://developercertificate.org/)) so the provenance of contributed code is clear and the licensing stays clean.
+
+**Good fits:** cross-platform support, CI/build tooling, bug fixes with a clear repro, performance. **Harder sells:** large UX/visual reworks, or new top-level features that haven't been discussed first.
 
 ## License
 

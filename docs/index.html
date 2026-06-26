@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI Agents Orchestrator — mission control for your AI development sessions</title>
-<meta name="description" content="A tiny native macOS dashboard that gives you one unified view over a dozen parallel AI coding sessions, across every project. Local-first, zero network, read-only by design." />
+<meta name="description" content="A tiny native dashboard for macOS & Linux that gives you one unified view over a dozen parallel AI coding sessions, across every project. Local-first, zero network, read-only by design." />
 <meta property="og:title" content="AI Agents Orchestrator" />
 <meta property="og:description" content="Mission control for your AI development sessions." />
 <meta property="og:image" content="media/hero.png" />
@@ -221,7 +221,7 @@
 
 <header>
   <div class="wrap">
-    <span class="pill"><span class="dot"></span> Local-first · macOS · source-available</span>
+    <span class="pill"><span class="dot"></span> Local-first · macOS & Linux · source-available</span>
     <h1>Mission control for your <span class="grad">AI development</span> sessions</h1>
     <p class="vs">AI coding sessions don't last minutes anymore. They last <strong>days, weeks, sometimes entire projects.</strong></p>
     <p class="sub">Each one accumulates context, decisions, repositories, tasks and agents. Before long, you're juggling dozens of parallel workstreams.</p>
@@ -247,7 +247,7 @@
     <span><b>Read-only</b> on <code>~/.claude</code></span>
     <span><b>Zero</b> network calls</span>
     <span><b>No</b> secrets stored</span>
-    <span><b>90</b> tests</span>
+    <span><b>107</b> tests</span>
   </div>
 </header>
 
@@ -402,15 +402,15 @@
 
 <span class="m"># start a tracked session, from anywhere</span>
 <span class="c">$</span> claude
-<span class="k">&gt;</span> /start FEAT 1842 checkout-redesign
+<span class="k">&gt;</span> /start-session FEAT 1842 checkout-redesign
 <span class="m">  ✓ workspace + notes.md created</span>
 <span class="m">  ✓ now live in the dashboard</span></pre>
       </div>
       <div class="skill-list reveal">
-        <div class="skill"><code>/start</code><span>Create a session workspace + <code>notes.md</code>, register it, sync the repo.</span></div>
-        <div class="skill"><code>/close</code><span>Wrap up — summarise into <code>notes.md</code> and append a history entry.</span></div>
-        <div class="skill"><code>/restart</code><span>Reload a session's context from its notes into a fresh session.</span></div>
-        <div class="skill"><code>/archive</code><span>Mark a session archived and drop it from the active list.</span></div>
+        <div class="skill"><code>/start-session</code><span>Create a session workspace + <code>notes.md</code>, register it, sync the repo.</span></div>
+        <div class="skill"><code>/close-session</code><span>Wrap up — summarise into <code>notes.md</code> and append a history entry.</span></div>
+        <div class="skill"><code>/restart-session</code><span>Reload a session's context from its notes into a fresh session.</span></div>
+        <div class="skill"><code>/archive-session</code><span>Mark a session archived and drop it from the active list.</span></div>
         <div class="skill"><code>/rename-category</code><span>Rename a category everywhere — folder, notes, and config.</span></div>
       </div>
     </div>
@@ -441,7 +441,7 @@
     <div class="box reveal">
       <p class="eyebrow">Get started</p>
       <h2>Bring order to the chaos</h2>
-      <p class="lead" style="margin:16px auto 0;">Clone it, run it, and watch your sessions line up. Requires macOS 13+, Rust + the Tauri CLI, and Claude Code.</p>
+      <p class="lead" style="margin:16px auto 0;">Clone it, run it, and watch your sessions line up. Runs on macOS 13+ and Linux (X11/Wayland) — needs Rust + the Tauri CLI and Claude Code.</p>
       <p class="lead" style="margin:10px auto 0;font-size:15px;color:var(--faint);">Works with Claude Code today — <strong style="color:var(--muted);font-weight:600;">GitHub Copilot and other agent CLIs are next on the roadmap.</strong></p>
       <div class="install"><span class="p">$</span> git clone https://github.com/t-mercier/ai-agents-orchestrator &amp;&amp; cd ai-agents-orchestrator &amp;&amp; cargo tauri dev</div>
       <div class="cta-row" style="margin-top:28px;">

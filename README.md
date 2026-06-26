@@ -4,7 +4,7 @@
 
 # AI Agents Orchestrator
 
-**Mission control for your AI development sessions — a tiny native macOS dashboard that brings order to the chaos.**
+**Mission control for your AI development sessions — a tiny native dashboard (macOS & Linux) that brings order to the chaos.**
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
@@ -12,6 +12,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
+[![Linux](https://img.shields.io/badge/Linux-X11%20%26%20Wayland-000000?style=flat&logo=linux&logoColor=white)](https://www.kernel.org/)
 [![Made with Claude Code](https://img.shields.io/badge/Made%20with-Claude%20Code-000000)](https://claude.com/claude-code)
 
 </div>
@@ -30,6 +31,7 @@
 > ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
 >
+> - 🐧 **Linux support** — runs on X11 & Wayland (verified on GNOME/Wayland); `cargo tauri build` produces `.deb`/`.AppImage`. *(First external contributions — thanks [@FelixDombek-TomTom](https://github.com/FelixDombek-TomTom)! Also added CI + a vendored-bundle freshness guard.)*
 > - 🔌 **Import, upgraded** — adopt a session into a chosen **space** (not just Work/Personal), **paste a session ID** to grab one that isn't in the recent list, and open it in the **embedded** terminal or an external one — full parity with ＋New.
 > - ⌨️ **Start a new session in the embedded terminal** — ＋New gets the same **Embedded / Terminal** toggle as Resume/Restart, so a brand-new session can open in the built-in terminal instead of an external tab. New sessions launch in *auto* mode so they're ready to work.
 > - 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board filters by space.
@@ -227,7 +229,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (47, `cargo test`) + Jest (56, renderer logic) |
+| Tests | Rust unit tests (51, `cargo test`) + Jest (56, renderer logic) |
 
 ## Roadmap
 
@@ -248,7 +250,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for notable changes ([Keep a Changelog](https
 
 ## Contributing
 
-**Issues and suggestions are very welcome** — bug reports, feature ideas, rough edges. This is an opinionated, design-led project that I maintain solo, so I'm not taking outside code contributions for now (it keeps the UX coherent and the codebase cleanly mine). Open an issue and let's talk. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+**Issues and suggestions are very welcome** — bug reports, feature ideas, rough edges. This is an opinionated, design-led project that I maintain solo, so I keep tight control over the UX. I do occasionally accept well-scoped PRs — especially infrastructure and cross-platform work (Linux support [landed that way](CHANGELOG.md)) — but **please open an issue first** so we can agree on the approach before you write code. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 

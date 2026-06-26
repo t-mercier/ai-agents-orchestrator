@@ -11,6 +11,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Linux support** 🐧 — runs on X11 and Wayland (verified on GNOME/Wayland); `cargo tauri build` produces `.deb`/`.AppImage`. External terminals resolve via `$TERMINAL`/`xdg-open` and the standard emulators; the macOS-only *reveal-existing-window* button is hidden on Linux. *(First external contribution — thanks [@FelixDombek-TomTom](https://github.com/FelixDombek-TomTom), #1.)*
+- **CI + bundle-freshness guard** — a GitHub Actions workflow runs clippy/tests, and `npm run check:bundle` fails if the vendored `renderer/xterm-bundle.js` drifts from its source. *(Contributed by [@FelixDombek-TomTom](https://github.com/FelixDombek-TomTom), #2.)*
 - **Import → v2 spaces** — the Import modal now picks a **space** (dropdown, like ＋New) instead of the old Work/Personal toggle, filters categories by space, and threads `--root` through `import_session` + the `/import-session` skill so the adopted notes.md lands under the chosen space.
 - **Import by session ID** — paste a session ID to import one that isn't in the recent-transcripts list.
 - **Import: Embedded / Terminal toggle** — adopt a session in the in-app terminal (keyed by its real id, links to the card with no re-key) or an external tab, sharing the `Open in` pref.
