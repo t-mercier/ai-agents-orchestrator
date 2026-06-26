@@ -114,8 +114,12 @@ pub fn pty_spawn(
     };
     let pair = native_pty_system().openpty(size).map_err(|e| e.to_string())?;
 
-    // Resume the session in a login shell (so PATH/etc. are set, claude is found),
-    // from the session's recorded cwd (Claude Code keys --resume by directory).
+    // Resume the session in an INTERACTIVE login shell (so PATH/etc. are set and `claude`
+    // is found), from the session's recorded cwd (Claude Code keys --resume by directory).
+    // Interactive matters: tools like `claude` are commonly added to PATH in ~/.zshrc
+    // (sourced only for interactive shells), not ~/.zprofile. A plain login shell (`-lc`)
+    // skips ~/.zshrc, so a Finder-launched app (which inherits only a minimal PATH) then
+    // can't find `claude`. `-ilc` sources both, matching a real terminal tab.
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let command = command.trim().to_string();
     let inner = if !command.is_empty() {
@@ -141,7 +145,7 @@ pub fn pty_spawn(
         )
     };
     let mut cmd = CommandBuilder::new(&shell);
-    cmd.arg("-lc");
+    cmd.arg("-ilc");
     cmd.arg(&inner);
     for (k, v) in std::env::vars() {
         // Don't leak the HOST terminal's identity into the embedded pty. Launched
