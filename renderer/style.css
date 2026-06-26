@@ -1185,7 +1185,8 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .look-swatch-custom { background: conic-gradient(from 180deg, #ff5a5a, #ffd23f, #3ad17e, #4ac8e5, #9b6be5, #ff5a5a); }
 /* Custom seed card: the colour input fills the card so the native picker pops AT it. */
 .look-card.look-custom { position: relative; }
-.seed-custom-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; padding: 0; cursor: pointer; }
+.seed-custom-input,
+.cat-seed-custom-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; padding: 0; cursor: pointer; }
 .look-swatch-custom i { background: rgba(255, 255, 255, 0.92); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28); }
 .look-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); padding: 0 8px 7px; text-align: left; }
 .look-card.active .look-name { color: var(--accent); }

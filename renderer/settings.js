@@ -188,8 +188,14 @@
     const matchesLook = window.CSM_LOOKS.some(L => L.accent.toLowerCase() === seed)
     const card = (val, name, swatch) =>
       `<button type="button" class="look-card" data-cat-seed="${val}" title="${name}">${swatch}<span class="look-name">${name}</span></button>`
-    const looks = window.CSM_LOOKS.map(L => card(L.accent, L.name, `<span class="look-swatch" style="background:${L.accent}"></span>`)).join('')
-    const none = card('', 'None', '<span class="look-swatch" style="background:rgba(var(--tint),0.05)"></span>')
+    // Same swatch treatment as Appearance (renderLooks): a faintly tinted card background
+    // with the accent as an inner dot — so the category cards read identically to the
+    // Appearance "looks", not as flat colour blocks.
+    const looks = window.CSM_LOOKS.map(L => {
+      const bg = L.tintA ? `rgba(${L.tint}, ${Math.min(0.16, L.tintA * 2.6)})` : 'rgba(var(--tint), 0.05)'
+      return card(L.accent, L.name, `<span class="look-swatch" style="background:${bg}"><i style="background:${L.accent}"></i></span>`)
+    }).join('')
+    const none = card('', 'None', '<span class="look-swatch" style="background:rgba(var(--tint),0.05)"><i style="background:rgba(var(--tint),0.18)"></i></span>')
     const cv = (seed && !matchesLook) ? getCatSeed() : '#7E93B8'
     const custom = `<label class="look-card look-custom" data-cat-seed="custom" title="Custom seed">
       <span class="look-swatch look-swatch-custom"><i></i></span><span class="look-name">Custom</span>
