@@ -1,0 +1,210 @@
+//! In-app session-skills installer.
+//!
+//! The session skills (`/start-session`, `/close-session`, …) only work when they
+//! live in `~/.claude/skills/` — Claude Code never reads them from inside the app
+//! bundle. So the bundle merely *carries* them: `include_dir!` embeds `../skills`
+//! into the binary at compile time, and this module copies them out to
+//! `~/.claude/skills/` on request. That makes a `.dmg`-only install self-sufficient
+//! (no git clone + `install.sh` needed) and lets the app refresh the skills after an
+//! upgrade.
+//!
+//! This is the one place the app writes under `~/.claude` besides the two explicit
+//! session-data writes (archive, PR link), and it only ever touches
+//! `~/.claude/skills/` (app-owned lifecycle skills), never session transcripts.
+//!
+//! Embedding via `include_dir!` (rather than Tauri `bundle.resources`) means the
+//! path resolves identically in `tauri dev` and the bundled app — no resource-dir
+//! divergence, no `_up_` path rewriting.
+
+use crate::config;
+use include_dir::{include_dir, Dir};
+use serde::Serialize;
+use std::fs;
+use std::path::Path;
+
+/// The repo's `skills/` directory, embedded at compile time.
+static SKILLS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../skills");
+
+/// `lib/` is the shared Python helper — app-owned, always refreshed (never a
+/// user-customised skill), and not itself a slash-command.
+const SHARED_LIB: &str = "lib";
+
+#[derive(Serialize)]
+pub struct InstallReport {
+    /// Skill dirs written this run (always includes `lib`).
+    pub installed: Vec<String>,
+    /// Skill dirs left untouched because they existed and `force` was false.
+    pub skipped: Vec<String>,
+    /// Whether a default config.json was seeded (absent before).
+    pub config_seeded: bool,
+    /// Category base dirs created (absent before).
+    pub dirs_created: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct SkillsStatus {
+    /// True when every bundled slash-command skill is present in `~/.claude/skills`.
+    pub installed: bool,
+    pub present: Vec<String>,
+    pub missing: Vec<String>,
+}
+
+/// The slash-command skill names the bundle carries (excludes the shared `lib`).
+fn skill_names() -> Vec<String> {
+    let mut names: Vec<String> = SKILLS
+        .dirs()
+        .filter_map(|d| d.path().file_name().map(|n| n.to_string_lossy().into_owned()))
+        .filter(|n| n != SHARED_LIB)
+        .collect();
+    names.sort();
+    names
+}
+
+/// Recursively write `dir`'s *contents* into `target` (files by basename, subdirs
+/// recursed into `target/<subname>`).
+fn extract_into(dir: &Dir, target: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(target)?;
+    for f in dir.files() {
+        if let Some(name) = f.path().file_name() {
+            fs::write(target.join(name), f.contents())?;
+        }
+    }
+    for d in dir.dirs() {
+        if let Some(name) = d.path().file_name() {
+            extract_into(d, &target.join(name))?;
+        }
+    }
+    Ok(())
+}
+
+/// Copy the embedded skills into `dst` (= `~/.claude/skills`).
+/// - `lib/` is always refreshed (app-owned helper).
+/// - a skill dir that already exists is skipped unless `force` (then overwritten).
+///
+/// Returns `(installed, skipped)` skill-dir names. Pure I/O on `dst` so it's unit-
+/// testable against a temp dir.
+fn install_into(dst: &Path, force: bool) -> std::io::Result<(Vec<String>, Vec<String>)> {
+    let mut installed = Vec::new();
+    let mut skipped = Vec::new();
+    fs::create_dir_all(dst)?;
+    for d in SKILLS.dirs() {
+        let Some(name) = d.path().file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        let target = dst.join(&name);
+        // The shared helper is app-owned: always refresh it (mirrors install.sh).
+        if name == SHARED_LIB {
+            extract_into(d, &target)?;
+            installed.push(name);
+            continue;
+        }
+        if target.exists() && !force {
+            skipped.push(name);
+            continue;
+        }
+        if target.exists() {
+            fs::remove_dir_all(&target)?;
+        }
+        extract_into(d, &target)?;
+        installed.push(name);
+    }
+    installed.sort();
+    skipped.sort();
+    Ok((installed, skipped))
+}
+
+/// Install (or, with `force`, refresh) the bundled skills into `~/.claude/skills`,
+/// seed a default config if none exists, and pre-create the category folders.
+#[tauri::command]
+pub fn install_skills(force: bool) -> Result<InstallReport, String> {
+    let dst = config::home().join(".claude").join("skills");
+    let (installed, skipped) = install_into(&dst, force).map_err(|e| e.to_string())?;
+    let config_seeded = config::seed_default_if_absent()?;
+    let mut dirs_created = Vec::new();
+    for base in config::category_base_dirs() {
+        if !base.exists() && fs::create_dir_all(&base).is_ok() {
+            dirs_created.push(base.to_string_lossy().into_owned());
+        }
+    }
+    Ok(InstallReport { installed, skipped, config_seeded, dirs_created })
+}
+
+/// Which bundled skills are already installed — drives the first-launch banner.
+#[tauri::command]
+pub fn skills_status() -> SkillsStatus {
+    let dst = config::home().join(".claude").join("skills");
+    let (mut present, mut missing) = (Vec::new(), Vec::new());
+    for name in skill_names() {
+        if dst.join(&name).exists() {
+            present.push(name);
+        } else {
+            missing.push(name);
+        }
+    }
+    SkillsStatus { installed: missing.is_empty(), present, missing }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("ao-skills-{}-{}", std::process::id(), tag));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn bundle_carries_the_slash_command_skills() {
+        let names = skill_names();
+        for expected in ["start-session", "close-session", "restart-session", "archive-session"] {
+            assert!(names.contains(&expected.to_string()), "missing bundled skill: {expected}");
+        }
+        assert!(!names.contains(&"lib".to_string()), "lib is not a slash-command skill");
+    }
+
+    #[test]
+    fn install_writes_every_skill_plus_the_shared_lib() {
+        let dst = tmp("fresh");
+        let (installed, skipped) = install_into(&dst, false).unwrap();
+        assert!(skipped.is_empty());
+        assert!(installed.contains(&"lib".to_string()));
+        // A representative skill file and a shared-lib file landed on disk.
+        assert!(dst.join("start-session/SKILL.md").exists());
+        assert!(dst.join("lib").read_dir().unwrap().any(|e| {
+            e.unwrap().path().extension().map(|x| x == "py").unwrap_or(false)
+        }));
+        let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn existing_skill_is_skipped_without_force_and_overwritten_with_it() {
+        let dst = tmp("force");
+        // Pre-seed a customised skill dir with a sentinel that a non-force install must keep.
+        let skill = dst.join("start-session");
+        fs::create_dir_all(&skill).unwrap();
+        fs::write(skill.join("SKILL.md"), b"USER EDIT").unwrap();
+
+        let (installed, skipped) = install_into(&dst, false).unwrap();
+        assert!(skipped.contains(&"start-session".to_string()));
+        assert!(!installed.contains(&"start-session".to_string()));
+        assert_eq!(fs::read(skill.join("SKILL.md")).unwrap(), b"USER EDIT");
+
+        let (installed, _) = install_into(&dst, true).unwrap();
+        assert!(installed.contains(&"start-session".to_string()));
+        assert_ne!(fs::read(skill.join("SKILL.md")).unwrap(), b"USER EDIT");
+        let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn lib_is_refreshed_even_without_force() {
+        let dst = tmp("lib");
+        let lib = dst.join("lib");
+        fs::create_dir_all(&lib).unwrap();
+        fs::write(lib.join("aoconfig.py"), b"STALE").unwrap();
+        let (installed, _) = install_into(&dst, false).unwrap();
+        assert!(installed.contains(&"lib".to_string()));
+        assert_ne!(fs::read(lib.join("aoconfig.py")).unwrap(), b"STALE");
+        let _ = fs::remove_dir_all(&dst);
+    }
+}

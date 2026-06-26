@@ -503,6 +503,24 @@
     window.location.reload()
   })
 
+  // ── Session skills: install / refresh the bundled skills into ~/.claude/skills ──
+  // Force-overwrites (this button's reason to exist is pulling updated skills after an
+  // app upgrade); the first-launch banner uses the non-force path for a fresh install.
+  if ($('set-install-skills')) $('set-install-skills').addEventListener('click', async () => {
+    if (!window.api || !window.api.installSkills) return
+    const res = await window.api.installSkills(true)
+    if (!res || !res.ok) {
+      if (window.confirmAction) window.confirmAction({ title: 'Skills install failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+      return
+    }
+    const n = (res.installed || []).filter(s => s !== 'lib').length
+    const bits = [`Installed / updated ${n} skill${n === 1 ? '' : 's'} in ~/.claude/skills.`]
+    if (res.config_seeded) bits.push('Seeded a default config.')
+    if ((res.dirs_created || []).length) bits.push(`Created ${res.dirs_created.length} category folder${res.dirs_created.length === 1 ? '' : 's'}.`)
+    bits.push('Open a fresh Claude Code session to pick them up.')
+    if (window.confirmAction) window.confirmAction({ title: 'Session skills ready', body: bits.join(' '), confirmLabel: 'OK' })
+  })
+
   // Appearance — apply live + persist (localStorage), independent of Save/Cancel.
   document.querySelectorAll('.theme-toggle [data-theme-choice]').forEach(btn => {
     btn.addEventListener('click', () => {

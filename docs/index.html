@@ -247,7 +247,7 @@
     <span><b>Read-only</b> on <code>~/.claude</code></span>
     <span><b>Zero</b> network calls</span>
     <span><b>No</b> secrets stored</span>
-    <span><b>107</b> tests</span>
+    <span><b>112</b> tests</span>
   </div>
 </header>
 
@@ -424,7 +424,7 @@
     <div class="section-head reveal">
       <p class="eyebrow">Local-first by design</p>
       <h2>It watches. It barely touches.</h2>
-      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It never phones home, and it's read-only on <code>~/.claude</code> save for two explicit, sandboxed writes.</p>
+      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It never phones home, and it's read-only on your session data — writing only when you explicitly archive a session or save a PR link (installing the session skills is a separate, opt-in copy into <code>~/.claude/skills</code>).</p>
     </div>
     <div class="secgrid">
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg> No shell strings</h4><p>Every command spawns with separate args — no string interpolation, no injection surface.</p></div>

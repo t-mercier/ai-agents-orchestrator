@@ -3,6 +3,7 @@ mod pty;
 mod reader;
 mod git;
 mod terminal;
+mod skills;
 
 use tauri::Manager;
 
@@ -906,6 +907,8 @@ pub fn run() {
             set_pr_link,
             can_reveal_terminal,
             reveal_terminal,
+            skills::install_skills,
+            skills::skills_status,
             pty::pty_spawn,
             pty::pty_input,
             pty::pty_resize,

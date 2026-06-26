@@ -86,6 +86,16 @@
         .then((res) => ({ ok: true, ...(res || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
+    // ── Session skills installer (src-tauri/src/skills.rs) ──
+    // status: which bundled skills are already in ~/.claude/skills (drives the banner).
+    skillsStatus: () => invoke('skills_status').catch(() => ({ installed: true, present: [], missing: [] })),
+    // install(force): copy bundled skills → ~/.claude/skills (force overwrites existing),
+    // seed a default config if absent, pre-create category folders. Returns the report.
+    installSkills: (force) =>
+      invoke('install_skills', { force: !!force })
+        .then((r) => ({ ok: true, ...(r || {}) }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+
     // ── Detach into its own window + pin (src-tauri/src/lib.rs) ──
     detachSession: (key) => invoke('detach_session', { key }),
     setAlwaysOnTop: (flag) => invoke('set_always_on_top', { flag }).catch(() => false),

@@ -1664,3 +1664,28 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(var(--tint), 0.1); border-radius: 2px; }
+
+/* ===== First-launch session-skills banner (app.js maybeShowSkillsBanner) ===== */
+.skills-banner {
+  display: flex; align-items: center; gap: 14px;
+  margin: 10px 16px 0; padding: 11px 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.10);
+  border-radius: var(--radius);
+  color: var(--text-primary); font-size: 13px;
+}
+.skills-banner[hidden] { display: none; }
+.skills-banner .sb-text { flex: 1; line-height: 1.4; }
+.skills-banner .sb-text code { font-size: 12px; color: var(--text-secondary); }
+.skills-banner .sb-install {
+  flex: none; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; background: var(--accent); color: var(--on-accent);
+  font-weight: 600; font-size: 12.5px;
+}
+.skills-banner .sb-install:hover { filter: brightness(1.06); }
+.skills-banner .sb-install:disabled { opacity: 0.6; cursor: default; }
+.skills-banner .sb-dismiss {
+  flex: none; width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+  border: none; background: transparent; color: var(--text-tertiary); font-size: 17px; line-height: 1;
+}
+.skills-banner .sb-dismiss:hover { color: var(--text-primary); background: rgba(var(--tint), 0.08); }

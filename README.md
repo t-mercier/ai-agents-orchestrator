@@ -31,6 +31,7 @@
 > ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
 >
+> - 🧩 **Skills install themselves now** — the app bundles the session skills and copies them into `~/.claude/skills/` on a click (a first-launch banner, or **Settings → Session skills**). A `.dmg`-only install no longer needs the repo + `install.sh`.
 > - 🐧 **Linux support** — runs on X11 & Wayland (verified on GNOME/Wayland); `cargo tauri build` produces `.deb`/`.AppImage`. *(First external contributions — thanks [@FelixDombek-TomTom](https://github.com/FelixDombek-TomTom)! Also added CI + a vendored-bundle freshness guard.)*
 > - 🔌 **Import, upgraded** — adopt a session into a chosen **space** (not just Work/Personal), **paste a session ID** to grab one that isn't in the recent list, and open it in the **embedded** terminal or an external one — full parity with ＋New.
 > - ⌨️ **Start a new session in the embedded terminal** — ＋New gets the same **Embedded / Terminal** toggle as Resume/Restart, so a brand-new session can open in the built-in terminal instead of an external tab. New sessions launch in *auto* mode so they're ready to work.
@@ -91,7 +92,7 @@ Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pi
 
 AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It **never** touches the network and **never** stores secrets — it visualizes what's on disk and lets Claude Code do the rest.
 
-It is **read-only on `~/.claude` by design**. The only writes it makes are two explicit actions you trigger — **archiving** a session and **saving a PR link** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Your UI preferences live in `localStorage` + your own config file.
+It is **read-only on your session data by design**. The only writes it makes to session files are two explicit actions you trigger — **archiving** a session and **saving a PR link** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, you can ask it to **install the session skills** into `~/.claude/skills/` (a Settings button / first-launch prompt) — a user-triggered write confined to that skills folder, never touching your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
 
@@ -217,7 +218,8 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 
 - **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
 - Repo / branch / URL inputs are **allowlist-validated** (absolute path, real git repo, safe branch, `github.com/owner/repo/pull/N`).
-- The two filesystem writes (archive, PR link) are **atomic**, target a real `notes.md`, and are **confined under your configured roots** (canonicalized — no `../` escape).
+- The two session-file writes (archive, PR link) are **atomic**, target a real `notes.md`, and are **confined under your configured roots** (canonicalized — no `../` escape).
+- **Installing the session skills** (optional, user-triggered) writes only under `~/.claude/skills/` — it copies the app's bundled skills there; it never touches session transcripts.
 - External links open in your **system browser**, never inside the app.
 - Nothing is sent over the network; no secrets stored.
 
@@ -229,7 +231,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (51, `cargo test`) + Jest (56, renderer logic) |
+| Tests | Rust unit tests (56, `cargo test`) + Jest (56, renderer logic) |
 
 ## Roadmap
 

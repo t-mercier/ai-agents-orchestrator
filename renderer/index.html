@@ -40,6 +40,10 @@
     </div>
   </div>
 
+  <!-- First-launch nudge: shown by app.js (maybeShowSkillsBanner) only when the
+       bundled session skills aren't yet in ~/.claude/skills. Dismissible. -->
+  <div id="skills-banner" class="skills-banner" hidden></div>
+
   <!-- New-session backoffice: collects inputs, then launches `claude` + /start-session
        in iTerm. The app writes nothing itself (ADR-001/012). -->
   <dialog id="new-session-modal" class="modal">
@@ -182,6 +186,14 @@
                 <div class="path-row">
                   <button type="button" class="modal-btn" id="set-export">Export settings…</button>
                   <button type="button" class="modal-btn" id="set-import">Import settings…</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="modal-field">
+                <span>Session skills <em>— installs / refreshes the <code>/start-session</code>… skills into <code>~/.claude/skills</code></em></span>
+                <div class="path-row">
+                  <button type="button" class="modal-btn" id="set-install-skills">Install / update skills</button>
                 </div>
               </div>
             </div>

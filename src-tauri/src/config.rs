@@ -252,6 +252,56 @@ fn save(cfg: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// The default config written on a fresh install (v2 schema). Kept in sync with the
+/// seed in `scripts/install.sh` — the two install paths (git clone + the in-app
+/// skills installer) must produce the same starting config.
+pub fn default_config() -> Value {
+    json!({
+        "version": 2,
+        "roots": [
+            { "name": "Work",  "path": "~/work" },
+            { "name": "Perso", "path": "~" }
+        ],
+        "categories": [
+            { "name": "FEAT",   "color": "#7df0c0", "root": "Work" },
+            { "name": "BUG",    "color": "#ff9eb1", "root": "Work" },
+            { "name": "REVIEW", "color": "#d9a86e", "root": "Work" },
+            { "name": "CHORE",  "color": "#ffe17a", "root": "Work" },
+            { "name": "TEST",   "color": "#cdd0d6", "root": "Work" },
+            { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
+        ],
+        "obsidian": { "enabled": false, "workVaultPath": "", "personalVaultPath": "" },
+        "ticketBaseUrl": ""
+    })
+}
+
+/// Write the default config if none exists yet. Returns whether a file was written.
+/// Used by the in-app skills installer so a `.dmg`-only user gets a working config
+/// (the skills' Python helper reads the raw file from disk).
+pub fn seed_default_if_absent() -> Result<bool, String> {
+    if config_path().exists() {
+        return Ok(false);
+    }
+    save(&default_config())?;
+    Ok(true)
+}
+
+/// Absolute base dir for every configured category (`<root path>/<CAT>`), so the
+/// installer can pre-create them (mirrors `install.sh` step 4). Reads the derived
+/// `scanDirs`, so root resolution stays single-sourced in `derive()`.
+pub fn category_base_dirs() -> Vec<PathBuf> {
+    load()
+        .get("scanDirs")
+        .and_then(Value::as_array)
+        .map(|dirs| {
+            dirs.iter()
+                .filter_map(|d| d.get("base").and_then(Value::as_str))
+                .map(PathBuf::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn get_config() -> Value {
     load()
@@ -264,8 +314,25 @@ pub fn set_config(cfg: Value) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{derive, validate};
+    use super::{default_config, derive, validate};
     use serde_json::json;
+
+    // The in-app skills installer seeds default_config() via save() → validate() on first
+    // launch. If it didn't validate, install would copy the skills then error out — so lock
+    // the invariant here (this path otherwise only runs on a real first launch).
+    #[test]
+    fn default_config_passes_validation() {
+        assert!(validate(&default_config()).is_ok());
+    }
+
+    // derive() must also accept the seed and produce v2 with both roots + a scanDir per category.
+    #[test]
+    fn default_config_derives_cleanly() {
+        let d = derive(&default_config());
+        assert_eq!(d["version"], 2);
+        assert_eq!(d["roots"].as_array().unwrap().len(), 2);
+        assert_eq!(d["scanDirs"].as_array().unwrap().len(), 6);
+    }
 
     #[test]
     fn derive_migrates_v1_scope_to_named_roots() {
