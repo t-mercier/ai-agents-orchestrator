@@ -47,9 +47,14 @@ pub struct SkillsStatus {
     pub installed: bool,
     pub present: Vec<String>,
     pub missing: Vec<String>,
+    /// Present skills whose on-disk content differs from the bundled version — i.e. the
+    /// ones a force-install would actually change (e.g. a user's customised copy). Lets
+    /// the UI warn precisely before overwriting.
+    pub differs: Vec<String>,
 }
 
 /// The slash-command skill names the bundle carries (excludes the shared `lib`).
+#[cfg(test)]
 fn skill_names() -> Vec<String> {
     let mut names: Vec<String> = SKILLS
         .dirs()
@@ -58,6 +63,28 @@ fn skill_names() -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+/// True if `dir`'s embedded content differs from what's on disk at `target` (a missing
+/// or byte-different file counts as differing). One-directional: it answers "would
+/// re-extracting the bundle change these files?", which is what a force-install does.
+fn dir_differs(dir: &Dir, target: &Path) -> bool {
+    for f in dir.files() {
+        if let Some(name) = f.path().file_name() {
+            match fs::read(target.join(name)) {
+                Ok(bytes) if bytes == f.contents() => {}
+                _ => return true,
+            }
+        }
+    }
+    for d in dir.dirs() {
+        if let Some(name) = d.path().file_name() {
+            if dir_differs(d, &target.join(name)) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Recursively write `dir`'s *contents* into `target` (files by basename, subdirs
@@ -133,15 +160,28 @@ pub fn install_skills(force: bool) -> Result<InstallReport, String> {
 #[tauri::command]
 pub fn skills_status() -> SkillsStatus {
     let dst = config::home().join(".claude").join("skills");
-    let (mut present, mut missing) = (Vec::new(), Vec::new());
-    for name in skill_names() {
-        if dst.join(&name).exists() {
-            present.push(name);
-        } else {
-            missing.push(name);
+    let (mut present, mut missing, mut differs) = (Vec::new(), Vec::new(), Vec::new());
+    for d in SKILLS.dirs() {
+        let Some(name) = d.path().file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        if name == SHARED_LIB {
+            continue; // not a slash-command skill
         }
+        let target = dst.join(&name);
+        if !target.exists() {
+            missing.push(name);
+            continue;
+        }
+        if dir_differs(d, &target) {
+            differs.push(name.clone());
+        }
+        present.push(name);
     }
-    SkillsStatus { installed: missing.is_empty(), present, missing }
+    present.sort();
+    missing.sort();
+    differs.sort();
+    SkillsStatus { installed: missing.is_empty(), present, missing, differs }
 }
 
 #[cfg(test)]
@@ -193,6 +233,21 @@ mod tests {
         let (installed, _) = install_into(&dst, true).unwrap();
         assert!(installed.contains(&"start-session".to_string()));
         assert_ne!(fs::read(skill.join("SKILL.md")).unwrap(), b"USER EDIT");
+        let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn dir_differs_detects_tampering_and_missing() {
+        let dst = tmp("differs");
+        install_into(&dst, false).unwrap();
+        let start = SKILLS.get_dir("start-session").expect("bundled start-session");
+        // Fresh extract is byte-identical → no diff.
+        assert!(!dir_differs(start, &dst.join("start-session")));
+        // A user edit is detected.
+        fs::write(dst.join("start-session/SKILL.md"), b"EDITED").unwrap();
+        assert!(dir_differs(start, &dst.join("start-session")));
+        // A missing target counts as differing (force would create it).
+        assert!(dir_differs(start, &dst.join("nope")));
         let _ = fs::remove_dir_all(&dst);
     }
 

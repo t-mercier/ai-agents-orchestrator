@@ -508,6 +508,23 @@
   // app upgrade); the first-launch banner uses the non-force path for a fresh install.
   if ($('set-install-skills')) $('set-install-skills').addEventListener('click', async () => {
     if (!window.api || !window.api.installSkills) return
+    // Force-overwrites only the app's OWN skill names — never your other skills. But if
+    // any of those already exist (esp. customised ones), confirm with an explicit list
+    // first so we never silently clobber a skill you edited.
+    const status = window.api.skillsStatus ? await window.api.skillsStatus() : null
+    const present = (status && status.present) || []
+    const differs = (status && status.differs) || []
+    if (present.length && window.confirmAction) {
+      const diffNote = differs.length
+        ? ` ${differs.length} of them differ from the bundled version and your changes would be lost: ${differs.join(', ')}.`
+        : ''
+      const ok = await window.confirmAction({
+        title: 'Overwrite session skills?',
+        body: `This replaces these skills in ~/.claude/skills with the app's bundled versions: ${present.join(', ')}.${diffNote} Your other skills are not touched.`,
+        confirmLabel: `Overwrite ${present.length}`,
+      }).then(c => c === 'confirm')
+      if (!ok) return
+    }
     const res = await window.api.installSkills(true)
     if (!res || !res.ok) {
       if (window.confirmAction) window.confirmAction({ title: 'Skills install failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
