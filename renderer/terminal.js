@@ -245,16 +245,22 @@ function hideTerminalPane() {
   activeTerminalSession = null
 }
 
-// Deliberately END the active session: kill its pty and dispose its xterm. Wired
-// only to the explicit "End session ✕" button — every other path (switch, ⌨
-// toggle-off, drawer close) merely hides, so closing a view never kills claude.
-function closeTerminalPane() {
-  const sid = activeTerminalSession
+// The terminal key is a notesPath (embedded +New) or a sessionId (Resume/Restart) —
+// resolve the session's notes.md so we can wrap it up on End.
+function notesPathForKey(key) {
+  if (key && key.endsWith('/notes.md')) return key
+  const s = (window._lastSessions || []).find(x => x.sessionId === key)
+  return (s && s.notesPath) || ''
+}
+
+// Kill the pty + dispose the xterm for `sid`, then restore the view. The hide is guarded
+// on `sid` still being the active one, so an async End that completes after the user
+// switched away doesn't yank a different session's terminal.
+function killTerminal(sid) {
   try {
     if (sid) {
-      // Kill the pty FIRST — ending the session is the whole point, and it must not
-      // be skipped if xterm teardown below throws (renderer-addon disposal can hiccup
-      // in WKWebView). Otherwise claude keeps running and the pane stays stuck.
+      // Kill the pty FIRST — ending is the whole point, and must not be skipped if xterm
+      // teardown throws (renderer-addon disposal can hiccup in WKWebView).
       try { window.api.ptyKill(sid) } catch (e) { console.error('ptyKill failed:', e) }
       const entry = terminals.get(sid)
       if (entry) {
@@ -264,10 +270,48 @@ function closeTerminalPane() {
       }
     }
   } finally {
-    // Always restore the view + clear state, even if teardown threw above.
-    hideTerminalPane()
+    if (activeTerminalSession === sid) hideTerminalPane()
     if (window.onTerminalClosed) window.onTerminalClosed()
   }
+}
+
+// "End session ✕": close the session WITH an AI wrap-up, then end it. Injects
+// /close-session into the live pty so claude writes the full summary to notes.md, polls
+// until that close is recorded, then kills the pty → the session lands in Closed (not
+// stale). Wired only to the explicit "End session ✕" button — switch / ⌨ toggle / drawer
+// close merely hide (pty stays alive). Falls back to a plain kill for an unmanaged session
+// (no notes.md), and offers "end anyway" if the wrap-up never lands (e.g. plan mode).
+const ending = new Set()
+function closeTerminalPane() {
+  const sid = activeTerminalSession
+  if (!sid) { hideTerminalPane(); return }
+  if (ending.has(sid)) return
+  const notesPath = notesPathForKey(sid)
+  if (!notesPath || !window.api.notesClosedSince) { killTerminal(sid); return }
+
+  ending.add(sid)
+  const since = Date.now()
+  const entry = terminals.get(sid)
+  if (entry) entry.term.write('\r\n\x1b[2m[ending — writing wrap-up via /close-session… closes once it is saved]\x1b[0m\r\n')
+  window.api.ptyInput(sid, '/close-session\n')
+
+  const POLL = 2000, TIMEOUT = 120000
+  let waited = 0
+  const iv = setInterval(async () => {
+    if (!terminals.has(sid)) { clearInterval(iv); ending.delete(sid); return }  // pty already gone
+    waited += POLL
+    let closed = false
+    try { closed = await window.api.notesClosedSince(notesPath, since) } catch (_) { /* keep polling */ }
+    if (closed) {
+      clearInterval(iv); ending.delete(sid); killTerminal(sid)
+    } else if (waited >= TIMEOUT) {
+      clearInterval(iv); ending.delete(sid)
+      const go = window.confirmAction
+        ? await window.confirmAction({ title: 'Wrap-up not detected', body: 'No /close-session wrap-up was recorded (the session may be in plan mode, or still working). End it anyway, without a wrap-up?', confirmLabel: 'End anyway' }).then(c => c === 'confirm')
+        : true
+      if (go) killTerminal(sid)
+    }
+  }, POLL)
 }
 
 // Is there a live (alive, possibly-backgrounded) terminal for this session?

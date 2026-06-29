@@ -771,6 +771,27 @@ fn set_pr_link(notes_path: String, url: String) -> Result<(), String> {
     atomic_write(&abs, &set_pr_link_in_frontmatter(&content, url))
 }
 
+/// Has this session's notes.md been freshly wrapped up (a `/close-session` write) since
+/// `since_ms`? The embedded "End session" button injects `/close-session` into the live
+/// pty, then polls this until the AI wrap-up is written — then it kills the pty so the
+/// session moves to Closed (not stale). Read-only, confined to a notes.md under a root.
+/// The mtime gate prevents a pre-existing (older) close from reading as "just closed".
+#[tauri::command]
+fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String> {
+    let abs = notes_md_under_root(&notes_path)?;
+    let mtime_ms = std::fs::metadata(&abs)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    if mtime_ms + 1000.0 < since_ms {
+        return Ok(false); // not written since we injected /close-session
+    }
+    let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
+    Ok(reader::session_history_info(&content).0 == "closed")
+}
+
 /// Open a native folder picker for Settings; returns the chosen absolute path, or
 /// null if cancelled. MUST stay `async`: the native panel (rfd) runs on the main
 /// thread and `blocking_pick_folder` blocks the caller on a channel — only safe
@@ -912,6 +933,7 @@ pub fn run() {
             archive_session,
             delete_session,
             set_pr_link,
+            notes_closed_since,
             can_reveal_terminal,
             reveal_terminal,
             skills::install_skills,

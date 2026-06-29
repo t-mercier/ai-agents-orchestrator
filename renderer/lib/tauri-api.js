@@ -86,6 +86,12 @@
         .then((res) => ({ ok: true, ...(res || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
+    // ── Has the session's notes.md been freshly /close-session'd since `since` (ms)? ──
+    // Polled by the embedded "End session" button after it injects /close-session, to
+    // know when the AI wrap-up has been written (then it kills the pty).
+    notesClosedSince: (notesPath, since) =>
+      invoke('notes_closed_since', { notesPath: notesPath || '', sinceMs: since || 0 }).catch(() => false),
+
     // ── Session skills installer (src-tauri/src/skills.rs) ──
     // status: which bundled skills are already in ~/.claude/skills (drives the banner).
     skillsStatus: () => invoke('skills_status').catch(() => ({ installed: true, present: [], missing: [], differs: [] })),
