@@ -91,16 +91,20 @@ fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
         return Err("invalid session id".into());
     }
     // Closed sessions may send an empty/relative cwd — only cd when it's absolute.
+    // --permission-mode auto: a resumed session must be able to run /close-session and
+    // /save-session, which WRITE notes.md (and so bail in plan mode at their Step 0). Plan
+    // mode would leave the session perpetually "stale" because the close never records.
+    // Matches +New / Import (which already force auto for the same reason).
     let cmd = if std::path::Path::new(&cwd).is_absolute() {
         format!(
-            "cd {} && claude --resume {} --model {}",
+            "cd {} && claude --resume {} --model {} --permission-mode auto",
             pty::shell_quote(&cwd),
             session_id,
             pty::shell_quote(pty::CLAUDE_MODEL),
         )
     } else {
         format!(
-            "claude --resume {} --model {}",
+            "claude --resume {} --model {} --permission-mode auto",
             session_id,
             pty::shell_quote(pty::CLAUDE_MODEL),
         )
@@ -389,8 +393,11 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
         .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
 
     let prompt = format!("/restart-session {slug}");
+    // --permission-mode auto: /restart-session writes (re-registers + checks out the
+    // branch) and the reopened session must be able to /close-session later — both bail in
+    // plan mode. Matches +New / Import / Resume.
     let cmd = format!(
-        "cd {} && claude --model {} {}",
+        "cd {} && claude --model {} --permission-mode auto {}",
         pty::shell_quote(&dir),
         pty::shell_quote(pty::CLAUDE_MODEL),
         pty::shell_quote(&prompt),

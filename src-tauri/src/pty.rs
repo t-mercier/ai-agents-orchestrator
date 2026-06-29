@@ -129,16 +129,21 @@ pub fn pty_spawn(
         // /restart-session branch, which already runs a slash command in the pty.
         command
     } else if restart_slug.is_empty() {
+        // --permission-mode auto: the resumed session must be able to run /close-session
+        // and /save-session (which WRITE notes.md and bail in plan mode). Without it a
+        // resume in plan mode can never record its close → it lingers as "stale". Matches
+        // +New / Import.
         format!(
-            "cd {} && claude --resume {} --model {}",
+            "cd {} && claude --resume {} --model {} --permission-mode auto",
             shell_quote(&cwd),
             shell_quote(&session_id),
             shell_quote(CLAUDE_MODEL),
         )
     } else {
-        // /restart-session rebuilds from notes — no transcript needed.
+        // /restart-session rebuilds from notes — no transcript needed. Auto mode so the
+        // skill (which writes + re-registers) and a later /close-session aren't blocked.
         format!(
-            "cd {} && claude --model {} {}",
+            "cd {} && claude --model {} --permission-mode auto {}",
             shell_quote(&cwd),
             shell_quote(CLAUDE_MODEL),
             shell_quote(&format!("/restart-session {restart_slug}")),
