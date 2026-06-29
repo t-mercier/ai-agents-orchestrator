@@ -285,7 +285,9 @@ const ending = new Set()
 function closeTerminalPane() {
   const sid = activeTerminalSession
   if (!sid) { hideTerminalPane(); return }
-  if (ending.has(sid)) return
+  // Second click while a wrap-up is in flight = bail out and end now (no wrap-up). The
+  // running poll self-clears on its next tick once the terminal is gone.
+  if (ending.has(sid)) { ending.delete(sid); killTerminal(sid); return }
   const notesPath = notesPathForKey(sid)
   if (!notesPath || !window.api.notesClosedSince) { killTerminal(sid); return }
 
@@ -293,7 +295,9 @@ function closeTerminalPane() {
   const since = Date.now()
   const entry = terminals.get(sid)
   if (entry) entry.term.write('\r\n\x1b[2m[ending — writing wrap-up via /close-session… closes once it is saved]\x1b[0m\r\n')
-  window.api.ptyInput(sid, '/close-session\n')
+  // Submit with a carriage return (\r = Enter). A \n is a line feed → claude's TUI inserts
+  // a newline in the input instead of submitting, so the command would just sit there.
+  window.api.ptyInput(sid, '/close-session\r')
 
   const POLL = 2000, TIMEOUT = 120000
   let waited = 0
