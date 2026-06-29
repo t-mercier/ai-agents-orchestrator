@@ -792,6 +792,38 @@ fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String>
     Ok(reader::session_history_info(&content).0 == "closed")
 }
 
+/// Stamp a close marker directly into the session's notes.md history — the guaranteed
+/// fallback for the "End session" button when `/close-session` produced no fresh wrap-up
+/// (nothing new to summarise, or it was in plan mode). Ensures the session lands in
+/// **Closed**, not stale, even without an AI summary. Idempotent for today: if it's
+/// already wrapped up with TODAY's date, do nothing (avoids a duplicate when
+/// /close-session did write). Mirrors archive_session's confined atomic write.
+#[tauri::command]
+fn close_session(notes_path: String) -> Result<(), String> {
+    let abs = notes_md_under_root(&notes_path)?;
+    let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
+    let stamp = std::process::Command::new("date")
+        .arg("+%Y-%m-%d %H:%M")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    let (date, time) = match stamp.split_once(' ') {
+        Some((d, t)) if !d.is_empty() => (d, t),
+        _ => return Err("could not determine the current date".into()),
+    };
+    // Already closed today (e.g. /close-session just wrote a fresh wrap-up) → no double-stamp.
+    let (status, last_date) = reader::session_history_info(&content);
+    if status == "closed" && last_date.as_deref() == Some(date) {
+        return Ok(());
+    }
+    // `?? → HH:MM` is the legacy close shape is_wrapped_up recognises (no session id needed).
+    let line =
+        format!("- {date} ?? → {time} | closed from the dashboard (ended without a /close-session summary)");
+    atomic_write(&abs, &stamp_archived(&content, &line))
+}
+
 /// Open a native folder picker for Settings; returns the chosen absolute path, or
 /// null if cancelled. MUST stay `async`: the native panel (rfd) runs on the main
 /// thread and `blocking_pick_folder` blocks the caller on a channel — only safe
@@ -934,6 +966,7 @@ pub fn run() {
             delete_session,
             set_pr_link,
             notes_closed_since,
+            close_session,
             can_reveal_terminal,
             reveal_terminal,
             skills::install_skills,

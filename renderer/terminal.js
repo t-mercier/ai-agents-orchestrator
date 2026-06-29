@@ -281,14 +281,26 @@ function killTerminal(sid) {
 // stale). Wired only to the explicit "End session ✕" button — switch / ⌨ toggle / drawer
 // close merely hide (pty stays alive). Falls back to a plain kill for an unmanaged session
 // (no notes.md), and offers "end anyway" if the wrap-up never lands (e.g. plan mode).
+// Guarantee the session lands in Closed: if /close-session didn't write a fresh wrap-up
+// (nothing new to summarise, or plan mode), stamp a close marker directly, then kill the
+// pty. So End ALWAYS → Closed, never stale.
+async function endNow(sid, notesPath, msg) {
+  const entry = terminals.get(sid)
+  if (entry && msg) { try { entry.term.write(`\r\n\x1b[2m${msg}\x1b[0m\r\n`) } catch (_) {} }
+  if (notesPath && window.api.closeSession) {
+    try { await window.api.closeSession(notesPath) } catch (_) { /* fall through to kill */ }
+  }
+  killTerminal(sid)
+}
+
 const ending = new Set()
 function closeTerminalPane() {
   const sid = activeTerminalSession
   if (!sid) { hideTerminalPane(); return }
-  // Second click while a wrap-up is in flight = bail out and end now (no wrap-up). The
-  // running poll self-clears on its next tick once the terminal is gone.
-  if (ending.has(sid)) { ending.delete(sid); killTerminal(sid); return }
   const notesPath = notesPathForKey(sid)
+  // Second click while a wrap-up is in flight = end now (stamp a close, no AI summary).
+  if (ending.has(sid)) { ending.delete(sid); endNow(sid, notesPath, '[ending now — closing without a summary]'); return }
+  // Unmanaged session (no notes.md): nothing to wrap up — just kill.
   if (!notesPath || !window.api.notesClosedSince) { killTerminal(sid); return }
 
   ending.add(sid)
@@ -299,7 +311,7 @@ function closeTerminalPane() {
   // a newline in the input instead of submitting, so the command would just sit there.
   window.api.ptyInput(sid, '/close-session\r')
 
-  const POLL = 2000, TIMEOUT = 120000
+  const POLL = 2000, TIMEOUT = 75000
   let waited = 0
   const iv = setInterval(async () => {
     if (!terminals.has(sid)) { clearInterval(iv); ending.delete(sid); return }  // pty already gone
@@ -307,13 +319,12 @@ function closeTerminalPane() {
     let closed = false
     try { closed = await window.api.notesClosedSince(notesPath, since) } catch (_) { /* keep polling */ }
     if (closed) {
+      // /close-session wrote a fresh wrap-up → already Closed, just kill.
       clearInterval(iv); ending.delete(sid); killTerminal(sid)
     } else if (waited >= TIMEOUT) {
+      // No fresh wrap-up (nothing new / plan mode): stamp a direct close → still Closed.
       clearInterval(iv); ending.delete(sid)
-      const go = window.confirmAction
-        ? await window.confirmAction({ title: 'Wrap-up not detected', body: 'No /close-session wrap-up was recorded (the session may be in plan mode, or still working). End it anyway, without a wrap-up?', confirmLabel: 'End anyway' }).then(c => c === 'confirm')
-        : true
-      if (go) killTerminal(sid)
+      endNow(sid, notesPath, '[no new work to summarise — closed from the dashboard]')
     }
   }, POLL)
 }

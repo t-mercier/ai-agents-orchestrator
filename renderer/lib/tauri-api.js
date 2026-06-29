@@ -91,6 +91,10 @@
     // know when the AI wrap-up has been written (then it kills the pty).
     notesClosedSince: (notesPath, since) =>
       invoke('notes_closed_since', { notesPath: notesPath || '', sinceMs: since || 0 }).catch(() => false),
+    // Stamp a close marker directly into notes.md (guaranteed-close fallback when
+    // /close-session produced no fresh wrap-up). Moves the session to Closed.
+    closeSession: (notesPath) =>
+      invoke('close_session', { notesPath: notesPath || '' }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Session skills installer (src-tauri/src/skills.rs) ──
     // status: which bundled skills are already in ~/.claude/skills (drives the banner).
