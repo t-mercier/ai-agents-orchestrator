@@ -19,6 +19,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - **Import: Embedded / Terminal toggle** — adopt a session in the in-app terminal (keyed by its real id, links to the card with no re-key) or an external tab, sharing the `Open in` pref.
 
 ### Fixed
+- **Resumed archived/closed session showed as "OTHER"** — the Running tab resolved category/root only from `active-sessions.json` (by session id), so a session resumed after being archived/closed (de-registered) appeared uncategorised with no workspace. It now relinks to the managed `notes.md` whose history records that `session=<id>`, recovering category/ticket/root — and is excluded from its historical bucket while live (no double-listing).
+- **Embedded `+New` terminal — false "already running"** — resuming a `+New` session (whose terminal is keyed by `notesPath`) checked liveness only by `sessionId`, so it warned "already running" instead of re-revealing the backgrounded terminal. It now matches either key and re-reveals.
+- **`/close-session` relink** — a resumed session whose id isn't in `active-sessions.json` now finds its `notes.md` via the `session=<id>` history line (so the close records in the right place), and no longer falls back to "most recently modified session" (which could mis-route the close to a different session).
 - **Import** launches the resumed session in **auto mode** (`--permission-mode auto`) so `/import-session` can write — plan mode was silently blocking the adoption.
 - **False "Archived"** — a session was wrongly filed under Archived when the *word* "archived" appeared anywhere in its `notes.md` history (so the dashboard's own project, whose notes discuss archiving, kept self-archiving). The classifier now matches only the genuine `| ARCHIVED |` marker that `/archive-session` writes.
 - **Archived/Closed status dot** — these showed a green ("running") dot in the List/Cards; they now use the muted grey *historical* dot (they aren't running).
