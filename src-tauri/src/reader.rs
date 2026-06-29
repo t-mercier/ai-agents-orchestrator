@@ -619,7 +619,92 @@ pub fn get_sessions() -> Vec<Value> {
             "prLink": pr_link,
         }));
     }
+
+    // Recover identity for LIVE sessions that aren't in active-sessions.json — e.g. an
+    // archived/closed session resumed directly. The Running tab keys category/notes/root
+    // off active-sessions, so without this they'd show uncategorised ("OTHER") with no
+    // workspace. The notes.md records the live id in its history, so relink via that.
+    // Only scans when something is actually unregistered → the common poll pays nothing.
+    let needs_recovery =
+        |s: &Value| s.get("category").and_then(Value::as_str).is_none_or(str::is_empty);
+    let missing: HashSet<String> = out
+        .iter()
+        .filter(|s| needs_recovery(s))
+        .filter_map(|s| s.get("sessionId").and_then(Value::as_str).map(String::from))
+        .collect();
+    if !missing.is_empty() {
+        let recovered = recover_unregistered(&cfg, &missing);
+        for s in out.iter_mut() {
+            if !needs_recovery(s) {
+                continue;
+            }
+            let sid = s.get("sessionId").and_then(Value::as_str).unwrap_or("").to_string();
+            if let Some(meta) = recovered.get(&sid) {
+                s["category"] = meta["category"].clone();
+                s["ticket"] = meta["ticket"].clone();
+                s["notesPath"] = meta["notesPath"].clone();
+                s["root"] = meta["root"].clone();
+            }
+        }
+    }
     out
+}
+
+/// Does this notes.md record `session=<sid>` in its history? Links a live session id to
+/// its managed notes.md when active-sessions.json has no entry — a resumed archived/closed
+/// session is de-registered but still records every session in its lineage as a
+/// `session=<id>` history line. (Session ids are full UUIDs, so a substring match can't
+/// collide with a different id.)
+fn notes_records_session(content: &str, sid: &str) -> bool {
+    !sid.is_empty() && content.contains(&format!("session={sid}"))
+}
+
+/// For live session ids with no active-sessions.json entry, find the managed notes.md
+/// whose history records each id and recover its category / ticket / root / notesPath.
+/// Scans the category dirs ONCE; the caller only invokes it when `want` is non-empty.
+/// An unmanaged id (in no notes.md) is simply absent from the result → stays "OTHER".
+fn recover_unregistered(cfg: &Value, want: &HashSet<String>) -> HashMap<String, Value> {
+    let mut found: HashMap<String, Value> = HashMap::new();
+    if want.is_empty() {
+        return found;
+    }
+    let scan_dirs = cfg.get("scanDirs").and_then(Value::as_array).cloned().unwrap_or_default();
+    for sd in &scan_dirs {
+        let Some(base) = sd.get("base").and_then(Value::as_str) else { continue };
+        let category = sd.get("category").and_then(Value::as_str).unwrap_or("");
+        let root = sd.get("root").cloned().unwrap_or(Value::Null);
+        let Ok(entries) = fs::read_dir(base) else { continue };
+        for entry in entries.flatten() {
+            if found.len() == want.len() {
+                return found; // every wanted id recovered — stop early
+            }
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let notes = dir.join("notes.md");
+            let Ok(content) = fs::read_to_string(&notes) else { continue };
+            let hits: Vec<String> = want
+                .iter()
+                .filter(|s| !found.contains_key(*s) && notes_records_session(&content, s))
+                .cloned()
+                .collect();
+            if hits.is_empty() {
+                continue;
+            }
+            let fm = parse_frontmatter(&content);
+            let meta = json!({
+                "category": category,
+                "ticket": fv(&fm, "ticket"),
+                "notesPath": notes.to_string_lossy().into_owned(),
+                "root": root.clone(),
+            });
+            for sid in hits {
+                found.insert(sid, meta.clone());
+            }
+        }
+    }
+    found
 }
 
 /// Parse the leading `---\n…\n---` YAML-ish frontmatter into key→value pairs
@@ -840,6 +925,13 @@ fn scan_historical() -> Vec<Value> {
             if active_notes.contains(&notes_path) {
                 continue;
             }
+            // A managed session that's currently LIVE belongs to the Running tab — even
+            // when it's de-registered from active-sessions.json (e.g. an archived/closed
+            // session resumed directly). get_sessions recovers it into Running via the
+            // same `session=<id>` history link, so exclude it here to avoid double-listing.
+            if running_ids.iter().any(|sid| notes_records_session(&content, sid)) {
+                continue;
+            }
 
             let updated_at = fs::metadata(&notes)
                 .and_then(|m| m.modified())
@@ -929,10 +1021,21 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 mod tests {
     use super::{
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, lead_date,
-        parse_frontmatter, pick_pr_url, reopened_after_close, root_for_notes_path,
-        session_history_info, Transcript,
+        notes_records_session, parse_frontmatter, pick_pr_url, reopened_after_close,
+        root_for_notes_path, session_history_info, Transcript,
     };
     use serde_json::json;
+
+    #[test]
+    fn notes_records_session_links_live_id_via_history_line() {
+        let content = "## Session history\n- 2026-06-04 | ARCHIVED | archived via /archive\n\
+            - 2026-06-08 | session=b96f3fd7-2b41-4ba9-b584-fad5dcb850f8 | handoff written\n";
+        // The exact live id recorded in a `session=` line is found…
+        assert!(notes_records_session(content, "b96f3fd7-2b41-4ba9-b584-fad5dcb850f8"));
+        // …an unrelated id is not, and an empty id never matches.
+        assert!(!notes_records_session(content, "deadbeef-0000-0000-0000-000000000000"));
+        assert!(!notes_records_session(content, ""));
+    }
 
     #[test]
     fn root_for_notes_path_matches_longest_base_and_handles_unknown() {
