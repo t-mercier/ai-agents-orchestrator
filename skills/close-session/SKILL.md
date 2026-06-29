@@ -105,17 +105,20 @@ Use the Edit tool to: append new bullets to **Decisions made** and **Files touch
 update **Open questions** (tick resolved, add new); replace **Next steps** with the
 updated list.
 
-## Step 6 — Append a Session history entry
+## Step 6 — Append a Session history entry (ALWAYS — this is the close marker)
 
 ```bash
 NOW=$(date +"%Y-%m-%d %H:%M")
 ```
 
-Append under `## Session history` (Edit tool):
+**Always** append a closing entry under `## Session history` (Edit tool) — this line is what marks the session **Closed**; without a fresh one, a resumed session lingers as *stale*. Do not skip it as a "no-op" even when nothing new happened.
 
 ```
 - <NOW> | session=<SESSION_ID> | <one-line summary>
 ```
+
+- **No new work since the last close?** Still append a brief line, e.g. `- <NOW> | session=<SESSION_ID> | reclosed — no new work since the last close`.
+- **Only skip** if the latest existing entry is already a close dated **today** (avoids a same-day duplicate). An older close (a previous day) does not count — append a fresh one.
 
 ## Step 7 — Optional: distil to Obsidian (gated)
 
