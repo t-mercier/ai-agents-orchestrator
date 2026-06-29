@@ -901,13 +901,35 @@ function routeResume(sid, cwd) {
     if (live) warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — opening it in your terminal starts a second instance on the same session.`, open)
     else open()
   } else if (window.toggleEmbeddedTerminal) {
+    // Already has a live embedded terminal? Re-reveal it — never warn "already running"
+    // or start a 2nd instance. It may be keyed by sessionId (Resume/Restart) OR by
+    // notesPath (embedded +New), so look up either key (the +New case is why a session
+    // "open nowhere visible" used to hit the warning: hasLiveTerminal(sid) missed it).
+    const liveKey = window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sid) : (window.hasLiveTerminal && window.hasLiveTerminal(sid) ? sid : null)
+    if (liveKey && window.openTerminalPane) {
+      toListForEmbedded()
+      window.openTerminalPane(liveKey, cwd || '')
+      return
+    }
     const go = () => { toListForEmbedded(); window.toggleEmbeddedTerminal(sid, cwd, '') }
-    const alreadyEmbedded = window.hasLiveTerminal && window.hasLiveTerminal(sid)
-    if (!alreadyEmbedded && window.isSessionLive && window.isSessionLive(sid)) {
+    if (window.isSessionLive && window.isSessionLive(sid)) {
       warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — opening it in the embedded terminal starts a second instance on the same session.`, go)
     } else { go() }
   }
 }
+
+// A session's live embedded terminal is keyed by sessionId (Resume/Restart) OR by
+// notesPath (embedded +New). Return whichever key currently has a live terminal, else
+// null. Shared by routeResume here and restoreTerminalForSelected in app.js.
+function liveTerminalKeyFor(sid) {
+  const has = window.hasLiveTerminal
+  if (!has) return null
+  if (sid && has(sid)) return sid
+  const s = (window._lastSessions || []).find(x => x.sessionId === sid)
+  const np = s && s.notesPath
+  return np && has(np) ? np : null
+}
+window.liveTerminalKeyFor = liveTerminalKeyFor
 // The embedded terminal lives in the List view's detail panel — not the cramped
 // cards/board slide-over. So before opening it, leave any other view for List.
 // (External-terminal resumes never call this — they open their own window.)

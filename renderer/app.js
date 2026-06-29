@@ -424,10 +424,14 @@ function restoreTerminalForSelected() {
   if (window.getTerminalVisible && window.getTerminalVisible()) return
   if (!selectedKey) return
   const sel = sessions.find(s => sessionKey(s) === selectedKey)
-  const sid = sel && sel.sessionId
-  if (sid && window.hasLiveTerminal && window.hasLiveTerminal(sid) && window.openTerminalPane) {
-    window.openTerminalPane(sid, sel.cwd || '')
-  }
+  if (!sel || !window.hasLiveTerminal || !window.openTerminalPane) return
+  // The live terminal may be keyed by notesPath (embedded +New) OR sessionId
+  // (Resume/Restart) — check both, like selectSession does, so a +New session's
+  // terminal is restored too (not just sessionId-keyed ones).
+  const tkey = (sel.notesPath && window.hasLiveTerminal(sel.notesPath)) ? sel.notesPath
+    : (sel.sessionId && window.hasLiveTerminal(sel.sessionId)) ? sel.sessionId
+      : null
+  if (tkey) window.openTerminalPane(tkey, sel.cwd || '')
 }
 
 function setViewMode(mode) {
