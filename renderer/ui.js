@@ -144,11 +144,22 @@ function pinBtn(s) {
            title="${p ? 'Unpin' : 'Pin to top'}" aria-label="${p ? 'Unpin' : 'Pin to top'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>`
 }
 
-// Archive button — only on CLOSED sessions (historical + not already archived).
-// Running sessions (no historyStatus) get none (close them first); archived ones
-// are already there. Click → confirm → archive_session (moves it to Archived).
+// Lifecycle granularity: Running/Stale → Close → Closed → Archive → Archived.
+// Close button — only on STALE sessions (in the Running tab: terminal gone, never
+// /close-session'd). Click → confirm → close_session (stamps a close marker → Closed).
+// Active (alive) sessions close via the terminal's "End session ✕"; the stale badge stays
+// in the Running tab so un-closed sessions are still trackable until you close them.
+function closeBtn(s) {
+  if (!s.notesPath || s.state !== 'stale') return ''
+  return `<button class="close-btn" data-close-notes="${escapeHtml(s.notesPath)}" data-close-name="${escapeHtml(s.name || '')}"
+           title="Close this session (move to Closed)" aria-label="Close this session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg></button>`
+}
+
+// Archive button — only on CLOSED sessions (not stale, not already archived). Stale
+// sessions get the Close button instead (close them first). Click → confirm →
+// archive_session (moves it to Archived).
 function archiveBtn(s) {
-  if (!s.notesPath || !s.historyStatus || s.historyStatus === 'archived') return ''
+  if (!s.notesPath || s.historyStatus !== 'closed') return ''
   return `<button class="archive-btn" data-archive-notes="${escapeHtml(s.notesPath)}" data-archive-name="${escapeHtml(s.name || '')}"
            title="Archive this session" aria-label="Archive this session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>`
 }
@@ -213,6 +224,7 @@ function renderListCard(s, selectedKey, changed) {
       <div class="list-card-header">
         <span class="status-dot ${dotClass}"></span>
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
+        ${closeBtn(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
         ${pinBtn(s)}
@@ -388,6 +400,7 @@ function renderSessionCard(s, selectedKey, changed) {
         <span class="session-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
         <span class="session-card-cat" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
+        ${closeBtn(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
         ${pinBtn(s)}
@@ -1042,6 +1055,31 @@ function installDelegatedHandlers() {
     // Archive — confirm, then archive_session (moves Closed → Archived). Must come
     // before the card-select handler (it's inside a card); stopPropagation so the
     // card isn't selected by the same click.
+    // Close (stale → Closed) — confirm, then stamp a close marker via close_session.
+    const close = e.target.closest('.close-btn[data-close-notes]')
+    if (close) {
+      e.stopPropagation()
+      const notes = close.dataset.closeNotes
+      const name = close.dataset.closeName || 'this session'
+      if (window.confirmAction && window.api.closeSession) {
+        window.confirmAction({
+          title: 'Close session',
+          body: `Close "${name}"? It moves to the Closed tab. (No AI summary — for a full wrap-up, run /close-session in the session.)`,
+          confirmLabel: 'Close',
+        }).then(choice => {
+          if (choice !== 'confirm') return
+          window.api.closeSession(notes).then(res => {
+            if (res && res.ok) {
+              if (window.refreshSessions) window.refreshSessions()
+            } else if (window.confirmAction) {
+              window.confirmAction({ title: '⚠️ Close failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+            }
+          })
+        })
+      }
+      return
+    }
+
     const archive = e.target.closest('.archive-btn[data-archive-notes]')
     if (archive) {
       e.stopPropagation()

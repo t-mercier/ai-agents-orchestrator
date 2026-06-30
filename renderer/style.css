@@ -1226,7 +1226,8 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .pin-btn.pinned { opacity: 1 !important; color: var(--accent); }
 .pin-btn.pinned svg { fill: currentColor; }
 /* Archive button — hover-revealed like the pin, on closed-session cards. */
-.archive-btn {
+.archive-btn,
+.close-btn {
   display: inline-flex;
   align-items: center;
   background: none;
@@ -1239,10 +1240,13 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   -webkit-app-region: no-drag;
   transition: opacity 0.1s, color 0.1s;
 }
-.archive-btn svg { width: 15px; height: 15px; display: block; }
+.archive-btn svg, .close-btn svg { width: 15px; height: 15px; display: block; }
 .list-card:hover .archive-btn,
-.session-card:hover .archive-btn { opacity: 0.5; }
+.session-card:hover .archive-btn,
+.list-card:hover .close-btn,
+.session-card:hover .close-btn { opacity: 0.5; }
 .archive-btn:hover { opacity: 1 !important; color: var(--text-primary); }
+.close-btn:hover { opacity: 1 !important; color: var(--status-busy, var(--accent)); }
 /* Trash button (archived sessions only) — same affordance as archive, red on hover (destructive). */
 .delete-btn {
   display: inline-flex; align-items: center; background: none; border: none;
