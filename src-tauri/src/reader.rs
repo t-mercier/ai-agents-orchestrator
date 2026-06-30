@@ -600,7 +600,13 @@ pub fn get_sessions() -> Vec<Value> {
 
         out.push(json!({
             "sessionId": sid,
-            "name": data.get("name").and_then(Value::as_str).unwrap_or(""),
+            // Prefer the registered name (active-sessions.json, set by /start-session's
+            // rename) — same source as category/ticket below. Claude Code often leaves the
+            // pidfile `name` empty, which showed managed sessions as "unnamed". Fall back to
+            // the pidfile title for unmanaged live sessions.
+            "name": entry_meta.get("name").and_then(Value::as_str).filter(|s| !s.is_empty())
+                .or_else(|| data.get("name").and_then(Value::as_str))
+                .unwrap_or(""),
             "cwd": launch_cwd,
             "pid": pid,
             "status": data.get("status").and_then(Value::as_str).unwrap_or("idle"),
@@ -644,6 +650,9 @@ pub fn get_sessions() -> Vec<Value> {
                 s["ticket"] = meta["ticket"].clone();
                 s["notesPath"] = meta["notesPath"].clone();
                 s["root"] = meta["root"].clone();
+                if s.get("name").and_then(Value::as_str).unwrap_or("").is_empty() {
+                    s["name"] = meta["name"].clone();
+                }
             }
         }
     }
@@ -696,6 +705,7 @@ fn recover_unregistered(cfg: &Value, want: &HashSet<String>) -> HashMap<String, 
             let meta = json!({
                 "category": category,
                 "ticket": fv(&fm, "ticket"),
+                "name": fv(&fm, "name"),
                 "notesPath": notes.to_string_lossy().into_owned(),
                 "root": root.clone(),
             });
