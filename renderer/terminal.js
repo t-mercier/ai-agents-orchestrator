@@ -220,16 +220,32 @@ function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
   activeTerminalSession = sessionId
 }
 
-function openTerminalPane(sessionId, cwd, restartSlug = '', command = '') {
+function openTerminalPane(sessionId, cwd, restartSlug = '', command = '', notesPath = '') {
   const infoPane = document.getElementById('detail-info-pane')
   const termPane = document.getElementById('detail-terminal-pane')
   infoPane.style.display = 'none'
   termPane.style.display = 'flex'
   terminalVisible = true
   showTerminal(sessionId, cwd, restartSlug, command)
+  // Tag the terminal with its managed notes.md (stable across resume sid-changes). A
+  // session resumed twice gets a new sessionId each time, but its notesPath is constant —
+  // so we can re-find a backgrounded terminal by notesPath even when its Map key is an
+  // older sid. Set once (first open); re-reveals pass no notesPath and keep the original.
+  const entry = terminals.get(sessionId)
+  if (entry && notesPath && !entry.notesPath) entry.notesPath = notesPath
   // Resuming makes the session live → let app.js remember it (so the panel
   // survives the Closed→Running migration) and flip the view to Running.
   if (window.onTerminalOpened) window.onTerminalOpened(sessionId)
+}
+
+// Find a live (backgrounded) terminal by its managed notes.md, regardless of the Map key
+// (which may be an older sessionId from a previous resume). Returns the key, or null.
+function terminalKeyForNotes(notesPath) {
+  if (!notesPath) return null
+  for (const [key, entry] of terminals) {
+    if (entry.notesPath === notesPath) return key
+  }
+  return null
 }
 
 // Stop SHOWING the terminal without killing it — the xterm + Rust pty stay alive
@@ -334,11 +350,11 @@ function hasLiveTerminal(sessionId) {
   return terminals.has(sessionId)
 }
 
-function toggleEmbeddedTerminal(sessionId, cwd, restartSlug = '') {
+function toggleEmbeddedTerminal(sessionId, cwd, restartSlug = '', notesPath = '') {
   if (terminalVisible && activeTerminalSession === sessionId) {
     hideTerminalPane()   // background it (pty stays alive); "End session ✕" kills
   } else {
-    openTerminalPane(sessionId, cwd, restartSlug)
+    openTerminalPane(sessionId, cwd, restartSlug, '', notesPath)
   }
 }
 
@@ -361,6 +377,7 @@ if (termPaneEl && 'ResizeObserver' in window) {
 
 window.toggleEmbeddedTerminal = toggleEmbeddedTerminal
 window.openTerminalPane = openTerminalPane
+window.terminalKeyForNotes = terminalKeyForNotes
 window.hideTerminalPane = hideTerminalPane
 window.closeTerminalPane = closeTerminalPane
 window.hasLiveTerminal = hasLiveTerminal

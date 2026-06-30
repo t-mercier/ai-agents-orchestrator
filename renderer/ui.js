@@ -485,14 +485,14 @@ function embeddedTerminalAction(s) {
   const glyph = svgIcon('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')
   if (canResume(s)) {
     return `<button class="act act-primary terminal-toggle-btn" aria-label="Open integrated terminal" data-tip="Open integrated terminal"
-             data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}">${glyph}</button>`
+             data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}">${glyph}</button>`
   }
   // Transcript gone → can't --resume, but we can /restart from notes in the embedded
   // terminal (data-restart-slug switches the pty command). Needs a notes slug.
   const slug = slugOf(s)
   if (slug) {
     return `<button class="act act-primary terminal-toggle-btn" aria-label="Restart in integrated terminal" data-tip="Restart in integrated terminal (from notes)"
-             data-session="${escapeHtml(s.sessionId || slug)}" data-cwd="${escapeHtml(s.cwd || '')}" data-restart-slug="${escapeHtml(slug)}">${glyph}</button>`
+             data-session="${escapeHtml(s.sessionId || slug)}" data-cwd="${escapeHtml(s.cwd || '')}" data-restart-slug="${escapeHtml(slug)}" data-notes="${escapeHtml(s.notesPath || '')}">${glyph}</button>`
   }
   return ''
 }
@@ -747,13 +747,13 @@ function destinationToggle() {
 }
 function resumeBtn(s) {
   if (!canResume(s)) return ''
-  return `<button class="act-verb primary" data-open-resume data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}"
+  return `<button class="act-verb primary" data-open-resume data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}"
            data-tip="Resume this session">${svgIcon('<polygon points="6 3 20 12 6 21 6 3"/>')}Resume</button>`
 }
 function restartBtn(s) {
   const slug = slugOf(s)
   if (!slug) return ''
-  return `<button class="act-verb" data-open-restart data-restore-slug="${escapeHtml(slug)}" data-restore-sid="${escapeHtml(s.sessionId || '')}" data-cwd="${escapeHtml(s.cwd || '')}"
+  return `<button class="act-verb" data-open-restart data-restore-slug="${escapeHtml(slug)}" data-restore-sid="${escapeHtml(s.sessionId || '')}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}"
            data-tip="Restart from notes">${svgIcon('<path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/>')}Restart</button>`
 }
 
@@ -906,40 +906,48 @@ async function warnAlreadyRunning(sid, body, proceed) {
 // Shared by the detail-panel Option-A buttons, the Enter key, and the hover quick-
 // actions on cards — all route through these so the "already running" guard and the
 // embedded-vs-external split stay in one place.
-function routeResume(sid, cwd) {
+function routeResume(sid, cwd, notesPath) {
   const dest = window.getOpenIn ? window.getOpenIn() : 'embedded'
+  const liveKey = window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sid, notesPath) : null
   if (dest === 'terminal') {
     const open = () => window.api.openInTerminal(cwd, sid)
-    const live = (window.isSessionLive && window.isSessionLive(sid)) || (window.hasLiveTerminal && window.hasLiveTerminal(sid))
+    const live = (window.isSessionLive && window.isSessionLive(sid)) || !!liveKey
     if (live) warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — opening it in your terminal starts a second instance on the same session.`, open)
     else open()
   } else if (window.toggleEmbeddedTerminal) {
     // Already has a live embedded terminal? Re-reveal it — never warn "already running"
-    // or start a 2nd instance. It may be keyed by sessionId (Resume/Restart) OR by
-    // notesPath (embedded +New), so look up either key (the +New case is why a session
-    // "open nowhere visible" used to hit the warning: hasLiveTerminal(sid) missed it).
-    const liveKey = window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sid) : (window.hasLiveTerminal && window.hasLiveTerminal(sid) ? sid : null)
+    // or start a 2nd instance. liveTerminalKeyFor matches by notes.md (stable across the
+    // sid changes a resume causes), so a backgrounded terminal keyed by an older sid is
+    // still found — this is what used to miss and trip the warning.
     if (liveKey && window.openTerminalPane) {
       toListForEmbedded()
       window.openTerminalPane(liveKey, cwd || '')
       return
     }
-    const go = () => { toListForEmbedded(); window.toggleEmbeddedTerminal(sid, cwd, '') }
+    // First open: pass notesPath so the new terminal is tagged for future re-finds.
+    const go = () => { toListForEmbedded(); window.toggleEmbeddedTerminal(sid, cwd, '', notesPath) }
     if (window.isSessionLive && window.isSessionLive(sid)) {
       warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — opening it in the embedded terminal starts a second instance on the same session.`, go)
     } else { go() }
   }
 }
 
-// A session's live embedded terminal is keyed by sessionId (Resume/Restart) OR by
-// notesPath (embedded +New). Return whichever key currently has a live terminal, else
-// null. Shared by routeResume here and restoreTerminalForSelected in app.js.
-function liveTerminalKeyFor(sid) {
+// The key of this session's live embedded terminal, or null. A managed session resumed
+// twice gets a fresh sessionId each time, but its notes.md is constant — so the most
+// robust match is by notesPath (terminalKeyForNotes scans the entries' recorded notesPath,
+// finding the terminal even when its Map key is an OLDER sid). Falls back to direct
+// sessionId / notesPath key hits. Shared by routeResume + restoreTerminalForSelected.
+function liveTerminalKeyFor(sid, notesPath) {
   const has = window.hasLiveTerminal
   if (!has) return null
-  if (sid && has(sid)) return sid
   const s = (window._lastSessions || []).find(x => x.sessionId === sid)
-  const np = s && s.notesPath
+  const np = notesPath || (s && s.notesPath)
+  // Primary, sid-stable: a terminal tagged with this notes.md (any Map key).
+  if (np && window.terminalKeyForNotes) {
+    const k = window.terminalKeyForNotes(np)
+    if (k) return k
+  }
+  if (sid && has(sid)) return sid
   return np && has(np) ? np : null
 }
 window.liveTerminalKeyFor = liveTerminalKeyFor
@@ -949,17 +957,22 @@ window.liveTerminalKeyFor = liveTerminalKeyFor
 function toListForEmbedded() {
   if (window.viewMode && window.viewMode !== 'list' && window.setViewMode) window.setViewMode('list')
 }
-function routeRestart(slug, sid, cwd) {
+function routeRestart(slug, sid, cwd, notesPath) {
   const dest = window.getOpenIn ? window.getOpenIn() : 'embedded'
   if (dest === 'terminal') window.api.restoreSession(slug, sid)
-  else if (window.toggleEmbeddedTerminal) { toListForEmbedded(); window.toggleEmbeddedTerminal(sid || slug, cwd, slug) }
+  else if (window.toggleEmbeddedTerminal) {
+    // Re-reveal an existing terminal for this notes.md if it's already live.
+    const liveKey = window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sid, notesPath) : null
+    if (liveKey && window.openTerminalPane) { toListForEmbedded(); window.openTerminalPane(liveKey, cwd || ''); return }
+    toListForEmbedded(); window.toggleEmbeddedTerminal(sid || slug, cwd, slug, notesPath)
+  }
 }
 // Pick the right verb for a session (Resume when possible, else Restart from notes)
 // and route per the destination pref. Used by Enter + hover quick-actions.
 function openSessionDefault(s) {
-  if (canResume(s)) { routeResume(s.sessionId, s.cwd || ''); return true }
+  if (canResume(s)) { routeResume(s.sessionId, s.cwd || '', s.notesPath || ''); return true }
   const slug = slugOf(s)
-  if (slug) { routeRestart(slug, s.sessionId || '', s.cwd || ''); return true }
+  if (slug) { routeRestart(slug, s.sessionId || '', s.cwd || '', s.notesPath || ''); return true }
   return false
 }
 window.routeResume = routeResume
@@ -1006,13 +1019,13 @@ function installDelegatedHandlers() {
     const resumeEl = e.target.closest('[data-open-resume]')
     if (resumeEl) {
       e.stopPropagation()
-      routeResume(resumeEl.dataset.session, resumeEl.dataset.cwd || '')
+      routeResume(resumeEl.dataset.session, resumeEl.dataset.cwd || '', resumeEl.dataset.notes || '')
       return
     }
     const restartEl = e.target.closest('[data-open-restart]')
     if (restartEl) {
       e.stopPropagation()
-      routeRestart(restartEl.dataset.restoreSlug, restartEl.dataset.restoreSid || '', restartEl.dataset.cwd || '')
+      routeRestart(restartEl.dataset.restoreSlug, restartEl.dataset.restoreSid || '', restartEl.dataset.cwd || '', restartEl.dataset.notes || '')
       return
     }
 
@@ -1039,10 +1052,13 @@ function installDelegatedHandlers() {
     const term = e.target.closest('.terminal-toggle-btn')
     if (term && window.toggleEmbeddedTerminal) {
       const sid = term.dataset.session
-      const go = () => window.toggleEmbeddedTerminal(sid, term.dataset.cwd, term.dataset.restartSlug || '')
-      // If we already hold this embedded terminal, toggling just reveals/hides it
-      // (no new process). Only warn when it's live elsewhere (running, not ours).
-      const alreadyEmbedded = window.hasLiveTerminal && window.hasLiveTerminal(sid)
+      const notes = term.dataset.notes || ''
+      const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(sid, notes)
+      // Already hold a terminal for this session (any key)? Reveal it; no new process.
+      if (liveKey && window.openTerminalPane) { window.openTerminalPane(liveKey, term.dataset.cwd || ''); return }
+      const go = () => window.toggleEmbeddedTerminal(sid, term.dataset.cwd, term.dataset.restartSlug || '', notes)
+      // Only warn when it's live elsewhere (running, not ours).
+      const alreadyEmbedded = !!liveKey
       if (!alreadyEmbedded && window.isSessionLive && window.isSessionLive(sid)) {
         warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — you likely have it open in a terminal. Opening it in the embedded terminal starts a second instance on the same session, which can clash.`, go)
       } else { go() }

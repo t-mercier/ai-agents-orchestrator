@@ -362,14 +362,10 @@ function selectSession(key) {
   // running in the background). Only "End session ✕" kills.
   if (changing) {
     const sel = selectedKey && sessions.find(s => sessionKey(s) === selectedKey)
-    // A session has at most one live embedded pty, keyed by notesPath (embedded +New) OR
-    // sessionId (Resume/Restart). Prefer notesPath so a +New session reveals its terminal.
-    const has = window.hasLiveTerminal
-    const tkey = sel && has && (
-      (sel.notesPath && has(sel.notesPath)) ? sel.notesPath
-        : (sel.sessionId && has(sel.sessionId)) ? sel.sessionId
-          : null
-    )
+    // A session has at most one live embedded pty. liveTerminalKeyFor finds it by notes.md
+    // (stable across resume sid-changes) then by sessionId — so a backgrounded terminal is
+    // re-revealed whether it was a +New (notesPath key) or a resumed one (older sid key).
+    const tkey = sel && window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sel.sessionId, sel.notesPath) : null
     if (tkey) {
       window.openTerminalPane(tkey, sel.cwd || '')
     } else if (window.getTerminalVisible && window.getTerminalVisible()) {
@@ -424,13 +420,9 @@ function restoreTerminalForSelected() {
   if (window.getTerminalVisible && window.getTerminalVisible()) return
   if (!selectedKey) return
   const sel = sessions.find(s => sessionKey(s) === selectedKey)
-  if (!sel || !window.hasLiveTerminal || !window.openTerminalPane) return
-  // The live terminal may be keyed by notesPath (embedded +New) OR sessionId
-  // (Resume/Restart) — check both, like selectSession does, so a +New session's
-  // terminal is restored too (not just sessionId-keyed ones).
-  const tkey = (sel.notesPath && window.hasLiveTerminal(sel.notesPath)) ? sel.notesPath
-    : (sel.sessionId && window.hasLiveTerminal(sel.sessionId)) ? sel.sessionId
-      : null
+  if (!sel || !window.openTerminalPane) return
+  // Find the live terminal by notes.md (stable across resume sid-changes) then sessionId.
+  const tkey = window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sel.sessionId, sel.notesPath) : null
   if (tkey) window.openTerminalPane(tkey, sel.cwd || '')
 }
 
@@ -837,7 +829,7 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
     window._lastSelectedKey = res.notesPath
     // openTerminalPane → onTerminalOpened flips to the Running tab WITHOUT nulling the
     // selection (switchTab() would reset selectedKey, collapsing the panel — bug fixed).
-    window.openTerminalPane(res.notesPath, '', '', res.command)
+    window.openTerminalPane(res.notesPath, '', '', res.command, res.notesPath)
   }
 })
 
