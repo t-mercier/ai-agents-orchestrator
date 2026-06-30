@@ -668,6 +668,37 @@ fn notes_records_session(content: &str, sid: &str) -> bool {
     !sid.is_empty() && content.contains(&format!("session={sid}"))
 }
 
+/// A real Claude session id (UUID-ish: hex + hyphens, ≥32 chars). Filters out
+/// `/start-session` placeholders like `to fill (open the parallel session, …)`.
+fn is_resumable_sid(s: &str) -> bool {
+    s.len() >= 32 && s.contains('-') && s.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
+}
+
+/// When a notes.md carries no real frontmatter session_id (a stub/placeholder), find the
+/// most-recently-active session id registered to it in active-sessions.json whose
+/// transcript still exists — so the dashboard can offer Resume, not only Restart.
+fn latest_resumable_sid(notes_path: &str) -> Option<String> {
+    let active: Value = fs::read_to_string(home().join(".claude").join("active-sessions.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({}));
+    let mut best: Option<(String, SystemTime)> = None;
+    for (sid, e) in active.as_object()? {
+        if e.get("notes_path").and_then(Value::as_str) != Some(notes_path) || !is_resumable_sid(sid) {
+            continue;
+        }
+        let tr = read_transcript(sid);
+        if !tr.found {
+            continue;
+        }
+        let mt = tr.mtime.unwrap_or(std::time::UNIX_EPOCH);
+        if best.as_ref().is_none_or(|(_, bm)| mt > *bm) {
+            best = Some((sid.clone(), mt));
+        }
+    }
+    best.map(|(sid, _)| sid)
+}
+
 /// For live session ids with no active-sessions.json entry, find the managed notes.md
 /// whose history records each id and recover its category / ticket / root / notesPath.
 /// Scans the category dirs ONCE; the caller only invokes it when `want` is non-empty.
@@ -911,7 +942,17 @@ fn scan_historical() -> Vec<Value> {
             let (mut hist_status, hist_date) = session_history_info(&content);
             let fm = parse_frontmatter(&content);
             let notes_path = notes.to_string_lossy().into_owned();
-            let tr = fm.get("session_id").map(|sid| read_transcript(sid));
+            // Effective resumable id: the frontmatter session_id if it's a real UUID, else
+            // the latest id registered to this notes.md in active-sessions.json. A
+            // /start-session stub leaves session_id as a "to fill (…)" placeholder, so
+            // without this Resume is never offered (only Restart) even when a live
+            // transcript exists.
+            let eff_sid = fm
+                .get("session_id")
+                .filter(|s| is_resumable_sid(s))
+                .cloned()
+                .or_else(|| latest_resumable_sid(&notes_path));
+            let tr = eff_sid.as_ref().map(|sid| read_transcript(sid));
             // A "closed" session whose transcript was touched on a LATER day than its
             // last /close-session was reopened (resumed) + worked on without re-closing →
             // surface it as stale (open work) rather than closed. (Resume/restart-session don't
@@ -927,7 +968,7 @@ fn scan_historical() -> Vec<Value> {
             // Lifecycle bucket (closed | stale | archived) is carried on each session
             // as `historyStatus`; the caller filters/partitions. Exclude live sessions
             // (the Running tab owns them) regardless of bucket.
-            if let Some(sid) = fm.get("session_id") {
+            if let Some(sid) = eff_sid.as_ref() {
                 if running_ids.contains(sid) {
                     continue;
                 }
@@ -973,7 +1014,7 @@ fn scan_historical() -> Vec<Value> {
 
             out.push(json!({
                 "notesPath": notes_path,
-                "sessionId": fv(&fm, "session_id"),
+                "sessionId": eff_sid.clone().map(Value::String).unwrap_or(Value::Null),
                 "cwd": cwd,
                 "resumable": resumable,
                 "category": cat,
@@ -1031,10 +1072,19 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 mod tests {
     use super::{
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, lead_date,
-        notes_records_session, parse_frontmatter, pick_pr_url, reopened_after_close,
-        root_for_notes_path, session_history_info, Transcript,
+        is_resumable_sid, notes_records_session, parse_frontmatter, pick_pr_url,
+        reopened_after_close, root_for_notes_path, session_history_info, Transcript,
     };
     use serde_json::json;
+
+    #[test]
+    fn is_resumable_sid_accepts_uuid_rejects_placeholder() {
+        assert!(is_resumable_sid("b59fd8e8-fe1e-4ac5-bf6d-9a242a7f900f"));
+        // /start-session "to fill (…)" stub is not a resumable id → UI offers Restart only.
+        assert!(!is_resumable_sid("to fill (open the parallel session, then /restart-session X)"));
+        assert!(!is_resumable_sid(""));
+        assert!(!is_resumable_sid("short"));
+    }
 
     #[test]
     fn notes_records_session_links_live_id_via_history_line() {
