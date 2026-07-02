@@ -1072,7 +1072,8 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   flex-shrink: 0;
   margin-left: auto;
 }
-.age-pill svg { width: 11px; height: 11px; opacity: 0.7; }
+.age-pill svg { width: 12px; height: 12px; opacity: 0.7; }
+.age-pill { align-self: flex-end; padding-bottom: 5px; }
 /* Centered on the action row's height (inherits align-items: center from the row). */
 .list-card-foot .age-pill { margin-left: auto; }
 .session-card-foot .age-pill { margin-left: 8px; }
@@ -1378,7 +1379,9 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 /* Header icons sit at the top-right → tooltip points down, and right-anchored so
    the rightmost icon's label grows leftward instead of clipping off the window edge. */
 .detail-header-row .act[data-tip]:hover::after { bottom: auto; top: calc(100% + 7px); left: auto; right: 0; }
-.terminal-close-btn {
+.terminal-toolbar-actions { display: flex; align-items: center; gap: 10px; -webkit-app-region: no-drag; }
+.terminal-close-btn,
+.terminal-pause-btn {
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -1388,7 +1391,9 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   font-family: var(--font);
   -webkit-app-region: no-drag;
 }
-.terminal-close-btn:hover { color: var(--text-primary); }
+.terminal-pause-btn { display: inline-flex; align-items: center; gap: 4px; }
+.terminal-pause-btn svg { width: 13px; height: 13px; }
+.terminal-close-btn:hover, .terminal-pause-btn:hover { color: var(--text-primary); }
 
 .detail-empty {
   color: var(--text-tertiary);

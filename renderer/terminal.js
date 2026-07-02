@@ -380,6 +380,13 @@ window.openTerminalPane = openTerminalPane
 window.terminalKeyForNotes = terminalKeyForNotes
 window.hideTerminalPane = hideTerminalPane
 window.closeTerminalPane = closeTerminalPane
+// "Pause" toolbar button — kill the CURRENTLY SHOWN terminal directly, no /close-session
+// injection, no close marker. Mirrors the list/card Pause action but from inside the
+// terminal itself. The session goes idle and stays in Running for a later Resume.
+window.pauseActiveTerminal = () => {
+  if (activeTerminalSession) killTerminal(activeTerminalSession)
+  if (window.refreshSessions) window.refreshSessions()
+}
 window.hasLiveTerminal = hasLiveTerminal
 // "Pause" (list/card action, no wrap-up): kill a session's live embedded terminal by its
 // Map key WITHOUT any /close-session injection — the session just goes idle (dead pid),
