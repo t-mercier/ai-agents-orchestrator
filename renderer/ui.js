@@ -234,7 +234,7 @@ function pauseBtn(s) {
   const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(s.sessionId, s.notesPath)
   if (!liveKey) return ''
   return `<button class="pause-btn" data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"
-           title="Pause — set aside without closing" aria-label="Pause this session">${svgIcon('<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>')}</button>`
+           title="Pause — set aside without closing" aria-label="Pause this session">${svgIcon('<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>')}</button>`
 }
 
 function renderListCard(s, selectedKey, changed) {
