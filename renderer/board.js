@@ -59,7 +59,7 @@
     const nextTrim = next.length > 64 ? next.slice(0, 63) + '…' : next
     const badges =
       (urgent ? '<span class="kb-badge urgent">⚡ urgent</span>' : '') +
-      (waiting ? '<span class="kb-badge waiting">WAIT</span>' : (stale ? '<span class="kb-badge stale">stale</span>' : ''))
+      (waiting ? '<span class="kb-badge waiting">WAIT</span>' : (stale ? '<span class="kb-badge stale">idle</span>' : ''))
     // Ticket / PR as clickable service icons (open via the global .pill / data-url handler).
     const icons = [
       (window.prPill ? window.prPill(s.prLink) : ''),

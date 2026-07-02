@@ -381,5 +381,9 @@ window.terminalKeyForNotes = terminalKeyForNotes
 window.hideTerminalPane = hideTerminalPane
 window.closeTerminalPane = closeTerminalPane
 window.hasLiveTerminal = hasLiveTerminal
+// "Pause" (list/card action, no wrap-up): kill a session's live embedded terminal by its
+// Map key WITHOUT any /close-session injection — the session just goes idle (dead pid),
+// stays in Running. Handles both the visible pane (hides it) and a backgrounded one.
+window.killTerminal = killTerminal
 window.fitActiveTerminal = fitActiveTerminal
 window.getTerminalVisible = () => terminalVisible

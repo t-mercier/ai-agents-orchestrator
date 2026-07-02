@@ -67,5 +67,26 @@
     }
   }
 
-  return { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime }
+  // Compact age for a card's icon row, e.g. "2m" / "5h" / "3d" / "2w" / "4mo" / "1y".
+  // Unlike formatTimestamp (verbose "5m ago", falls back to a full date), this always
+  // stays a short token — used next to a clock glyph where space is tight. `now` is
+  // injectable for deterministic tests (defaults to Date.now()).
+  function formatAge(ms, now) {
+    if (!ms) return ''
+    const ref = typeof now === 'number' ? now : Date.now()
+    const diffMin = Math.floor((ref - ms) / 60000)
+    if (diffMin < 1) return 'now'
+    if (diffMin < 60) return `${diffMin}m`
+    const diffH = Math.floor(diffMin / 60)
+    if (diffH < 24) return `${diffH}h`
+    const diffD = Math.floor(diffH / 24)
+    if (diffD < 7) return `${diffD}d`
+    const diffW = Math.floor(diffD / 7)
+    if (diffD < 30) return `${diffW}w`
+    const diffMo = Math.floor(diffD / 30)
+    if (diffMo < 12) return `${diffMo}mo`
+    return `${Math.floor(diffD / 365)}y`
+  }
+
+  return { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge }
 })

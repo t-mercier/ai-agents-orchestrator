@@ -27,7 +27,7 @@ let prevActivity = new Map()    // sessionId → epoch ms
 
 // Pure helpers live in renderer/lib/* (loaded as <script> before this file).
 // Destructure so existing call sites stay unchanged.
-const { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime } = window.CSMFormatters
+const { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge } = window.CSMFormatters
 const { renderMarkdown } = window.CSMMarkdown
 
 function rebuildSortRank(sessions) {
@@ -193,22 +193,44 @@ function cardIcons(s) {
   return icons ? `<div class="card-icons">${icons}</div>` : ''
 }
 
-// Status-derived render bits shared by the list + cards views: stale → grey dot +
-// "stale" badge; 'waiting' → a WAIT badge (the one state needing action — busy/idle
-// rely on the coloured dot alone, Tufte: no redundant ink); closed/archived →
-// greyed-white name via .historical (lighter than stale's fully-greyed).
+// Status-derived render bits shared by the list + cards views: 'waiting' → a WAIT badge
+// (the one state needing action — busy/idle rely on the coloured dot alone, Tufte: no
+// redundant ink); closed/archived/idle(no live pid) → greyed-white name via .historical.
+// No "stale" text badge — age (ageBadge) carries that signal instead, everywhere.
 function statusBits(s) {
   const stale = s.state === 'stale'
   const historical = s.state === 'closed' || s.state === 'archived'
   return {
-    // Closed/archived sessions have no live status → grey 'historical' dot, not the
+    // Closed/archived/idle sessions have no live status → grey 'historical' dot, not the
     // green 'idle' default (they aren't running).
     dotClass: stale ? 'stale' : historical ? 'historical' : (s.status || 'idle'),
     historical: historical ? 'historical' : '',
-    badge: stale
-      ? `<span class="list-card-badge stale">stale</span>`
-      : (s.status === 'waiting' ? `<span class="list-card-badge waiting">WAIT</span>` : ''),
+    badge: s.status === 'waiting' ? `<span class="list-card-badge waiting">WAIT</span>` : '',
   }
+}
+
+// Compact "⏱ 3d" age pill — how long since this session was last active. Shown on every
+// card (active, idle/stale, closed, archived) in the bottom icon row; replaces the old
+// "stale" text badge with a neutral, always-present signal (no anxious wording).
+function ageBadge(s) {
+  const t = sessionTime(s)
+  if (!t) return ''
+  const age = formatAge(t)
+  if (!age) return ''
+  const abs = formatDateTime(t)
+  return `<span class="age-pill" title="Last activity: ${escapeHtml(abs)}">${svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')}${escapeHtml(age)}</span>`
+}
+
+// Pause — set the session aside WITHOUT closing it: kills the embedded terminal's process
+// (no /close-session wrap-up), the session goes idle (grey dot + age) but STAYS in
+// Running, ready to Resume later. Only shown when a live embedded terminal actually
+// exists for this session (nothing to pause for an external-terminal resume — the
+// dashboard doesn't own that process). Distinct from Close (done, → Closed tab).
+function pauseBtn(s) {
+  const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(s.sessionId, s.notesPath)
+  if (!liveKey) return ''
+  return `<button class="pause-btn" data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"
+           title="Pause — set aside without closing" aria-label="Pause this session">${svgIcon('<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>')}</button>`
 }
 
 function renderListCard(s, selectedKey, changed) {
@@ -224,6 +246,7 @@ function renderListCard(s, selectedKey, changed) {
       <div class="list-card-header">
         <span class="status-dot ${dotClass}"></span>
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
+        ${pauseBtn(s)}
         ${closeBtn(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
@@ -231,8 +254,8 @@ function renderListCard(s, selectedKey, changed) {
       </div>
       ${preview ? `<div class="list-card-preview">${preview}</div>` : ''}
       ${next ? `<div class="list-card-next" title="Next: ${escapeHtml(next)}">↪ ${escapeHtml(truncate(next, 70))}</div>` : ''}
-      ${(() => { const icons = cardIcons(s)
-         return (icons || badge) ? `<div class="list-card-foot">${icons}${badge}</div>` : '' })()}
+      ${(() => { const icons = cardIcons(s); const age = ageBadge(s)
+         return (icons || badge || age) ? `<div class="list-card-foot">${icons}${age}${badge}</div>` : '' })()}
     </div>
   `
 }
@@ -390,7 +413,6 @@ function renderSessionCard(s, selectedKey, changed) {
   const preview = escapeHtml(truncate(s.lastActivity || s.goal, 110))
   const next = firstNextStep(s.nextSteps)
   const cat = s.category || 'OTHER'
-  const upd = formatDateTime(s.updatedAt || s.lastActivityAt)  // absolute, matches detail "Last update"
   const { dotClass, historical, badge } = statusBits(s)
   return `
     <div class="session-card ${dotClass} ${historical} ${sessionKey(s) === selectedKey ? 'selected' : ''} ${changed ? 'just-updated' : ''} ${isPinnedSession(s) ? 'pinned' : ''}"
@@ -400,6 +422,7 @@ function renderSessionCard(s, selectedKey, changed) {
         <span class="session-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
         ${badge}
         <span class="session-card-cat" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</span>
+        ${pauseBtn(s)}
         ${closeBtn(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}
@@ -409,7 +432,7 @@ function renderSessionCard(s, selectedKey, changed) {
       ${next ? `<div class="session-card-next" title="Next: ${escapeHtml(next)}">↪ ${escapeHtml(truncate(next, 90))}</div>` : ''}
       <div class="session-card-foot">
         ${cardIcons(s) || '<span></span>'}
-        ${upd ? `<span class="session-card-upd" title="Last update">↻ ${escapeHtml(upd)}</span>` : ''}
+        ${ageBadge(s)}
       </div>
     </div>
   `
@@ -767,12 +790,13 @@ function renderDetailPanel(s, tab = 'running') {
     return
   }
 
-  // A stale session lives in the Running tab but has no live pid — render it like a
-  // historical record (Restart/Resume/Archive, "Started" meta) with a STALE badge.
+  // A stale (idle) session lives in the Running tab but has no live pid — render it like
+  // a historical record (Restart/Resume/Archive, "Started" meta) with an IDLE badge (the
+  // ageBadge pill carries the "how long" signal elsewhere; no anxious "STALE" wording).
   const stale = s.state === 'stale'
   const isHistorical = s.state ? s.state !== 'active' : (tab !== 'running')
   const statusStr = stale
-    ? 'STALE'
+    ? 'IDLE'
     : isHistorical
       ? (s.historyStatus === 'archived' ? 'ARCHIVED' : 'CLOSED')
       : statusLabel(s.status)
@@ -1067,6 +1091,21 @@ function installDelegatedHandlers() {
 
     const detach = e.target.closest('.drawer-detach[data-key]')
     if (detach && window.detachSession) { window.detachSession(detach.dataset.key); return }
+
+    // Pause — kill the embedded pty directly (no wrap-up, no close marker). The session
+    // just goes idle (grey dot + age) and stays in Running, ready to Resume later.
+    const pause = e.target.closest('.pause-btn[data-pause-sid], .pause-btn[data-pause-notes]')
+    if (pause) {
+      e.stopPropagation()
+      const sid = pause.dataset.pauseSid || ''
+      const notes = pause.dataset.pauseNotes || ''
+      const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(sid, notes)
+      if (liveKey && window.killTerminal) {
+        window.killTerminal(liveKey)
+        if (window.refreshSessions) window.refreshSessions()
+      }
+      return
+    }
 
     // Archive — confirm, then archive_session (moves Closed → Archived). Must come
     // before the card-select handler (it's inside a card); stopPropagation so the

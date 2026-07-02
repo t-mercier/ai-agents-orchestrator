@@ -55,3 +55,15 @@ describe('formatDateTime', () => {
     expect(F.formatDateTime('nope')).toBe('')
   })
 })
+
+describe('formatAge', () => {
+  const now = Date.parse('2026-06-10T12:00:00.000Z')
+  it('now under a minute', () => expect(F.formatAge(now - 30 * 1000, now)).toBe('now'))
+  it('minutes', () => expect(F.formatAge(now - 5 * 60000, now)).toBe('5m'))
+  it('hours', () => expect(F.formatAge(now - 3 * 3600000, now)).toBe('3h'))
+  it('days', () => expect(F.formatAge(now - 3 * 86400000, now)).toBe('3d'))
+  it('weeks', () => expect(F.formatAge(now - 14 * 86400000, now)).toBe('2w'))
+  it('months', () => expect(F.formatAge(now - 90 * 86400000, now)).toBe('3mo'))
+  it('years', () => expect(F.formatAge(now - 400 * 86400000, now)).toBe('1y'))
+  it('empty for falsy', () => expect(F.formatAge(0, now)).toBe(''))
+})
