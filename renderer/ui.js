@@ -213,6 +213,10 @@ function statusBits(s) {
 // card (active, idle/stale, closed, archived) in the bottom icon row; replaces the old
 // "stale" text badge with a neutral, always-present signal (no anxious wording).
 function ageBadge(s) {
+  // Only on grey (non-active) cards — stale/idle, closed, archived. Active sessions
+  // (green busy / orange waiting / the live idle dot) never show it: the dot + live
+  // status already say everything for those; age only matters once work has paused.
+  if (s.state === 'active') return ''
   const t = sessionTime(s)
   if (!t) return ''
   const age = formatAge(t)
