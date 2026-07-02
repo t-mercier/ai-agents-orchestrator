@@ -1059,14 +1059,26 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   padding: 1px 5px;
   border-radius: 4px;
 }
-/* stale = open work whose terminal is gone — muted, not alarming */
-.list-card-badge.stale {
+/* Age pill (⏱ 3d) — how long since last activity. Neutral, always-present (active, idle,
+   closed, archived alike) — replaces the old alarming "stale" text badge. */
+.age-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
-  background: rgba(var(--tint), 0.1);
-  padding: 1px 5px;
-  border-radius: 4px;
-  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
+.age-pill svg { width: 11px; height: 11px; opacity: 0.7; }
+/* The pill is shorter than the 24px icon buttons it shares a row with — align-items:
+   center would float it slightly above their visual bottom edge. Pin it to the row's
+   bottom instead, level with the action icons. */
+.age-pill { align-self: flex-end; padding-bottom: 1px; }
+.list-card-foot .age-pill { margin-left: auto; }
+.session-card-foot .age-pill { margin-left: 8px; }
 .list-card-preview {
   font-size: 11px;
   color: var(--text-secondary);
@@ -1111,8 +1123,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 [data-density="compact"] .list-card-preview,
 [data-density="compact"] .list-card-next,
 [data-density="compact"] .session-card-activity,
-[data-density="compact"] .session-card-next,
-[data-density="compact"] .session-card-upd { display: none; }
+[data-density="compact"] .session-card-next { display: none; }
 [data-density="compact"] .session-card { height: auto; }
 
 [data-density="minimal"] .list-card-preview,
@@ -1227,7 +1238,8 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .pin-btn.pinned svg { fill: currentColor; }
 /* Archive button — hover-revealed like the pin, on closed-session cards. */
 .archive-btn,
-.close-btn {
+.close-btn,
+.pause-btn {
   display: inline-flex;
   align-items: center;
   background: none;
@@ -1240,12 +1252,15 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   -webkit-app-region: no-drag;
   transition: opacity 0.1s, color 0.1s;
 }
-.archive-btn svg, .close-btn svg { width: 15px; height: 15px; display: block; }
+.archive-btn svg, .close-btn svg, .pause-btn svg { width: 15px; height: 15px; display: block; }
 .list-card:hover .archive-btn,
 .session-card:hover .archive-btn,
 .list-card:hover .close-btn,
-.session-card:hover .close-btn { opacity: 0.5; }
+.session-card:hover .close-btn,
+.list-card:hover .pause-btn,
+.session-card:hover .pause-btn { opacity: 0.5; }
 .archive-btn:hover { opacity: 1 !important; color: var(--text-primary); }
+.pause-btn:hover { opacity: 1 !important; color: var(--text-primary); }
 .close-btn:hover { opacity: 1 !important; color: var(--status-busy, var(--accent)); }
 /* Trash button (archived sessions only) — same affordance as archive, red on hover (destructive). */
 .delete-btn {
