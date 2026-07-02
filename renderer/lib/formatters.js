@@ -25,14 +25,23 @@
       (status || 'IDLE').toUpperCase()
   }
 
-  // Normalize a session's last-activity to epoch ms. updatedAt may be a number
-  // (epoch ms) or an ISO string; falls back to lastActivityAt then startedAt.
-  function sessionTime(s) {
-    const v = s.updatedAt || s.lastActivityAt || s.startedAt
+  // Normalize a session's last-activity to epoch ms. Each field may be a number (epoch
+  // ms) or an ISO string. Takes the MOST RECENT of updatedAt / lastActivityAt — not a
+  // fixed priority — because either can be the true "last touched" signal depending on
+  // the write path: updatedAt is the notes.md file's mtime (bumped by /save-session,
+  // /close-session, Archive…), lastActivityAt is the transcript's last message. Pause
+  // (kills the pty, no notes.md write) only bumps the transcript, so if updatedAt won
+  // outright it would show a stale, days-old "last activity" right after pausing today's
+  // work. Falls back to startedAt only when neither is present.
+  function toMs(v) {
     if (!v) return 0
     if (typeof v === 'number') return v
     const t = new Date(v).getTime()
     return Number.isNaN(t) ? 0 : t
+  }
+  function sessionTime(s) {
+    const best = Math.max(toMs(s.updatedAt), toMs(s.lastActivityAt))
+    return best || toMs(s.startedAt)
   }
 
   // Relative time, e.g. "just now" / "5m ago" / "3h ago" / a date. `now` is

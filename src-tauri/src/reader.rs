@@ -1010,6 +1010,11 @@ fn scan_historical() -> Vec<Value> {
             // into the transcript, disambiguated by the number in the session name.
             let pr_urls = tr.as_ref().map(|t| t.pr_urls.as_slice()).unwrap_or(&[]);
             let pr_link = resolve_pr_link(fv(&fm, "pr_link"), &cat, pr_urls, name.as_str());
+            // Last real activity from the transcript (e.g. Pause kills the pty without
+            // touching notes.md, so its mtime can be a stale prior save/close — the
+            // renderer takes the MORE RECENT of updatedAt vs lastActivityAt for the age
+            // pill, so a same-day Pause doesn't display a days-old "last activity").
+            let last_activity_at = tr.as_ref().and_then(|t| t.last_activity_at.clone());
             let cwd = tr.and_then(|t| t.launch_cwd).unwrap_or(scope_root);
 
             out.push(json!({
@@ -1025,6 +1030,7 @@ fn scan_historical() -> Vec<Value> {
                 "prLink": pr_link,
                 "startedAt": fv(&fm, "started_at"),
                 "updatedAt": updated_at,
+                "lastActivityAt": last_activity_at,
                 "state": hist_status.clone(),   // stale | closed | archived
                 "historyStatus": hist_status,
                 "historyDate": hist_date,

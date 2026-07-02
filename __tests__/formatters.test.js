@@ -38,6 +38,12 @@ describe('sessionTime', () => {
     expect(F.sessionTime({})).toBe(0)
     expect(F.sessionTime({ updatedAt: 'not-a-date' })).toBe(0)
   })
+  it('picks the MORE RECENT of updatedAt / lastActivityAt, not a fixed priority', () => {
+    // Pause kills the pty without touching notes.md — updatedAt (notes.md mtime) can be
+    // days old while lastActivityAt (transcript) is from today. The fresher one must win.
+    expect(F.sessionTime({ updatedAt: 1000, lastActivityAt: 5000 })).toBe(5000)
+    expect(F.sessionTime({ updatedAt: 5000, lastActivityAt: 1000 })).toBe(5000)
+  })
 })
 
 describe('formatTimestamp', () => {
