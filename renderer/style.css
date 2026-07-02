@@ -1073,10 +1073,7 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   margin-left: auto;
 }
 .age-pill svg { width: 11px; height: 11px; opacity: 0.7; }
-/* The pill is shorter than the 24px icon buttons it shares a row with — align-items:
-   center would float it slightly above their visual bottom edge. Pin it to the row's
-   bottom instead, level with the action icons. */
-.age-pill { align-self: flex-end; padding-bottom: 1px; }
+/* Centered on the action row's height (inherits align-items: center from the row). */
 .list-card-foot .age-pill { margin-left: auto; }
 .session-card-foot .age-pill { margin-left: 8px; }
 .list-card-preview {
