@@ -67,10 +67,19 @@ window.getTerminalPrefs = getTerminalPrefs
 window.setTerminalPrefs = setTerminalPrefs
 window.applyTerminalPrefs = applyTerminalPrefs
 
-// Wire incoming pty data to the right xterm instance
+// Wire incoming pty data to the right xterm instance.
 window.api.onPtyData((sessionId, data) => {
   const entry = terminals.get(sessionId)
-  if (entry) entry.term.write(data)
+  if (!entry) return
+  entry.term.write(data)
+  // WKWebView DOM-renderer paint nudge: after a burst settles, force a repaint of the
+  // whole viewport. A large alt-screen render (e.g. /mcp's full-screen menu) otherwise
+  // paints only the top rows and leaves the rest blank for a few seconds until some
+  // unrelated event forces a redraw. A short debounce coalesces the burst into one refresh.
+  clearTimeout(entry.repaintT)
+  entry.repaintT = setTimeout(() => {
+    try { entry.term.refresh(0, entry.term.rows - 1) } catch (_) { /* disposed */ }
+  }, 40)
 })
 
 // When the pty dies (claude/shell exited, or killed by last-window-close),
