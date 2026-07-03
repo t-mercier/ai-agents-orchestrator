@@ -138,6 +138,7 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 |---|---|
 | `/start-session <CAT> <ticket> <name>` | Create a session workspace + `notes.md` under the category's folder, register it, sync the repo |
 | `/close-session` | Wrap up the session: summarise into `notes.md` + append a history entry tagged with the session id |
+| `/save-session` | Checkpoint mid-flight (same summary as close, marked `(in progress)`) **without** closing it — handy before a context compaction |
 | `/restart-session <slug>` | Reload a session's notes **and its recorded session id** into a fresh session (history stays linked) |
 | `/archive-session <slug>` | Mark a session archived (drops it from the active list) |
 | `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
@@ -165,6 +166,27 @@ flowchart LR
 ```
 
 Everything stays linked — **notes → session id → transcript** — so nothing important lives only in a context window.
+
+<details>
+<summary><strong>Optional: get nudged to <code>/save-session</code> before compaction</strong></summary>
+
+A checkpoint only helps if you remember to run it. This **opt-in** Claude Code hook watches
+the transcript size and reminds you to `/save-session` as context fills (≈50% / 75% / 90%).
+It's not installed for you — the app never edits your global `~/.claude/settings.json`.
+Add it there yourself under `hooks`:
+
+```json
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "SESSION_ID=$(jq -r '.session_id // empty' 2>/dev/null); [ -z \"$SESSION_ID\" ] && exit 0; T=$(find \"$HOME/.claude/projects\" -maxdepth 2 -name \"${SESSION_ID}.jsonl\" 2>/dev/null | head -1); [ -f \"$T\" ] || exit 0; S=$(wc -c < \"$T\"); if [ \"$S\" -gt 10000000 ] && [ ! -f \"/tmp/cc-90-$SESSION_ID\" ]; then touch /tmp/cc-50-$SESSION_ID /tmp/cc-75-$SESSION_ID /tmp/cc-90-$SESSION_ID; echo '{\"systemMessage\":\"Context ~90% - compact imminent. Run /save-session now.\"}'; elif [ \"$S\" -gt 6000000 ] && [ ! -f \"/tmp/cc-75-$SESSION_ID\" ]; then touch /tmp/cc-50-$SESSION_ID /tmp/cc-75-$SESSION_ID; echo '{\"systemMessage\":\"Context ~75% used. Run /save-session.\"}'; elif [ \"$S\" -gt 3000000 ] && [ ! -f \"/tmp/cc-50-$SESSION_ID\" ]; then touch /tmp/cc-50-$SESSION_ID; echo '{\"systemMessage\":\"Context ~50% used - consider /save-session.\"}'; fi" }] }]
+  }
+}
+```
+
+The `/tmp` flags make each threshold fire once per session. Pair it with a `PreCompact`
+hook if you want a last-ditch save right before Claude Code compacts.
+
+</details>
 
 📖 **New to the lifecycle?** The **[Guide](docs/GUIDE.md)** explains the four session states (Active · Stale · Closed · Archived), Start vs Resume vs Restart, and how the notes beat compaction — in plain terms, no jargon.
 
