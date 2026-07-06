@@ -773,9 +773,17 @@ fn set_pr_link(notes_path: String, url: String) -> Result<(), String> {
 
 /// Has this session's notes.md been freshly wrapped up (a `/close-session` write) since
 /// `since_ms`? The embedded "End session" button injects `/close-session` into the live
-/// pty, then polls this until the AI wrap-up is written — then it kills the pty so the
+/// pty, then polls this until the wrap-up is written — then it kills the pty so the
 /// session moves to Closed (not stale). Read-only, confined to a notes.md under a root.
-/// The mtime gate prevents a pre-existing (older) close from reading as "just closed".
+///
+/// Requires the latest Session history entry to be a close dated **today** — NOT merely
+/// "status closed + file touched". A session with a pre-existing (older) close entry
+/// already reads as "closed", so /close-session's early section writes (Decisions/Files)
+/// bump the mtime and would trip a status-only check BEFORE it appends the fresh close
+/// line — killing the pty too early, so no today-dated close is recorded and
+/// reopened_after_close (transcript touched today > the old close date) flips it to stale.
+/// Gating on a today-dated close both fixes that race and guarantees the recorded close is
+/// same-day as the transcript, so it won't be flipped.
 #[tauri::command]
 fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String> {
     let abs = notes_md_under_root(&notes_path)?;
@@ -789,7 +797,20 @@ fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String>
         return Ok(false); // not written since we injected /close-session
     }
     let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
-    Ok(reader::session_history_info(&content).0 == "closed")
+    let (status, date) = reader::session_history_info(&content);
+    if status != "closed" {
+        return Ok(false);
+    }
+    // The close entry must be dated today (local, matching how /close-session and
+    // close_session stamp it) — else an older close reads as "closed" and trips this early.
+    let today = std::process::Command::new("date")
+        .arg("+%Y-%m-%d")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    Ok(!today.is_empty() && date.as_deref().is_some_and(|d| d.starts_with(&today)))
 }
 
 /// Stamp a close marker directly into the session's notes.md history — the guaranteed
