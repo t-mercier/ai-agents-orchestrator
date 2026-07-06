@@ -598,6 +598,16 @@ pub fn get_sessions() -> Vec<Value> {
             .map(|p| root_for_notes_path(&cfg, p))
             .unwrap_or(Value::Null);
 
+        // Claude Code's pidfile `status` can lag — it stays `idle` while the main loop is
+        // actually working (the dashboard then shows a green/idle dot on a busy session).
+        // A transcript touched in the last few seconds means live output, so override a
+        // stale `idle` with `busy`. Leave `waiting` (needs-you) and `shell` untouched —
+        // those are meaningful signals, not lag.
+        let status_raw = data.get("status").and_then(Value::as_str).unwrap_or("idle");
+        let recently_active =
+            tr.mtime.and_then(|m| m.elapsed().ok()).is_some_and(|e| e.as_secs() < 10);
+        let status = if status_raw == "idle" && recently_active { "busy" } else { status_raw };
+
         out.push(json!({
             "sessionId": sid,
             // Prefer the registered name (active-sessions.json, set by /start-session's
@@ -609,7 +619,7 @@ pub fn get_sessions() -> Vec<Value> {
                 .unwrap_or(""),
             "cwd": launch_cwd,
             "pid": pid,
-            "status": data.get("status").and_then(Value::as_str).unwrap_or("idle"),
+            "status": status,
             "state": "active",   // lifecycle state: live pid (vs stale/closed/archived)
             "updatedAt": data.get("updatedAt").cloned().unwrap_or(Value::Null),
             "notesPath": notes_path,
