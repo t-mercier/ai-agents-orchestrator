@@ -576,6 +576,46 @@ fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), String> {
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// Every configured root, canonicalized (v2 `roots` list + legacy workRoot/personalRoot).
+/// Non-existent roots drop out (canonicalize fails). Shared by the confinement checks so
+/// the "what counts as a root" list lives once.
+fn configured_roots() -> Vec<std::path::PathBuf> {
+    let cfg = config::load();
+    let mut roots: Vec<String> = Vec::new();
+    if let Some(arr) = cfg.get("roots").and_then(serde_json::Value::as_array) {
+        for r in arr {
+            if let Some(p) = r.get("path").and_then(serde_json::Value::as_str) {
+                roots.push(p.to_string());
+            }
+        }
+    }
+    for k in ["workRoot", "personalRoot"] {
+        if let Some(p) = cfg.get(k).and_then(serde_json::Value::as_str) {
+            roots.push(p.to_string());
+        }
+    }
+    roots.iter().filter_map(|r| std::path::Path::new(r).canonicalize().ok()).collect()
+}
+
+/// A folder is safe to trash as a session iff it is a session dir — strictly nested
+/// at least two levels below a configured root (`<root>/<CATEGORY>/<slug>`, which is
+/// where the scanner surfaces every managed notes.md). This blocks trashing a root
+/// itself or a whole category dir when the notes.md is shallow-nested (a hand-crafted
+/// active-sessions.json or a misconfig could otherwise make delete_session's
+/// `abs.parent()` resolve to a root).
+fn is_deletable_session_dir(dir: &std::path::Path, roots: &[std::path::PathBuf]) -> bool {
+    // Measure depth from the MOST SPECIFIC (longest) matching root — roots can nest
+    // (the default config has Perso=~ containing Work=~/work), so a category dir under
+    // the inner root would otherwise look session-deep under the outer one.
+    roots
+        .iter()
+        .filter(|root| dir.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .and_then(|root| dir.strip_prefix(root).ok())
+        .map(|rel| rel.components().count() >= 2)
+        .unwrap_or(false)
+}
+
 /// Resolve a notes.md path the app is allowed to WRITE: a real `notes.md` file
 /// confined under a configured root. Shared by the two source-of-truth writes
 /// (archive + pr_link) so the confinement rule lives once. Checks EVERY configured
@@ -591,28 +631,7 @@ fn notes_md_under_root(notes_path: &str) -> Result<std::path::PathBuf, String> {
     if !abs.is_file() || abs.file_name().and_then(|n| n.to_str()) != Some("notes.md") {
         return Err("not a notes.md file".into());
     }
-    let cfg = config::load();
-    // Candidate root paths: every entry in the v2 `roots` list + the legacy keys.
-    let mut roots: Vec<String> = Vec::new();
-    if let Some(arr) = cfg.get("roots").and_then(serde_json::Value::as_array) {
-        for r in arr {
-            if let Some(p) = r.get("path").and_then(serde_json::Value::as_str) {
-                roots.push(p.to_string());
-            }
-        }
-    }
-    for k in ["workRoot", "personalRoot"] {
-        if let Some(p) = cfg.get(k).and_then(serde_json::Value::as_str) {
-            roots.push(p.to_string());
-        }
-    }
-    let under_root = roots.iter().any(|r| {
-        std::path::Path::new(r)
-            .canonicalize()
-            .ok()
-            .map(|root| abs.starts_with(&root))
-            .unwrap_or(false)
-    });
+    let under_root = configured_roots().iter().any(|root| abs.starts_with(root));
     if !under_root {
         return Err("notes.md is outside the configured roots".into());
     }
@@ -746,9 +765,15 @@ fn delete_session(notes_path: String) -> Result<(), String> {
     if reader::session_history_info(&content).0 != "archived" {
         return Err("only archived sessions can be deleted".into());
     }
-    // Session folder = the notes.md's parent; notes_md_under_root already proved it's
-    // confined under a root, and the parent is the slug dir one level below that.
+    // Session folder = the notes.md's parent. notes_md_under_root proved it's confined
+    // under a root, but NOT that it's properly nested — a notes.md sitting directly in a
+    // root (or a category dir) would make `dir` the root/category itself and trash every
+    // session under it. Require a real session dir (<root>/<CATEGORY>/<slug>) before any
+    // destructive move.
     let dir = abs.parent().filter(|p| p.is_dir()).ok_or("session folder not found")?;
+    if !is_deletable_session_dir(dir, &configured_roots()) {
+        return Err("refusing to delete: not a nested session folder".into());
+    }
     // Move to the OS Trash (recoverable) rather than an irreversible hard delete.
     trash::delete(dir).map_err(|e| e.to_string())?;
 
@@ -1011,10 +1036,26 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        category_root_dir, is_pr_url, is_safe_branch, is_safe_category, is_ticket, percent_encode,
-        set_pr_link_in_frontmatter, slugify, stamp_archived,
+        category_root_dir, is_deletable_session_dir, is_pr_url, is_safe_branch, is_safe_category,
+        is_ticket, percent_encode, set_pr_link_in_frontmatter, slugify, stamp_archived,
     };
     use serde_json::json;
+    use std::path::PathBuf;
+
+    #[test]
+    fn deletable_session_dir_requires_two_levels_below_a_root() {
+        let roots = vec![PathBuf::from("/Users/dev/work"), PathBuf::from("/Users/dev")];
+        // A real session dir <root>/<CATEGORY>/<slug> → deletable.
+        assert!(is_deletable_session_dir(&PathBuf::from("/Users/dev/work/FEAT/my-slug"), &roots));
+        // The root itself → NEVER (would trash every session under it).
+        assert!(!is_deletable_session_dir(&PathBuf::from("/Users/dev/work"), &roots));
+        // A category dir <root>/<CATEGORY> → refused (one level).
+        assert!(!is_deletable_session_dir(&PathBuf::from("/Users/dev/work/FEAT"), &roots));
+        // Outside every root → refused.
+        assert!(!is_deletable_session_dir(&PathBuf::from("/tmp/elsewhere/x/y"), &roots));
+        // Deeper than a session dir is still fine (strictly-more-nested).
+        assert!(is_deletable_session_dir(&PathBuf::from("/Users/dev/work/FEAT/slug/sub"), &roots));
+    }
 
     #[test]
     fn slugify_is_byte_faithful_to_the_skill() {
