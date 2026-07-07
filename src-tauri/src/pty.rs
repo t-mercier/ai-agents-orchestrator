@@ -185,9 +185,19 @@ pub fn pty_spawn(
         cmd.cwd(home);
     }
 
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+    // The child is live from here on — if wiring its I/O fails, kill + reap it
+    // before erroring, or it runs unmanaged forever (never in the map, so no
+    // pty_kill/kill_all can reach it) and its shell lingers as a zombie.
+    let io = pair.master.try_clone_reader().and_then(|r| pair.master.take_writer().map(|w| (r, w)));
+    let (mut reader, writer) = match io {
+        Ok(rw) => rw,
+        Err(e) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(e.to_string());
+        }
+    };
     drop(pair.slave); // close our handle to the slave so the child owns it
 
     // Reader thread → stream output to the renderer; emit pty-exit on EOF.
