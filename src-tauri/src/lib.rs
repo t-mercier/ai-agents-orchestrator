@@ -80,14 +80,52 @@ fn is_safe_category(s: &str) -> bool {
         && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
+/// A resumable Claude Code sessionId: non-empty, `[A-Za-z0-9_-]` only (real ids are
+/// UUIDs). The boundary check before a sessionId is folded into a shell command.
+fn is_valid_session_id(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+/// Validate an optional space (`--root`) override: empty = no override (fine); otherwise
+/// it must name a declared root AND be a safe token (it rides the skill prompt). Shared by
+/// start_session + import_session so the rule lives once.
+fn validate_root_override(cfg: &serde_json::Value, want_root: &str) -> Result<(), String> {
+    if want_root.is_empty() {
+        return Ok(());
+    }
+    let known = cfg.get("roots").and_then(serde_json::Value::as_array).is_some_and(|rs| {
+        rs.iter().any(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(want_root))
+    });
+    let safe = want_root.len() <= 30
+        && want_root.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+    if !known || !safe {
+        return Err("invalid space".into());
+    }
+    Ok(())
+}
+
+/// Sanitize a session NAME for the skill prompt + YAML frontmatter + iTerm title:
+/// whitespace collapsed to single spaces, restricted to unicode letters/digits/spaces +
+/// a small punctuation set (excludes backtick, $, ", \\, newline — the chars that break
+/// the downstream shell-quote / YAML / title), trimmed and capped at 120 chars. May
+/// return "" (callers that require a title check for empty). Shared by start_session +
+/// import_session.
+fn sanitize_session_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || "-_.,'()".contains(*c))
+        .collect();
+    let joined = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    joined.chars().take(120).collect::<String>().trim().to_string()
+}
+
 /// Resume a session's full conversation in the user's terminal. sessionId is regex-
 /// restricted; the cwd is POSIX single-quoted, and `claude --model 'opus[1m]'`
 /// must stay quoted (the `[1m]` would otherwise be glob-expanded by the shell).
 #[tauri::command]
 fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
-    if session_id.is_empty()
-        || !session_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
+    if !is_valid_session_id(&session_id) {
         return Err("invalid session id".into());
     }
     // Closed sessions may send an empty/relative cwd — only cd when it's absolute.
@@ -183,16 +221,7 @@ fn start_session(
     // and decides the launch dir + the `--root` the skill writes under. Must be a
     // declared root and a safe token (it rides the /start-session prompt).
     let want_root = root.trim();
-    if !want_root.is_empty() {
-        let known = cfg.get("roots").and_then(serde_json::Value::as_array).is_some_and(|rs| {
-            rs.iter().any(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(want_root))
-        });
-        let safe = want_root.len() <= 30
-            && want_root.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
-        if !known || !safe {
-            return Err("invalid space".into());
-        }
-    }
+    validate_root_override(&cfg, want_root)?;
     let cats = cfg.get("categories").and_then(serde_json::Value::as_array);
     // Match the category by (name, root) when a space is given, so the right entry
     // (and thus the right launch dir) wins for a name that exists under several spaces.
@@ -208,17 +237,8 @@ fn start_session(
         _ => return Err("invalid category".into()),
     };
 
-    // Title (the session name): unicode letters/digits (French accents OK), spaces,
-    // and a small punctuation set. Excludes backtick, $, ", \\ and newline — the
-    // chars that break the downstream shell-quote / YAML frontmatter / iTerm title.
-    // Whitespace is collapsed; capped at 120.
-    let cleaned: String = name
-        .chars()
-        .map(|c| if c.is_whitespace() { ' ' } else { c })
-        .filter(|c| c.is_alphanumeric() || *c == ' ' || "-_.,'()".contains(*c))
-        .collect();
-    let safe_name: String = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
-    let safe_name: String = safe_name.chars().take(120).collect::<String>().trim().to_string();
+    // Title (the session name) — see sanitize_session_name for the allowed set.
+    let safe_name = sanitize_session_name(&name);
     if safe_name.is_empty() {
         return Err("title required".into());
     }
@@ -379,9 +399,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     if slug.is_empty() || !slug.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-') {
         return Err("invalid slug".into());
     }
-    if !session_id.is_empty()
-        && !session_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
+    if !session_id.is_empty() && !is_valid_session_id(&session_id) {
         return Err("invalid sessionId".into());
     }
     // cd into the session's launch dir so /restart-session lands in the right place.
@@ -411,9 +429,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
 /// `--resume` must run). Category must be one the user configured.
 #[tauri::command(async)]
 fn import_session(session_id: String, category: String, name: String, root: String, embedded: bool) -> Result<serde_json::Value, String> {
-    if session_id.is_empty()
-        || !session_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
+    if !is_valid_session_id(&session_id) {
         return Err("invalid sessionId".into());
     }
     let category = category.trim().to_uppercase();
@@ -428,27 +444,11 @@ fn import_session(session_id: String, category: String, name: String, root: Stri
         return Err("unknown category — add it in Settings first".into());
     }
     // Optional space (root): which space the imported session's notes.md lands under,
-    // for a category that exists in several. Must be a declared root + a safe token (it
-    // rides the /import-session prompt). Mirrors start_session.
+    // for a category that exists in several. Mirrors start_session.
     let want_root = root.trim();
-    if !want_root.is_empty() {
-        let known_root = cfg.get("roots").and_then(serde_json::Value::as_array).is_some_and(|rs| {
-            rs.iter().any(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(want_root))
-        });
-        let safe = want_root.len() <= 30
-            && want_root.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
-        if !known_root || !safe {
-            return Err("invalid space".into());
-        }
-    }
+    validate_root_override(&cfg, want_root)?;
     // Same safe-name set as /start-session (no shell / YAML-breaking chars); may be empty.
-    let cleaned: String = name
-        .chars()
-        .map(|c| if c.is_whitespace() { ' ' } else { c })
-        .filter(|c| c.is_alphanumeric() || *c == ' ' || "-_.,'()".contains(*c))
-        .collect();
-    let safe_name = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
-    let safe_name: String = safe_name.chars().take(120).collect::<String>().trim().to_string();
+    let safe_name = sanitize_session_name(&name);
 
     let dir = reader::resolve_session_cwd(&session_id)
         .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
@@ -1037,10 +1037,40 @@ pub fn run() {
 mod tests {
     use super::{
         category_root_dir, is_deletable_session_dir, is_pr_url, is_safe_branch, is_safe_category,
-        is_ticket, percent_encode, set_pr_link_in_frontmatter, slugify, stamp_archived,
+        is_ticket, is_valid_session_id, percent_encode, sanitize_session_name,
+        set_pr_link_in_frontmatter, slugify, stamp_archived, validate_root_override,
     };
     use serde_json::json;
     use std::path::PathBuf;
+
+    #[test]
+    fn valid_session_id_accepts_uuid_rejects_empty_and_metachars() {
+        assert!(is_valid_session_id("b59fd8e8-fe1e-4ac5-bf6d-9a242a7f900f"));
+        assert!(!is_valid_session_id(""));
+        assert!(!is_valid_session_id("a b"));
+        assert!(!is_valid_session_id("a;rm"));
+        assert!(!is_valid_session_id("../x"));
+    }
+
+    #[test]
+    fn sanitize_session_name_collapses_filters_and_caps() {
+        assert_eq!(sanitize_session_name("  Fix   the   bug  "), "Fix the bug"); // collapse+trim
+        assert_eq!(sanitize_session_name("café résumé"), "café résumé"); // unicode letters kept
+        assert_eq!(sanitize_session_name("rm -rf $HOME `id`"), "rm -rf HOME id"); // $, backtick dropped
+        assert_eq!(sanitize_session_name("a\"b\\c"), "abc"); // quote + backslash dropped
+        assert_eq!(sanitize_session_name(""), "");
+        assert_eq!(sanitize_session_name(&"x".repeat(200)).chars().count(), 120); // capped
+    }
+
+    #[test]
+    fn validate_root_override_requires_declared_and_safe() {
+        let cfg = json!({ "roots": [{ "name": "Work", "path": "/w" }, { "name": "Perso", "path": "/p" }] });
+        assert!(validate_root_override(&cfg, "").is_ok()); // empty = no override
+        assert!(validate_root_override(&cfg, "Work").is_ok());
+        assert!(validate_root_override(&cfg, "Ghost").is_err()); // not a declared root
+        assert!(validate_root_override(&cfg, "a b").is_err()); // unsafe token
+        assert!(validate_root_override(&cfg, &"x".repeat(31)).is_err()); // > 30 chars
+    }
 
     #[test]
     fn deletable_session_dir_requires_two_levels_below_a_root() {
