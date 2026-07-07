@@ -238,18 +238,16 @@ fn validate(c: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Validate then atomically write the user config.
+/// Validate then atomically write the user config (shared atomic_write: tmp +
+/// fsync + rename).
 fn save(cfg: &Value) -> Result<(), String> {
     validate(cfg)?;
     let path = config_path();
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let tmp = path.with_extension("json.tmp");
     let body = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    fs::write(&tmp, body).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
-    Ok(())
+    crate::atomic_write(&path, &body)
 }
 
 /// The default config written on a fresh install (v2 schema). Kept in sync with the

@@ -578,11 +578,17 @@ fn set_window_bg(window: tauri::WebviewWindow, dark: bool) {
     let _ = window.set_background_color(Some(c));
 }
 
-/// Write `body` to `path` atomically (tmp + rename), so a crash never leaves a
-/// half-written session file.
-fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), String> {
+/// Write `body` to `path` atomically (tmp + fsync + rename), so a crash never leaves
+/// a half-written session file. The fsync matters: rename-over is only atomic for
+/// data already flushed to the tmp file — a power loss between the rename and the
+/// delayed writeback could otherwise replace a good file with an empty one. The one
+/// atomic-write implementation (config::save uses it too).
+pub(crate) fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), String> {
+    use std::io::Write;
     let tmp = path.with_extension("ao-tmp");
-    std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
+    let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    f.write_all(body.as_bytes()).map_err(|e| e.to_string())?;
+    f.sync_all().map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
