@@ -343,6 +343,13 @@ fn start_session(
         // <category root>/<CATEGORY>/<folder>/notes.md, folder = ticket || slugify(name).
         // slugify is byte-faithful to the skill's slug(); keep both in sync.
         let folder = if safe_ticket.is_empty() { slugify(&safe_name) } else { safe_ticket.clone() };
+        // A name with no ASCII alphanumerics (e.g. "..." or "éé") slugifies to "" —
+        // the notesPath would collapse to <base>/<CAT>//notes.md and the skill's own
+        // slug() would bootstrap a mismatched (category-level) dir. Surface it in the
+        // form instead of launching a broken session.
+        if folder.is_empty() {
+            return Err("title needs at least one letter or digit (a-z, 0-9)".into());
+        }
         let base = category_root_dir(&cfg, cat_def);
         let notes_path = format!("{base}/{category}/{folder}/notes.md");
         return Ok(serde_json::json!({ "command": cmd, "notesPath": notes_path }));
