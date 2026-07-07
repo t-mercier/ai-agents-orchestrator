@@ -21,5 +21,6 @@ _Generated from the adversarial expert-panel synthesis (6 personas, 3 rounds). E
 | [ADR-012](./ADR-012-new-session-via-launcher-not-writer.md) | New session via launcher (open `claude` + `/start`), not an in-app writer | APPROVED |
 | [ADR-013](./ADR-013-archive-from-dashboard-bounded-source-of-truth-write.md) | Archive from the dashboard: one bounded source-of-truth write | APPROVED |
 | [ADR-014](./ADR-014-delete-archived-session-to-os-trash.md) | Delete an archived session by moving its folder to the OS Trash (recoverable, guarded) | APPROVED |
+| [ADR-015](./ADR-015-config-v1-to-v2-migration-flag-gated-self-cleaning.md) | Config v1→v2 migration: transient `migratedToV2` flag, migrate-on-launch, self-cleaning staged rollout, fail-loud shim strip | APPROVED |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the synthesized target architecture and invariants.
