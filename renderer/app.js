@@ -294,25 +294,38 @@ function toggleSpaceFilter(space) {
 let fetchInFlight = false
 async function fetchAndRender(resort = false) {
   fetchInFlight = true
+  // Capture the tab this fetch is FOR. switchTab() flips activeTab and fires its own
+  // fetch without waiting for an in-flight one, so activeTab can change during the
+  // awaits below. Keying everything off `tab` (not the live activeTab) keeps this
+  // fetch self-consistent, and we bail before clobbering shared state if the user has
+  // since moved on.
+  const tab = activeTab
   try {
-    if (activeTab === 'running') {
+    let fetched
+    if (tab === 'running') {
       // Running = active (live pid) ∪ stale (terminal gone, not /closed yet).
       const [active, stale] = await Promise.all([
         window.api.getSessions(),
         window.api.getHistoricalSessions('stale'),
       ])
-      sessions = [...active, ...stale]
+      fetched = [...active, ...stale]
     } else {
-      sessions = await window.api.getHistoricalSessions(activeTab)
+      fetched = await window.api.getHistoricalSessions(tab)
     }
+    // Per-tab badge count — keyed by the fetched tab, so it's valid to record even if
+    // we've since switched away (current tab updates each poll; others fill on visit).
+    window._tabCounts = window._tabCounts || {}
+    window._tabCounts[tab] = fetched.length
+    // Stale result: the user switched tabs mid-flight (their switch started its own
+    // fetch). This data is for a tab that's no longer showing — don't paint it over the
+    // current view or clobber the shared session list.
+    if (tab !== activeTab) return
+    sessions = fetched
     window._lastSessions = sessions
     window._lastSelectedKey = selectedKey
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"
-    // Per-tab counts for the tab badges (current tab updates each poll; others fill on visit).
-    window._tabCounts = window._tabCounts || {}
-    window._tabCounts[activeTab] = sessions.length
-    if (activeTab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
-    renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, resort)
+    if (tab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
+    renderAll(filterSessions(sessions, searchQuery), selectedKey, tab, resort)
   } catch (err) {
     console.error('Failed to fetch sessions:', err)
   } finally {
