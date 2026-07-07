@@ -592,6 +592,19 @@ pub(crate) fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), Str
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// Local (`date`-derived) current stamp as `("YYYY-MM-DD", "HH:MM")`. Spawning `date`
+/// (not chrono) is deliberate: it matches byte-for-byte how the session skills stamp
+/// notes.md (`date +%Y-%m-%d …` = local civil time), and these writes must classify
+/// identically in reader.rs. None when the spawn fails or prints an unexpected shape.
+/// The one definition — archive_session / close_session / notes_closed_since all
+/// stamped via their own inline `date` spawn before.
+fn local_date_time() -> Option<(String, String)> {
+    let out = std::process::Command::new("date").arg("+%Y-%m-%d %H:%M").output().ok()?;
+    let s = String::from_utf8(out.stdout).ok()?;
+    let (d, t) = s.trim().split_once(' ')?;
+    (d.len() == 10 && t.len() == 5).then(|| (d.to_string(), t.to_string()))
+}
+
 /// Every configured root, canonicalized (v2 `roots` list + legacy workRoot/personalRoot).
 /// Non-existent roots drop out (canonicalize fails). Shared by the confinement checks so
 /// the "what counts as a root" list lives once.
@@ -755,13 +768,7 @@ fn archive_session(notes_path: String) -> Result<(), String> {
 
     // 1) Stamp ARCHIVED into notes.md (atomic).
     let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
-    let date = std::process::Command::new("date")
-        .arg("+%Y-%m-%d %H:%M")
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_default();
+    let date = local_date_time().map(|(d, t)| format!("{d} {t}")).unwrap_or_default();
     let line = format!("- {date} | ARCHIVED | archived from the dashboard");
     atomic_write(&abs, &stamp_archived(&content, &line))?;
 
@@ -844,14 +851,8 @@ fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String>
     }
     // The close entry must be dated today (local, matching how /close-session and
     // close_session stamp it) — else an older close reads as "closed" and trips this early.
-    let today = std::process::Command::new("date")
-        .arg("+%Y-%m-%d")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default();
-    Ok(!today.is_empty() && date.as_deref().is_some_and(|d| d.starts_with(&today)))
+    let today = local_date_time().map(|(d, _)| d);
+    Ok(today.is_some_and(|t| date.as_deref().is_some_and(|d| d.starts_with(&t))))
 }
 
 /// Stamp a close marker directly into the session's notes.md history — the guaranteed
@@ -864,17 +865,9 @@ fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String>
 fn close_session(notes_path: String) -> Result<(), String> {
     let abs = notes_md_under_root(&notes_path)?;
     let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
-    let stamp = std::process::Command::new("date")
-        .arg("+%Y-%m-%d %H:%M")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default();
-    let (date, time) = match stamp.split_once(' ') {
-        Some((d, t)) if !d.is_empty() => (d, t),
-        _ => return Err("could not determine the current date".into()),
-    };
+    let (date, time) =
+        local_date_time().ok_or("could not determine the current date")?;
+    let (date, time) = (date.as_str(), time.as_str());
     // Already closed today (e.g. /close-session just wrote a fresh wrap-up) → no double-stamp.
     let (status, last_date) = reader::session_history_info(&content);
     if status == "closed" && last_date.as_deref() == Some(date) {
