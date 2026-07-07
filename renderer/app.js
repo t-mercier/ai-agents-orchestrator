@@ -82,14 +82,14 @@ function onAccentText(hex) {
   return lum > 150 ? '#16171b' : '#ffffff'
 }
 window.applyAccent = (hex) => {
-  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#7E93B8'
+  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : window.CSM_COLORS.accent
   document.documentElement.style.setProperty('--accent', safe)
   document.documentElement.style.setProperty('--accent-rgb', hexToRgbTriplet(safe))
   document.documentElement.style.setProperty('--on-accent', onAccentText(safe))
   try { localStorage.setItem('csm.accent', safe) } catch { /* ignore */ }
 }
 window.getTheme = () => document.documentElement.dataset.theme || 'dark'
-window.getAccent = () => { try { return localStorage.getItem('csm.accent') || '#7E93B8' } catch { return '#7E93B8' } }
+window.getAccent = () => { try { return localStorage.getItem('csm.accent') || window.CSM_COLORS.accent } catch { return window.CSM_COLORS.accent } }
 
 // A "look" = the accent + a faint surface tint (warm/cool ambiance) washed over the
 // window background. Neutral looks pass tint '0,0,0' @ 0 (no wash). Persisted so it
@@ -765,7 +765,7 @@ document.getElementById('import-go').addEventListener('click', async () => {
   const cfg = window.CSM_CONFIG || {}
   const existing = cfg.categories || []
   if (!existing.some(c => c.name === category)) {
-    const newCat = { name: category, color: '#8a8f98' }
+    const newCat = { name: category, color: window.CSM_COLORS.neutral }
     if (space) newCat.root = space
     const next = { ...cfg, categories: [...existing, newCat] }
     const w = await window.api.setConfig(next)

@@ -17,3 +17,12 @@ window.CSM_LOOKS = [
   { id: 'peche',       name: 'Pêche',       accent: '#F0A988', tint: '245,200,175', tintA: 0.05 },  // Peach Fuzz (Pantone 2024)
   { id: 'celadon',     name: 'Céladon',     accent: '#8FC9B9', tint: '150,205,185', tintA: 0.045 }, // celadon seafoam
 ]
+
+// Shared color constants — the single source for hexes that were duplicated across
+// app.js / settings.js. Frozen. (style.css's `--accent` mirrors `accent` by hand —
+// CSS can't read JS; its comment cross-references here.)
+window.CSM_COLORS = Object.freeze({
+  accent:      window.CSM_LOOKS[0].accent,  // '#7E93B8' — Ardoise, the default look
+  newCategory: '#8fd9ff',                   // colour given to a freshly added category
+  neutral:     '#8a8f98',                   // grey fallback for unknown/invalid colours
+})

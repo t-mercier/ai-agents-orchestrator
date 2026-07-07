@@ -69,7 +69,7 @@
       <span class="cat-name-label"></span>
       <span class="cat-scope-label"></span>
       <button type="button" class="icon-btn cat-remove" title="Remove from the dashboard (the folder on disk is left untouched)">✕</button>`
-    row.querySelector('.cat-color').value = COLOR_RE.test(cat.color || '') ? cat.color : '#8fd9ff'
+    row.querySelector('.cat-color').value = COLOR_RE.test(cat.color || '') ? cat.color : window.CSM_COLORS.newCategory
     row.querySelector('.cat-name-label').textContent = name || '(unnamed)'
     row.querySelector('.cat-scope-label').textContent = root   // show which root, not work/personal
     row.querySelector('.cat-remove').addEventListener('click', () => row.remove())
@@ -160,7 +160,7 @@
       // Show the EFFECTIVE colour (manual override, else scheme-derived) so the pastilles
       // preview the scheme live; index matches the board's visible-column order.
       const eff = CSMBoard.colorForColumn(st, c, Math.max(0, visible.indexOf(c)), visible.length)
-      const val = /^#[0-9a-fA-F]{6}$/.test(eff) ? eff : '#8a8a8e'
+      const val = /^#[0-9a-fA-F]{6}$/.test(eff) ? eff : window.CSM_COLORS.neutral
       return `
       <div class="settings-col-row ${c.hidden ? 'col-hidden' : ''}" data-col-id="${c.id}">
         <input class="col-color" type="color" value="${val}" title="Column colour (overrides the scheme)">
@@ -196,7 +196,7 @@
       return card(L.accent, L.name, `<span class="look-swatch" style="background:${bg}"><i style="background:${L.accent}"></i></span>`)
     }).join('')
     const none = card('', 'None', '<span class="look-swatch" style="background:rgba(var(--tint),0.05)"><i style="background:rgba(var(--tint),0.18)"></i></span>')
-    const cv = (seed && !matchesLook) ? getCatSeed() : '#7E93B8'
+    const cv = (seed && !matchesLook) ? getCatSeed() : window.CSM_COLORS.accent
     const custom = `<label class="look-card look-custom" data-cat-seed="custom" title="Custom seed">
       <span class="look-swatch look-swatch-custom"><i></i></span><span class="look-name">Custom</span>
       <input type="color" class="cat-seed-custom-input" value="${cv}">
@@ -255,7 +255,7 @@
     const looks = window.CSM_LOOKS.map(L => card(L.accent, L.name, `<span class="look-swatch" style="background:${L.accent}"></span>`)).join('')
     const none = card('', 'None', '<span class="look-swatch" style="background:rgba(var(--tint),0.05)"></span>')
     // Custom = a label wrapping a real colour input, so the native picker pops AT the card.
-    const cv = (seed && !matchesLook) ? st.colorSeed : '#7E93B8'
+    const cv = (seed && !matchesLook) ? st.colorSeed : window.CSM_COLORS.accent
     const custom = `<label class="look-card look-custom" data-seed="custom" title="Custom seed">
       <span class="look-swatch look-swatch-custom"><i></i></span><span class="look-name">Custom</span>
       <input type="color" class="seed-custom-input" value="${cv}">
@@ -392,7 +392,7 @@
   function snapshotLivePrefs() {
     return {
       theme: window.getTheme ? window.getTheme() : 'dark',
-      accent: window.getAccent ? window.getAccent() : '#7E93B8',
+      accent: window.getAccent ? window.getAccent() : window.CSM_COLORS.accent,
       density: window.getDensity ? window.getDensity() : 'detailed',
       compact: window.getCompactChrome ? window.getCompactChrome() : false,
       keys: window.getKeys ? window.getKeys() : null,
@@ -466,7 +466,7 @@
       if (have.has(key(root, base))) { skipped.push(`${base} (already in ${root})`); continue }
       have.add(key(root, base))
       const scope = root === 'Perso' ? 'personal' : 'work'   // legacy, drives vault choice
-      addCatRow({ name: base, scope, root, color: '#8fd9ff' })
+      addCatRow({ name: base, scope, root, color: window.CSM_COLORS.newCategory })
       added += 1
     }
     if (skipped.length) {
@@ -587,7 +587,7 @@
   function applyLookById(id) {
     if (id === 'custom') {
       // Keep the current accent, drop the tint, and open the picker to choose a colour.
-      const acc = (window.getAccent ? window.getAccent() : '#7E93B8')
+      const acc = (window.getAccent ? window.getAccent() : window.CSM_COLORS.accent)
       if (window.applyLook) window.applyLook(acc, '0,0,0', 0, 'custom')
       highlightActiveLook('custom')
       const inp = $('set-accent'); if (inp) { inp.value = acc; inp.focus(); if (inp.showPicker) { try { inp.showPicker() } catch {} } }
