@@ -19,12 +19,7 @@ type TranscriptEntry = (PathBuf, u64, Option<SystemTime>, Transcript);
 static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// A Claude Code sessionId safe to fold into a file path: non-empty, only
-/// `[A-Za-z0-9_-]` (real ids are UUIDs). Blocks `.`/`/` so it can't traverse out
-/// of ~/.claude/projects when used as `{sid}.jsonl`.
-fn is_valid_sid(sid: &str) -> bool {
-    !sid.is_empty() && sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-}
+use crate::{is_safe_slug, is_valid_session_id};
 
 /// Mirror of isProcessAlive: alive if kill(pid,0) succeeds, or EPERM (exists but
 /// we can't signal it).
@@ -139,7 +134,7 @@ fn read_transcript(sid: &str) -> Transcript {
     // sessions/*.json written by another process — a `..`-laden sid would otherwise
     // let read_dir + join escape ~/.claude/projects. Guarding here covers every caller
     // in one place (matches resolve_session_cwd / resolve_slug_cwd).
-    if !is_valid_sid(sid) {
+    if !is_valid_session_id(sid) {
         return Transcript::default();
     }
     // Cache hit: cached path still exists and its (len, mtime) is unchanged. This
@@ -235,7 +230,7 @@ fn read_transcript(sid: &str) -> Transcript {
 /// `/restart-session` must cd into (Claude Code keys resume by launch dir). Mirrors the
 /// Electron resolveSessionCwd (which returned the transcript's first cwd).
 pub fn resolve_session_cwd(sid: &str) -> Option<String> {
-    if !is_valid_sid(sid) {
+    if !is_valid_session_id(sid) {
         return None;
     }
     read_transcript(sid).launch_cwd
@@ -246,9 +241,7 @@ pub fn resolve_session_cwd(sid: &str) -> Option<String> {
 /// scanDir and return that SPACE's root — the scanDir base's parent, i.e. `<space>` in
 /// `<space>/<CATEGORY>/<slug>`. So a Work session restarts in Work, not in $HOME.
 pub fn resolve_slug_cwd(slug: &str) -> Option<String> {
-    if slug.is_empty()
-        || !slug.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-')
-    {
+    if !is_safe_slug(slug) {
         return None;
     }
     let cfg = crate::config::load();
@@ -1131,19 +1124,21 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 mod tests {
     use super::{
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, lead_date,
-        is_resumable_sid, is_valid_sid, notes_records_session, parse_frontmatter, pick_pr_url,
+        is_resumable_sid, notes_records_session, parse_frontmatter, pick_pr_url,
         reopened_after_close, root_for_notes_path, session_history_info, Transcript,
     };
+    use crate::is_valid_session_id;
     use serde_json::json;
 
     #[test]
-    fn is_valid_sid_allows_uuids_blocks_path_traversal() {
-        assert!(is_valid_sid("b59fd8e8-fe1e-4ac5-bf6d-9a242a7f900f"));
-        assert!(is_valid_sid("abc_123-XYZ"));
-        assert!(!is_valid_sid("")); // empty
-        assert!(!is_valid_sid("../../.ssh/id_rsa")); // slashes + dots → traversal
-        assert!(!is_valid_sid("a.b")); // a dot would let `{sid}.jsonl` climb dirs
-        assert!(!is_valid_sid("a/b")); // path separator
+    fn sid_validator_blocks_path_traversal() {
+        // The shared validator also guards the `{sid}.jsonl` path built here — the
+        // path-shaped rejections are THIS module's contract, so they're locked here.
+        assert!(is_valid_session_id("b59fd8e8-fe1e-4ac5-bf6d-9a242a7f900f"));
+        assert!(is_valid_session_id("abc_123-XYZ"));
+        assert!(!is_valid_session_id("../../.ssh/id_rsa")); // slashes + dots → traversal
+        assert!(!is_valid_session_id("a.b")); // a dot would let `{sid}.jsonl` climb dirs
+        assert!(!is_valid_session_id("a/b")); // path separator
     }
 
     #[test]

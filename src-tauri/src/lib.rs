@@ -80,10 +80,20 @@ fn is_safe_category(s: &str) -> bool {
         && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
-/// A resumable Claude Code sessionId: non-empty, `[A-Za-z0-9_-]` only (real ids are
-/// UUIDs). The boundary check before a sessionId is folded into a shell command.
-fn is_valid_session_id(s: &str) -> bool {
+/// A Claude Code sessionId safe at every boundary it crosses: non-empty,
+/// `[A-Za-z0-9_-]` only (real ids are UUIDs). Blocks shell metachars before the id
+/// is folded into a command, and `.`/`/` before it becomes a `{sid}.jsonl` path
+/// (reader.rs), so it can't traverse out of ~/.claude/projects. The ONE definition —
+/// lib.rs commands and reader.rs both use it.
+pub(crate) fn is_valid_session_id(s: &str) -> bool {
     !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+/// A session folder slug safe at its boundaries (filesystem path component, skill
+/// prompt): non-empty, `[A-Za-z0-9._-]` only. Shared by restore_session,
+/// reader::resolve_slug_cwd and pty::pty_spawn's restart_slug.
+pub(crate) fn is_safe_slug(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
 /// Validate an optional space (`--root`) override: empty = no override (fine); otherwise
@@ -396,7 +406,7 @@ fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::Value) -> St
 fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     // Slug is a folder name (allows '.') — validate at the boundary before it
     // reaches the filesystem/prompt. sessionId, if present, must be a clean id.
-    if slug.is_empty() || !slug.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-') {
+    if !is_safe_slug(&slug) {
         return Err("invalid slug".into());
     }
     if !session_id.is_empty() && !is_valid_session_id(&session_id) {
@@ -1037,7 +1047,7 @@ pub fn run() {
 mod tests {
     use super::{
         category_root_dir, is_deletable_session_dir, is_pr_url, is_safe_branch, is_safe_category,
-        is_ticket, is_valid_session_id, percent_encode, sanitize_session_name,
+        is_safe_slug, is_ticket, is_valid_session_id, percent_encode, sanitize_session_name,
         set_pr_link_in_frontmatter, slugify, stamp_archived, validate_root_override,
     };
     use serde_json::json;
@@ -1050,6 +1060,16 @@ mod tests {
         assert!(!is_valid_session_id("a b"));
         assert!(!is_valid_session_id("a;rm"));
         assert!(!is_valid_session_id("../x"));
+    }
+
+    #[test]
+    fn safe_slug_accepts_folder_names_rejects_traversal_and_metachars() {
+        assert!(is_safe_slug("my-slug"));
+        assert!(is_safe_slug("GOSDK-123.hotfix_2")); // '.' allowed (folder names use it)
+        assert!(!is_safe_slug("")); // empty
+        assert!(!is_safe_slug("a/b")); // path separator
+        assert!(!is_safe_slug("a b")); // space
+        assert!(!is_safe_slug("a;rm")); // shell metachar (slug rides the skill prompt)
     }
 
     #[test]

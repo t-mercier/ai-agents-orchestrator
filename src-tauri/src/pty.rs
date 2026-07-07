@@ -94,9 +94,7 @@ pub fn pty_spawn(
     command: String,
 ) -> Result<(), String> {
     let restart_slug = restart_slug.trim().to_string();
-    if !restart_slug.is_empty()
-        && !restart_slug.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-    {
+    if !restart_slug.is_empty() && !crate::is_safe_slug(&restart_slug) {
         return Err("invalid slug".into());
     }
     let mut sessions = state.sessions.lock().unwrap();
