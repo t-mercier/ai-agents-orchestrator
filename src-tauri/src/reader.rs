@@ -19,6 +19,13 @@ type TranscriptEntry = (PathBuf, u64, Option<SystemTime>, Transcript);
 static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// A Claude Code sessionId safe to fold into a file path: non-empty, only
+/// `[A-Za-z0-9_-]` (real ids are UUIDs). Blocks `.`/`/` so it can't traverse out
+/// of ~/.claude/projects when used as `{sid}.jsonl`.
+fn is_valid_sid(sid: &str) -> bool {
+    !sid.is_empty() && sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 /// Mirror of isProcessAlive: alive if kill(pid,0) succeeds, or EPERM (exists but
 /// we can't signal it).
 fn alive(pid: i64) -> bool {
@@ -123,6 +130,14 @@ fn pick_pr_url(urls: &[String], name: &str) -> Option<String> {
 /// avoids the lossy cwd→folder encoding) and fold the events into the last seen
 /// gitBranch / prLink / cwd and the last assistant text.
 fn read_transcript(sid: &str) -> Transcript {
+    // Allowlist the sid before it builds a file path (`{sid}.jsonl`). Most callers
+    // already validate, but get_sessions() folds the sid straight from a
+    // sessions/*.json written by another process — a `..`-laden sid would otherwise
+    // let read_dir + join escape ~/.claude/projects. Guarding here covers every caller
+    // in one place (matches resolve_session_cwd / resolve_slug_cwd).
+    if !is_valid_sid(sid) {
+        return Transcript::default();
+    }
     // Cache hit: cached path still exists and its (len, mtime) is unchanged. This
     // also skips the projects-dir scan below.
     if let Some((path, len, mtime, tr)) = TRANSCRIPT_CACHE.lock().unwrap().get(sid) {
@@ -216,7 +231,7 @@ fn read_transcript(sid: &str) -> Transcript {
 /// `/restart-session` must cd into (Claude Code keys resume by launch dir). Mirrors the
 /// Electron resolveSessionCwd (which returned the transcript's first cwd).
 pub fn resolve_session_cwd(sid: &str) -> Option<String> {
-    if sid.is_empty() || !sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+    if !is_valid_sid(sid) {
         return None;
     }
     read_transcript(sid).launch_cwd
@@ -804,10 +819,19 @@ fn date_to_days(s: &str) -> Option<i64> {
     Some(days_from_civil(y, m, d))
 }
 
-/// True when the transcript was modified on a LATER calendar day than the session's
-/// last `/close-session` — i.e. the session was reopened (resumed) and worked on without a
-/// fresh `/close-session`. Day granularity sidesteps timezone/time parsing; strictly-later is
-/// conservative (a genuinely-closed, untouched session never trips it).
+/// True when the transcript was modified MORE THAN A DAY after the session's last
+/// `/close-session` — i.e. the session was reopened (resumed) and worked on without a
+/// fresh `/close-session`.
+///
+/// `close_date` is a LOCAL calendar day (`/close-session` stamps `date +%Y-%m-%d`), but
+/// `tr.mtime` is a UTC instant. Bucketing the UTC mtime into a UTC day and comparing it
+/// to a local day can be off by one at the day boundary: in a negative-UTC-offset zone
+/// (the Americas), an evening close writes today's local date while the UTC mtime has
+/// already rolled to tomorrow — so a plain `mtime_day > close_day` fired the instant the
+/// session was closed and flipped it Closed→Stale. The max civil-offset skew is <24h, so
+/// requiring a *strictly-more-than-one-day* gap (`+ 1`) absorbs it in every timezone. The
+/// cost is that a genuine same-/next-day reopen isn't flagged stale until the following
+/// day — an acceptable, self-healing lag versus a wrong flip right after closing.
 fn reopened_after_close(tr: &Transcript, close_date: &str) -> bool {
     let close_days = match date_to_days(close_date) {
         Some(d) => d,
@@ -817,7 +841,7 @@ fn reopened_after_close(tr: &Transcript, close_date: &str) -> bool {
         Some(d) => (d.as_secs() / 86400) as i64,
         None => return false,
     };
-    mtime_days > close_days
+    mtime_days > close_days + 1
 }
 
 /// First `YYYY-MM-DD` (optionally ` HH:MM`) found in a line.
@@ -894,21 +918,36 @@ fn is_wrapped_up(line: &str) -> bool {
     if line.contains("session=") {
         return true;
     }
-    // Legacy `/close-session` format: a leading "HH:MM → HH:MM" (or "?? → HH:MM") time range.
+    // Legacy `/close-session` format: a "HH:MM → HH:MM" (or "?? → HH:MM") time range.
+    // Require the arrow to sit BETWEEN two clock tokens — left ends with HH:MM (or the
+    // `??` placeholder), AND right STARTS with HH:MM. Checking only the left side let a
+    // free-text line like "… 14:30 → discuss next steps" false-positive as a close.
     let Some(pos) = line.find('→') else {
         return false;
     };
     let left = line[..pos].trim_end();
-    if left.ends_with("??") {
-        return true;
-    }
-    let b = left.as_bytes();
+    let right = line[pos + '→'.len_utf8()..].trim_start();
+    (left.ends_with("??") || ends_with_hhmm(left)) && starts_with_hhmm(right)
+}
+
+/// The first 5 bytes read as `HH:MM` (two digits, colon, two digits).
+fn starts_with_hhmm(s: &str) -> bool {
+    is_hhmm(s.as_bytes())
+}
+
+/// The last 5 bytes read as `HH:MM`.
+fn ends_with_hhmm(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() >= 5 && is_hhmm(&b[b.len() - 5..])
+}
+
+fn is_hhmm(b: &[u8]) -> bool {
     b.len() >= 5
-        && b[b.len() - 1].is_ascii_digit()
-        && b[b.len() - 2].is_ascii_digit()
-        && b[b.len() - 3] == b':'
-        && b[b.len() - 4].is_ascii_digit()
-        && b[b.len() - 5].is_ascii_digit()
+        && b[0].is_ascii_digit()
+        && b[1].is_ascii_digit()
+        && b[2] == b':'
+        && b[3].is_ascii_digit()
+        && b[4].is_ascii_digit()
 }
 
 fn fv(fm: &HashMap<String, String>, key: &str) -> Value {
@@ -1088,10 +1127,20 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 mod tests {
     use super::{
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, lead_date,
-        is_resumable_sid, notes_records_session, parse_frontmatter, pick_pr_url,
+        is_resumable_sid, is_valid_sid, notes_records_session, parse_frontmatter, pick_pr_url,
         reopened_after_close, root_for_notes_path, session_history_info, Transcript,
     };
     use serde_json::json;
+
+    #[test]
+    fn is_valid_sid_allows_uuids_blocks_path_traversal() {
+        assert!(is_valid_sid("b59fd8e8-fe1e-4ac5-bf6d-9a242a7f900f"));
+        assert!(is_valid_sid("abc_123-XYZ"));
+        assert!(!is_valid_sid("")); // empty
+        assert!(!is_valid_sid("../../.ssh/id_rsa")); // slashes + dots → traversal
+        assert!(!is_valid_sid("a.b")); // a dot would let `{sid}.jsonl` climb dirs
+        assert!(!is_valid_sid("a/b")); // path separator
+    }
 
     #[test]
     fn is_resumable_sid_accepts_uuid_rejects_placeholder() {
@@ -1195,6 +1244,24 @@ mod tests {
     }
 
     #[test]
+    fn legacy_arrow_close_needs_a_clock_on_both_sides() {
+        let status = |hist: &str| {
+            let content = format!("## Session history\n{hist}\n");
+            session_history_info(&content).0
+        };
+        // genuine legacy close range → closed
+        assert_eq!(status("- 2026-06-10 | 09:00 → 11:30 | wrapped up"), "closed");
+        // dashboard close_session fallback shape "?? → HH:MM" → closed
+        assert_eq!(status("- 2026-06-10 ?? → 14:30 | closed from the dashboard"), "closed");
+        // free-text with a clock time BEFORE an arrow → NOT a close (was the false positive)
+        assert_eq!(status("- 2026-06-11 | synced at 14:30 → follow up tomorrow"), "stale");
+        // clock on the left but prose on the right → NOT a close
+        assert_eq!(status("- 2026-06-11 10:45 → ship it"), "stale");
+        // `??` on the left but no clock on the right → NOT a close
+        assert_eq!(status("- 2026-06-11 ?? → ship it"), "stale");
+    }
+
+    #[test]
     fn session_history_info_uses_newest_dated_entry_not_last_physical_line() {
         // Out-of-order history: the close (06-20) sits ABOVE an older entry (06-18).
         // The state + date must come from the newest-dated line, else the stale 06-18
@@ -1240,7 +1307,7 @@ mod tests {
     }
 
     #[test]
-    fn reopened_after_close_is_strictly_a_later_day() {
+    fn reopened_after_close_needs_more_than_a_days_gap() {
         use std::time::{Duration, UNIX_EPOCH};
         let close = "2026-06-10";
         let day = date_to_days(close).unwrap() as u64;
@@ -1250,8 +1317,11 @@ mod tests {
         };
         // same calendar day (a few hours later) → NOT reopened
         assert!(!reopened_after_close(&with_mtime(day * 86400 + 5 * 3600), close));
-        // next day → reopened
-        assert!(reopened_after_close(&with_mtime((day + 1) * 86400), close));
+        // next UTC day → NOT reopened: this is exactly the local-vs-UTC-day skew a
+        // negative-offset (Americas) evening close produces, and must not flip Closed→Stale.
+        assert!(!reopened_after_close(&with_mtime((day + 1) * 86400 + 2 * 3600), close));
+        // two days later → genuinely reopened
+        assert!(reopened_after_close(&with_mtime((day + 2) * 86400), close));
         // no transcript mtime → false
         assert!(!reopened_after_close(&Transcript::default(), close));
     }
