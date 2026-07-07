@@ -100,8 +100,18 @@ pub fn pty_spawn(
         return Err("invalid slug".into());
     }
     let mut sessions = state.sessions.lock().unwrap();
-    if sessions.contains_key(&session_id) {
-        return Ok(()); // already attached
+    if let Some(existing) = sessions.get_mut(&session_id) {
+        // A pty whose child already exited (user typed `exit`, or claude quit) still has
+        // its entry here: the reader thread emits pty-exit on EOF but can't reach this map.
+        // Returning early on a dead entry would block reopen forever (no new pty spawns).
+        // try_wait reaps an exited child; if it's gone, drop the stale entry so the spawn
+        // below recreates it. A still-running child means we're genuinely already attached.
+        match existing.child.try_wait() {
+            Ok(Some(_)) => {
+                sessions.remove(&session_id);
+            }
+            _ => return Ok(()),
+        }
     }
 
     // Spawn at the size the renderer already measured, so claude renders at the
