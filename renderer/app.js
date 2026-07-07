@@ -61,7 +61,7 @@ window.togglePin = togglePin
 // these power the Settings controls + live apply.
 function hexToRgbTriplet(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
-  if (!m) return '10, 132, 255'
+  if (!m) return '126, 147, 184'
   const n = parseInt(m[1], 16)
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
@@ -82,14 +82,14 @@ function onAccentText(hex) {
   return lum > 150 ? '#16171b' : '#ffffff'
 }
 window.applyAccent = (hex) => {
-  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#0a84ff'
+  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#7E93B8'
   document.documentElement.style.setProperty('--accent', safe)
   document.documentElement.style.setProperty('--accent-rgb', hexToRgbTriplet(safe))
   document.documentElement.style.setProperty('--on-accent', onAccentText(safe))
   try { localStorage.setItem('csm.accent', safe) } catch { /* ignore */ }
 }
 window.getTheme = () => document.documentElement.dataset.theme || 'dark'
-window.getAccent = () => { try { return localStorage.getItem('csm.accent') || '#0a84ff' } catch { return '#0a84ff' } }
+window.getAccent = () => { try { return localStorage.getItem('csm.accent') || '#7E93B8' } catch { return '#7E93B8' } }
 
 // A "look" = the accent + a faint surface tint (warm/cool ambiance) washed over the
 // window background. Neutral looks pass tint '0,0,0' @ 0 (no wash). Persisted so it

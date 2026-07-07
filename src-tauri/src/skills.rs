@@ -197,7 +197,15 @@ mod tests {
     #[test]
     fn bundle_carries_the_slash_command_skills() {
         let names = skill_names();
-        for expected in ["start-session", "close-session", "restart-session", "archive-session"] {
+        for expected in [
+            "start-session",
+            "close-session",
+            "save-session",
+            "restart-session",
+            "archive-session",
+            "import-session",
+            "rename-category",
+        ] {
             assert!(names.contains(&expected.to_string()), "missing bundled skill: {expected}");
         }
         assert!(!names.contains(&"lib".to_string()), "lib is not a slash-command skill");

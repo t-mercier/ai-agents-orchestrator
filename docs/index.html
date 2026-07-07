@@ -247,7 +247,7 @@
     <span><b>Read-only</b> on <code>~/.claude</code></span>
     <span><b>Zero</b> network calls</span>
     <span><b>No</b> secrets stored</span>
-    <span><b>124</b> tests</span>
+    <span><b>131</b> tests</span>
   </div>
 </header>
 
@@ -409,8 +409,10 @@
       <div class="skill-list reveal">
         <div class="skill"><code>/start-session</code><span>Create a session workspace + <code>notes.md</code>, register it, sync the repo.</span></div>
         <div class="skill"><code>/close-session</code><span>Wrap up — summarise into <code>notes.md</code> and append a history entry.</span></div>
+        <div class="skill"><code>/save-session</code><span>Checkpoint mid-flight (same summary as close, marked <code>(in progress)</code>) <strong>without</strong> closing it — handy before a context compaction.</span></div>
         <div class="skill"><code>/restart-session</code><span>Reload a session's context from its notes into a fresh session.</span></div>
         <div class="skill"><code>/archive-session</code><span>Mark a session archived and drop it from the active list.</span></div>
+        <div class="skill"><code>/import-session</code><span>Adopt an existing Claude Code session into management under a chosen space/category.</span></div>
         <div class="skill"><code>/rename-category</code><span>Rename a category everywhere — folder, notes, and config.</span></div>
       </div>
     </div>

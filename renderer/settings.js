@@ -392,7 +392,7 @@
   function snapshotLivePrefs() {
     return {
       theme: window.getTheme ? window.getTheme() : 'dark',
-      accent: window.getAccent ? window.getAccent() : '#0a84ff',
+      accent: window.getAccent ? window.getAccent() : '#7E93B8',
       density: window.getDensity ? window.getDensity() : 'detailed',
       compact: window.getCompactChrome ? window.getCompactChrome() : false,
       keys: window.getKeys ? window.getKeys() : null,
@@ -587,7 +587,7 @@
   function applyLookById(id) {
     if (id === 'custom') {
       // Keep the current accent, drop the tint, and open the picker to choose a colour.
-      const acc = (window.getAccent ? window.getAccent() : '#0a84ff')
+      const acc = (window.getAccent ? window.getAccent() : '#7E93B8')
       if (window.applyLook) window.applyLook(acc, '0,0,0', 0, 'custom')
       highlightActiveLook('custom')
       const inp = $('set-accent'); if (inp) { inp.value = acc; inp.focus(); if (inp.showPicker) { try { inp.showPicker() } catch {} } }

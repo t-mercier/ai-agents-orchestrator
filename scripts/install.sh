@@ -75,4 +75,4 @@ echo
 echo "✓ Done. Edit categories/colors/paths in the app's Settings (⚙), or in $CONFIG."
 echo "→ Optional: install the Superpowers plugin for git-worktree support:"
 echo "    https://github.com/obra/superpowers"
-echo "Skills available now: /start-session  /close-session  /restart-session  /archive-session  /rename-category"
+echo "Skills available now: /start-session  /close-session  /save-session  /restart-session  /archive-session  /import-session  /rename-category"

@@ -72,8 +72,10 @@ You run these inside Claude Code (the dashboard buttons trigger them for you). C
 |---|---|
 | **`/start-session <CATEGORY> <ticket> <name>`** | Creates the session: a workspace + `notes.md` under the category's folder, registers it, and syncs the git repo. |
 | **`/close-session`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry **tagged with the session id**. → *Closed* |
+| **`/save-session`** | Checkpoints the active session into `notes.md` mid-flight, marked `(in progress)`, **without** closing it — handy before a context compaction. Stays *Running*. |
 | **`/restart-session <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |
 | **`/archive-session <slug>`** | Marks a session archived and drops it from the active list (the notes file is kept). → *Archived* |
+| **`/import-session <slug>`** | Adopts an unmanaged Claude Code session into management under a chosen space and category. |
 | **`/rename-category <OLD> <NEW>`** | Renames a category everywhere — moves its folder, re-tags every `notes.md`, updates the config. (The app is read-only, so renaming *there* alone would orphan sessions — this skill does the real move.) |
 
 ## A typical day

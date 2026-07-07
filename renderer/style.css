@@ -13,11 +13,11 @@
   --text-primary: rgba(var(--tint), 0.92);
   --text-secondary: rgba(var(--tint), 0.62);  /* was 0.5 — lift for WCAG legibility */
   --text-tertiary: rgba(var(--tint), 0.48);   /* was 0.28 — meta/timestamps were ~2:1 */
-  --accent: #0a84ff;
+  --accent: #7E93B8;      /* default = the "Ardoise" look's accent (looks.js), the neutral default look */
   --on-accent: #ffffff;   /* legible text on a solid accent fill; recomputed per accent (luminance) */
   --look-tint: 0, 0, 0;   /* surface ambiance wash (a "look"); neutral by default */
   --look-tint-a: 0;       /* wash opacity — 0 = no tint */
-  --accent-rgb: 10, 132, 255;         /* accent as r,g,b for rgba() tints; set by the picker */
+  --accent-rgb: 126, 147, 184;        /* accent as r,g,b for rgba() tints; set by the picker */
   --danger: #ff6b6b;                  /* destructive actions (remove/delete) */
   --status-busy: #ff9f0a;        --status-busy-rgb: 255, 159, 10;
   --status-waiting: #ff453a;     --status-waiting-rgb: 255, 69, 58;
