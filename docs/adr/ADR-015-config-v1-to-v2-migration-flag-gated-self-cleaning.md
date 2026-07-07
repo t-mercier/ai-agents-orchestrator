@@ -4,11 +4,15 @@
 
 ## Context
 
-The config moved from the v1 schema (`~/.config/claude-session-monitor/config.json`,
-flat `workRoot`/`personalRoot` + categories) to the v2 schema
-(`~/.config/ai-agents-orchestrator/config.json`, named `roots`/`spaces`). We want to
-**remove v1 entirely** — the old file, the app's migration code, and the read-only v1
-tolerance in the Python skill readers (`aoconfig.py`, `rename.py`).
+The config **schema** moved from v1 (flat `workRoot`/`personalRoot` + a category
+`scope` of work|personal) to v2 (named `roots`/`spaces`) — **both at the same, unchanged
+public path**: `~/.config/ai-agents-orchestrator/config.json`. Migration therefore
+reads and writes that **one** path; there is no old-path lookup. (The
+`claude-session-monitor` path was the *pre-public perso repo's* config dir — it was
+never referenced by shipped code, so it is out of scope for the product's migration; a
+stray perso leftover there is deleted by hand.) We want to **remove v1 entirely** — the
+old-schema fields, the app's schema-migration code, and the read-only v1 tolerance in the
+Python skill readers (`aoconfig.py`, `rename.py`).
 
 Two facts make a naïve "just delete v1" unsafe:
 
