@@ -129,8 +129,15 @@ started_at: <NOW>
 1. …
 
 ## Session history
-- <NOW> | session=<SESSION_ID> | imported into <CATEGORY> via the dashboard
+- <NOW> (in progress) | session=<SESSION_ID> | imported into <CATEGORY> via the dashboard
 ```
+
+> The `(in progress)` marker matters: an imported session is **open work**, not closed.
+> A history line with `session=` but no `(in progress)` reads as a completed
+> `/close-session` to the dashboard (reader.rs `is_wrapped_up`), so without it a freshly
+> imported session whose terminal is closed same-day would wrongly show under **Closed**
+> instead of Running/stale. `/close-session` later appends a line WITHOUT the marker to
+> file it under Closed.
 
 ## Step 6 — Register in active-sessions.json
 
