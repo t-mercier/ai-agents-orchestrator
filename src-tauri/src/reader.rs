@@ -29,7 +29,11 @@ fn is_valid_sid(sid: &str) -> bool {
 /// Mirror of isProcessAlive: alive if kill(pid,0) succeeds, or EPERM (exists but
 /// we can't signal it).
 fn alive(pid: i64) -> bool {
-    if pid <= 0 {
+    // The pid comes from a sessions/*.json written by another process — clamp it to
+    // pid_t's range before the cast. An oversized value would wrap negative, and
+    // kill(-pgid, 0) queries a whole PROCESS GROUP: a dead session could then read
+    // as alive because some unrelated group member answered.
+    if pid <= 0 || pid > libc::pid_t::MAX as i64 {
         return false;
     }
     unsafe {
