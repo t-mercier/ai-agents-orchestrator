@@ -69,6 +69,17 @@ struct Transcript {
     mtime: Option<SystemTime>,
 }
 
+/// Parse ~/.claude/active-sessions.json (the skills' session registry). `{}` when
+/// absent or unparseable — every consumer treats the registry as best-effort. The one
+/// place the file is read+parsed (it was inlined four times, incl. once per notes.md
+/// inside the poll scan).
+fn load_active_sessions() -> Value {
+    fs::read_to_string(home().join(".claude").join("active-sessions.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({}))
+}
+
 /// All GitHub PR URLs in raw transcript text (with duplicates, so the picker can use
 /// frequency). Scans for the `https://github.com/` needle + validates the `/pull/<n>`
 /// shape — the user pastes the PR link when asking Claude to review it.
@@ -345,12 +356,9 @@ fn discover_meta(path: &std::path::Path) -> (Option<String>, Option<String>, boo
 /// in a notes.md frontmatter under the configured roots (covers running/closed/archived).
 /// Used to exclude already-managed transcripts from the import picker.
 fn managed_session_ids() -> HashSet<String> {
-    let claude = home().join(".claude");
     let mut ids = HashSet::new();
-    if let Ok(s) = fs::read_to_string(claude.join("active-sessions.json")) {
-        if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&s) {
-            ids.extend(m.keys().cloned());
-        }
+    if let Value::Object(m) = load_active_sessions() {
+        ids.extend(m.into_iter().map(|(k, _)| k));
     }
     let cfg = crate::config::load();
     if let Some(dirs) = cfg.get("scanDirs").and_then(Value::as_array) {
@@ -467,10 +475,7 @@ fn read_notes_meta(notes_path: &str) -> (Value, Value, Value) {
 /// inside get_historical_sessions).
 fn running_session_ids() -> (HashSet<String>, HashSet<String>) {
     let claude = home().join(".claude");
-    let active: Value = fs::read_to_string(claude.join("active-sessions.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+    let active = load_active_sessions();
     let mut ids = HashSet::new();
     let mut notes = HashSet::new();
     let entries = match fs::read_dir(claude.join("sessions")) {
@@ -544,10 +549,7 @@ fn resolve_pr_link(explicit_fm: Value, category: &str, pr_urls: &[String], name:
 pub fn get_sessions() -> Vec<Value> {
     let claude = home().join(".claude");
     let cfg = crate::config::load();
-    let active: Value = fs::read_to_string(claude.join("active-sessions.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+    let active = load_active_sessions();
 
     let mut out = Vec::new();
     let entries = match fs::read_dir(claude.join("sessions")) {
@@ -697,13 +699,10 @@ fn is_resumable_sid(s: &str) -> bool {
 }
 
 /// When a notes.md carries no real frontmatter session_id (a stub/placeholder), find the
-/// most-recently-active session id registered to it in active-sessions.json whose
-/// transcript still exists — so the dashboard can offer Resume, not only Restart.
-fn latest_resumable_sid(notes_path: &str) -> Option<String> {
-    let active: Value = fs::read_to_string(home().join(".claude").join("active-sessions.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| json!({}));
+/// most-recently-active session id registered to it in `active` (the parsed
+/// active-sessions.json — the caller loads it ONCE per scan, not once per notes.md)
+/// whose transcript still exists — so the dashboard can offer Resume, not only Restart.
+fn latest_resumable_sid(notes_path: &str, active: &Value) -> Option<String> {
     let mut best: Option<(String, SystemTime)> = None;
     for (sid, e) in active.as_object()? {
         if e.get("notes_path").and_then(Value::as_str) != Some(notes_path) || !is_resumable_sid(sid) {
@@ -962,6 +961,8 @@ fn scan_historical() -> Vec<Value> {
     // Exclude sessions that are currently live (running tab owns them). Cheap scan —
     // no transcript/git work (was a full get_sessions() that duplicated the running poll).
     let (running_ids, active_notes) = running_session_ids();
+    // Parsed once for the whole scan; latest_resumable_sid needs it per stub notes.md.
+    let active_registry = load_active_sessions();
 
     let mut out = Vec::new();
     for sd in &scan_dirs {
@@ -997,7 +998,7 @@ fn scan_historical() -> Vec<Value> {
                 .get("session_id")
                 .filter(|s| is_resumable_sid(s))
                 .cloned()
-                .or_else(|| latest_resumable_sid(&notes_path));
+                .or_else(|| latest_resumable_sid(&notes_path, &active_registry));
             let tr = eff_sid.as_ref().map(|sid| read_transcript(sid));
             // A "closed" session whose transcript was touched on a LATER day than its
             // last /close-session was reopened (resumed) + worked on without re-closing →
