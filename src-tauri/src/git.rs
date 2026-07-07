@@ -45,10 +45,11 @@ pub(crate) fn git_info(cwd: &str) -> (Value, Value) {
         }
     }
     let (b, w) = git_info_uncached(cwd);
-    GIT_CACHE
-        .lock()
-        .unwrap()
-        .insert(cwd.to_string(), (Instant::now(), b.clone(), w.clone()));
+    let mut cache = GIT_CACHE.lock().unwrap();
+    // Drop expired entries while we're here — cwds of closed/vanished sessions would
+    // otherwise accumulate for the app's lifetime (nothing else ever removes them).
+    cache.retain(|_, (t, _, _)| t.elapsed() < GIT_TTL);
+    cache.insert(cwd.to_string(), (Instant::now(), b.clone(), w.clone()));
     (b, w)
 }
 
