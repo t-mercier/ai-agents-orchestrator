@@ -142,7 +142,7 @@ started_at: <NOW>
 # <TITLE>
 
 ## Goal
-<one-line why — fill in>
+<one-line why — FILL IN>
 
 ## Branch
 <BRANCH or "to fill">
@@ -157,10 +157,20 @@ started_at: <NOW>
 - [ ] …
 
 ## Next steps
-1. …
+- [ ] …
 
 ## Session history
 ```
+
+## Step 6.5 — Write real Goal and initial Next-steps plan
+
+Read the notes you just created. **DO NOT leave `<fill in>` placeholders.** Rewrite:
+- **Goal**: a single line capturing what was asked (the real why), in plain English.
+- **Next steps**: a todo-list (`- [ ]` items), 3–7 items, one line each. Concrete: what comes next (not general advice). Mark any already-done items as `- [x]`.
+
+Both are mandatory — stop and ask the user if the task is unclear. If you can infer the real goal from the context, write it yourself (don't push it to the user later).
+
+Use the Edit tool to replace the `<one-line why — FILL IN>` and the `- [ ] …` Next steps.
 
 ## Step 7 — Register in active-sessions.json
 
@@ -232,7 +242,7 @@ else:
 EOF
 ```
 
-## Step 10 — Final output
+## Step 11 — Final output
 
-Print a short summary: notes.md path · branch · git-sync result · renamed-to (or
-`/rename …` fallback) · reminder to fill in Goal + Open questions.
+Print a short summary: notes.md path · Goal (one line) · Next steps (count) · branch · git-sync result · renamed-to (or
+`/rename …` fallback). The Goal + Next steps are now locked in.

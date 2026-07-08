@@ -238,10 +238,16 @@ else:
 EOF
 ```
 
-### Step 7 — Brief the user
+### Step 7 — Brief the user (refresh Goal/Next steps if plan changed)
 
-Read the current session's `cwd` from its `~/.claude/sessions/<pid>.json`. Print a
-tight 5-second summary:
+Read the current session's `cwd` from its `~/.claude/sessions/<pid>.json`.
+
+**If the session's plan has changed** (you see the next steps are no longer realistic/clear, or the Goal has drifted — common after a restart) — rewrite them:
+- Edit Goal to one line if it needs it.
+- Edit Next steps: a todo-list (`- [ ]` items, ≤7 open, one line each); mark completed as `- [x]`.
+- Brief the user that you've refreshed the plan (one sentence).
+
+Print a tight 5-second summary:
 
 ```
 Loaded <SLUG> from <NOTES_PATH>.

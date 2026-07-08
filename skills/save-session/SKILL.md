@@ -96,10 +96,10 @@ From the work done in this session up to now, gather:
 - **Decisions made** — date-prefixed (`YYYY-MM-DD:`) one-liners (architecture/approach choices).
 - **Files touched** — paths + a one-line note (pull from Edit/Write calls).
 - **Open questions** — tick off any now-resolved `[ ]`; append genuinely new ones.
-- **Next steps** — the updated ordered list of what comes next.
-- **One-line summary** — the session so far in 10–15 words.
+- **Next steps** — a todo-list (`- [ ]` items, ≤7 open items, one line each). Mark completed work as `- [x]` (don't delete). Max 7 open items total.
+- **One-line summary** — a concrete result in past tense, 10–15 words (not "worked on X").
 
-Skip noise (don't list every read/grep).
+Skip noise (don't list every read/grep). **Re-validate Goal** if it's drifted (rewrite in one line if needed).
 
 ## Step 5 — Frontmatter refresh (auto-attach PR / ticket)
 
