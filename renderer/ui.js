@@ -238,8 +238,9 @@ function pauseBtn(s) {
 }
 
 function renderListCard(s, selectedKey, changed) {
+  // Session summary (from /save-session or /close-session), hidden when there's none.
   // Full text — CSS (ellipsis) clips to the panel width, so widening the panel reveals more.
-  const preview = escapeHtml(s.lastActivity || s.goal || '')
+  const preview = escapeHtml(s.lastSummary || '')
   const next = firstNextStep(s.nextSteps)
   const { dotClass, historical, badge } = statusBits(s)
   // Selection is keyed on sessionKey (unique per notes.md) — sessionId can be
@@ -414,10 +415,10 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
 // ── Cards view: full-width grid ──
 
 function renderSessionCard(s, selectedKey, changed) {
-  // For historical (closed/archived) sessions, prefer lastSummary (from Session history);
-  // else use live lastActivity. Fall back to goal in both cases.
-  const isHistorical = s.state === 'closed' || s.state === 'archived'
-  const preview = escapeHtml(truncate(isHistorical ? (s.lastSummary || s.goal) : (s.lastActivity || s.goal), 110))
+  // One-line "what was done" = the summary written by /save-session or /close-session
+  // (the latest Session-history line, running or historical). Raw transcript output is
+  // never shown; when there's no summary yet, the activity line is hidden entirely.
+  const preview = escapeHtml(truncate(s.lastSummary || '', 110))
   const next = firstNextStep(s.nextSteps)
   const cat = s.category || 'OTHER'
   const { dotClass, historical, badge } = statusBits(s)
@@ -435,7 +436,7 @@ function renderSessionCard(s, selectedKey, changed) {
         ${deleteBtn(s)}
         ${pinBtn(s)}
       </div>
-      <div class="session-card-activity">${preview || '—'}</div>
+      ${preview ? `<div class="session-card-activity">${preview}</div>` : ''}
       ${next ? `<div class="session-card-next" title="Next: ${escapeHtml(next)}">↪ ${escapeHtml(truncate(next, 90))}</div>` : ''}
       <div class="session-card-foot">
         ${cardIcons(s) || '<span></span>'}
@@ -836,13 +837,11 @@ function renderDetailPanel(s, tab = 'running') {
 
   const goalSection = s.goal ? detailSection('Goal', `<div class="detail-goal">${escapeHtml(s.goal)}</div>`) : ''
 
-  // For historical sessions, show lastSummary; for running/stale, show lastActivity.
-  const activitySection = isHistorical && s.lastSummary
-    ? detailSection('Last summary', `<div class="detail-activity">${escapeHtml(s.lastSummary)}</div>`)
-    : !isHistorical && s.lastActivity
-    ? detailSection('Last activity',
-        `<div class="detail-activity">${escapeHtml(s.lastActivity)}</div>` +
-        (s.lastActivityAt ? `<div class="detail-timestamp">${escapeHtml(formatTimestamp(s.lastActivityAt))}</div>` : ''))
+  // "Summary" = the latest Session-history summary (written by /save-session or
+  // /close-session), for running and historical alike. Raw transcript output is no longer
+  // shown; hidden entirely when there's no summary yet.
+  const activitySection = s.lastSummary
+    ? detailSection('Summary', `<div class="detail-activity">${escapeHtml(s.lastSummary)}</div>`)
     : ''
 
   const nextStepsSection = s.nextSteps

@@ -455,7 +455,7 @@ fn extract_section(content: &str, heading: &str) -> Option<String> {
 // (goal, next_steps, pr_link) read from a running session's notes.md. pr_link comes
 // from the frontmatter — the durable source — and the caller prefers it over the
 // (vestigial) transcript prLink.
-fn read_notes_meta(notes_path: &str) -> (Value, Value, Value) {
+fn read_notes_meta(notes_path: &str) -> (Value, Value, Value, Value) {
     match fs::read_to_string(notes_path) {
         Ok(c) => {
             let pr_link = parse_frontmatter(&c)
@@ -467,9 +467,10 @@ fn read_notes_meta(notes_path: &str) -> (Value, Value, Value) {
                 extract_section(&c, "Goal").map(Value::String).unwrap_or(Value::Null),
                 extract_section(&c, "Next steps").map(Value::String).unwrap_or(Value::Null),
                 pr_link,
+                last_history_summary(&c).map(Value::String).unwrap_or(Value::Null),
             )
         }
-        Err(_) => (Value::Null, Value::Null, Value::Null),
+        Err(_) => (Value::Null, Value::Null, Value::Null, Value::Null),
     }
 }
 
@@ -587,9 +588,9 @@ pub fn get_sessions() -> Vec<Value> {
 
         let entry_meta = active.get(&sid).cloned().unwrap_or_else(|| json!({}));
         let notes_path = entry_meta.get("notes_path").and_then(Value::as_str).map(String::from);
-        let (goal, next_steps, pr_link_fm) = match &notes_path {
+        let (goal, next_steps, pr_link_fm, last_summary) = match &notes_path {
             Some(p) => read_notes_meta(p),
-            None => (Value::Null, Value::Null, Value::Null),
+            None => (Value::Null, Value::Null, Value::Null, Value::Null),
         };
         let launch_cwd = data.get("cwd").and_then(Value::as_str).unwrap_or("");
         // The transcript records where the session actually works (it cd's into a
@@ -650,6 +651,7 @@ pub fn get_sessions() -> Vec<Value> {
             "worktree": worktree,
             "lastActivity": tr.last_activity.map(Value::String).unwrap_or(Value::Null),
             "lastActivityAt": tr.last_activity_at.map(Value::String).unwrap_or(Value::Null),
+            "lastSummary": last_summary,
             "prLink": pr_link,
         }));
     }
@@ -921,6 +923,23 @@ fn extract_history_summary(line: &str) -> Option<String> {
     None
 }
 
+/// The summary segment of the NEWEST-dated `## Session history` line (the same line
+/// `session_history_info` picks for the state). `None` when no history line carries a
+/// summary yet — callers then show NO summary at all (never raw transcript output). This
+/// is what a session's card/detail shows as its one-line "what was done", written by
+/// `/save-session` (in-progress) and `/close-session`.
+fn last_history_summary(content: &str) -> Option<String> {
+    let hist = extract_section(content, "Session history")?;
+    let lines: Vec<&str> = hist.lines().filter(|l| l.trim_start().starts_with('-')).collect();
+    if lines.is_empty() {
+        return None;
+    }
+    let latest = lines[(0..lines.len())
+        .max_by_key(|&i| (lead_date(lines[i]).as_deref().and_then(date_to_days), i))
+        .unwrap()];
+    extract_history_summary(latest)
+}
+
 /// Extract the last text block from an assistant message, cleaning markdown and filtering noise.
 /// Strips headers (`#`), code fences (```), collapses whitespace, and skips blocks < ~15 chars.
 /// Used for live activity display on running sessions.
@@ -1121,21 +1140,7 @@ fn scan_historical() -> Vec<Value> {
             let last_activity_at = tr.as_ref().and_then(|t| t.last_activity_at.clone());
             let cwd = tr.and_then(|t| t.launch_cwd).unwrap_or(root_dir);
 
-            // Extract last summary from the newest-dated Session history line (matching the
-            // logic in session_history_info, which picks the newest-dated line for the state).
-            let last_summary = extract_section(&content, "Session history")
-                .and_then(|hist| {
-                    let lines: Vec<&str> = hist.lines()
-                        .filter(|l| l.trim_start().starts_with('-'))
-                        .collect();
-                    if lines.is_empty() {
-                        return None;
-                    }
-                    let latest = lines[(0..lines.len())
-                        .max_by_key(|&i| (lead_date(lines[i]).as_deref().and_then(date_to_days), i))
-                        .unwrap()];
-                    extract_history_summary(latest)
-                });
+            let last_summary = last_history_summary(&content);
 
             out.push(json!({
                 "notesPath": notes_path,
