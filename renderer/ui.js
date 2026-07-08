@@ -414,7 +414,10 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
 // ── Cards view: full-width grid ──
 
 function renderSessionCard(s, selectedKey, changed) {
-  const preview = escapeHtml(truncate(s.lastActivity || s.goal, 110))
+  // For historical (closed/archived) sessions, prefer lastSummary (from Session history);
+  // else use live lastActivity. Fall back to goal in both cases.
+  const isHistorical = s.state === 'closed' || s.state === 'archived'
+  const preview = escapeHtml(truncate(isHistorical ? (s.lastSummary || s.goal) : (s.lastActivity || s.goal), 110))
   const next = firstNextStep(s.nextSteps)
   const cat = s.category || 'OTHER'
   const { dotClass, historical, badge } = statusBits(s)
@@ -833,7 +836,10 @@ function renderDetailPanel(s, tab = 'running') {
 
   const goalSection = s.goal ? detailSection('Goal', `<div class="detail-goal">${escapeHtml(s.goal)}</div>`) : ''
 
-  const activitySection = !isHistorical && s.lastActivity
+  // For historical sessions, show lastSummary; for running/stale, show lastActivity.
+  const activitySection = isHistorical && s.lastSummary
+    ? detailSection('Last summary', `<div class="detail-activity">${escapeHtml(s.lastSummary)}</div>`)
+    : !isHistorical && s.lastActivity
     ? detailSection('Last activity',
         `<div class="detail-activity">${escapeHtml(s.lastActivity)}</div>` +
         (s.lastActivityAt ? `<div class="detail-timestamp">${escapeHtml(formatTimestamp(s.lastActivityAt))}</div>` : ''))

@@ -43,6 +43,7 @@ fn alive(pid: i64) -> bool {
 /// Fields pulled from a session's transcript (jsonl). The transcript is the
 /// source of truth for where a session actually works + its branch + last reply.
 #[derive(Default, Clone)]
+#[allow(dead_code)]
 struct Transcript {
     git_branch: Option<String>,
     pr_link: Option<String>,
@@ -67,6 +68,8 @@ struct Transcript {
     // reopened (resumed) and worked on after its last /close-session (transcript touched on a
     // later day) → reclassify closed → stale.
     mtime: Option<SystemTime>,
+    // Summary extracted from the last Session-history line (for historical cards).
+    last_summary: Option<String>,
 }
 
 /// Parse ~/.claude/active-sessions.json (the skills' session registry). `{}` when
@@ -209,17 +212,21 @@ fn read_transcript(sid: &str) -> Transcript {
             t.cwd = Some(c.to_string()); // last = current work dir (git info)
         }
         if ev.get("type").and_then(Value::as_str) == Some("assistant") {
-            let text = ev
+            // Collect all text blocks from this assistant message
+            let blocks: Vec<&str> = ev
                 .get("message")
                 .and_then(|m| m.get("content"))
                 .and_then(Value::as_array)
-                .and_then(|arr| {
+                .map(|arr| {
                     arr.iter()
                         .filter(|c| c.get("type").and_then(Value::as_str) == Some("text"))
-                        .find_map(|c| c.get("text").and_then(Value::as_str))
-                });
-            if let Some(txt) = text {
-                t.last_activity = Some(txt.chars().take(200).collect());
+                        .filter_map(|c| c.get("text").and_then(Value::as_str))
+                        .collect()
+                })
+                .unwrap_or_default();
+            // Extract the last meaningful block (not the first), cleaning markdown
+            if let Some(last_block) = extract_last_activity_block(&blocks) {
+                t.last_activity = Some(last_block.chars().take(200).collect());
                 t.last_activity_at = ev.get("timestamp").and_then(Value::as_str).map(String::from);
             }
         }
@@ -897,6 +904,59 @@ pub(crate) fn session_history_info(content: &str) -> (String, Option<String>) {
     }
 }
 
+/// Extract the summary segment (last `|`-delimited field) from a Session-history line.
+/// Used to populate lastSummary in historical session cards.
+/// Returns None if the line has no `|` delimiter (or fewer than 3 fields).
+fn extract_history_summary(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with('-') {
+        return None;
+    }
+    let content = trimmed.trim_start_matches('-').trim();
+    let segments: Vec<&str> = content.split('|').collect();
+    // Expect at least 3 segments: date | field2 | summary.
+    if segments.len() >= 3 {
+        let summary = segments[segments.len() - 1].trim();
+        if !summary.is_empty() {
+            return Some(summary.to_string());
+        }
+    }
+    None
+}
+
+/// Extract the last text block from an assistant message, cleaning markdown and filtering noise.
+/// Strips headers (`#`), code fences (```), collapses whitespace, and skips blocks < ~15 chars.
+/// Used for live activity display on running sessions.
+fn extract_last_activity_block(blocks: &[&str]) -> Option<String> {
+    for block in blocks.iter().rev() {
+        let cleaned = clean_markdown_block(block);
+        if cleaned.len() >= 15 {
+            return Some(cleaned);
+        }
+    }
+    None
+}
+
+/// Clean markdown from a text block: strip headers (`#...`), code fences, collapse whitespace.
+fn clean_markdown_block(text: &str) -> String {
+    let mut result = String::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        // Skip header lines and code fences
+        if trimmed.starts_with('#') || trimmed.starts_with("```") {
+            continue;
+        }
+        if !trimmed.is_empty() {
+            if !result.is_empty() {
+                result.push(' ');
+            }
+            result.push_str(trimmed);
+        }
+    }
+    // Collapse multiple spaces into one
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Does a `## Session history` line mark a wrap-up (`/close-session`)?
 ///
 /// `/close-session` stamps a summary entry tagged `… | session=<id> | …` with NO in-progress
@@ -1064,6 +1124,22 @@ fn scan_historical() -> Vec<Value> {
             let last_activity_at = tr.as_ref().and_then(|t| t.last_activity_at.clone());
             let cwd = tr.and_then(|t| t.launch_cwd).unwrap_or(root_dir);
 
+            // Extract last summary from the newest-dated Session history line (matching the
+            // logic in session_history_info, which picks the newest-dated line for the state).
+            let last_summary = extract_section(&content, "Session history")
+                .and_then(|hist| {
+                    let lines: Vec<&str> = hist.lines()
+                        .filter(|l| l.trim_start().starts_with('-'))
+                        .collect();
+                    if lines.is_empty() {
+                        return None;
+                    }
+                    let latest = lines[(0..lines.len())
+                        .max_by_key(|&i| (lead_date(lines[i]).as_deref().and_then(date_to_days), i))
+                        .unwrap()];
+                    extract_history_summary(latest)
+                });
+
             out.push(json!({
                 "notesPath": notes_path,
                 "sessionId": eff_sid.clone().map(Value::String).unwrap_or(Value::Null),
@@ -1083,6 +1159,7 @@ fn scan_historical() -> Vec<Value> {
                 "historyDate": hist_date,
                 "goal": extract_section(&content, "Goal").map(Value::String).unwrap_or(Value::Null),
                 "nextSteps": extract_section(&content, "Next steps").map(Value::String).unwrap_or(Value::Null),
+                "lastSummary": last_summary.map(Value::String).unwrap_or(Value::Null),
             }));
         }
     }
@@ -1458,5 +1535,66 @@ mod tests {
             pick_pr_url(&urls, "ticket 350 something").as_deref(),
             Some("https://github.com/o/r/pull/35") // fallback (only candidate), not a name match
         );
+    }
+
+    #[test]
+    fn extracts_history_summary_from_pipe_delimited_line() {
+        use super::extract_history_summary;
+        // Normal close-session format: date | session=id | summary
+        assert_eq!(
+            extract_history_summary("- 2026-06-10 | session=abc | implemented feature X"),
+            Some("implemented feature X".to_string())
+        );
+        // With leading whitespace
+        assert_eq!(
+            extract_history_summary("  - 2026-06-10 | session=abc | fixed bug Y"),
+            Some("fixed bug Y".to_string())
+        );
+        // No pipe delimiters → None
+        assert_eq!(extract_history_summary("- 2026-06-10 no pipes here"), None);
+        // Fewer than 3 segments → None
+        assert_eq!(extract_history_summary("- 2026-06-10 | session=abc"), None);
+        // Empty summary segment → None
+        assert_eq!(extract_history_summary("- 2026-06-10 | session=abc |"), None);
+        assert_eq!(extract_history_summary("- 2026-06-10 | session=abc |   "), None);
+    }
+
+    #[test]
+    fn extracts_last_activity_block_with_markdown_cleanup() {
+        use super::extract_last_activity_block;
+        // Filters markdown headers and code fences, keeps normal text blocks
+        let blocks = vec![
+            "# Header line",
+            "```rust\ncode block\n```",
+            "Real content with multiple words",
+        ];
+        assert_eq!(
+            extract_last_activity_block(&blocks),
+            Some("Real content with multiple words".to_string())
+        );
+        // Collects from last non-trivial block
+        let blocks = vec![
+            "Setup complete.",
+            "Finished the implementation with success",
+        ];
+        assert_eq!(
+            extract_last_activity_block(&blocks),
+            Some("Finished the implementation with success".to_string())
+        );
+        // Skips blocks that are too short (< ~15 chars) after cleanup
+        let blocks = vec![
+            "Short",
+            "Also short",
+            "This is a real block with enough content",
+        ];
+        assert_eq!(
+            extract_last_activity_block(&blocks),
+            Some("This is a real block with enough content".to_string())
+        );
+        // All blocks too short → None
+        let blocks = vec!["Hi", "OK", "Short"];
+        assert_eq!(extract_last_activity_block(&blocks), None);
+        // Empty list → None
+        assert_eq!(extract_last_activity_block(&[]), None);
     }
 }
