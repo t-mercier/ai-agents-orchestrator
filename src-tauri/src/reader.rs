@@ -43,7 +43,6 @@ fn alive(pid: i64) -> bool {
 /// Fields pulled from a session's transcript (jsonl). The transcript is the
 /// source of truth for where a session actually works + its branch + last reply.
 #[derive(Default, Clone)]
-#[allow(dead_code)]
 struct Transcript {
     git_branch: Option<String>,
     pr_link: Option<String>,
@@ -68,8 +67,6 @@ struct Transcript {
     // reopened (resumed) and worked on after its last /close-session (transcript touched on a
     // later day) → reclassify closed → stale.
     mtime: Option<SystemTime>,
-    // Summary extracted from the last Session-history line (for historical cards).
-    last_summary: Option<String>,
 }
 
 /// Parse ~/.claude/active-sessions.json (the skills' session registry). `{}` when
