@@ -99,7 +99,21 @@ From the work done in this session, gather:
 
 Skip noise (don't list every read/grep).
 
-## Step 5 — Update notes.md sections
+## Step 5 — Frontmatter refresh (auto-attach PR / ticket)
+
+Deterministic source: `gh pr view --json url -q .url` on the current branch (session's repo). If it returns a valid GitHub PR URL (`https://github.com/owner/repo/pull/N`) → use it.
+Fallback: if no `gh`/repo, use the PR Claude created/manipulated in THIS conversation (scan the conversation for any GitHub PR URL).
+
+Update `pr_link:` in the frontmatter (Edit tool) **only if empty or different**. NEVER overwrite a value with empty.
+
+If a ticket matching `^[A-Za-z][A-Za-z0-9]*-[0-9]+$` was created/identified in the session and `ticket:` is empty:
+1. Uppercase it.
+2. Update `ticket:` in the frontmatter.
+3. Patch `active-sessions.json` by reading the current entry for `SESSION_ID` and MERGING: set only `ticket`, preserve `notes_path`, `category`, `name`, `started_at` (do NOT replace the whole entry).
+
+The `prPill` icon fills automatically once the frontmatter is right.
+
+## Step 5b — Update notes.md sections
 
 Use the Edit tool to: append new bullets to **Decisions made** and **Files touched**;
 update **Open questions** (tick resolved, add new); replace **Next steps** with the
@@ -135,6 +149,6 @@ the Next steps, and a backlink line `Source: <NOTES_PATH>`. Create the
 
 ## Step 8 — Confirm
 
-Print a short confirmation: which sections were updated, the Session history line
+Print a short confirmation: frontmatter refresh result (PR link / ticket updated, or already set), which sections were updated, the Session history line
 added, and (if applicable) the vault note written. Remind the user they can resume
 later with `/restart-session <slug>` or start fresh.
