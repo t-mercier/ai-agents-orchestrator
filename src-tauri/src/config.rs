@@ -276,49 +276,50 @@ pub fn migrate_v1_if_needed() -> Result<bool, String> {
         Err(_) => return Ok(false), // Can't read; leave it alone.
     };
 
-    // Check if already migrated.
+    let v2_config = match migrate_v1_value(&raw) {
+        Some(v) => v,
+        None => return Ok(false), // already v2 (flagged, or no legacy shape).
+    };
+
+    // Back up the original v1 config, then write the v2 config atomically.
+    let backup_path = path.with_file_name("config.json.v1-backup");
+    fs::copy(&path, &backup_path).map_err(|e| format!("failed to backup config: {e}"))?;
+    save(&v2_config)?;
+
+    Ok(true)
+}
+
+/// Pure v1→v2 transform (no I/O) — the migration logic, unit-testable in isolation.
+/// Returns the v2 config to write, or `None` when `raw` is already v2 (flagged, or no
+/// legacy shape). Detection is by SHAPE, not `version`, because settings.js wrote
+/// `roots` AND the legacy scalars together under `version: 1`.
+fn migrate_v1_value(raw: &Value) -> Option<Value> {
+    // Already migrated → nothing to do.
     if raw.get("migratedToV2").and_then(Value::as_bool).unwrap_or(false) {
-        return Ok(false);
+        return None;
     }
 
-    // Detect v1 config by shape: legacy field present AND not flagged.
+    // Detect a v1 config by shape: any legacy field present.
     let has_legacy = raw.get("workRoot").is_some()
         || raw.get("personalRoot").is_some()
         || raw
             .get("obsidian")
-            .and_then(|o| {
-                if o.get("workVaultPath").is_some() || o.get("personalVaultPath").is_some() {
-                    Some(true)
-                } else {
-                    None
-                }
-            })
-            .is_some()
+            .map(|o| o.get("workVaultPath").is_some() || o.get("personalVaultPath").is_some())
+            .unwrap_or(false)
         || raw
             .get("categories")
             .and_then(Value::as_array)
-            .map(|cats| {
-                cats.iter().any(|c| {
-                    c.get("scope").is_some() && c.get("root").is_none()
-                })
-            })
+            .map(|cats| cats.iter().any(|c| c.get("scope").is_some() && c.get("root").is_none()))
             .unwrap_or(false);
-
     if !has_legacy {
-        return Ok(false); // Already v2, no migration needed.
+        return None; // already v2.
     }
 
-    // Build v2 config from v1.
     let work_root = expand(raw.get("workRoot").and_then(Value::as_str).unwrap_or("~/work"));
     let personal_root = expand(raw.get("personalRoot").and_then(Value::as_str).unwrap_or("~"));
-
-    // Roots: migrate Work/Perso from the legacy fields.
     let work_vault = expand(
         raw.get("obsidian")
-            .and_then(|o| {
-                o.get("workVaultPath")
-                    .or_else(|| o.get("vaultPath"))
-            })
+            .and_then(|o| o.get("workVaultPath").or_else(|| o.get("vaultPath")))
             .and_then(Value::as_str)
             .unwrap_or(""),
     );
@@ -329,22 +330,44 @@ pub fn migrate_v1_if_needed() -> Result<bool, String> {
             .unwrap_or(""),
     );
 
-    let v2_roots = vec![
-        json!({ "name": "Work", "path": work_root, "vaultPath": work_vault }),
-        json!({ "name": "Perso", "path": personal_root, "vaultPath": personal_vault }),
-    ];
+    // Prefer an existing v2 `roots` list — a present list (custom names, >2 spaces, real
+    // paths) must NOT be discarded and rebuilt from the scalars (that would reset a
+    // customized Work path to the ~/work default). Synthesize Work/Perso only when absent.
+    let mut v2_roots: Vec<Value> = match raw.get("roots").and_then(Value::as_array) {
+        Some(rs) if !rs.is_empty() => rs.clone(),
+        _ => vec![
+            json!({ "name": "Work", "path": work_root }),
+            json!({ "name": "Perso", "path": personal_root }),
+        ],
+    };
+    // Fold the legacy obsidian work/personal vault split onto the matching root by name,
+    // without clobbering a vaultPath a root already carries.
+    for r in v2_roots.iter_mut() {
+        if let Some(obj) = r.as_object_mut() {
+            let has_vault =
+                obj.get("vaultPath").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+            if !has_vault {
+                let v = match obj.get("name").and_then(Value::as_str).unwrap_or("") {
+                    "Work" => work_vault.as_str(),
+                    "Perso" => personal_vault.as_str(),
+                    _ => "",
+                };
+                if !v.is_empty() {
+                    obj.insert("vaultPath".to_string(), json!(v));
+                }
+            }
+        }
+    }
 
-    // Categories: migrate `scope` → `root`.
+    // Categories: migrate `scope` → `root` when root is absent; drop `scope`.
     let mut v2_cats: Vec<Value> = vec![];
     if let Some(cats) = raw.get("categories").and_then(Value::as_array) {
         for cat in cats {
             let mut c = cat.clone();
-            // Migrate scope to root if root is absent.
             if c.get("root").is_none() {
                 let scope = c.get("scope").and_then(Value::as_str).unwrap_or("work");
                 c["root"] = json!(if scope == "personal" { "Perso" } else { "Work" });
             }
-            // Drop the scope field.
             if let Some(obj) = c.as_object_mut() {
                 obj.remove("scope");
             }
@@ -352,7 +375,7 @@ pub fn migrate_v1_if_needed() -> Result<bool, String> {
         }
     }
 
-    let v2_config = json!({
+    Some(json!({
         "version": 2,
         "roots": v2_roots,
         "categories": v2_cats,
@@ -360,16 +383,7 @@ pub fn migrate_v1_if_needed() -> Result<bool, String> {
         "ticketBaseUrl": raw.get("ticketBaseUrl").cloned().unwrap_or(json!("")),
         "terminalApp": raw.get("terminalApp").cloned().unwrap_or(json!("")),
         "migratedToV2": true,
-    });
-
-    // Back up the original v1 config.
-    let backup_path = path.with_file_name("config.json.v1-backup");
-    fs::copy(&path, &backup_path).map_err(|e| format!("failed to backup config: {e}"))?;
-
-    // Write the v2 config atomically.
-    save(&v2_config)?;
-
-    Ok(true)
+    }))
 }
 
 /// The default config written on a fresh install (v2 schema). Kept in sync with the
@@ -434,7 +448,7 @@ pub fn set_config(cfg: Value) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_config, derive, validate};
+    use super::{default_config, derive, migrate_v1_value, validate};
     use serde_json::json;
 
     // The in-app skills installer seeds default_config() via save() → validate() on first
@@ -521,74 +535,73 @@ mod tests {
     // Migration tests (v1 → v2 on disk).
 
     #[test]
-    fn migrate_v1_if_needed_detects_and_migrates_v1_config() {
-        // A v1 config with workRoot/personalRoot should be detected and migrated.
+    fn migrate_v1_value_migrates_pure_v1() {
+        // Pure v1 (no `roots`): synthesize Work/Perso from the scalars, fold vaults,
+        // scope→root, drop scope, set flag. The output must validate as v2.
         let v1 = json!({
+            "version": 1,
             "workRoot": "/w",
             "personalRoot": "/p",
             "categories": [
                 {"name":"FEAT","color":"#7df0c0","scope":"work"},
                 {"name":"PERSO","color":"#8fd9ff","scope":"personal"}
             ],
-            "obsidian": {
-                "enabled": true,
-                "workVaultPath": "/w/vault",
-                "personalVaultPath": "/p/vault"
-            }
+            "obsidian": { "enabled": true, "workVaultPath": "/w/vault", "personalVaultPath": "/p/vault" }
         });
-
-        // Verify structure: v1 config must have workRoot/personalRoot to be detected.
-        assert!(v1.get("workRoot").is_some());
-        assert!(v1.get("personalRoot").is_some());
-
-        // After migration, the v2 config should:
-        // 1. Have roots migrated from workRoot/personalRoot.
-        // 2. Have scope migrated to root.
-        // 3. Have vaultPath on each root.
-        // 4. Have migratedToV2 flag set.
-
-        let roots = json!([
-            {"name":"Work","path":"/w","vaultPath":"/w/vault"},
-            {"name":"Perso","path":"/p","vaultPath":"/p/vault"}
-        ]);
-        let expected_cats = json!([
-            {"name":"FEAT","color":"#7df0c0","root":"Work"},
-            {"name":"PERSO","color":"#8fd9ff","root":"Perso"}
-        ]);
-
-        // Verify the expected transformation structure (the actual migration test is in
-        // lib.rs where we can control the config path).
-        let mut migrated = v1.clone();
-        migrated["roots"] = roots;
-        migrated["categories"] = expected_cats;
-        migrated["migratedToV2"] = json!(true);
-        migrated.as_object_mut().unwrap().remove("workRoot");
-        migrated.as_object_mut().unwrap().remove("personalRoot");
-        if let Some(obj) = migrated["categories"].as_array_mut() {
-            for cat in obj {
-                cat.as_object_mut().unwrap().remove("scope");
-            }
-        }
-
-        // The migrated config should validate.
-        assert!(validate(&migrated).is_ok());
+        let v2 = migrate_v1_value(&v1).expect("pure v1 must migrate");
+        let roots = v2["roots"].as_array().unwrap();
+        assert_eq!(roots[0]["name"], "Work");
+        assert_eq!(roots[0]["path"], "/w");
+        assert_eq!(roots[0]["vaultPath"], "/w/vault");
+        assert_eq!(roots[1]["vaultPath"], "/p/vault");
+        assert_eq!(v2["categories"][0]["root"], "Work");
+        assert_eq!(v2["categories"][1]["root"], "Perso");
+        assert!(v2["categories"][0].get("scope").is_none());
+        assert_eq!(v2["migratedToV2"], json!(true));
+        assert!(validate(&v2).is_ok());
     }
 
     #[test]
-    fn migrate_v1_if_needed_is_idempotent() {
-        // Running migrate twice should not re-write the file.
-        // This is tested indirectly: the second run should return false (no migration).
-        // The actual idempotency is verified in lib.rs where we control the file path.
-
-        let v2 = json!({
-            "version": 2,
-            "roots": [{"name":"Work","path":"/w"},{"name":"Perso","path":"/p"}],
+    fn migrate_v1_value_preserves_an_existing_roots_list() {
+        // Regression guard: settings.js wrote `roots` AND the legacy scalars together.
+        // Migration must KEEP the existing roots (custom paths, extra spaces) rather than
+        // rebuild plain Work/Perso from workRoot/personalRoot. Vaults fold onto the
+        // matching root by name.
+        let v1 = json!({
+            "version": 1,
+            "roots": [
+                {"name":"Work","path":"/custom/tomtom"},
+                {"name":"Perso","path":"/home/me"},
+                {"name":"Side","path":"/side/projects"}
+            ],
+            "workRoot": "/w-drifted",       // stale — must be ignored
+            "personalRoot": "/p-drifted",   // stale — must be ignored
             "categories": [{"name":"FEAT","color":"#7df0c0","root":"Work"}],
-            "obsidian": {"enabled": false},
-            "migratedToV2": true
+            "obsidian": { "enabled": true, "workVaultPath": "/tt/vault", "personalVaultPath": "/me/vault" }
         });
-
-        // A v2 config with the flag set should not be re-migrated.
+        let v2 = migrate_v1_value(&v1).expect("legacy-tainted v2 must migrate");
+        let roots = v2["roots"].as_array().unwrap();
+        assert_eq!(roots.len(), 3, "the custom roots list must be preserved, not rebuilt");
+        assert_eq!(roots[0]["path"], "/custom/tomtom", "Work path must NOT reset to workRoot/~work");
+        assert_eq!(roots[2]["name"], "Side", "extra spaces must survive");
+        assert_eq!(roots[0]["vaultPath"], "/tt/vault", "workVaultPath folds onto Work");
+        assert_eq!(roots[1]["vaultPath"], "/me/vault", "personalVaultPath folds onto Perso");
+        assert!(roots[2].get("vaultPath").is_none(), "a non-Work/Perso root gets no vault");
+        assert_eq!(v2["migratedToV2"], json!(true));
         assert!(validate(&v2).is_ok());
+    }
+
+    #[test]
+    fn migrate_v1_value_skips_already_v2() {
+        // Flagged, or a clean v2 with no legacy shape → no migration (idempotent).
+        let flagged = json!({ "version": 2, "roots": [{"name":"Work","path":"/w"}], "migratedToV2": true });
+        assert!(migrate_v1_value(&flagged).is_none());
+        let clean_v2 = json!({
+            "version": 2,
+            "roots": [{"name":"Work","path":"/w","vaultPath":""}],
+            "categories": [{"name":"FEAT","color":"#7df0c0","root":"Work"}],
+            "obsidian": {"enabled": false}
+        });
+        assert!(migrate_v1_value(&clean_v2).is_none(), "no legacy shape → not migrated");
     }
 }
