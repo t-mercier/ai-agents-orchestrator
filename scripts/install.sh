@@ -43,8 +43,8 @@ if [ ! -f "$CONFIG" ]; then
 {
   "version": 2,
   "roots": [
-    { "name": "Work",  "path": "~/work" },
-    { "name": "Perso", "path": "~" }
+    { "name": "Work",  "path": "~/work", "vaultPath": "" },
+    { "name": "Perso", "path": "~", "vaultPath": "" }
   ],
   "categories": [
     { "name": "FEAT",   "color": "#7df0c0", "root": "Work" },
@@ -54,7 +54,7 @@ if [ ! -f "$CONFIG" ]; then
     { "name": "TEST",   "color": "#cdd0d6", "root": "Work" },
     { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
   ],
-  "obsidian": { "enabled": false, "workVaultPath": "", "personalVaultPath": "" },
+  "obsidian": { "enabled": false },
   "ticketBaseUrl": ""
 }
 JSON

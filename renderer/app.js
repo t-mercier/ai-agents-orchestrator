@@ -8,17 +8,14 @@ const activeCatFilters = new Set()  // empty = show all categories
 const filterCategories = () => window.CSMCategories.order()
 const POLL_INTERVAL = 5000
 
-// Root (space) names from config: v2 `roots`, else migrate the legacy two roots to
-// Work/Perso. Exposed so ui.js/board.js can order their space sections.
+// Root (space) names from config: v2 `roots` only. Exposed so ui.js/board.js can
+// order their space sections.
 function configRoots() {
   const cfg = window.CSM_CONFIG || {}
   if (Array.isArray(cfg.roots) && cfg.roots.length) {
     return cfg.roots.map(r => r && r.name).filter(Boolean)
   }
-  const out = []
-  if (cfg.workRoot) out.push('Work')
-  if (cfg.personalRoot) out.push('Perso')
-  return out
+  return []
 }
 // More than one space configured ⇒ the list + cards group into space sections and the
 // board shows its own space selector. A single space ⇒ no space chrome at all.
@@ -249,7 +246,7 @@ let nsRoot = ''
 function categoriesForRoot(rootName) {
   const cats = (window.CSM_CONFIG && window.CSM_CONFIG.categories) || []
   const names = cats
-    .filter(c => (c.root || (c.scope === 'personal' ? 'Perso' : 'Work')) === rootName)
+    .filter(c => c.root === rootName)
     .map(c => c.name)
   return names.length ? [...new Set(names)] : filterCategories()
 }
@@ -1084,4 +1081,18 @@ window.reloadConfig = async () => {           // called by Settings after save
   fetchAndRender(true)   // refreshes the active tab + its badge
   seedTabCounts()        // re-seed ALL tab badges — roots/categories may have changed
 }
+
+// v1 → v2 migration notification (emitted by Rust on startup).
+if (window.api && window.api.onEvent) {
+  window.api.onEvent('config_migrated_v2', () => {
+    if (window.confirmAction) {
+      window.confirmAction({
+        title: 'Config upgraded',
+        body: 'Your configuration has been upgraded to v2. A backup was saved. Changes will take effect on the next refresh.',
+        confirmLabel: 'OK'
+      })
+    }
+  })
+}
+
 boot()

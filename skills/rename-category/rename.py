@@ -57,8 +57,19 @@ def alive(pid):
         return False
 
 
-def category_base(cfg, scope):
-    if scope == 'personal':
+def category_base(cfg, root_name):
+    """Resolve a root name to its path (v2).
+
+    v1 shim (keep until Release N+1): scope → workRoot/personalRoot.
+    """
+    # v2: look up the root in roots[].
+    roots = cfg.get('roots', [])
+    if isinstance(roots, list):
+        for r in roots:
+            if isinstance(r, dict) and r.get('name') == root_name:
+                return expand(r.get('path') or HOME)
+    # v1 shim: if root_name is 'Perso' or similar, map to personalRoot.
+    if root_name and root_name.lower() in ('perso', 'personal', 'personnel'):
         return expand(cfg.get('personalRoot') or HOME)
     return expand(cfg.get('workRoot') or os.path.join(HOME, 'work'))
 
@@ -115,8 +126,8 @@ def main():
         print(f"ERROR: category '{NEW}' already exists")
         sys.exit(1)
 
-    scope = cat.get('scope', 'work')
-    base = category_base(cfg, scope)
+    root_name = cat.get('root', 'Work')  # v2: root is the category's space
+    base = category_base(cfg, root_name)
     src = os.path.join(base, OLD)
     dst = os.path.join(base, NEW)
 
@@ -127,7 +138,7 @@ def main():
     entries = [sid for sid, e in active.items() if e.get('category') == OLD]
     running = [sid for sid in entries if sid in alive_ids]
 
-    print(f"Rename category:  {OLD}  →  {NEW}   (scope: {scope})")
+    print(f"Rename category:  {OLD}  →  {NEW}   (root: {root_name})")
     print(f"  Folder:                 {src}  →  {dst}")
     print(f"  notes.md to re-tag:     {len(notes)}")
     print(f"  active-sessions update: {len(entries)}")

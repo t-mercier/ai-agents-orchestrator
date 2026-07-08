@@ -106,7 +106,7 @@
     clearError()
 
     // Seed the output and context object.
-    const out = { version: 1 }
+    const out = { version: 2 }
     const ctx = {}
 
     // Collect from all tabs in order.

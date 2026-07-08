@@ -10,29 +10,25 @@
   const COLOR_RE = /^#[0-9a-fA-F]{6}$/
   const escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
-  // Name + scope are READ-ONLY labels: they mirror a real folder on disk
-  // (<root>/<NAME>), so editing them here would drift from reality (the app never
-  // moves folders). Renaming goes through the /rename-category skill, which moves the
-  // folder + retags everything. Only the colour (a pure display preference) is editable.
+  // Name is READ-ONLY label: it mirrors a real folder on disk (<root>/<NAME>),
+  // so editing it here would drift from reality (the app never moves folders).
+  // Renaming goes through the /rename-category skill, which moves the folder +
+  // retags everything. Only the colour (a pure display preference) is editable.
   function addCatRow(cat = {}) {
     const name = cat.name || ''
-    const scope = cat.scope === 'personal' ? 'personal' : 'work'
-    // The named root the category lives under (its identity is (root, name), so the
-    // same name can exist under several roots). Falls back to the legacy scope mapping.
-    const root = cat.root || (scope === 'personal' ? 'Perso' : 'Work')
+    const root = cat.root || ''
     const row = document.createElement('div')
     row.className = 'settings-cat-row'
     row.dataset.name = name
-    row.dataset.scope = scope
     row.dataset.root = root
     row.innerHTML = `
       <input class="cat-color" type="color">
       <span class="cat-name-label"></span>
-      <span class="cat-scope-label"></span>
+      <span class="cat-root-label"></span>
       <button type="button" class="icon-btn cat-remove" title="Remove from the dashboard (the folder on disk is left untouched)">✕</button>`
     row.querySelector('.cat-color').value = COLOR_RE.test(cat.color || '') ? cat.color : window.CSM_COLORS.newCategory
     row.querySelector('.cat-name-label').textContent = name || '(unnamed)'
-    row.querySelector('.cat-scope-label').textContent = root   // show which root, not work/personal
+    row.querySelector('.cat-root-label').textContent = root || '(no root)'
     row.querySelector('.cat-remove').addEventListener('click', () => row.remove())
     catList.appendChild(row)
   }
@@ -50,22 +46,21 @@
   // Collect categories and apply rename map from general.js.
   function collectCategories(out, ctx) {
     // Categories are folder-mirrored: only colour is editable here. PRESERVE every
-    // other field from the loaded config — crucially the v2 `root` (and legacy
-    // `scope`). Identity is (root, name) — the same name can live under two roots —
+    // other field from the loaded config — crucially the v2 `root`.
+    // Identity is (root, name) — the same name can live under two roots —
     // so preserve per pair, not per name. A renamed space retags the category's root.
     const prevCats = (window.CSM_CONFIG && Array.isArray(window.CSM_CONFIG.categories))
       ? window.CSM_CONFIG.categories : []
-    const rootOf = (c) => c.root || (c.scope === 'personal' ? 'Perso' : 'Work')
+    const rootOf = (c) => c.root || ''
     const byKey = new Map(prevCats.map(c => [`${rootOf(c)}\0${c.name}`, c]))
     const rename = ctx.renameMap || {}
     const categories = [...catList.querySelectorAll('.settings-cat-row')].map(row => {
-      const oldRoot = row.dataset.root || (row.dataset.scope === 'personal' ? 'Perso' : 'Work')
+      const oldRoot = row.dataset.root || ''
       const prev = byKey.get(`${oldRoot}\0${row.dataset.name}`) || {}
       return {
         name: row.dataset.name,
         color: row.querySelector('.cat-color').value,
         root: rename[oldRoot] || oldRoot,              // follow a space rename
-        scope: prev.scope || row.dataset.scope,        // legacy — kept for back-compat / vault
       }
     })
     out.categories = categories
@@ -85,7 +80,7 @@
       }
       // Dedup on (root, name): the same name under two spaces is legitimate — only the
       // SAME pair twice is a real dup.
-      const dkey = `${cat.root || cat.scope || ''}\0${cat.name}`
+      const dkey = `${cat.root || ''}\0${cat.name}`
       if (seen.has(dkey)) return `Duplicate category "${cat.name}" under the same space.`
       seen.add(dkey)
       if (!COLOR_RE.test(cat.color)) return `Invalid color for "${cat.name}".`
@@ -169,25 +164,20 @@
 
   // Categories are added by picking EXISTING folder(s) — the app never creates or
   // renames folders (that stays in your hands / the /rename-category skill). Each
-  // chosen folder must sit directly under workRoot/personalRoot (a category maps to
-  // <root>/<NAME>); we derive name=basename + scope=which root. Multi-select adds
-  // several at once; anything outside a root, invalid, or already present is skipped
-  // with a summary.
+  // chosen folder must sit directly under a space (a category maps to <space>/<NAME>).
+  // Multi-select adds several at once; anything outside a space, invalid, or already
+  // present is skipped with a summary.
   $('set-add-cat-folder').addEventListener('click', async () => {
     if (!window.api.pickDirectories) return
     const picked = await window.api.pickDirectories()
     if (!picked || !picked.length) return
     window.clearSettingsError()
     const c = window.CSM_CONFIG || {}
-    // The named root a picked folder's PARENT dir maps to: a v2 roots entry whose path
-    // matches, else the legacy workRoot/personalRoot → Work/Perso.
+    // The named root a picked folder's PARENT dir maps to: a v2 roots entry whose path matches.
     const rootForParent = (parent) => {
       const roots = Array.isArray(c.roots) ? c.roots : []
       const hit = roots.find(r => r.path === parent)
-      if (hit) return hit.name
-      if (parent === c.workRoot) return 'Work'
-      if (parent === c.personalRoot) return 'Perso'
-      return null
+      return hit ? hit.name : null
     }
     // Identity is (root, name) — so the SAME category name can be added under a second
     // root (e.g. AI-SYSTEM under both Work and Perso). Dedup on the pair, not the name.
@@ -205,12 +195,11 @@
       if (!NAME_RE.test(base)) { skipped.push(`${base} (invalid name)`); continue }
       if (have.has(key(root, base))) { skipped.push(`${base} (already in ${root})`); continue }
       have.add(key(root, base))
-      const scope = root === 'Perso' ? 'personal' : 'work'   // legacy, drives vault choice
-      addCatRow({ name: base, scope, root, color: window.CSM_COLORS.newCategory })
+      addCatRow({ name: base, root, color: window.CSM_COLORS.newCategory })
       added += 1
     }
     if (skipped.length) {
-      const roots = (Array.isArray(c.roots) ? c.roots.map(r => r.path) : [c.workRoot, c.personalRoot]).filter(Boolean)
+      const roots = (Array.isArray(c.roots) ? c.roots.map(r => r.path) : []).filter(Boolean)
       window.showSettingsError(`Added ${added}. Skipped: ${skipped.join(', ')}. Pick folders directly inside one of your spaces: ${roots.join(', ') || '—'}.`)
     }
   })

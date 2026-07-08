@@ -139,11 +139,30 @@ def scope_of(cfg, name):
 
 
 def vault_for(cfg, name):
+    """Obsidian vault path for a category's root.
+
+    v2: the vault lives on the category's root (roots[].vaultPath).
+    v1 shim: scope → workVaultPath/personalVaultPath (remove in ADR-015 Release N+1).
+    """
     obs = cfg.get('obsidian') or {}
     if not obs.get('enabled'):
         return ''
+
+    # v2: read vaultPath from the category's root.
+    entry = find_entry(cfg, name)
+    if entry:
+        root_name = root_name_of(entry)
+        # Look up the root in the raw config to get its vaultPath.
+        roots = cfg.get('roots', [])
+        if isinstance(roots, list):
+            for r in roots:
+                if isinstance(r, dict) and r.get('name') == root_name:
+                    return expand(r.get('vaultPath', '') or '')
+
+    # v1 shim: scope → workVaultPath/personalVaultPath.
+    # Keep until ADR-015 Release N+1.
     key = 'personalVaultPath' if scope_of(cfg, name) == 'personal' else 'workVaultPath'
-    return expand(obs.get(key) or obs.get('vaultPath') or '')
+    return expand(obs.get(key) or '')
 
 
 def find_notes(cfg, slug):

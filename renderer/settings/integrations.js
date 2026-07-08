@@ -1,4 +1,5 @@
-// Settings: Integrations tab — ticket URL + Obsidian fields.
+// Settings: Integrations tab — ticket URL + Obsidian toggle.
+// Per-space vault paths have moved to the General tab (spaces editor).
 ;(function () {
   const modal = document.getElementById('settings-modal')
   if (!modal) return
@@ -9,8 +10,6 @@
     const c = window.CSM_CONFIG || {}
     const obs = c.obsidian || {}
     $('set-obsidian-enabled').checked = !!obs.enabled
-    $('set-work-vault').value = obs.workVaultPath || ''
-    $('set-personal-vault').value = obs.personalVaultPath || ''
     $('set-ticket').value = c.ticketBaseUrl || ''
   }
 
@@ -18,8 +17,6 @@
   function collectIntegrations(out) {
     out.obsidian = {
       enabled: $('set-obsidian-enabled').checked,
-      workVaultPath: $('set-work-vault').value.trim(),
-      personalVaultPath: $('set-personal-vault').value.trim(),
     }
     out.ticketBaseUrl = $('set-ticket').value.trim()
   }

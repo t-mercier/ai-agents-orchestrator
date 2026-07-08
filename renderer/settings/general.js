@@ -9,23 +9,26 @@
   const NAME_RE = /^[A-Za-z0-9_-]{1,20}$/
   const escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
-  // ── Spaces editor: each row = {name, path}. Renaming a space (the name changed from
+  // ── Spaces editor: each row = {name, path, vaultPath}. Renaming a space (the name changed from
   // its original) retags the categories under it on save; the path re-points scanning.
+  // vaultPath is where Obsidian vault lives for this space (optional).
   let spaceRowSeq = 0
   function addSpaceRow(space = {}) {
-    const id = `set-space-path-${spaceRowSeq++}`
+    const idPath = `set-space-path-${spaceRowSeq}`
+    const idVault = `set-space-vault-${spaceRowSeq++}`
     const item = document.createElement('div')
     item.className = 'settings-space-item'
     item.dataset.orig = space.name || ''   // original name → detect rename for category retag
-    // Line 1: name + Browse + remove. Line 2: the selected path (set via Browse only,
-    // read-only — the path input doubles as the display + the value collect() reads).
+    // Line 1: name + Browse + remove. Line 2: the selected path. Line 3: the vault path (optional).
     item.innerHTML = `
       <div class="settings-space-row">
         <input class="space-name" type="text" placeholder="Name" value="${escAttr(space.name)}" spellcheck="false" autocomplete="off">
-        <button type="button" class="modal-btn path-browse" data-browse="${id}">Browse…</button>
+        <button type="button" class="modal-btn path-browse" data-browse="${idPath}">Browse…</button>
         <button type="button" class="icon-btn space-remove" title="Remove this space (its folders on disk are left untouched)">✕</button>
       </div>
-      <input class="space-path" id="${id}" type="text" placeholder="No folder selected — click Browse" value="${escAttr(space.path)}" readonly spellcheck="false" autocomplete="off" title="${escAttr(space.path)}">`
+      <input class="space-path" id="${idPath}" type="text" placeholder="No folder selected — click Browse" value="${escAttr(space.path)}" readonly spellcheck="false" autocomplete="off" title="${escAttr(space.path)}">
+      <div style="font-size:0.85em;color:var(--text-2);margin-top:0.25em;">Obsidian vault (optional):</div>
+      <input class="space-vault" id="${idVault}" type="text" placeholder="Path to Obsidian vault for this space" value="${escAttr(space.vaultPath || '')}" spellcheck="false" autocomplete="off">`
     item.querySelector('.space-remove').addEventListener('click', () => item.remove())
     spaceList.appendChild(item)
   }
@@ -47,21 +50,16 @@
       for (const item of spaceList.querySelectorAll('.settings-space-item')) {
         const name = item.querySelector('.space-name').value.trim()
         const path = item.querySelector('.space-path').value.trim()
+        const vaultPath = item.querySelector('.space-vault').value.trim()
         if (!name) continue
         if (item.dataset.orig && item.dataset.orig !== name) rename[item.dataset.orig] = name
-        roots.push({ name, path })
+        const root = { name, path }
+        if (vaultPath) root.vaultPath = vaultPath
+        roots.push(root)
       }
     }
 
-    // Legacy workRoot/personalRoot, kept for back-compat (derive prefers `roots`):
-    // map them from the like-named spaces, else the first/second.
-    const byName = (re) => roots.find(r => re.test(r.name))
-    const workSpace = byName(/^work$/i) || roots[0]
-    const persoSpace = byName(/^(perso|personal|personnel)$/i) || roots[1] || roots[0]
-
     out.roots = roots
-    out.workRoot = workSpace ? workSpace.path : ''
-    out.personalRoot = persoSpace ? persoSpace.path : ''
 
     // Pass the rename map to categories.js via ctx.
     ctx.renameMap = rename
