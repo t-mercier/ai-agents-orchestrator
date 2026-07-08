@@ -157,7 +157,10 @@ def vault_for(cfg, name):
         if isinstance(roots, list):
             for r in roots:
                 if isinstance(r, dict) and r.get('name') == root_name:
-                    return expand(r.get('vaultPath', '') or '')
+                    vp = expand(r.get('vaultPath', '') or '')
+                    if vp:
+                        return vp
+                    break  # root found but carries no vault → fall through to the v1 shim
 
     # v1 shim: scope → workVaultPath/personalVaultPath.
     # Keep until ADR-015 Release N+1.
