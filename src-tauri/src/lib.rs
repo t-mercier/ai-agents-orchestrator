@@ -5,7 +5,7 @@ mod git;
 mod terminal;
 mod skills;
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 
 /// Open an http(s) URL in the system browser. The scheme check already prevents a
 /// leading `-`; `--` terminates `open`'s option parsing (defense-in-depth).
@@ -381,9 +381,8 @@ fn slugify(name: &str) -> String {
 
 /// Launch dir for a NEW session in this category: the path of the category's
 /// configured `root` (v2 — `derive()` sets `root` on every category). Falls back to
-/// the legacy `scope`→workRoot/personalRoot when the root can't be resolved (v1
-/// configs), then to home. Keeps a moved-to-a-custom-root category launching from
-/// the right place.
+/// the first root, then to home. Keeps a moved-to-a-custom-root category launching
+/// from the right place.
 fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::Value) -> String {
     let home = cfg.get("home").and_then(serde_json::Value::as_str).unwrap_or("/");
     // v2: resolve the category's root name → its path in cfg.roots.
@@ -398,10 +397,14 @@ fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::Value) -> St
             }
         }
     }
-    // v1 fallback: scope → workRoot / personalRoot.
-    let scope = cat_def.get("scope").and_then(serde_json::Value::as_str).unwrap_or("work");
-    let root_key = if scope == "personal" { "personalRoot" } else { "workRoot" };
-    cfg.get(root_key).and_then(serde_json::Value::as_str).unwrap_or(home).to_string()
+    // Fallback: use first root's path, or home.
+    if let Some(roots) = cfg.get("roots").and_then(serde_json::Value::as_array) {
+        if let Some(path) = roots.first()
+            .and_then(|r| r.get("path").and_then(serde_json::Value::as_str)) {
+            return path.to_string();
+        }
+    }
+    home.to_string()
 }
 
 /// Reopen a closed/archived session: launch `claude` + the `/restart-session` skill, which
@@ -612,7 +615,7 @@ fn local_date_time() -> Option<(String, String)> {
     (d.len() == 10 && t.len() == 5).then(|| (d.to_string(), t.to_string()))
 }
 
-/// Every configured root, canonicalized (v2 `roots` list + legacy workRoot/personalRoot).
+/// Every configured root, canonicalized (v2 `roots` list only).
 /// Non-existent roots drop out (canonicalize fails). Shared by the confinement checks so
 /// the "what counts as a root" list lives once.
 fn configured_roots() -> Vec<std::path::PathBuf> {
@@ -623,11 +626,6 @@ fn configured_roots() -> Vec<std::path::PathBuf> {
             if let Some(p) = r.get("path").and_then(serde_json::Value::as_str) {
                 roots.push(p.to_string());
             }
-        }
-    }
-    for k in ["workRoot", "personalRoot"] {
-        if let Some(p) = cfg.get(k).and_then(serde_json::Value::as_str) {
-            roots.push(p.to_string());
         }
     }
     roots.iter().filter_map(|r| std::path::Path::new(r).canonicalize().ok()).collect()
@@ -982,15 +980,32 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // v1 → v2 migration (idempotent, run-once at startup).
+            match config::migrate_v1_if_needed() {
+                Ok(true) => {
+                    eprintln!("[ai-agents-orchestrator] Config migrated to v2 (backup saved)");
+                    // Emit a Tauri event so the renderer can show a toast.
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.emit("config_migrated_v2", ());
+                    }
+                }
+                Ok(false) => {
+                    // No migration needed.
+                }
+                Err(e) => {
+                    eprintln!("[ai-agents-orchestrator] Config migration failed: {e}");
+                }
+            }
             // One-time startup diagnostic: a missing scan root means the app will
             // silently show no sessions there — the #1 confusing first-run state.
             // Surface it (don't fail) so a tester who skipped install.sh sees why.
             let cfg = config::load();
-            for key in ["workRoot", "personalRoot"] {
-                if let Some(root) = cfg.get(key).and_then(serde_json::Value::as_str) {
-                    if !std::path::Path::new(root).exists() {
+            for r in cfg.get("roots").and_then(serde_json::Value::as_array).unwrap_or(&vec![]) {
+                if let Some(path) = r.get("path").and_then(serde_json::Value::as_str) {
+                    if !std::path::Path::new(path).exists() {
+                        let name = r.get("name").and_then(serde_json::Value::as_str).unwrap_or("(unknown)");
                         eprintln!(
-                            "[ai-agents-orchestrator] configured {key} '{root}' does not exist — \
+                            "[ai-agents-orchestrator] configured root '{name}' path '{path}' does not exist — \
                              sessions there won't be found (run scripts/install.sh, or set it in Settings)"
                         );
                     }
@@ -1129,21 +1144,24 @@ mod tests {
     }
 
     #[test]
-    fn category_root_dir_resolves_v2_root_then_falls_back_to_scope() {
+    fn category_root_dir_resolves_v2_root_then_falls_back_to_first_root() {
         let cfg = json!({
             "home": "/home/u",
-            "workRoot": "/w", "personalRoot": "/p",
             "roots": [{"name":"Work","path":"/w"},{"name":"Perso","path":"/p"},{"name":"Clients","path":"/c"}],
         });
         // v2: launch dir = the category's named root path.
         assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Clients"})), "/c");
         assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Perso"})), "/p");
-        // Unknown root name → v1 scope fallback (work).
-        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Ghost","scope":"work"})), "/w");
-        // No root field at all (v1) → scope fallback.
-        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","scope":"personal"})), "/p");
-        // No root, no scope → defaults to work root.
+        // Unknown root name → first root (v2 safety net).
+        assert_eq!(category_root_dir(&cfg, &json!({"name":"X","root":"Ghost"})), "/w");
+        // No root field → first root.
         assert_eq!(category_root_dir(&cfg, &json!({"name":"X"})), "/w");
+        // Empty roots list → home.
+        let cfg_no_roots = json!({
+            "home": "/home/u",
+            "roots": [],
+        });
+        assert_eq!(category_root_dir(&cfg_no_roots, &json!({"name":"X"})), "/home/u");
     }
 
     #[test]

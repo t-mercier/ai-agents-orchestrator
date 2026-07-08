@@ -1044,9 +1044,9 @@ fn scan_historical() -> Vec<Value> {
 
             // Resume is keyed by the dir `claude` was LAUNCHED from (not where it
             // later cd'd to) — use the transcript's first cwd. Fall back to the
-            // category's scope root (the parent of <root>/<CAT>) so a work session
-            // resumes from the configured work root, not the home directory.
-            let scope_root = std::path::Path::new(base)
+            // category's root (the parent of <root>/<CAT>) so a session resumes
+            // from the configured root, not the home directory.
+            let root_dir = std::path::Path::new(base)
                 .parent()
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default();
@@ -1062,7 +1062,7 @@ fn scan_historical() -> Vec<Value> {
             // renderer takes the MORE RECENT of updatedAt vs lastActivityAt for the age
             // pill, so a same-day Pause doesn't display a days-old "last activity").
             let last_activity_at = tr.as_ref().and_then(|t| t.last_activity_at.clone());
-            let cwd = tr.and_then(|t| t.launch_cwd).unwrap_or(scope_root);
+            let cwd = tr.and_then(|t| t.launch_cwd).unwrap_or(root_dir);
 
             out.push(json!({
                 "notesPath": notes_path,
