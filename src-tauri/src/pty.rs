@@ -141,19 +141,23 @@ pub fn pty_spawn(
         // and /save-session (which WRITE notes.md and bail in plan mode). Without it a
         // resume in plan mode can never record its close → it lingers as "stale". Matches
         // +New / Import.
+        let settings_arg = crate::statusline_settings_arg();
         format!(
-            "cd {} && claude --resume {} --model {} --permission-mode auto",
+            "cd {} && claude --resume {} --model {} --permission-mode auto{}",
             shell_quote(&cwd),
             shell_quote(&session_id),
             shell_quote(CLAUDE_MODEL),
+            settings_arg,
         )
     } else {
         // /restart-session rebuilds from notes — no transcript needed. Auto mode so the
         // skill (which writes + re-registers) and a later /close-session aren't blocked.
+        let settings_arg = crate::statusline_settings_arg();
         format!(
-            "cd {} && claude --model {} --permission-mode auto {}",
+            "cd {} && claude --model {} --permission-mode auto{} {}",
             shell_quote(&cwd),
             shell_quote(CLAUDE_MODEL),
+            settings_arg,
             shell_quote(&format!("/restart-session {restart_slug}")),
         )
     };

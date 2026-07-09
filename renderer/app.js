@@ -1066,7 +1066,7 @@ async function refreshUsage() {
     return
   }
 
-  const { model, fiveHourPct, sevenDayPct, contextPct, updatedAt } = usage
+  const { model, fiveHourPct, sevenDayPct, contextPct, fiveHourResetsAt, sevenDayResetsAt, updatedAt } = usage
 
   // Show the bar only if we have at least one metric.
   const hasMetric = typeof fiveHourPct === 'number' || typeof sevenDayPct === 'number' || typeof contextPct === 'number'
@@ -1091,7 +1091,7 @@ async function refreshUsage() {
   barsGroup.innerHTML = ''
 
   // Helper: create a single bar (5h, 7d, or ctx).
-  const makeBar = (label, pct) => {
+  const makeBar = (label, pct, resetsAt) => {
     if (typeof pct !== 'number' || pct < 0) return null
 
     const item = document.createElement('div')
@@ -1099,7 +1099,15 @@ async function refreshUsage() {
 
     const labelEl = document.createElement('span')
     labelEl.className = 'usage-bar-label'
-    labelEl.textContent = label
+    let labelText = label
+    // If reset time is available, append it as a compact relative time (e.g., "5h ↻2h10").
+    if (typeof resetsAt === 'number' && window.CSMFormatters && window.CSMFormatters.formatResetIn) {
+      const resetIn = window.CSMFormatters.formatResetIn(resetsAt)
+      if (resetIn) {
+        labelText = `${label} ↻${resetIn}`
+      }
+    }
+    labelEl.textContent = labelText
 
     const track = document.createElement('div')
     track.className = 'usage-bar-track'
@@ -1131,11 +1139,11 @@ async function refreshUsage() {
 
   // Add bars for each metric.
   if (typeof fiveHourPct === 'number') {
-    const bar5h = makeBar('5h', fiveHourPct)
+    const bar5h = makeBar('5h', fiveHourPct, fiveHourResetsAt)
     if (bar5h) barsGroup.appendChild(bar5h)
   }
   if (typeof sevenDayPct === 'number') {
-    const bar7d = makeBar('7d', sevenDayPct)
+    const bar7d = makeBar('7d', sevenDayPct, sevenDayResetsAt)
     if (bar7d) barsGroup.appendChild(bar7d)
   }
   if (typeof contextPct === 'number') {

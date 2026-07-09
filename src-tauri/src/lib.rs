@@ -4,9 +4,75 @@ mod reader;
 mod git;
 mod terminal;
 mod skills;
+mod statusline;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
+
+/// Build a `--settings '<path>'` argument (with leading space) that injects the
+/// statusLine wrapper, or return an empty string if settings file writing fails.
+/// Writes a per-session launch-settings.json to ~/.config/ai-agents-orchestrator/
+/// that injects ao-statusline.sh as the statusLine, preserving the user's own
+/// statusline command (read read-only from ~/.claude/settings.json).
+/// Any error (can't write settings, can't read user config) returns "", so the
+/// launch proceeds without injection.
+pub(crate) fn statusline_settings_arg() -> String {
+    let config_dir = config::home().join(".config").join("ai-agents-orchestrator");
+    if std::fs::create_dir_all(&config_dir).is_err() {
+        return String::new();
+    }
+
+    // Read the user's current statusLine command (if any) from ~/.claude/settings.json.
+    let user_statusline = {
+        let settings_path = config::home().join(".claude").join("settings.json");
+        match std::fs::read_to_string(&settings_path) {
+            Ok(content) => {
+                if let Ok(Value::Object(map)) = serde_json::from_str::<Value>(&content) {
+                    if let Some(statusline) = map.get("statusLine") {
+                        if let Some(cmd) = statusline.get("command").and_then(Value::as_str) {
+                            cmd.to_string()
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                }
+            }
+            Err(_) => String::new(),
+        }
+    };
+
+    // Build the wrapper command: ao-statusline.sh with the user's original as an arg.
+    let ao_statusline = config::home().join(".claude").join("ao-statusline.sh");
+    let wrapper_cmd = format!(
+        "{} {}",
+        ao_statusline.to_string_lossy(),
+        pty::shell_quote(&user_statusline)
+    );
+
+    // Build the settings JSON: inject the wrapper as the statusLine.
+    let settings = serde_json::json!({
+        "statusLine": {
+            "type": "command",
+            "command": wrapper_cmd
+        }
+    });
+
+    let settings_file = config_dir.join("launch-settings.json");
+    let settings_json = match serde_json::to_string(&settings) {
+        Ok(s) => s,
+        Err(_) => return String::new(),
+    };
+
+    if atomic_write(&settings_file, &settings_json).is_err() {
+        return String::new();
+    }
+
+    format!(" --settings '{}'", settings_file.to_string_lossy())
+}
 
 /// Open an http(s) URL in the system browser. The scheme check already prevents a
 /// leading `-`; `--` terminates `open`'s option parsing (defense-in-depth).
@@ -144,18 +210,21 @@ fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
     // /save-session, which WRITE notes.md (and so bail in plan mode at their Step 0). Plan
     // mode would leave the session perpetually "stale" because the close never records.
     // Matches +New / Import (which already force auto for the same reason).
+    let settings_arg = statusline_settings_arg();
     let cmd = if std::path::Path::new(&cwd).is_absolute() {
         format!(
-            "cd {} && claude --resume {} --model {} --permission-mode auto",
+            "cd {} && claude --resume {} --model {} --permission-mode auto{}",
             pty::shell_quote(&cwd),
             session_id,
             pty::shell_quote(pty::CLAUDE_MODEL),
+            settings_arg,
         )
     } else {
         format!(
-            "claude --resume {} --model {} --permission-mode auto",
+            "claude --resume {} --model {} --permission-mode auto{}",
             session_id,
             pty::shell_quote(pty::CLAUDE_MODEL),
+            settings_arg,
         )
     };
     terminal::launch_in_terminal(&cmd)
@@ -313,9 +382,11 @@ fn start_session(
     // forces a writable mode regardless of the user's persisted default. (Resume/Restart
     // keep the session's own mode — this is only for fresh sessions.) `auto` is a fixed
     // literal, no quoting needed.
+    let settings_arg = statusline_settings_arg();
     let claude = format!(
-        "claude --model {} --permission-mode auto {}",
+        "claude --model {} --permission-mode auto{} {}",
         pty::shell_quote(model),
+        settings_arg,
         pty::shell_quote(&prompt),
     );
 
@@ -435,10 +506,12 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     // --permission-mode auto: /restart-session writes (re-registers + checks out the
     // branch) and the reopened session must be able to /close-session later — both bail in
     // plan mode. Matches +New / Import / Resume.
+    let settings_arg = statusline_settings_arg();
     let cmd = format!(
-        "cd {} && claude --model {} --permission-mode auto {}",
+        "cd {} && claude --model {} --permission-mode auto{} {}",
         pty::shell_quote(&dir),
         pty::shell_quote(pty::CLAUDE_MODEL),
+        settings_arg,
         pty::shell_quote(&prompt),
     );
     terminal::launch_in_terminal(&cmd)
@@ -485,11 +558,13 @@ fn import_session(session_id: String, category: String, name: String, root: Stri
     // session; plan mode blocks that (same wall +New hit). Force a writable mode on the
     // resumed session so the adoption goes through. Resume cwd stays the session's own
     // dir (claude --resume keys by directory); the space only decides where notes land.
+    let settings_arg = statusline_settings_arg();
     let cmd = format!(
-        "cd {} && claude --resume {} --model {} --permission-mode auto {}",
+        "cd {} && claude --resume {} --model {} --permission-mode auto{} {}",
         pty::shell_quote(&dir),
         pty::shell_quote(&session_id),
         pty::shell_quote(pty::CLAUDE_MODEL),
+        settings_arg,
         pty::shell_quote(&prompt),
     );
     if embedded {
@@ -1005,6 +1080,9 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // Install the statusline wrapper (idempotent, best-effort).
+            statusline::install_if_needed();
+
             // v1 → v2 migration (idempotent, run-once at startup).
             match config::migrate_v1_if_needed() {
                 Ok(true) => {

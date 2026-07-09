@@ -97,5 +97,22 @@
     return `${Math.floor(diffD / 365)}y`
   }
 
-  return { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge }
+  // Format a future time (e.g., "in 2h 10m" for rate-limit resets).
+  // Accepts epoch ms. `now` is injectable for tests (defaults to Date.now()).
+  function formatResetIn(ms, now) {
+    if (!ms) return ''
+    const ref = typeof now === 'number' ? now : Date.now()
+    const diffMin = Math.floor((ms - ref) / 60000)
+    if (diffMin < 1) return 'now'
+    if (diffMin < 60) return `${diffMin}m`
+    const diffH = Math.floor(diffMin / 60)
+    if (diffH < 24) {
+      const remainingMin = diffMin % 60
+      return remainingMin > 0 ? `${diffH}h ${remainingMin}m` : `${diffH}h`
+    }
+    const diffD = Math.floor(diffH / 24)
+    return `${diffD}d`
+  }
+
+  return { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge, formatResetIn }
 })
