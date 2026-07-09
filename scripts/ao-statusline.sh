@@ -21,11 +21,12 @@ set -u
 INPUT="$(cat)"
 CACHE="$HOME/.claude/statusline-cache.json"
 
-# Best-effort cache write (python parses the stdin JSON; any error is swallowed).
-printf '%s' "$INPUT" | python3 - "$CACHE" 2>/dev/null <<'PY' || true
+# Best-effort cache write. INPUT is passed via env (AO_INPUT), NOT stdin: `python3 -`
+# reads its PROGRAM from stdin (this heredoc), so a piped stdin would be discarded.
+AO_INPUT="$INPUT" python3 - "$CACHE" 2>/dev/null <<'PY' || true
 import json, os, sys, time, re
 try:
-    d = json.load(sys.stdin)
+    d = json.loads(os.environ.get("AO_INPUT", "{}"))
 except Exception:
     sys.exit(0)
 def num(v):
