@@ -188,6 +188,31 @@ hook if you want a last-ditch save right before Claude Code compacts.
 
 </details>
 
+<details>
+<summary><strong>Optional: a usage bar (model · 5h / weekly limits · context)</strong></summary>
+
+The dashboard can show a slim bottom bar with your **model**, the **5-hour** and **weekly**
+rate-limit windows, and the current **context %** — the same numbers a Claude Code statusline
+shows. Claude Code only hands that data to a `statusLine` command (never to disk), so a small
+**opt-in** piggyback persists it for the app to read.
+
+Point your Claude Code `statusLine` at the bundled wrapper, passing your own statusline
+command as the argument (or omit it if you have none):
+
+```jsonc
+// ~/.claude/settings.json
+"statusLine": {
+  "type": "command",
+  "command": "/ABS/PATH/scripts/statusline-usage-piggyback.sh /ABS/PATH/your-statusline.sh"
+}
+```
+
+The wrapper writes `~/.claude/statusline-cache.json` on each render; the app **reads it
+read-only** and renders the bar (hidden entirely if the cache is absent, dimmed if stale).
+It never touches your config. See [`scripts/statusline-usage-piggyback.sh`](scripts/statusline-usage-piggyback.sh).
+
+</details>
+
 📖 **New to the lifecycle?** The **[Guide](docs/GUIDE.md)** explains the four session states (Active · Stale · Closed · Archived), Start vs Resume vs Restart, and how the notes beat compaction — in plain terms, no jargon.
 
 ## Customization
