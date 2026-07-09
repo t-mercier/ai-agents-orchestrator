@@ -1061,6 +1061,7 @@ async function refreshUsage() {
 
   // Cache absent or error → hide the bar.
   if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+    document.documentElement.classList.remove('has-usage')
     if (bar) bar.hidden = true
     return
   }
@@ -1070,6 +1071,7 @@ async function refreshUsage() {
   // Show the bar only if we have at least one metric.
   const hasMetric = typeof fiveHourPct === 'number' || typeof sevenDayPct === 'number' || typeof contextPct === 'number'
   if (!hasMetric) {
+    document.documentElement.classList.remove('has-usage')
     if (bar) bar.hidden = true
     return
   }
@@ -1141,8 +1143,10 @@ async function refreshUsage() {
     if (barCtx) barsGroup.appendChild(barCtx)
   }
 
-  // Show the bar.
+  // Show the bar (and reserve its 26px in the layout via the has-usage class, so a user
+  // without the piggyback cache leaves no empty gap at the bottom).
   bar.hidden = false
+  document.documentElement.classList.add('has-usage')
 
   // Stale check: updatedAt > 15 min old → dim + add stale class.
   const isStale = typeof updatedAt === 'number' && Date.now() - updatedAt > 900000 // 15 min

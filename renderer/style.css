@@ -573,11 +573,16 @@ body.mode-board .board-view { display: block; flex: 1; min-height: 0; overflow: 
 .view-btn .view-ico { width: 12px; height: 12px; vertical-align: -2px; }
 
 /* ===== Layout ===== */
-/* Layout: full height below titlebar, minus usage bar height */
+/* Layout: full height below titlebar. Only when the usage bar is shown (has-usage set on
+   <html> by refreshUsage) do we reserve its 26px — so a user without the piggyback cache
+   sees no empty gap at the bottom, and the fixed bar never overlaps the content when shown. */
 .layout {
   display: flex;
-  height: calc(100vh - var(--titlebar-h) - 26px);
+  height: calc(100vh - var(--titlebar-h));
   overflow: hidden;
+}
+html.has-usage .layout {
+  height: calc(100vh - var(--titlebar-h) - 26px);
 }
 
 /* ── View-mode visibility ── */
