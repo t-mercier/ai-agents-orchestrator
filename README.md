@@ -189,27 +189,22 @@ hook if you want a last-ditch save right before Claude Code compacts.
 </details>
 
 <details>
-<summary><strong>Optional: a usage bar (model · 5h / weekly limits · context)</strong></summary>
+<summary><strong>Usage bar (model · 5h / weekly limits · context) — automatic</strong></summary>
 
-The dashboard can show a slim bottom bar with your **model**, the **5-hour** and **weekly**
-rate-limit windows, and the current **context %** — the same numbers a Claude Code statusline
-shows. Claude Code only hands that data to a `statusLine` command (never to disk), so a small
-**opt-in** piggyback persists it for the app to read.
+A slim bottom bar shows your **model**, the **5-hour** and **weekly** rate-limit windows
+(colour-coded, with reset countdowns), and the current **context %** — the numbers a Claude
+Code statusline shows. Claude Code only hands that data to a `statusLine` command (never to
+disk), so the app supplies its own.
 
-Point your Claude Code `statusLine` at the bundled wrapper, passing your own statusline
-command as the argument (or omit it if you have none):
+**No setup needed** for sessions **launched from the dashboard**: the app installs a bundled
+wrapper (`~/.claude/ao-statusline.sh`) and, at each launch, passes it as that session's
+`statusLine` via `claude --settings` — **per-session, so it never edits your global
+`settings.json`**. The wrapper writes `~/.claude/statusline-cache.json` (which the app reads
+**read-only**) and then delegates to your own statusline, so your terminal statusline is
+unchanged. See [`scripts/ao-statusline.sh`](scripts/ao-statusline.sh).
 
-```jsonc
-// ~/.claude/settings.json
-"statusLine": {
-  "type": "command",
-  "command": "/ABS/PATH/scripts/statusline-usage-piggyback.sh /ABS/PATH/your-statusline.sh"
-}
-```
-
-The wrapper writes `~/.claude/statusline-cache.json` on each render; the app **reads it
-read-only** and renders the bar (hidden entirely if the cache is absent, dimmed if stale).
-It never touches your config. See [`scripts/statusline-usage-piggyback.sh`](scripts/statusline-usage-piggyback.sh).
+Caveat: only sessions started from the app feed the bar (the injection is per-launch), so it
+dims as *stale* if you've only worked outside the app, and hides entirely when no cache exists.
 
 </details>
 
