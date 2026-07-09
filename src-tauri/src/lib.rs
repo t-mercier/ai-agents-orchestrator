@@ -6,6 +6,7 @@ mod terminal;
 mod skills;
 
 use tauri::{Manager, Emitter};
+use serde_json::Value;
 
 /// Open an http(s) URL in the system browser. The scheme check already prevents a
 /// leading `-`; `--` terminates `open`'s option parsing (defense-in-depth).
@@ -884,6 +885,30 @@ fn close_session(notes_path: String) -> Result<(), String> {
     atomic_write(&abs, &stamp_archived(&content, &line))
 }
 
+/// Parse statusline-cache.json (or any JSON) into a serde_json Value.
+/// Valid JSON object → the object; anything else (garbage, scalar values) → Null.
+fn parse_usage(content: &str) -> Value {
+    match serde_json::from_str::<Value>(content) {
+        Ok(v) if v.is_object() => v,
+        _ => Value::Null,
+    }
+}
+
+/// Read the Claude Code statusline cache file (~/.claude/statusline-cache.json)
+/// and return its parsed JSON. Returns Null if the file is absent, unreadable, or
+/// contains invalid/non-object JSON. Never errors — always returns a Value.
+#[tauri::command]
+fn get_usage() -> Value {
+    let cache_path = config::home()
+        .join(".claude")
+        .join("statusline-cache.json");
+
+    match std::fs::read_to_string(&cache_path) {
+        Ok(content) => parse_usage(&content),
+        Err(_) => Value::Null,
+    }
+}
+
 /// Open a native folder picker for Settings; returns the chosen absolute path, or
 /// null if cancelled. MUST stay `async`: the native panel (rfd) runs on the main
 /// thread and `blocking_pick_folder` blocks the caller on a channel — only safe
@@ -1046,6 +1071,7 @@ pub fn run() {
             close_session,
             can_reveal_terminal,
             reveal_terminal,
+            get_usage,
             skills::install_skills,
             skills::skills_status,
             pty::pty_spawn,
@@ -1068,10 +1094,10 @@ pub fn run() {
 mod tests {
     use super::{
         category_root_dir, is_deletable_session_dir, is_pr_url, is_safe_branch, is_safe_category,
-        is_safe_slug, is_ticket, is_valid_session_id, percent_encode, sanitize_session_name,
+        is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_pr_link_in_frontmatter, slugify, stamp_archived, validate_root_override,
     };
-    use serde_json::json;
+    use serde_json::{json, Value};
     use std::path::PathBuf;
 
     #[test]
@@ -1230,6 +1256,21 @@ mod tests {
         assert!(!is_pr_url("http://github.com/o/r/pull/3")); // not https
         assert!(!is_pr_url("https://github.com/o/r/pull/3 extra")); // whitespace
         assert!(!is_pr_url(""));
+    }
+
+    #[test]
+    fn parse_usage_accepts_valid_object_rejects_garbage() {
+        // Valid object → returns it.
+        let obj = json!({ "model": "Opus 4.8", "fiveHourPct": 43 });
+        let result = parse_usage(&obj.to_string());
+        assert_eq!(result, obj);
+
+        // Invalid/non-object JSON → Null.
+        assert_eq!(parse_usage("garbage"), Value::Null);
+        assert_eq!(parse_usage("42"), Value::Null); // scalar
+        assert_eq!(parse_usage("[1,2,3]"), Value::Null); // array
+        assert_eq!(parse_usage(""), Value::Null); // empty
+        assert_eq!(parse_usage("null"), Value::Null); // null literal
     }
 
     const FM: &str = "---\nname: x\ncategory: REVIEW\nbranch: feat/y\n---\n\n# x\nbody\n";

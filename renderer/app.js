@@ -1051,6 +1051,108 @@ async function maybeShowSkillsBanner() {
   })
 }
 
+// Render the global usage status bar from ~/.claude/statusline-cache.json.
+// Updates the model name + progress bars (5h, 7d, ctx). Hides the bar if cache is absent.
+async function refreshUsage() {
+  if (!window.api || !window.api.getUsage) return
+
+  const usage = await window.api.getUsage()
+  const bar = document.getElementById('usage-bar')
+
+  // Cache absent or error → hide the bar.
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+    if (bar) bar.hidden = true
+    return
+  }
+
+  const { model, fiveHourPct, sevenDayPct, contextPct, updatedAt } = usage
+
+  // Show the bar only if we have at least one metric.
+  const hasMetric = typeof fiveHourPct === 'number' || typeof sevenDayPct === 'number' || typeof contextPct === 'number'
+  if (!hasMetric) {
+    if (bar) bar.hidden = true
+    return
+  }
+
+  if (!bar) return
+
+  // Populate model name.
+  const modelEl = document.getElementById('usage-model')
+  if (modelEl) {
+    modelEl.textContent = model || '(unknown model)'
+  }
+
+  // Build the bars group.
+  const barsGroup = document.getElementById('usage-bars-group')
+  if (!barsGroup) return
+
+  barsGroup.innerHTML = ''
+
+  // Helper: create a single bar (5h, 7d, or ctx).
+  const makeBar = (label, pct) => {
+    if (typeof pct !== 'number' || pct < 0) return null
+
+    const item = document.createElement('div')
+    item.className = 'usage-bar-item'
+
+    const labelEl = document.createElement('span')
+    labelEl.className = 'usage-bar-label'
+    labelEl.textContent = label
+
+    const track = document.createElement('div')
+    track.className = 'usage-bar-track'
+
+    const fill = document.createElement('div')
+    fill.className = 'usage-bar-fill'
+    // Threshold: <70% idle-green, <90% busy-orange, >=90% waiting-red.
+    if (pct < 70) {
+      fill.classList.add('idle')
+    } else if (pct < 90) {
+      fill.classList.add('busy')
+    } else {
+      fill.classList.add('waiting')
+    }
+    fill.style.width = `${Math.min(100, pct)}%`
+
+    track.appendChild(fill)
+
+    const percentEl = document.createElement('span')
+    percentEl.className = 'usage-bar-percent'
+    percentEl.textContent = `${Math.round(pct)}%`
+
+    item.appendChild(labelEl)
+    item.appendChild(track)
+    item.appendChild(percentEl)
+
+    return item
+  }
+
+  // Add bars for each metric.
+  if (typeof fiveHourPct === 'number') {
+    const bar5h = makeBar('5h', fiveHourPct)
+    if (bar5h) barsGroup.appendChild(bar5h)
+  }
+  if (typeof sevenDayPct === 'number') {
+    const bar7d = makeBar('7d', sevenDayPct)
+    if (bar7d) barsGroup.appendChild(bar7d)
+  }
+  if (typeof contextPct === 'number') {
+    const barCtx = makeBar('ctx', contextPct)
+    if (barCtx) barsGroup.appendChild(barCtx)
+  }
+
+  // Show the bar.
+  bar.hidden = false
+
+  // Stale check: updatedAt > 15 min old → dim + add stale class.
+  const isStale = typeof updatedAt === 'number' && Date.now() - updatedAt > 900000 // 15 min
+  if (isStale) {
+    bar.classList.add('stale')
+  } else {
+    bar.classList.remove('stale')
+  }
+}
+
 async function boot() {
   // Sync the native window background to the saved theme (the inline head script already
   // set dataset.theme before first paint) so a resize never flashes the wrong colour.
@@ -1067,10 +1169,12 @@ async function boot() {
   fetchAndRender(true)                        // initial → sort
   seedTabCounts()                             // fill ALL tab badges at launch (not just on visit)
   maybeShowSkillsBanner()                     // first-launch nudge if skills aren't installed yet
+  refreshUsage()                              // initial usage bar render
   // poll → keep order frozen; skip if the previous fetch is still running (no stacking)
   setInterval(() => {
     if (viewMode === 'board') window.refreshBoard()
     else if (!fetchInFlight) fetchAndRender(false)
+    refreshUsage()                            // refresh usage bar on every poll
   }, POLL_INTERVAL)
 }
 window.reloadConfig = async () => {           // called by Settings after save

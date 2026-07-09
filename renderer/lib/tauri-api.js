@@ -111,5 +111,9 @@
     setAlwaysOnTop: (flag) => invoke('set_always_on_top', { flag }).catch(() => false),
     // Match the native window background to the theme (avoids a white flash on resize).
     setWindowBg: (dark) => invoke('set_window_bg', { dark: !!dark }).catch(() => {}),
+
+    // ── Usage status bar (Claude Code statusline cache) ──
+    // Fetches ~/.claude/statusline-cache.json; returns the parsed object or null (cache absent/unreadable).
+    getUsage: () => invoke('get_usage').catch(() => null),
   }
 })()

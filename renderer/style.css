@@ -573,10 +573,10 @@ body.mode-board .board-view { display: block; flex: 1; min-height: 0; overflow: 
 .view-btn .view-ico { width: 12px; height: 12px; vertical-align: -2px; }
 
 /* ===== Layout ===== */
-/* Layout: full height below titlebar */
+/* Layout: full height below titlebar, minus usage bar height */
 .layout {
   display: flex;
-  height: calc(100vh - var(--titlebar-h));
+  height: calc(100vh - var(--titlebar-h) - 26px);
   overflow: hidden;
 }
 
@@ -1711,3 +1711,106 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   border: none; background: transparent; color: var(--text-tertiary); font-size: 17px; line-height: 1;
 }
 .skills-banner .sb-dismiss:hover { color: var(--text-primary); background: rgba(var(--tint), 0.08); }
+
+/* ===== Usage Status Bar ===== */
+.usage-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  background: var(--surface-bg);
+  border-top: 0.5px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+  z-index: 100;
+}
+
+.usage-bar[hidden] {
+  display: none !important;
+}
+
+.usage-bar.stale {
+  opacity: 0.6;
+}
+
+.usage-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.usage-model {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-bars-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.usage-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.usage-bar-label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.usage-bar-track {
+  width: 80px;
+  height: 6px;
+  background: rgba(var(--tint), 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.usage-bar-fill.idle {
+  background: var(--status-idle);
+}
+
+.usage-bar-fill.busy {
+  background: var(--status-busy);
+}
+
+.usage-bar-fill.waiting {
+  background: var(--status-waiting);
+}
+
+.usage-bar-percent {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  flex-shrink: 0;
+  min-width: 26px;
+  text-align: right;
+}
