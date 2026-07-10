@@ -104,12 +104,20 @@ function pathLink(fullPath, prefix = '') {
   return `<span class="path-link" data-folder="${escapeHtml(fullPath)}" title="Open in Finder — ${escapeHtml(fullPath)}">${prefix}${escapeHtml(shortHome(fullPath))}</span>`
 }
 
+// The group a session falls under: its real category, else — for an unmanaged live
+// session opened via the Claude Desktop app (no notes.md, so no category) — a dedicated
+// "Claude Desktop" group instead of the generic catch-all "OTHER".
+function displayCategory(s) {
+  if (s.category) return s.category
+  return s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER'
+}
+
 // ── Left panel: grouped by category ──
 
 function groupByCategory(sessions) {
   const groups = {}
   for (const s of sessions) {
-    const cat = s.category || 'OTHER'
+    const cat = displayCategory(s)
     if (!groups[cat]) groups[cat] = []
     groups[cat].push(s)
   }
@@ -420,7 +428,7 @@ function renderSessionCard(s, selectedKey, changed) {
   // never shown; when there's no summary yet, the activity line is hidden entirely.
   const preview = escapeHtml(truncate(s.lastSummary || '', 110))
   const next = firstNextStep(s.nextSteps)
-  const cat = s.category || 'OTHER'
+  const cat = displayCategory(s)
   const { dotClass, historical, badge } = statusBits(s)
   return `
     <div class="session-card ${dotClass} ${historical} ${sessionKey(s) === selectedKey ? 'selected' : ''} ${changed ? 'just-updated' : ''} ${isPinnedSession(s) ? 'pinned' : ''}"

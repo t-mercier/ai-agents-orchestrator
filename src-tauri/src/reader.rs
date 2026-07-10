@@ -639,6 +639,10 @@ pub fn get_sessions() -> Vec<Value> {
             "cwd": launch_cwd,
             "pid": pid,
             "status": status,
+            // "cli" (Claude Code terminal) or "claude-desktop" (the Claude Desktop app) —
+            // lets an unmanaged claude-desktop session group as "Claude Desktop" in the
+            // renderer instead of falling into the catch-all "OTHER".
+            "entrypoint": data.get("entrypoint").and_then(Value::as_str).unwrap_or(""),
             "state": "active",   // lifecycle state: live pid (vs stale/closed/archived)
             "updatedAt": data.get("updatedAt").cloned().unwrap_or(Value::Null),
             "notesPath": notes_path,
