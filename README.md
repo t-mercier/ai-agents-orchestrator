@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.2.2--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -31,14 +31,14 @@
 > ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
 >
-> - 🧩 **Skills install themselves now** — the app bundles the session skills and copies them into `~/.claude/skills/` on a click (a first-launch banner, or **Settings → Session skills**). A `.dmg`-only install no longer needs the repo + `install.sh`.
-> - 🐧 **Linux support** — runs on X11 & Wayland (verified on GNOME/Wayland); `cargo tauri build` produces `.deb`/`.AppImage`. *(First external contributions — thanks [@FelixDombek-TomTom](https://github.com/FelixDombek-TomTom)! Also added CI + a vendored-bundle freshness guard.)*
-> - 🔌 **Import, upgraded** — adopt a session into a chosen **space** (not just Work/Personal), **paste a session ID** to grab one that isn't in the recent list, and open it in the **embedded** terminal or an external one — full parity with ＋New.
-> - ⌨️ **Start a new session in the embedded terminal** — ＋New gets the same **Embedded / Terminal** toggle as Resume/Restart, so a brand-new session can open in the built-in terminal instead of an external tab. New sessions launch in *auto* mode so they're ready to work.
-> - 🗂 **Spaces** — group categories under named spaces (*Work*, *Perso*, a client). List & Cards fold into collapsible **space sections**; the Board filters by space.
-> - ⚲ **Filter popover** — the category chip row became a single **⚲ Filter** button + checkbox menu (Spaces + Categories, one control across every view).
-> - 🧩 **Session skills renamed** to the `*-session` form (`/start-session`, `/close-session`…) — re-run `bash scripts/install.sh --force`.
-> - 📄 **Source-available licence** — free to use (incl. at work), no resale.
+> - ⚙️ **Config v2, auto-migrated** — named **spaces**, each with its own Obsidian **vault**. A legacy v1 config (work/personal roots + category `scope`) is migrated to v2 on first launch, with a backup kept. Nothing to do by hand.
+> - 📊 **Usage bar** — a slim bottom bar with your **model**, the **5-hour** & **weekly** rate-limit windows (with reset countdowns) and **context %**, right in the app. Automatic for sessions launched from the dashboard; never touches your global settings.
+> - 🖥 **"Claude Desktop" group** — live sessions opened from the Claude Desktop app now group on their own instead of the catch-all "OTHER".
+> - 📝 **Session summaries on cards** — cards & detail show the one-line summary written by `/save-session` · `/close-session`, not raw transcript output.
+> - 🔒 **Security & robustness audit** — a Fable-assisted hardening pass across the Rust backend (pid clamp, `fsync`'d atomic writes, delete-guards, single-source validators).
+> - 🧩 **Skills install themselves** — the app bundles the session skills and copies them into `~/.claude/skills/` on a click (a first-launch banner, or **Settings → Session skills**). A `.dmg`-only install no longer needs the repo + `install.sh`.
+> - 🐧 **Linux support** — runs on X11 & Wayland (verified on GNOME/Wayland); `cargo tauri build` produces `.deb`/`.AppImage`. *(First external contributions — thanks [@FelixDombek-TomTom](https://github.com/FelixDombek-TomTom)!)*
+> - 🔌 **Import, upgraded** — adopt a session into a chosen **space**, **paste a session ID** to grab one that isn't in the recent list, and open it in the **embedded** terminal or an external one.
 
 ## The problem
 
@@ -146,7 +146,7 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 Categories, note locations and Obsidian vaults all come from your shared config, so the skills and the app stay in sync. The installer won't overwrite a customised skill unless you pass `--force`.
 
 > [!IMPORTANT]
-> **Updating from an earlier version?** This release makes the skills **root-aware** (they resolve a session's folder from its category's root, with the old work/personal layout still supported) and **fixes `/restart-session`** — its un-archive step used to over-match and could strip valid `notes.md` history lines. **Re-run the installer to pull the updated skills:**
+> **Updating from an earlier version?** Your config **auto-migrates to v2** on first launch — named spaces + per-space Obsidian vaults, with a `.v1-backup` kept (see [ADR-015](docs/adr/ADR-015-config-v1-to-v2-migration-flag-gated-self-cleaning.md)). Nothing to do by hand. **Re-run the installer to pull the updated skills:**
 > ```bash
 > bash scripts/install.sh --force
 > ```
