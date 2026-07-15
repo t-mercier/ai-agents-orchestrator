@@ -217,8 +217,8 @@ Edit everything in the app's **Settings (⚙)** — categories & colours, scan r
 ```json
 {
   "roots": [
-    { "name": "Work",  "path": "~/work" },
-    { "name": "Perso", "path": "~" }
+    { "name": "Work",  "path": "~/work", "vaultPath": "~/work/vault" },
+    { "name": "Perso", "path": "~", "vaultPath": "" }
   ],
   "categories": [
     { "name": "FEAT",   "color": "#7df0c0", "root": "Work" },
@@ -226,12 +226,12 @@ Edit everything in the app's **Settings (⚙)** — categories & colours, scan r
     { "name": "REVIEW", "color": "#d9a86e", "root": "Work" },
     { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
   ],
-  "obsidian": { "enabled": false, "workVaultPath": "", "personalVaultPath": "" },
+  "obsidian": { "enabled": false },
   "ticketBaseUrl": ""
 }
 ```
 
-Each category names the **space** it lives under — the `root` key in the config (its folder is `<space path>/<CATEGORY>`), so the *same* category name can exist in several spaces, and the titlebar space selector scopes the view. *(Back-compat: the legacy `workRoot`/`personalRoot` + a category `scope` of `work`/`personal` are still read and auto-migrated to `Work`/`Perso` spaces, so existing configs keep working untouched.)*
+Each category names the **space** it lives under — the `root` key in the config (its folder is `<space path>/<CATEGORY>`), so the *same* category name can exist in several spaces, and the titlebar space selector scopes the view. Each space can carry a `vaultPath` (its Obsidian vault). *(Back-compat: a legacy v1 config — `workRoot`/`personalRoot`, a category `scope` of `work`/`personal`, and `obsidian.workVaultPath`/`personalVaultPath` — is auto-migrated on launch to the `Work`/`Perso` spaces + per-space `vaultPath` (a backup is kept), so existing configs keep working untouched.)*
 
 **Ticket tracking — any tracker, not just Jira.** `ticketBaseUrl` is just a URL prefix: the app appends each session's ticket ID to it to make the ID clickable. Point it at whatever you use:
 
@@ -273,7 +273,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (66, `cargo test`) + Jest (65, renderer logic) |
+| Tests | Rust unit tests (73, `cargo test`) + Jest (65, renderer logic) — 138 total |
 
 ## Roadmap
 

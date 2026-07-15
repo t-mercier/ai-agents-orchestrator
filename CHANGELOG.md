@@ -22,7 +22,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - **Import: Embedded / Terminal toggle** — adopt a session in the in-app terminal (keyed by its real id, links to the card with no re-key) or an external tab, sharing the `Open in` pref.
 
 ### Security
-- **Rust security & robustness audit** — a full pass (Fable-assisted, each finding adversarially reviewed) hardened the backend; every change verified with clippy + 66 tests:
+- **Rust security & robustness audit** — a full pass (Fable-assisted, each finding adversarially reviewed) hardened the backend; every change verified with clippy + the test suite green:
   - `alive()` now clamps a session's pid to `pid_t` range before the `kill(2)` cast — an oversized value from a foreign-written pidfile wrapped negative, and `kill(-pgid, 0)` probes a whole **process group**, so a dead session could read as *alive*.
   - `atomic_write` now `fsync`s the temp file before the rename (and `config::save` shares the one helper) — a crash in the writeback window could otherwise replace a good `notes.md`/config with an **empty** file.
   - `delete_session` refuses to remove a path that is a configured root or category directory (requires ≥2 levels below the longest matching root).

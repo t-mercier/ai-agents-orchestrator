@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# statusline-usage-piggyback.sh — feed the ai-agents-orchestrator dashboard's usage bar.
+# ao-statusline.sh — feed the ai-agents-orchestrator dashboard's usage bar.
 #
 # Claude Code hands the rate-limit + context data to the `statusLine` command on stdin and
 # nowhere else — it's never written to disk. This wrapper captures that stdin, writes it to
