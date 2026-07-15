@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0-alpha] - 2026-07-15
+
 ### Added
 - **"Claude Desktop" group for unmanaged Desktop-app sessions** — a live session opened via the Claude Desktop app (not Claude Code CLI) has no `notes.md`/category, so it used to land in the generic "OTHER" group in List/Cards. It now groups under its own **"Claude Desktop"** label instead, based on the pidfile's `entrypoint`.
 - **Usage status bar** — a slim bottom bar showing your **model**, the **5-hour** and **weekly** rate-limit windows (colour-coded, with reset countdowns), and the current **context %**. Works **automatically** for sessions launched from the dashboard: the app installs a bundled statusline wrapper (`~/.claude/ao-statusline.sh`) and injects it per-launch via `claude --settings` (never edits your global `settings.json`). The wrapper writes `~/.claude/statusline-cache.json`, which the app reads **read-only**, then delegates to your own statusline so your terminal display is unchanged. Hidden when no cache exists, dimmed when stale.
