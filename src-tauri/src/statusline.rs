@@ -48,7 +48,9 @@ mod tests {
         install_into(&target).unwrap();
 
         let content = fs::read_to_string(&target).unwrap();
-        assert!(content.contains("statusline-usage-piggyback.sh"));
+        // Assert on a stable behavioural marker (the cache path the wrapper writes),
+        // not the comment's filename — the script has been renamed once already.
+        assert!(content.contains("statusline-cache.json"));
 
         let metadata = fs::metadata(&target).unwrap();
         let mode = metadata.permissions().mode();
