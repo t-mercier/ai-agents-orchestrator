@@ -125,7 +125,11 @@ cargo tauri build      # macOS: .app/.dmg · Linux: .deb/.AppImage — in src-ta
 ```
 
 > [!NOTE]
-> **macOS:** built unsigned for now — on first launch, right-click the app → **Open** to get past Gatekeeper. Signed/notarized releases come once it's out of alpha.
+> **macOS:** built unsigned for now, so Gatekeeper flags it as "damaged" (it isn't). On recent macOS, right-click → **Open** no longer clears this — after moving the app to `/Applications`, strip the quarantine flag once from Terminal:
+> ```bash
+> xattr -cr "/Applications/AI Agents Orchestrator.app"
+> ```
+> Then open it normally. Signed/notarized releases come once it's out of alpha.
 
 > [!NOTE]
 > **Linux:** runs on X11 and Wayland (verified on GNOME/Wayland). One feature is macOS-only: *revealing* an existing external terminal window (there's no portable way to focus a window by tty on X11/Wayland), so that button is hidden on Linux. Opening a new terminal and the in-app embedded terminal both work.
