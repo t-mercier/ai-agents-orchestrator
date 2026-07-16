@@ -1812,6 +1812,19 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   background: var(--status-waiting);
 }
 
+.usage-bar-reset {
+  color: var(--text-tertiary);
+  font-size: 11px;   /* same size as the percentage… */
+  opacity: 0.6;      /* …but a touch lighter/greyer than it */
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.usage-bar-reset-icon {
+  line-height: 1;
+  font-size: 11px;    /* the ↻ glyph — same size as the rest, just a space follows it */
+}
+
 .usage-bar-percent {
   color: var(--text-tertiary);
   font-size: 11px;

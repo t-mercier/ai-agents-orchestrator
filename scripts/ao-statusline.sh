@@ -61,7 +61,6 @@ def parse_reset_time(val):
     return None
 # Capture reset times from rate_limits if present.
 rate_limits = dig(d, "rate_limits")
-rate_limits_raw = rate_limits if isinstance(rate_limits, dict) else None
 fiveHourResetsAt = None
 sevenDayResetsAt = None
 if rate_limits and isinstance(rate_limits, dict):
@@ -100,8 +99,6 @@ if fiveHourResetsAt is not None:
     out["fiveHourResetsAt"] = fiveHourResetsAt
 if sevenDayResetsAt is not None:
     out["sevenDayResetsAt"] = sevenDayResetsAt
-if rate_limits_raw is not None:
-    out["_rateLimitsRaw"] = rate_limits_raw
 p = sys.argv[1]
 tmp = p + ".tmp"
 with open(tmp, "w") as f:

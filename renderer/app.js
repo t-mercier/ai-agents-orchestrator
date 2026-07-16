@@ -1099,15 +1099,7 @@ async function refreshUsage() {
 
     const labelEl = document.createElement('span')
     labelEl.className = 'usage-bar-label'
-    let labelText = label
-    // If reset time is available, append it as a compact relative time (e.g., "5h ↻2h10").
-    if (typeof resetsAt === 'number' && window.CSMFormatters && window.CSMFormatters.formatResetIn) {
-      const resetIn = window.CSMFormatters.formatResetIn(resetsAt)
-      if (resetIn) {
-        labelText = `${label} ↻${resetIn}`
-      }
-    }
-    labelEl.textContent = labelText
+    labelEl.textContent = label
 
     const track = document.createElement('div')
     track.className = 'usage-bar-track'
@@ -1133,6 +1125,22 @@ async function refreshUsage() {
     item.appendChild(labelEl)
     item.appendChild(track)
     item.appendChild(percentEl)
+
+    // Reset countdown sits next to the % (not below), with a slightly larger ↻ glyph
+    // and a space before the time (e.g. "↻ 29m").
+    if (typeof resetsAt === 'number' && window.CSMFormatters && window.CSMFormatters.formatResetIn) {
+      const resetIn = window.CSMFormatters.formatResetIn(resetsAt)
+      if (resetIn) {
+        const resetEl = document.createElement('span')
+        resetEl.className = 'usage-bar-reset'
+        const icon = document.createElement('span')
+        icon.className = 'usage-bar-reset-icon'
+        icon.textContent = '↻'
+        resetEl.appendChild(icon)
+        resetEl.appendChild(document.createTextNode(' ' + resetIn))
+        item.appendChild(resetEl)
+      }
+    }
 
     return item
   }
