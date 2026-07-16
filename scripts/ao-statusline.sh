@@ -88,17 +88,35 @@ if rate_limits and isinstance(rate_limits, dict):
                         break
             if sevenDayResetsAt:
                 break
+# Merge with the previous cache. Claude Code doesn't include rate_limits on every
+# statusline render (e.g. right after a resume), so keep the last-known account-global
+# values instead of blanking the bars. Each field updates when this render carries it,
+# else keeps the prior value; updatedAt is always now.
+prev = {}
+try:
+    with open(sys.argv[1]) as f:
+        prev = json.load(f)
+    if not isinstance(prev, dict):
+        prev = {}
+except Exception:
+    prev = {}
+
+def keep(new_val, key):
+    return new_val if new_val is not None else prev.get(key)
+
 out = {
-    "model": dig(d, "model.display_name") or None,
-    "fiveHourPct": num(dig(d, "rate_limits.five_hour.used_percentage")),
-    "sevenDayPct": num(dig(d, "rate_limits.seven_day.used_percentage")),
-    "contextPct": num(dig(d, "context_window.used_percentage")),
+    "model": dig(d, "model.display_name") or prev.get("model"),
+    "fiveHourPct": keep(num(dig(d, "rate_limits.five_hour.used_percentage")), "fiveHourPct"),
+    "sevenDayPct": keep(num(dig(d, "rate_limits.seven_day.used_percentage")), "sevenDayPct"),
+    "contextPct": keep(num(dig(d, "context_window.used_percentage")), "contextPct"),
     "updatedAt": int(time.time() * 1000),
 }
-if fiveHourResetsAt is not None:
-    out["fiveHourResetsAt"] = fiveHourResetsAt
-if sevenDayResetsAt is not None:
-    out["sevenDayResetsAt"] = sevenDayResetsAt
+fh = fiveHourResetsAt if fiveHourResetsAt is not None else prev.get("fiveHourResetsAt")
+sd = sevenDayResetsAt if sevenDayResetsAt is not None else prev.get("sevenDayResetsAt")
+if fh is not None:
+    out["fiveHourResetsAt"] = fh
+if sd is not None:
+    out["sevenDayResetsAt"] = sd
 p = sys.argv[1]
 tmp = p + ".tmp"
 with open(tmp, "w") as f:
