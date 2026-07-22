@@ -24,7 +24,7 @@ CACHE="$HOME/.claude/statusline-cache.json"
 # Best-effort cache write. INPUT is passed via env (AO_INPUT), NOT stdin: `python3 -`
 # reads its PROGRAM from stdin (this heredoc), so a piped stdin would be discarded.
 AO_INPUT="$INPUT" python3 - "$CACHE" 2>/dev/null <<'PY' || true
-import json, os, sys, time, re
+import json, os, sys, time
 try:
     d = json.loads(os.environ.get("AO_INPUT", "{}"))
 except Exception:
@@ -37,86 +37,66 @@ def dig(o, path):
         o = o.get(k) if isinstance(o, dict) else None
     return o
 def parse_reset_time(val):
-    """Parse a reset time value (ISO string, seconds from now, or epoch seconds).
-    Returns epoch milliseconds, or None if unparseable."""
-    if val is None:
-        return None
+    if val is None: return None
     if isinstance(val, (int, float)):
-        # If it looks like seconds-from-now (< 10^9 or a reasonable relative time),
-        # add to current time. If > 10^12, treat as epoch ms. If ~10^9-10^12, treat as epoch seconds.
-        if val < 1e6:  # < ~11 days in seconds → likely relative
-            return int((time.time() + val) * 1000)
-        elif val < 1e10:  # ~10 year range in seconds → epoch seconds
-            return int(val * 1000)
-        else:  # >= 10^10 → likely epoch ms
-            return int(val)
+        if val < 1e6:   return int((time.time() + val) * 1000)
+        elif val < 1e10: return int(val * 1000)
+        else:            return int(val)
     if isinstance(val, str):
-        # Try ISO 8601 parse (e.g., "2026-07-01T12:34:56Z")
         try:
             from datetime import datetime
-            dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
-            return int(dt.timestamp() * 1000)
+            return int(datetime.fromisoformat(val.replace('Z', '+00:00')).timestamp() * 1000)
         except Exception:
             return None
     return None
-# Capture reset times from rate_limits if present.
-rate_limits = dig(d, "rate_limits")
-fiveHourResetsAt = None
-sevenDayResetsAt = None
-if rate_limits and isinstance(rate_limits, dict):
-    for key in ["five_hour", "five-hour"]:
-        rl = rate_limits.get(key)
-        if rl and isinstance(rl, dict):
-            for reset_key in ["resets_at", "resets_in_seconds", "reset_at", "reset_time"]:
-                v = rl.get(reset_key)
-                if v is not None:
-                    parsed = parse_reset_time(v)
-                    if parsed is not None:
-                        fiveHourResetsAt = parsed
-                        break
-            if fiveHourResetsAt:
-                break
-    for key in ["seven_day", "seven-day"]:
-        rl = rate_limits.get(key)
-        if rl and isinstance(rl, dict):
-            for reset_key in ["resets_at", "resets_in_seconds", "reset_at", "reset_time"]:
-                v = rl.get(reset_key)
-                if v is not None:
-                    parsed = parse_reset_time(v)
-                    if parsed is not None:
-                        sevenDayResetsAt = parsed
-                        break
-            if sevenDayResetsAt:
-                break
-# Merge with the previous cache. Claude Code doesn't include rate_limits on every
-# statusline render (e.g. right after a resume), so keep the last-known account-global
-# values instead of blanking the bars. Each field updates when this render carries it,
-# else keeps the prior value; updatedAt is always now.
+def reset_for(rl, *keys):
+    for key in keys:
+        r = rl.get(key) if isinstance(rl, dict) else None
+        if isinstance(r, dict):
+            for rk in ["resets_at", "resets_in_seconds", "reset_at", "reset_time"]:
+                p = parse_reset_time(r.get(rk))
+                if p is not None: return p
+    return None
+
+# Load previous cache; migrate a legacy flat object into the keyed shape.
 prev = {}
 try:
-    with open(sys.argv[1]) as f:
-        prev = json.load(f)
-    if not isinstance(prev, dict):
-        prev = {}
+    with open(sys.argv[1]) as f: prev = json.load(f)
+    if not isinstance(prev, dict): prev = {}
 except Exception:
     prev = {}
+if "global" not in prev and "sessions" not in prev and prev:
+    prev = {"global": {k: prev[k] for k in
+            ("fiveHourPct","sevenDayPct","fiveHourResetsAt","sevenDayResetsAt","updatedAt") if k in prev},
+            "sessions": {}}
+g_prev = prev.get("global") if isinstance(prev.get("global"), dict) else {}
+sessions = prev.get("sessions") if isinstance(prev.get("sessions"), dict) else {}
 
-def keep(new_val, key):
-    return new_val if new_val is not None else prev.get(key)
-
-out = {
-    "model": dig(d, "model.display_name") or prev.get("model"),
-    "fiveHourPct": keep(num(dig(d, "rate_limits.five_hour.used_percentage")), "fiveHourPct"),
-    "sevenDayPct": keep(num(dig(d, "rate_limits.seven_day.used_percentage")), "sevenDayPct"),
-    "contextPct": keep(num(dig(d, "context_window.used_percentage")), "contextPct"),
-    "updatedAt": int(time.time() * 1000),
+now = int(time.time() * 1000)
+rl = dig(d, "rate_limits")
+def keepg(newv, key): return newv if newv is not None else g_prev.get(key)
+g = {
+    "fiveHourPct": keepg(num(dig(d, "rate_limits.five_hour.used_percentage")), "fiveHourPct"),
+    "sevenDayPct": keepg(num(dig(d, "rate_limits.seven_day.used_percentage")), "sevenDayPct"),
+    "updatedAt": now,
 }
-fh = fiveHourResetsAt if fiveHourResetsAt is not None else prev.get("fiveHourResetsAt")
-sd = sevenDayResetsAt if sevenDayResetsAt is not None else prev.get("sevenDayResetsAt")
-if fh is not None:
-    out["fiveHourResetsAt"] = fh
-if sd is not None:
-    out["sevenDayResetsAt"] = sd
+fh = reset_for(rl, "five_hour", "five-hour")
+sd = reset_for(rl, "seven_day", "seven-day")
+fh = fh if fh is not None else g_prev.get("fiveHourResetsAt")
+sd = sd if sd is not None else g_prev.get("sevenDayResetsAt")
+if fh is not None: g["fiveHourResetsAt"] = fh
+if sd is not None: g["sevenDayResetsAt"] = sd
+
+# Per-session model + context (merge-preserve), keyed by session_id when present.
+sid = dig(d, "session_id")
+if isinstance(sid, str) and sid:
+    s_prev = sessions.get(sid) if isinstance(sessions.get(sid), dict) else {}
+    model = dig(d, "model.display_name") or s_prev.get("model")
+    ctx = num(dig(d, "context_window.used_percentage"))
+    ctx = ctx if ctx is not None else s_prev.get("contextPct")
+    sessions[sid] = {"model": model, "contextPct": ctx, "updatedAt": now}
+
+out = {"global": g, "sessions": sessions}
 p = sys.argv[1]
 tmp = p + ".tmp"
 with open(tmp, "w") as f:

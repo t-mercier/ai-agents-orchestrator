@@ -963,6 +963,7 @@ function renderDetailPanel(s, tab = 'running') {
 
 function renderAll(sessions, selectedKey, tab = 'running', resort = false) {
   if (window._listDragging || window._listEditing) return   // never rebuild the DOM under an active drag or inline edit
+  window._lastSessions = sessions
   // Rebuild the sort order only when explicitly asked (tab switch, search, manual
   // refresh, initial load). On the 5s poll, resort=false keeps the order frozen.
   if (resort || sortRank.size === 0) rebuildSortRank(sessions)

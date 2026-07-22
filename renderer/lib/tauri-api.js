@@ -114,6 +114,6 @@
 
     // ── Usage status bar (Claude Code statusline cache) ──
     // Fetches ~/.claude/statusline-cache.json; returns the parsed object or null (cache absent/unreadable).
-    getUsage: () => invoke('get_usage').catch(() => null),
+    getUsage: (sessionId) => invoke('get_usage', { sessionId }).catch(() => null),
   }
 })()
