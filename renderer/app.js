@@ -1,6 +1,43 @@
 let sessions = []
 let selectedKey = null   // unique session key (notesPath || sessionId || name), not raw sessionId
 let activeTab = 'running'
+
+// "Recent · unmanaged" section state. Discovery is lazy (on first expand) and NEVER
+// runs on the 5s poll — renderUnmanagedSection is called only from expand / refresh /
+// tab-switch / view-switch, so hundreds of on-disk sessions never inflate the poll.
+let unmanagedState = { expanded: false, loading: false, error: '', model: null, loaded: false }
+
+function renderUnmanagedSection() {
+  const show = activeTab === 'running'
+  const html = window.CSMUnmanaged.unmanagedSectionHtml(unmanagedState)
+  document.querySelectorAll('.unmanaged-section').forEach(el => {
+    el.hidden = !show
+    if (show) el.innerHTML = html
+  })
+}
+
+async function loadUnmanaged() {
+  unmanagedState.loading = true
+  unmanagedState.error = ''
+  renderUnmanagedSection()
+  try {
+    const sessions = await window.api.discoverSessions()
+    unmanagedState.model = window.CSMUnmanaged.buildUnmanagedModel(sessions)
+    unmanagedState.loaded = true
+  } catch (_) {
+    unmanagedState.error = 'Could not scan recent sessions.'
+    unmanagedState.model = null
+  }
+  unmanagedState.loading = false
+  renderUnmanagedSection()
+}
+
+// Re-run discovery + re-render. Exposed for Task 4 (refresh after an adopt).
+window.refreshUnmanaged = function () {
+  if (unmanagedState.expanded) loadUnmanaged()
+  else { unmanagedState.loaded = false; unmanagedState.model = null }
+}
+
 let viewMode = 'list'    // 'list' | 'cards' | 'board'
 let searchQuery = ''
 const activeCatFilters = new Set()  // empty = show all categories
@@ -415,6 +452,7 @@ function switchTab(tab) {
     btn.classList.toggle('active', btn.dataset.tab === tab)
   })
   fetchAndRender(true)  // tab switch → fresh sort
+  renderUnmanagedSection()
 }
 
 function cycleTab(dir) {
@@ -461,6 +499,7 @@ function setViewMode(mode) {
   // Arriving at List from another view (Board hides the terminal pane on the way
   // out) → bring the selected session's live terminal back into view.
   if (mode === 'list' && prevMode !== 'list') restoreTerminalForSelected()
+  renderUnmanagedSection()
 }
 
 // Close the cards-mode drawer
@@ -488,6 +527,25 @@ function onSearchInput(e) {
 SEARCH_FIELD_IDS.forEach(id => {
   const el = document.getElementById(id)
   if (el) el.addEventListener('input', onSearchInput)
+})
+
+// Delegated click handler for unmanaged section controls
+document.body.addEventListener('click', (e) => {
+  // Toggle expand/collapse (ignore clicks on the refresh button inside the header).
+  const toggle = e.target.closest('[data-unmanaged-toggle]')
+  if (toggle && !e.target.closest('[data-unmanaged-refresh]')) {
+    unmanagedState.expanded = !unmanagedState.expanded
+    if (unmanagedState.expanded && !unmanagedState.loaded && !unmanagedState.loading) loadUnmanaged()
+    else renderUnmanagedSection()
+    return
+  }
+  // Refresh / retry (rescan).
+  if (e.target.closest('[data-unmanaged-refresh]')) {
+    e.stopPropagation()
+    unmanagedState.expanded = true
+    loadUnmanaged()
+    return
+  }
 })
 
 // When an embedded terminal opens, it resumes the session — which makes a Closed
@@ -1190,6 +1248,7 @@ async function boot() {
   seedTabCounts()                             // fill ALL tab badges at launch (not just on visit)
   maybeShowSkillsBanner()                     // first-launch nudge if skills aren't installed yet
   refreshUsage()                              // initial usage bar render
+  renderUnmanagedSection()                    // initial: header present (collapsed), no discovery yet
   // poll → keep order frozen; skip if the previous fetch is still running (no stacking)
   setInterval(() => {
     if (viewMode === 'board') window.refreshBoard()
