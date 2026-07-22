@@ -772,6 +772,7 @@ async function openImportModal(opts) {
   document.getElementById('import-name').value = defaultName
   hideImportError()
   populateImportCategories()
+  // Render the Embedded/Terminal destination toggle reflecting the current pref (like +New).
   const destEl = document.getElementById('import-dest')
   if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
   const goBtn = document.getElementById('import-go')
