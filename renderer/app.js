@@ -1308,7 +1308,9 @@ async function boot() {
     root: document.getElementById('panel-left'),
     onReorder: async ({ kind, id, containerKey, index }) => {
       if (kind === 'session' && containerKey.startsWith('grp:')) {
-        const [, category, gid] = containerKey.split(':')
+        const gidIdx = containerKey.lastIndexOf(':')
+        const category = containerKey.slice(4, gidIdx)
+        const gid = containerKey.slice(gidIdx + 1)
         window.CSMListOrg.save(window.CSMListOrg.addToGroup(window.CSMListOrg.load(), category, gid, id, index))
         fetchAndRender(false); return
       }
@@ -1325,9 +1327,9 @@ async function boot() {
         return
       }
       if (containerKey === '__toplevel__' && (kind === 'category' || kind === 'unmanaged')) {
-        // Rebuild the top-level order from the current category order + unmanaged slot.
+        // Rebuild the top-level order from the rendered category list + unmanaged slot.
         const cfg = window.CSM_CONFIG || {}
-        const cats = (cfg.order || window.CSMCategories.order()).filter(c => c !== '__unmanaged__')
+        const cats = (window._listRenderedCats || []).slice()
         // Compose the display order (categories with the unmanaged slot at its index), move the dragged block, split back out.
         const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, cats.length)
         const display = [...cats]; display.splice(uIdx, 0, '__unmanaged__')
@@ -1338,8 +1340,10 @@ async function boot() {
         const newU = display.indexOf('__unmanaged__')
         const newCats = display.filter(c => c !== '__unmanaged__')
         window.CSMListOrg.save(window.CSMListOrg.setUnmanagedIndex(window.CSMListOrg.load(), newU))
-        if (JSON.stringify(newCats) !== JSON.stringify(cfg.order || [])) {
-          const w = await window.api.setConfig({ ...cfg, order: newCats })
+        const configured = (cfg.order || window.CSMCategories.order())
+        const merged = [...newCats, ...configured.filter(c => !newCats.includes(c))]
+        if (JSON.stringify(merged) !== JSON.stringify(cfg.order || [])) {
+          const w = await window.api.setConfig({ ...cfg, order: merged })
           if (w && w.ok && window.reloadConfig) await window.reloadConfig()
         }
         fetchAndRender(false)

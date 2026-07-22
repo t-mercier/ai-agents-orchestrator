@@ -447,7 +447,10 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
     if (pinned.length) {
       html += `<div class="space-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
     }
-    const catBlocks = groupByCategory(rest).map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
+    const grouped = groupByCategory(rest)
+    const renderedCats = grouped.map(([c]) => c)
+    window._listRenderedCats = renderedCats
+    const catBlocks = grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
     // The unmanaged block is moved out of its fixed slot and interleaved here at its
     // stored index (default = top). The standalone .unmanaged-section container is
     // hidden in the single-space running list (its content is rendered inline here).
