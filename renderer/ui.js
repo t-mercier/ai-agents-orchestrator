@@ -47,6 +47,15 @@ function sessionKey(s) {
 
 function clampUnmanagedIndex(i, n) { if (typeof i !== 'number' || i < 0) return 0; return Math.min(i, n) }
 
+// Manual order + groups + drag apply only on the Running tab AND when NOT searching.
+// Search is a find mode, not an organize mode: applying the model during a search would
+// render groups with only their matching members (often none → an empty group title) and
+// make drops confusing. Search → plain filtered list; organize with the search cleared.
+function listReorgActive() {
+  const q = (typeof searchQuery === 'string' ? searchQuery : '').trim()
+  return activeTab === 'running' && !q
+}
+
 // Display title with the redundant leading "<CATEGORY> | " prefix stripped — the
 // category is already shown (group header in list, badge on cards/board). Full name
 // stays in the title= tooltip. Only strips when the name actually starts with it.
@@ -309,7 +318,7 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
   // applying the model would render empty groups (title only, nothing inside). Those
   // tabs render plainly — no model, no groups, no drag.
   let body, dragAttrs = '', dropAttrs = ''
-  if (activeTab === 'running') {
+  if (listReorgActive()) {
     const st = window.CSMListOrg.load()
     const byKey = new Map(sessions.map(s => [sessionKey(s), s]))
     const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
@@ -464,9 +473,9 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
       html += `<div class="space-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
     }
     const grouped = groupByCategory(rest)
-    if (activeTab === 'running') {
-      // Running: draggable category blocks in a top-level drop container, with the
-      // movable unmanaged block interleaved at its stored index.
+    if (listReorgActive()) {
+      // Running (no search): draggable category blocks in a top-level drop container,
+      // with the movable unmanaged block interleaved at its stored index.
       const renderedCats = grouped.map(([c]) => c)
       window._listRenderedCats = renderedCats
       const catBlocks = grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
@@ -475,7 +484,8 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
       blocks.splice(uIdx, 0, `<div class="unmanaged-slot" data-drag-kind="unmanaged" data-drag-id="unmanaged"></div>`)
       html += `<div class="list-blocks" data-drop-key="__toplevel__" data-drop-accept="category unmanaged">${blocks.join('')}</div>`
     } else {
-      // Closed/Archived: plain category groups, no reorg wrapper, no unmanaged block.
+      // Closed/Archived, or Running during a search: plain category groups, no reorg
+      // wrapper, no unmanaged block.
       html += grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys)).join('')
     }
   }
