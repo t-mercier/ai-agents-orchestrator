@@ -10,10 +10,14 @@ let unmanagedState = { expanded: false, loading: false, error: '', model: null, 
 function renderUnmanagedSection() {
   const show = activeTab === 'running'
   const html = window.CSMUnmanaged.unmanagedSectionHtml(unmanagedState)
-  document.querySelectorAll('.unmanaged-section').forEach(el => {
+  document.querySelectorAll('.unmanaged-section, .unmanaged-slot').forEach(el => {
     el.hidden = !show
     if (show) el.innerHTML = html
   })
+  // Hide standalone .unmanaged-section when a .unmanaged-slot is present (single-space running list).
+  const hasSlot = document.querySelector('.unmanaged-slot')
+  const standaloneSection = document.querySelector('#panel-list ~ .unmanaged-section')
+  if (standaloneSection) standaloneSection.hidden = !!hasSlot || !show
 }
 
 async function loadUnmanaged() {
@@ -359,6 +363,14 @@ async function fetchAndRender(resort = false) {
     window._lastSelectedKey = selectedKey
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"
     if (tab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
+    // Prune list-org of sessions no longer present (moved to Closed/Archived, etc.).
+    // Only prune on the Running tab — manual order/groups apply to the running list;
+    // pruning on other tabs would drop running keys not present in those tabs' session sets.
+    if (tab === 'running') {
+      const liveByCat = {}
+      for (const s of sessions) { const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER'); (liveByCat[c] = liveByCat[c] || new Set()).add(s.notesPath || s.sessionId || s.name || '') }
+      window.CSMListOrg.save(window.CSMListOrg.prune(window.CSMListOrg.load(), liveByCat))
+    }
     renderAll(filterSessions(sessions, searchQuery), selectedKey, tab, resort)
   } catch (err) {
     console.error('Failed to fetch sessions:', err)
@@ -550,6 +562,69 @@ document.body.addEventListener('click', (e) => {
   const adopt = e.target.closest('[data-adopt-sid]')
   if (!adopt) return
   openImportModal({ preselectSessionId: adopt.dataset.adoptSid, defaultName: adopt.dataset.adoptName || '' })
+})
+
+document.body.addEventListener('click', (e) => {
+  const chev = e.target.closest('[data-group-collapse]')
+  if (chev) {
+    const head = chev.closest('.list-group-head')
+    window.CSMListOrg.save(window.CSMListOrg.toggleGroupCollapsed(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group))
+    fetchAndRender(false)
+    return
+  }
+  const del = e.target.closest('[data-group-delete]')
+  if (del) {
+    const head = del.closest('.list-group-head')
+    window.CSMListOrg.save(window.CSMListOrg.deleteGroup(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group))
+    fetchAndRender(false)
+    return
+  }
+})
+
+// Clicking into the embedded terminal selects (and reveals) its session's card in the
+// list, so it's clear which session the open terminal belongs to.
+document.body.addEventListener('mousedown', (e) => {
+  if (!e.target.closest('#detail-terminal-pane') || !window._terminalSession) return
+  const ts = window._terminalSession
+  const key = ts.notesPath || ts.sessionId || ts.name || ''
+  if (key && key !== selectedKey) {
+    selectedKey = key
+    window._lastSelectedKey = key
+    window._revealSelected = true
+    fetchAndRender(false)
+  }
+})
+
+document.body.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-group-rename]')
+  if (!trigger) return
+  const head = trigger.closest('.list-group-head')
+  if (!head) return
+  const nameEl = head.querySelector('.list-group-name')
+  if (!nameEl || head.querySelector('.list-group-name-input')) return   // no name, or already editing
+  const cat = head.dataset.cat, gid = head.dataset.group
+  const input = document.createElement('input')
+  input.className = 'list-group-name-input'
+  input.value = nameEl.textContent.trim()
+  nameEl.replaceWith(input)
+  window._listEditing = true
+  input.focus(); input.select()
+  let settled = false
+  const settle = (commit) => {
+    if (settled) return; settled = true
+    window._listEditing = false
+    if (document.activeElement === input) input.blur()
+    if (commit) {
+      const v = input.value.trim()
+      if (v) window.CSMListOrg.save(window.CSMListOrg.renameGroup(window.CSMListOrg.load(), cat, gid, v))
+    }
+    fetchAndRender(false)   // repaint (commit persisted, or revert on cancel)
+  }
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); settle(true) }
+    else if (ev.key === 'Escape') { ev.preventDefault(); settle(false) }
+  })
+  input.addEventListener('blur', () => settle(true))
 })
 
 // When an embedded terminal opens, it resumes the session — which makes a Closed
@@ -1259,6 +1334,67 @@ async function boot() {
   maybeShowSkillsBanner()                     // first-launch nudge if skills aren't installed yet
   refreshUsage()                              // initial usage bar render
   renderUnmanagedSection()                    // initial: header present (collapsed), no discovery yet
+  window.CSMDragList.init({
+    root: document.getElementById('panel-left'),
+    onReorder: async ({ kind, id, action, targetId, containerKey, index }) => {
+      if (kind === 'session' && action === 'merge') {
+        const category = containerKey.replace(/^cat:/, '')
+        const st = window.CSMListOrg.load()
+        const existing = st.categories[category]
+        // If the target is already in a group, add the dragged session to it; else make a new group of the two.
+        let gid = null
+        if (existing) for (const [id, g] of Object.entries(existing.groups)) if (g.members.includes(targetId)) { gid = id; break }
+        if (gid) {
+          window.CSMListOrg.save(window.CSMListOrg.addToGroup(st, category, gid, id))
+        } else {
+          const ngid = 'lg-' + Math.random().toString(36).slice(2, 9)
+          window.CSMListOrg.save(window.CSMListOrg.createGroupWith(st, category, ngid, [targetId, id], undefined))
+        }
+        fetchAndRender(false); return
+      }
+      if (kind === 'session' && containerKey.startsWith('grp:')) {
+        const gidIdx = containerKey.lastIndexOf(':')
+        const category = containerKey.slice(4, gidIdx)
+        const gid = containerKey.slice(gidIdx + 1)
+        window.CSMListOrg.save(window.CSMListOrg.addToGroup(window.CSMListOrg.load(), category, gid, id, index))
+        fetchAndRender(false); return
+      }
+      if (kind === 'group' && containerKey.startsWith('cat:')) {
+        const category = containerKey.slice(4)
+        window.CSMListOrg.save(window.CSMListOrg.moveGroupRef(window.CSMListOrg.load(), category, id, index))
+        fetchAndRender(false); return
+      }
+      if (kind === 'session' && containerKey.startsWith('cat:')) {
+        const category = containerKey.slice(4)
+        const st = window.CSMListOrg.load()
+        window.CSMListOrg.save(window.CSMListOrg.moveSession(st, category, id, index))
+        fetchAndRender(false)
+        return
+      }
+      if (containerKey === '__toplevel__' && (kind === 'category' || kind === 'unmanaged')) {
+        // Rebuild the top-level order from the rendered category list + unmanaged slot.
+        const cfg = window.CSM_CONFIG || {}
+        const cats = (window._listRenderedCats || []).slice()
+        // Compose the display order (categories with the unmanaged slot at its index), move the dragged block, split back out.
+        const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, cats.length)
+        const display = [...cats]; display.splice(uIdx, 0, '__unmanaged__')
+        const from = display.indexOf(kind === 'unmanaged' ? '__unmanaged__' : id)
+        if (from < 0) return
+        display.splice(from, 1)
+        display.splice(index, 0, kind === 'unmanaged' ? '__unmanaged__' : id)
+        const newU = display.indexOf('__unmanaged__')
+        const newCats = display.filter(c => c !== '__unmanaged__')
+        window.CSMListOrg.save(window.CSMListOrg.setUnmanagedIndex(window.CSMListOrg.load(), newU))
+        const configured = (cfg.order || window.CSMCategories.order())
+        const merged = [...newCats, ...configured.filter(c => !newCats.includes(c))]
+        if (JSON.stringify(merged) !== JSON.stringify(cfg.order || [])) {
+          const w = await window.api.setConfig({ ...cfg, order: merged })
+          if (w && w.ok && window.reloadConfig) await window.reloadConfig()
+        }
+        fetchAndRender(false)
+      }
+    }
+  })
   // poll → keep order frozen; skip if the previous fetch is still running (no stacking)
   setInterval(() => {
     if (viewMode === 'board') window.refreshBoard()

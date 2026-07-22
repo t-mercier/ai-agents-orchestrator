@@ -1852,3 +1852,28 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .unmanaged-adopt:hover { background: rgba(var(--tint), 0.08); }
 .unmanaged-empty, .unmanaged-error { font-size: 11px; color: rgba(var(--tint), 0.48); padding: 5px 10px; }
 .unmanaged-retry { background: none; border: none; color: rgba(var(--tint), 0.62); cursor: pointer; text-decoration: underline; }
+
+/* List drag (categories, unmanaged, sessions, groups) */
+.dl-ghost { position: fixed; z-index: 3000; pointer-events: none; opacity: 0.9; box-shadow: 0 6px 20px rgba(0,0,0,0.35); border-radius: 8px; }
+.dl-dragging { opacity: 0.4; }
+.dl-ins { position: fixed; height: 2px; background: rgba(var(--accent-rgb, var(--tint)), 0.7); border-radius: 2px; z-index: 3001; pointer-events: none; display: none; }
+.dl-merge { outline: 2px solid rgba(var(--tint), 0.5); outline-offset: -2px; border-radius: 8px; }
+body.dl-drag-active { cursor: grabbing; user-select: none; }
+.category-group[data-drag-kind] .category-header { cursor: grab; }
+.list-drag-item { cursor: grab; }
+body.dl-drag-active .list-card { pointer-events: none; }
+.unmanaged-slot { display: block; }
+
+.list-group { margin: 4px 6px; border: 1px solid rgba(var(--accent-rgb), 0.4); border-radius: 12px; background: rgba(var(--accent-rgb), 0.05); overflow: hidden; }
+.list-group-head { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: grab; }
+.list-group-chev { display: inline-block; color: var(--accent); cursor: pointer; transform: rotate(90deg); transition: transform 0.15s; line-height: 1; }
+.list-group-chev.collapsed { transform: rotate(0deg); }
+.list-group-name { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.85); cursor: pointer; padding: 1px 3px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-group-edit { display: inline-flex; align-items: center; background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; padding: 0 2px; }
+.list-group-edit svg { width: 13px; height: 13px; }
+.list-group-edit:hover { color: rgba(var(--tint), 0.85); }
+.list-group-name-input { flex: 1; min-width: 0; box-sizing: border-box; font-family: var(--font); font-size: 12px; font-weight: 600; color: var(--text-primary); background: rgba(var(--tint), 0.1); border: 0.5px solid var(--accent); border-radius: 4px; padding: 1px 3px; outline: none; }
+.list-group-count { font-size: 10px; font-weight: 700; color: var(--text-tertiary); background: rgba(var(--tint), 0.08); border-radius: 10px; padding: 1px 6px; flex: none; }
+.list-group-x { background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; font-size: 12px; }
+.list-group-x:hover { color: rgba(var(--tint), 0.85); }
+.list-group-body.collapsed { display: none; }
