@@ -70,6 +70,13 @@ describe('groups', () => {
     const items = M.orderedItems(s, 'FEAT', [])
     expect(items.find(i => i.kind === 'group').id).toBe('g1')
   })
+  it('moveGroupRef repositions the group within the category', () => {
+    let s = M.emptyState()
+    s = M.moveSession(s, 'FEAT', 'a', 0)
+    s = M.createGroup(s, 'FEAT', 'g1', 'X')   // ref appended after 'a'
+    s = M.moveGroupRef(s, 'FEAT', 'g1', 0)    // move group to front
+    expect(s.categories.FEAT.order[0]).toBe('g:g1')
+  })
 })
 
 describe('unmanaged position + prune + load', () => {

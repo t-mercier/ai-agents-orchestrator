@@ -113,6 +113,14 @@
     c.order.splice(i, 0, key)
     return s
   }
+  function moveGroupRef(state, catName, gid, index) {
+    const s = clone(state); const c = cat(s, catName); const ref = groupRef(gid)
+    if (!c.groups[gid]) return s
+    removeFromTop(c, ref)
+    const i = (index == null || index < 0 || index > c.order.length) ? c.order.length : index
+    c.order.splice(i, 0, ref)
+    return s
+  }
   function prune(state, liveKeysByCat) {
     const s = clone(state)
     for (const [catName, c] of Object.entries(s.categories)) {
@@ -134,7 +142,7 @@
     STORAGE_KEY, GROUP_PREFIX, groupRef, isGroupRef,
     emptyState, normalize, orderedItems,
     moveSession, setUnmanagedIndex,
-    createGroup, renameGroup, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup,
+    createGroup, renameGroup, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
     prune, load, save,
   }
 })

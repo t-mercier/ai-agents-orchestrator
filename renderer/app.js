@@ -564,6 +564,39 @@ document.body.addEventListener('click', (e) => {
   openImportModal({ preselectSessionId: adopt.dataset.adoptSid, defaultName: adopt.dataset.adoptName || '' })
 })
 
+document.body.addEventListener('click', (e) => {
+  const add = e.target.closest('[data-add-group]')
+  if (add) {
+    const cat = add.dataset.addGroup
+    const gid = 'lg-' + Math.random().toString(36).slice(2, 9)
+    window.CSMListOrg.save(window.CSMListOrg.createGroup(window.CSMListOrg.load(), cat, gid, 'New group'))
+    fetchAndRender(false)
+    return
+  }
+  const chev = e.target.closest('[data-group-collapse]')
+  if (chev) {
+    const head = chev.closest('.list-group-head')
+    window.CSMListOrg.save(window.CSMListOrg.toggleGroupCollapsed(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group))
+    fetchAndRender(false)
+    return
+  }
+  const del = e.target.closest('[data-group-delete]')
+  if (del) {
+    const head = del.closest('.list-group-head')
+    window.CSMListOrg.save(window.CSMListOrg.deleteGroup(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group))
+    fetchAndRender(false)
+    return
+  }
+})
+
+document.body.addEventListener('dblclick', (e) => {
+  const name = e.target.closest('[data-group-rename]')
+  if (!name) return
+  const head = name.closest('.list-group-head')
+  const next = window.prompt('Group name:', name.textContent.trim())
+  if (next != null) { window.CSMListOrg.save(window.CSMListOrg.renameGroup(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group, next)); fetchAndRender(false) }
+})
+
 // When an embedded terminal opens, it resumes the session — which makes a Closed
 // session live. Remember the session (so renderAll keeps its panel + terminal
 // alive across the Closed→Running migration) and flip the view to the Running tab,
@@ -1274,6 +1307,16 @@ async function boot() {
   window.CSMDragList.init({
     root: document.getElementById('panel-left'),
     onReorder: async ({ kind, id, containerKey, index }) => {
+      if (kind === 'session' && containerKey.startsWith('grp:')) {
+        const [, category, gid] = containerKey.split(':')
+        window.CSMListOrg.save(window.CSMListOrg.addToGroup(window.CSMListOrg.load(), category, gid, id, index))
+        fetchAndRender(false); return
+      }
+      if (kind === 'group' && containerKey.startsWith('cat:')) {
+        const category = containerKey.slice(4)
+        window.CSMListOrg.save(window.CSMListOrg.moveGroupRef(window.CSMListOrg.load(), category, id, index))
+        fetchAndRender(false); return
+      }
       if (kind === 'session' && containerKey.startsWith('cat:')) {
         const category = containerKey.slice(4)
         const st = window.CSMListOrg.load()

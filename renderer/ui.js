@@ -275,6 +275,26 @@ function renderListCard(s, selectedKey, changed) {
   `
 }
 
+function groupBlock(category, g, byKey, selectedKey, changedKeys) {
+  const gid = escapeHtml(g.id)
+  const memberCards = g.members.map(k => {
+    const s = byKey.get(k); if (!s) return ''
+    return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(k)}">${renderListCard(s, selectedKey, changedKeys.has(k))}</div>`
+  }).join('')
+  return `
+    <div class="list-group" data-drag-kind="group" data-drag-id="${gid}">
+      <div class="list-group-head" data-group="${gid}" data-cat="${escapeHtml(category)}">
+        <span class="list-group-chev ${g.collapsed ? 'collapsed' : ''}" data-group-collapse>›</span>
+        <span class="list-group-name" data-group-rename title="Rename group">${escapeHtml(g.name)}</span>
+        <span class="list-group-count">${g.members.length}</span>
+        <button type="button" class="list-group-x" data-group-delete title="Delete group (keep sessions)" aria-label="Delete group">✕</button>
+      </div>
+      <div class="list-group-body ${g.collapsed ? 'collapsed' : ''}" data-drop-key="grp:${escapeHtml(category)}:${gid}" data-drop-accept="session">
+        ${memberCards || `<div class="list-group-empty">Drop sessions here</div>`}
+      </div>
+    </div>`
+}
+
 function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
   const collapsed = collapsedCategories.has(category)
   const active = hasBusy(sessions)
@@ -287,7 +307,8 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
       const s = byKey.get(it.key); if (!s) return ''
       return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(it.key)}">${renderListCard(s, selectedKey, changedKeys.has(it.key))}</div>`
     }
-    return ''   // 'group' rendered in Task 4
+    if (it.kind === 'group') return groupBlock(category, it, byKey, selectedKey, changedKeys)
+    return ''
   }).join('')
   return `
     <div class="category-group" data-drag-kind="category" data-drag-id="${escapeHtml(category)}">
@@ -295,6 +316,7 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
         <span class="category-chevron ${collapsed ? 'collapsed' : ''}">›</span>
         <span class="category-name" data-cat="${escapeHtml(category)}">${escapeHtml(category)}</span>
         <span class="category-count">${sessions.length}</span>
+        <button type="button" class="cat-add-group" data-add-group="${escapeHtml(category)}" title="New group" aria-label="New group">＋ Group</button>
       </div>
       <div class="category-sessions ${collapsed ? 'collapsed' : ''}" data-drop-key="cat:${escapeHtml(category)}" data-drop-accept="session">
         ${body}

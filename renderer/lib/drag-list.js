@@ -55,7 +55,10 @@
       if (!container) return
       const accept = (container.dataset.dropAccept || '').split(/\s+/)
       if (!accept.includes(drag.kind)) return           // cross-container / wrong kind → no-op
-      if (drag.kind === 'session' && container.dataset.dropKey !== drag.srcKey) return  // no cross-category move
+      if (drag.kind === 'session') {
+        const catOf = (key) => (key || '').startsWith('grp:') ? key.split(':')[1] : (key || '').replace(/^cat:/, '')
+        if (catOf(drag.srcKey) !== catOf(container.dataset.dropKey)) return   // same-category only
+      }
       const items = [...container.querySelectorAll(':scope > [data-drag-kind]')].filter(c => c !== drag.el && !c.classList.contains('dl-dragging'))
       let index = items.length
       for (let k = 0; k < items.length; k++) { const r = items[k].getBoundingClientRect(); if (e.clientY < r.top + r.height / 2) { index = k; break } }

@@ -944,6 +944,17 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-radius: 4px;
 }
 
+.cat-add-group {
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: rgba(var(--tint), 0.62);
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+.cat-add-group:hover { color: rgba(var(--tint), 0.92); }
+
 .category-sessions { overflow: hidden; }
 .category-sessions.collapsed { display: none; }
 
@@ -1862,3 +1873,14 @@ body.dl-drag-active { cursor: grabbing; user-select: none; }
 .list-drag-item { cursor: grab; }
 body.dl-drag-active .list-card { pointer-events: none; }
 .unmanaged-slot { display: block; }
+
+.list-group { margin: 4px 6px; border: 1px solid rgba(var(--tint), 0.12); border-radius: 8px; }
+.list-group-head { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: grab; }
+.list-group-chev { cursor: pointer; transition: transform 0.15s; }
+.list-group-chev.collapsed { transform: rotate(-90deg); }
+.list-group-name { flex: 1; font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.85); cursor: text; }
+.list-group-count { font-size: 11px; color: rgba(var(--tint), 0.48); }
+.list-group-x { background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; font-size: 12px; }
+.list-group-x:hover { color: rgba(var(--tint), 0.85); }
+.list-group-body.collapsed { display: none; }
+.list-group-empty { font-size: 11px; color: rgba(var(--tint), 0.4); padding: 8px; text-align: center; }
