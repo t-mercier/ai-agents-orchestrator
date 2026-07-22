@@ -944,17 +944,6 @@ body.mode-cards .drawer-ctl, body.mode-board .drawer-ctl { display: inline-flex;
   border-radius: 4px;
 }
 
-.cat-add-group {
-  background: none;
-  border: none;
-  font-size: 11px;
-  color: rgba(var(--tint), 0.62);
-  cursor: pointer;
-  padding: 2px 4px;
-  flex-shrink: 0;
-}
-.cat-add-group:hover { color: rgba(var(--tint), 0.92); }
-
 .category-sessions { overflow: hidden; }
 .category-sessions.collapsed { display: none; }
 
@@ -1868,6 +1857,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .dl-ghost { position: fixed; z-index: 3000; pointer-events: none; opacity: 0.9; box-shadow: 0 6px 20px rgba(0,0,0,0.35); border-radius: 8px; }
 .dl-dragging { opacity: 0.4; }
 .dl-ins { position: fixed; height: 2px; background: rgba(var(--accent-rgb, var(--tint)), 0.7); border-radius: 2px; z-index: 3001; pointer-events: none; display: none; }
+.dl-merge { outline: 2px solid rgba(var(--tint), 0.5); outline-offset: -2px; border-radius: 8px; }
 body.dl-drag-active { cursor: grabbing; user-select: none; }
 .category-group[data-drag-kind] .category-header { cursor: grab; }
 .list-drag-item { cursor: grab; }
@@ -1883,4 +1873,3 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .list-group-x { background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; font-size: 12px; }
 .list-group-x:hover { color: rgba(var(--tint), 0.85); }
 .list-group-body.collapsed { display: none; }
-.list-group-empty { font-size: 11px; color: rgba(var(--tint), 0.4); padding: 8px; text-align: center; }

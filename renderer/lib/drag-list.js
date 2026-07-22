@@ -10,7 +10,9 @@
   else root.CSMDragList = api
 })(typeof self !== 'undefined' ? self : this, function () {
   let insEl = null
+  let mergeEl = null
   function clearIns() { if (insEl) insEl.style.display = 'none' }
+  function clearMerge() { if (mergeEl) { mergeEl.classList.remove('dl-merge'); mergeEl = null } }
   function showIns(container, items, index) {
     if (!insEl) { insEl = document.createElement('div'); insEl.className = 'dl-ins'; document.body.appendChild(insEl) }
     const br = container.getBoundingClientRect()
@@ -51,17 +53,33 @@
       drag.ghost.style.left = `${e.clientX - drag.offX}px`; drag.ghost.style.top = `${e.clientY - drag.offY}px`
       const el = document.elementFromPoint(e.clientX, e.clientY)
       const container = el && el.closest ? el.closest('[data-drop-key]') : null
-      drag.drop = null; clearIns()
+      drag.drop = null; drag.merge = null; clearIns(); clearMerge()
       if (!container) return
       const accept = (container.dataset.dropAccept || '').split(/\s+/)
       if (!accept.includes(drag.kind)) return           // cross-container / wrong kind → no-op
+      const catOf = (key) => {
+        if (!key) return ''
+        if (key.startsWith('grp:')) return key.slice(4, key.lastIndexOf(':'))
+        return key.replace(/^cat:/, '')
+      }
       if (drag.kind === 'session') {
-        const catOf = (key) => {
-          if (!key) return ''
-          if (key.startsWith('grp:')) return key.slice(4, key.lastIndexOf(':'))
-          return key.replace(/^cat:/, '')
-        }
         if (catOf(drag.srcKey) !== catOf(container.dataset.dropKey)) return   // same-category only
+        // Merge detection: only in cat: containers (not grp: bodies), check middle band of session cards
+        if (container.dataset.dropKey.startsWith('cat:')) {
+          const card = el && el.closest ? el.closest('.list-drag-item[data-drag-kind="session"]') : null
+          if (card && card !== drag.el && !card.classList.contains('dl-dragging')) {
+            const r = card.getBoundingClientRect()
+            const rel = (e.clientY - r.top) / r.height
+            if (rel > 0.28 && rel < 0.72) {
+              // Merge target found
+              clearMerge()
+              mergeEl = card
+              mergeEl.classList.add('dl-merge')
+              drag.merge = { targetId: card.dataset.dragId, category: catOf(container.dataset.dropKey) }
+              return
+            }
+          }
+        }
       }
       const items = [...container.querySelectorAll(':scope > [data-drag-kind]')].filter(c => c !== drag.el && !c.classList.contains('dl-dragging'))
       let index = items.length
@@ -74,9 +92,13 @@
       const d = drag; drag = null
       if (d.ghost) d.ghost.remove()
       if (d.el) d.el.classList.remove('dl-dragging')
-      document.body.classList.remove('dl-drag-active'); clearIns()
+      document.body.classList.remove('dl-drag-active'); clearIns(); clearMerge()
       window._listDragging = false
-      if (d.active && d.drop) onReorder({ kind: d.kind, id: d.id, containerKey: d.drop.containerKey, index: d.drop.index })
+      if (d.active && d.merge) {
+        onReorder({ kind: d.kind, id: d.id, action: 'merge', targetId: d.merge.targetId, containerKey: 'cat:' + d.merge.category })
+      } else if (d.active && d.drop) {
+        onReorder({ kind: d.kind, id: d.id, containerKey: d.drop.containerKey, index: d.drop.index })
+      }
     })
   }
   return { init }

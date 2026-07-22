@@ -290,7 +290,7 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
         <button type="button" class="list-group-x" data-group-delete title="Delete group (keep sessions)" aria-label="Delete group">✕</button>
       </div>
       <div class="list-group-body ${g.collapsed ? 'collapsed' : ''}" data-drop-key="grp:${escapeHtml(category)}:${gid}" data-drop-accept="session">
-        ${memberCards || `<div class="list-group-empty">Drop sessions here</div>`}
+        ${memberCards}
       </div>
     </div>`
 }
@@ -316,7 +316,6 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
         <span class="category-chevron ${collapsed ? 'collapsed' : ''}">›</span>
         <span class="category-name" data-cat="${escapeHtml(category)}">${escapeHtml(category)}</span>
         <span class="category-count">${sessions.length}</span>
-        <button type="button" class="cat-add-group" data-add-group="${escapeHtml(category)}" title="New group" aria-label="New group">＋ Group</button>
       </div>
       <div class="category-sessions ${collapsed ? 'collapsed' : ''}" data-drop-key="cat:${escapeHtml(category)}" data-drop-accept="session">
         ${body}

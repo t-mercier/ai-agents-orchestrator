@@ -565,14 +565,6 @@ document.body.addEventListener('click', (e) => {
 })
 
 document.body.addEventListener('click', (e) => {
-  const add = e.target.closest('[data-add-group]')
-  if (add) {
-    const cat = add.dataset.addGroup
-    const gid = 'lg-' + Math.random().toString(36).slice(2, 9)
-    window.CSMListOrg.save(window.CSMListOrg.createGroup(window.CSMListOrg.load(), cat, gid, 'New group'))
-    fetchAndRender(false)
-    return
-  }
   const chev = e.target.closest('[data-group-collapse]')
   if (chev) {
     const head = chev.closest('.list-group-head')
@@ -1306,7 +1298,22 @@ async function boot() {
   renderUnmanagedSection()                    // initial: header present (collapsed), no discovery yet
   window.CSMDragList.init({
     root: document.getElementById('panel-left'),
-    onReorder: async ({ kind, id, containerKey, index }) => {
+    onReorder: async ({ kind, id, action, targetId, containerKey, index }) => {
+      if (kind === 'session' && action === 'merge') {
+        const category = containerKey.replace(/^cat:/, '')
+        const st = window.CSMListOrg.load()
+        const existing = st.categories[category]
+        // If the target is already in a group, add the dragged session to it; else make a new group of the two.
+        let gid = null
+        if (existing) for (const [id, g] of Object.entries(existing.groups)) if (g.members.includes(targetId)) { gid = id; break }
+        if (gid) {
+          window.CSMListOrg.save(window.CSMListOrg.addToGroup(st, category, gid, id))
+        } else {
+          const ngid = 'lg-' + Math.random().toString(36).slice(2, 9)
+          window.CSMListOrg.save(window.CSMListOrg.createGroupWith(st, category, ngid, [targetId, id], undefined))
+        }
+        fetchAndRender(false); return
+      }
       if (kind === 'session' && containerKey.startsWith('grp:')) {
         const gidIdx = containerKey.lastIndexOf(':')
         const category = containerKey.slice(4, gidIdx)

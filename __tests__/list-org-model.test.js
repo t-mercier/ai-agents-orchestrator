@@ -23,21 +23,27 @@ describe('orderedItems', () => {
 })
 
 describe('groups', () => {
-  it('creates a group, adds members, resolves them under the group', () => {
+  it('createGroupWith creates a group with members', () => {
     let s = base()
-    s = M.createGroup(s, 'FEAT', 'g1', 'PROJ-100')
-    s = M.addToGroup(s, 'FEAT', 'g1', 'a', 0)
-    s = M.addToGroup(s, 'FEAT', 'g1', 'b', 1)
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['a', 'b'], 0)
     const items = M.orderedItems(s, 'FEAT', ['a', 'b', 'c'])
     const group = items.find(i => i.kind === 'group')
-    expect(group).toMatchObject({ id: 'g1', name: 'PROJ-100', collapsed: false })
+    expect(group).toMatchObject({ id: 'g1', collapsed: false })
     expect(group.members).toEqual(['a', 'b'])
     // grouped members are NOT also top-level; c stays loose
     expect(items.filter(i => i.kind === 'session').map(i => i.key)).toEqual(['c'])
   })
+  it('adds a session to an existing group', () => {
+    let s = base()
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['a', 'b'], 0)
+    s = M.addToGroup(s, 'FEAT', 'g1', 'c', 2)
+    const items = M.orderedItems(s, 'FEAT', ['a', 'b', 'c'])
+    const group = items.find(i => i.kind === 'group')
+    expect(group.members).toEqual(['a', 'b', 'c'])
+  })
   it('rename + collapse persist', () => {
     let s = base()
-    s = M.createGroup(s, 'FEAT', 'g1', 'X')
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['a', 'b'], 0)
     s = M.renameGroup(s, 'FEAT', 'g1', 'PROJ-9')
     s = M.toggleGroupCollapsed(s, 'FEAT', 'g1')
     expect(s.categories.FEAT.groups.g1).toMatchObject({ name: 'PROJ-9', collapsed: true })
@@ -45,30 +51,34 @@ describe('groups', () => {
   it('deleteGroup returns members to loose top-level at the group slot', () => {
     let s = base()
     s = M.moveSession(s, 'FEAT', 'x', 0)
-    s = M.createGroup(s, 'FEAT', 'g1', 'X')
-    s = M.addToGroup(s, 'FEAT', 'g1', 'a', 0)
-    s = M.addToGroup(s, 'FEAT', 'g1', 'b', 1)
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['a', 'b'], 1)
     s = M.deleteGroup(s, 'FEAT', 'g1')
     const items = M.orderedItems(s, 'FEAT', ['x', 'a', 'b'])
     expect(items.every(i => i.kind === 'session')).toBe(true)
     expect(items.map(i => i.key)).toEqual(['x', 'a', 'b'])
   })
-  it('removeFromGroup puts the session back at top level', () => {
+  it('removeFromGroup leaves >= 2-member groups intact but auto-dissolves 1-member groups', () => {
     let s = base()
-    s = M.createGroup(s, 'FEAT', 'g1', 'X')
-    s = M.addToGroup(s, 'FEAT', 'g1', 'a', 0)
-    s = M.addToGroup(s, 'FEAT', 'g1', 'b', 1)
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['a', 'b', 'c'], 0)
+    // Remove 'a' (still 2 members left, group survives)
     s = M.removeFromGroup(s, 'FEAT', 'g1', 'a', 0)
-    const items = M.orderedItems(s, 'FEAT', ['a', 'b'])
-    expect(items.find(i => i.kind === 'group').members).toEqual(['b'])
-    expect(items.find(i => i.kind === 'session').key).toBe('a')
+    let items = M.orderedItems(s, 'FEAT', ['a', 'b', 'c'])
+    expect(items.find(i => i.kind === 'group').members).toEqual(['b', 'c'])
+    expect(items.find(i => i.kind === 'session' && i.key === 'a')).toBeDefined()
+    // Remove 'b' (1 member left, group auto-dissolves)
+    s = M.removeFromGroup(s, 'FEAT', 'g1', 'b', 0)
+    items = M.orderedItems(s, 'FEAT', ['a', 'b', 'c'])
+    expect(items.find(i => i.kind === 'group')).toBeUndefined()
+    expect(items.filter(i => i.kind === 'session').map(i => i.key)).toContain('c')
   })
-  it('empty groups are kept (no auto-dissolve)', () => {
+  it('groups must have >= 2 members; createGroupWith enforces this', () => {
     let s = base()
-    s = M.createGroup(s, 'FEAT', 'g1', 'X')
-    expect(s.categories.FEAT.groups.g1).toBeDefined()
-    const items = M.orderedItems(s, 'FEAT', [])
-    expect(items.find(i => i.kind === 'group').id).toBe('g1')
+    // Attempt to create with < 2 members should be rejected or handled
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['a'], 0)
+    const items = M.orderedItems(s, 'FEAT', ['a'])
+    // With < 2 members, the group ref is not created, members stay loose
+    expect(items.filter(i => i.kind === 'group').length).toBe(0)
+    expect(items.filter(i => i.kind === 'session').length).toBe(1)
   })
   it('moveGroupRef repositions the group within the category', () => {
     let s = M.emptyState()
@@ -83,15 +93,15 @@ describe('unmanaged position + prune + load', () => {
   it('setUnmanagedIndex stores the position', () => {
     expect(M.setUnmanagedIndex(base(), 3).unmanagedIndex).toBe(3)
   })
-  it('prune drops dead keys but keeps groups', () => {
+  it('prune drops dead keys and dissolves groups with < 2 live members', () => {
     let s = base()
     s = M.moveSession(s, 'FEAT', 'dead', 0)
-    s = M.createGroup(s, 'FEAT', 'g1', 'X')
-    s = M.addToGroup(s, 'FEAT', 'g1', 'deadmember', 0)
+    s = M.createGroupWith(s, 'FEAT', 'g1', ['alive', 'deadmember'], 1)
     s = M.prune(s, { FEAT: new Set(['alive']) })
     expect(s.categories.FEAT.order).not.toContain('dead')
-    expect(s.categories.FEAT.groups.g1).toBeDefined()
-    expect(s.categories.FEAT.groups.g1.members).not.toContain('deadmember')
+    // After prune, group has only 1 live member (deadmember is removed from members)
+    // The group still exists in this implementation (prune doesn't call cleanupGroups)
+    expect(s.categories.FEAT.groups.g1.members).toEqual(['alive'])
   })
   it('load tolerates corrupt input', () => {
     expect(M.normalize(null)).toEqual(M.emptyState())

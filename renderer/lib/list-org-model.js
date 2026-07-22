@@ -103,7 +103,41 @@
     removeFromTop(c, key); removeFromGroups(c, key)
     const i = (index == null || index < 0 || index > g.members.length) ? g.members.length : index
     g.members.splice(i, 0, key)
+    cleanupGroups(c)
     return s
+  }
+  function createGroupWith(state, catName, gid, memberKeys, atIndex) {
+    // Create a group with memberKeys (must have >= 2). Insert the group ref at atIndex.
+    // Remove memberKeys from loose top-level and other groups first.
+    const s = clone(state); const c = cat(s, catName)
+    const keys = (memberKeys || []).filter(Boolean)
+    if (keys.length < 2) return s   // Reject: need >= 2 members
+    // Remove from loose + other groups
+    for (const key of keys) { removeFromTop(c, key); removeFromGroups(c, key) }
+    // Create the group
+    c.groups[gid] = { name: 'Group', collapsed: false, members: [...keys] }
+    // Insert group ref at the specified index (or append)
+    const ref = groupRef(gid)
+    const idx = (atIndex == null || atIndex < 0 || atIndex > c.order.length) ? c.order.length : atIndex
+    c.order.splice(idx, 0, ref)
+    cleanupGroups(c)   // The source groups (if members came from others) may have shrunk
+    return s
+  }
+  function cleanupGroups(c) {
+    // A group must hold >= 2 members; otherwise it dissolves (members become loose).
+    const ref = (gid) => GROUP_PREFIX + gid
+    for (const gid of Object.keys(c.groups)) {
+      const g = c.groups[gid]
+      if (!g || g.members.length < 2) {
+        // Dissolve: replace the group ref with its members in the order
+        const members = [...g.members]
+        const refStr = ref(gid)
+        const idx = c.order.indexOf(refStr)
+        if (idx >= 0) c.order.splice(idx, 1, ...members)
+        else c.order.push(...members)
+        delete c.groups[gid]
+      }
+    }
   }
   function removeFromGroup(state, catName, gid, key, index) {
     const s = clone(state); const c = cat(s, catName); const g = c.groups[gid]; if (!g) return s
@@ -111,6 +145,7 @@
     removeFromTop(c, key)
     const i = (index == null || index < 0 || index > c.order.length) ? c.order.length : index
     c.order.splice(i, 0, key)
+    cleanupGroups(c)
     return s
   }
   function moveGroupRef(state, catName, gid, index) {
@@ -142,7 +177,7 @@
     STORAGE_KEY, GROUP_PREFIX, groupRef, isGroupRef,
     emptyState, normalize, orderedItems,
     moveSession, setUnmanagedIndex,
-    createGroup, renameGroup, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
+    createGroup, createGroupWith, renameGroup, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
     prune, load, save,
   }
 })
