@@ -45,6 +45,8 @@ function sessionKey(s) {
   return s.notesPath || s.sessionId || s.name || ''
 }
 
+function clampUnmanagedIndex(i, n) { if (typeof i !== 'number' || i < 0) return 0; return Math.min(i, n) }
+
 // Display title with the redundant leading "<CATEGORY> | " prefix stripped — the
 // category is already shown (group header in list, badge on cards/board). Full name
 // stays in the title= tooltip. Only strips when the name actually starts with it.
@@ -277,7 +279,7 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
   const collapsed = collapsedCategories.has(category)
   const active = hasBusy(sessions)
   return `
-    <div class="category-group">
+    <div class="category-group" data-drag-kind="category" data-drag-id="${escapeHtml(category)}">
       <div class="category-header ${active ? 'has-active' : ''}" data-category="${escapeHtml(category)}">
         <span class="category-chevron ${collapsed ? 'collapsed' : ''}">›</span>
         <span class="category-name" data-cat="${escapeHtml(category)}">${escapeHtml(category)}</span>
@@ -412,9 +414,14 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
     if (pinned.length) {
       html += `<div class="space-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
     }
-    html += groupByCategory(rest).map(([cat, sess]) =>
-      renderCategoryGroup(cat, sess, selectedKey, changedKeys)
-    ).join('')
+    const catBlocks = groupByCategory(rest).map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
+    // The unmanaged block is moved out of its fixed slot and interleaved here at its
+    // stored index (default = top). The standalone .unmanaged-section container is
+    // hidden in the single-space running list (its content is rendered inline here).
+    const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, catBlocks.length)
+    const blocks = [...catBlocks]
+    blocks.splice(uIdx, 0, `<div class="unmanaged-slot" data-drag-kind="unmanaged" data-drag-id="unmanaged"></div>`)
+    html += `<div class="list-blocks" data-drop-key="__toplevel__" data-drop-accept="category unmanaged">${blocks.join('')}</div>`
   }
   // Skip DOM rewrite when unchanged — preserves hover/cursor between idle polls.
   setHtml(document.getElementById('panel-list'), html)
@@ -882,6 +889,7 @@ function renderDetailPanel(s, tab = 'running') {
 // ── Main render ──
 
 function renderAll(sessions, selectedKey, tab = 'running', resort = false) {
+  if (window._listDragging) return   // never rebuild the DOM under an active drag
   // Rebuild the sort order only when explicitly asked (tab switch, search, manual
   // refresh, initial load). On the 5s poll, resort=false keeps the order frozen.
   if (resort || sortRank.size === 0) rebuildSortRank(sessions)

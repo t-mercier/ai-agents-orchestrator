@@ -1852,3 +1852,11 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .unmanaged-adopt:hover { background: rgba(var(--tint), 0.08); }
 .unmanaged-empty, .unmanaged-error { font-size: 11px; color: rgba(var(--tint), 0.48); padding: 5px 10px; }
 .unmanaged-retry { background: none; border: none; color: rgba(var(--tint), 0.62); cursor: pointer; text-decoration: underline; }
+
+/* List drag (categories, unmanaged, sessions, groups) */
+.dl-ghost { position: fixed; z-index: 3000; pointer-events: none; opacity: 0.9; box-shadow: 0 6px 20px rgba(0,0,0,0.35); border-radius: 8px; }
+.dl-dragging { opacity: 0.4; }
+.dl-ins { position: fixed; height: 2px; background: rgba(var(--accent-rgb, var(--tint)), 0.7); border-radius: 2px; z-index: 3001; pointer-events: none; display: none; }
+body.dl-drag-active { cursor: grabbing; user-select: none; }
+.category-group[data-drag-kind] .category-header { cursor: grab; }
+.unmanaged-slot { display: block; }

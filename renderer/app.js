@@ -10,10 +10,14 @@ let unmanagedState = { expanded: false, loading: false, error: '', model: null, 
 function renderUnmanagedSection() {
   const show = activeTab === 'running'
   const html = window.CSMUnmanaged.unmanagedSectionHtml(unmanagedState)
-  document.querySelectorAll('.unmanaged-section').forEach(el => {
+  document.querySelectorAll('.unmanaged-section, .unmanaged-slot').forEach(el => {
     el.hidden = !show
     if (show) el.innerHTML = html
   })
+  // Hide standalone .unmanaged-section when a .unmanaged-slot is present (single-space running list).
+  const hasSlot = document.querySelector('.unmanaged-slot')
+  const standaloneSection = document.querySelector('#panel-list ~ .unmanaged-section')
+  if (standaloneSection) standaloneSection.hidden = !!hasSlot || !show
 }
 
 async function loadUnmanaged() {
@@ -1259,6 +1263,31 @@ async function boot() {
   maybeShowSkillsBanner()                     // first-launch nudge if skills aren't installed yet
   refreshUsage()                              // initial usage bar render
   renderUnmanagedSection()                    // initial: header present (collapsed), no discovery yet
+  window.CSMDragList.init({
+    root: document.getElementById('panel-left'),
+    onReorder: async ({ kind, id, containerKey, index }) => {
+      if (containerKey === '__toplevel__' && (kind === 'category' || kind === 'unmanaged')) {
+        // Rebuild the top-level order from the current category order + unmanaged slot.
+        const cfg = window.CSM_CONFIG || {}
+        const cats = (cfg.order || window.CSMCategories.order()).filter(c => c !== '__unmanaged__')
+        // Compose the display order (categories with the unmanaged slot at its index), move the dragged block, split back out.
+        const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, cats.length)
+        const display = [...cats]; display.splice(uIdx, 0, '__unmanaged__')
+        const from = display.indexOf(kind === 'unmanaged' ? '__unmanaged__' : id)
+        if (from < 0) return
+        display.splice(from, 1)
+        display.splice(index, 0, kind === 'unmanaged' ? '__unmanaged__' : id)
+        const newU = display.indexOf('__unmanaged__')
+        const newCats = display.filter(c => c !== '__unmanaged__')
+        window.CSMListOrg.save(window.CSMListOrg.setUnmanagedIndex(window.CSMListOrg.load(), newU))
+        if (JSON.stringify(newCats) !== JSON.stringify(cfg.order || [])) {
+          const w = await window.api.setConfig({ ...cfg, order: newCats })
+          if (w && w.ok && window.reloadConfig) await window.reloadConfig()
+        }
+        fetchAndRender(false)
+      }
+    }
+  })
   // poll → keep order frozen; skip if the previous fetch is still running (no stacking)
   setInterval(() => {
     if (viewMode === 'board') window.refreshBoard()
