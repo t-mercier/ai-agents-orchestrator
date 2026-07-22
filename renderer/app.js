@@ -364,9 +364,13 @@ async function fetchAndRender(resort = false) {
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"
     if (tab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
     // Prune list-org of sessions no longer present (moved to Closed/Archived, etc.).
-    const liveByCat = {}
-    for (const s of sessions) { const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER'); (liveByCat[c] = liveByCat[c] || new Set()).add(s.notesPath || s.sessionId || s.name || '') }
-    window.CSMListOrg.save(window.CSMListOrg.prune(window.CSMListOrg.load(), liveByCat))
+    // Only prune on the Running tab — manual order/groups apply to the running list;
+    // pruning on other tabs would drop running keys not present in those tabs' session sets.
+    if (tab === 'running') {
+      const liveByCat = {}
+      for (const s of sessions) { const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER'); (liveByCat[c] = liveByCat[c] || new Set()).add(s.notesPath || s.sessionId || s.name || '') }
+      window.CSMListOrg.save(window.CSMListOrg.prune(window.CSMListOrg.load(), liveByCat))
+    }
     renderAll(filterSessions(sessions, searchQuery), selectedKey, tab, resort)
   } catch (err) {
     console.error('Failed to fetch sessions:', err)
