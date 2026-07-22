@@ -546,6 +546,10 @@ document.body.addEventListener('click', (e) => {
     loadUnmanaged()
     return
   }
+  // Adopt a row (open the Import modal preselected with that session).
+  const adopt = e.target.closest('[data-adopt-sid]')
+  if (!adopt) return
+  openImportModal({ preselectSessionId: adopt.dataset.adoptSid, defaultName: adopt.dataset.adoptName || '' })
 })
 
 // When an embedded terminal opens, it resumes the session — which makes a Closed
@@ -758,25 +762,27 @@ function renderImportList(query) {
     </button>`
   }).join('')
 }
-async function openImportModal() {
-  importSelectedSid = null
+async function openImportModal(opts) {
+  const preselectSessionId = opts && opts.preselectSessionId
+  const defaultName = (opts && opts.defaultName) || ''
+  importSelectedSid = preselectSessionId || null
   importSessions = []
   document.getElementById('import-search').value = ''
   document.getElementById('import-uid').value = ''
-  document.getElementById('import-name').value = ''
+  document.getElementById('import-name').value = defaultName
   hideImportError()
   populateImportCategories()
-  // Render the Embedded/Terminal destination toggle reflecting the current pref (like +New).
   const destEl = document.getElementById('import-dest')
   if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
   const goBtn = document.getElementById('import-go')
-  goBtn.disabled = true
+  goBtn.disabled = !importSelectedSid
   document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
   importModal.showModal()
   try { importSessions = await window.api.discoverSessions() } catch (_) { importSessions = [] }
   renderImportList('')
+  updateImportGo()
 }
-document.getElementById('import-session-btn').addEventListener('click', openImportModal)
+document.getElementById('import-session-btn').addEventListener('click', () => openImportModal())
 document.getElementById('import-cancel').addEventListener('click', () => importModal.close())
 // Escape closes the modal. The search field is type=search, which natively eats
 // Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
@@ -830,6 +836,7 @@ document.getElementById('import-go').addEventListener('click', async () => {
   const res = await window.api.importSession(sid, category, name, space, embedded)
   if (!res || !res.ok) { showImportError((res && res.error) || 'Import failed.'); goBtn.disabled = false; return }
   importModal.close()
+  if (window.refreshUnmanaged) window.refreshUnmanaged()
   if (embedded && res.command && window.openTerminalPane) {
     // Adopt in the embedded terminal, keyed by the session's REAL id (already known). When
     // /import-session registers it, the card carries this sessionId → it reveals THIS pty
