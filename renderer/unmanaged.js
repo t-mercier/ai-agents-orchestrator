@@ -35,7 +35,8 @@
     return `<div class="unmanaged-row" title="${tip}">
       <div class="unmanaged-row-text">
         <span class="unmanaged-row-title">${esc(r.title)}</span>
-        <span class="unmanaged-row-meta">${esc(r.cwd)}${r.when ? ' · ' + esc(r.when) : ''}</span>
+        <span class="unmanaged-row-meta">${esc(r.cwd)}</span>
+        ${r.when ? `<span class="unmanaged-row-when">${esc(r.when)}</span>` : ''}
       </div>
       <button type="button" class="unmanaged-adopt" data-adopt-sid="${esc(r.sessionId)}" data-adopt-name="${esc(r.defaultName)}">Adopt</button>
     </div>`
