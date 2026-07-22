@@ -30,7 +30,6 @@
     <span class="titlebar-title" data-tauri-drag-region>AI Agents Orchestrator</span>
     <div class="titlebar-actions">
       <button class="new-session-btn" id="new-session-btn" title="Start a new session">＋ <span class="btn-label">New</span></button>
-      <button class="new-session-btn ghost" id="import-session-btn" title="Import an existing Claude Code session into the dashboard">＋ <span class="btn-label">Import</span></button>
       <div class="view-toggle">
         <button class="view-btn active" data-view="list" title="List view">☰ <span class="btn-label">List</span></button>
         <button class="view-btn" data-view="cards" title="Cards view">▦ <span class="btn-label">Cards</span></button>
@@ -437,6 +436,7 @@
         <input class="search-field" id="search-field" type="search" placeholder="Search sessions…" spellcheck="false">
       </div>
       <div class="cat-filter" id="cat-filter-list"></div>
+      <div class="unmanaged-section" hidden></div>
       <div class="panel-list" id="panel-list"></div>
     </div>
     <div class="resize-handle" id="resize-handle"></div>
@@ -452,6 +452,7 @@
         <input class="search-field cards-search" id="cards-search" type="search" placeholder="Search sessions…" spellcheck="false">
       </div>
       <div class="cat-filter" id="cat-filter-cards"></div>
+      <div class="unmanaged-section" hidden></div>
       <div class="cards-grid" id="cards-grid"></div>
     </div>
 
@@ -504,6 +505,7 @@
   <script src="lib/board-model.js"></script>
   <script src="looks.js"></script>
   <script src="ui.js"></script>
+  <script src="unmanaged.js"></script>
   <script src="terminal.js"></script>
   <script src="app.js"></script>
   <script src="board.js"></script>

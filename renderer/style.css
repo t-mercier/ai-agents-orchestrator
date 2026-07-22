@@ -1831,3 +1831,20 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   min-width: 26px;
   text-align: right;
 }
+
+/* Recent · unmanaged section */
+.unmanaged-section { margin-bottom: 6px; }
+.unmanaged-group { border-bottom: 1px solid rgba(var(--tint), 0.08); }
+.unmanaged-header { display: flex; align-items: center; gap: 6px; padding: 6px 10px; cursor: pointer; user-select: none; }
+.unmanaged-name { font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.62); flex: 1; }
+.unmanaged-refresh { background: none; border: none; color: rgba(var(--tint), 0.48); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+.unmanaged-refresh:hover { color: rgba(var(--tint), 0.92); }
+.unmanaged-body { padding: 2px 0 6px; }
+.unmanaged-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; }
+.unmanaged-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.unmanaged-row-title { font-size: 12px; color: rgba(var(--tint), 0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unmanaged-row-meta { font-size: 11px; color: rgba(var(--tint), 0.48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unmanaged-adopt { flex: none; font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(var(--tint), 0.18); background: none; color: rgba(var(--tint), 0.92); cursor: pointer; }
+.unmanaged-adopt:hover { background: rgba(var(--tint), 0.08); }
+.unmanaged-empty, .unmanaged-error { font-size: 11px; color: rgba(var(--tint), 0.48); padding: 5px 10px; }
+.unmanaged-retry { background: none; border: none; color: rgba(var(--tint), 0.62); cursor: pointer; text-decoration: underline; }

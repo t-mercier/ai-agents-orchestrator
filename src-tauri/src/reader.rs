@@ -385,6 +385,23 @@ fn managed_session_ids() -> HashSet<String> {
     ids
 }
 
+/// Pure core of `discover_sessions`: drop managed and skip=true rows, sort newest-first
+/// by mtime, cap to the 30 newest. Rows are (mtime, sessionId, title, cwd, skip).
+fn select_unmanaged(
+    rows: Vec<(u64, String, Option<String>, Option<String>, bool)>,
+    managed: &std::collections::HashSet<String>,
+) -> Vec<Value> {
+    let mut kept: Vec<(u64, Value)> = rows
+        .into_iter()
+        .filter(|(_, sid, _, _, skip)| !skip && !managed.contains(sid))
+        .map(|(mtime, sid, title, cwd, _)| {
+            (mtime, json!({ "sessionId": sid, "title": title, "cwd": cwd, "mtime": mtime }))
+        })
+        .collect();
+    kept.sort_by_key(|(mtime, _)| std::cmp::Reverse(*mtime));
+    kept.into_iter().take(30).map(|(_, v)| v).collect()
+}
+
 /// The most-recent *unmanaged* Claude Code transcripts (`~/.claude/projects/**/<id>.jsonl`
 /// with no managing notes.md) — fuel for the "Import a session" picker. Capped to the
 /// 30 newest by mtime (the picker is for recent work; older ones aren't the use case).
@@ -392,7 +409,7 @@ fn managed_session_ids() -> HashSet<String> {
 pub fn discover_sessions() -> Vec<Value> {
     let projects = home().join(".claude").join("projects");
     let managed = managed_session_ids();
-    let mut rows: Vec<(u64, Value)> = Vec::new();
+    let mut rows: Vec<(u64, String, Option<String>, Option<String>, bool)> = Vec::new();
     let dirs = match fs::read_dir(&projects) {
         Ok(d) => d,
         Err(_) => return Vec::new(),
@@ -415,9 +432,6 @@ pub fn discover_sessions() -> Vec<Value> {
                 Some(s) => s.to_string(),
                 None => continue,
             };
-            if managed.contains(&sid) {
-                continue;
-            }
             let mtime = fs::metadata(&path)
                 .ok()
                 .and_then(|m| m.modified().ok())
@@ -425,17 +439,10 @@ pub fn discover_sessions() -> Vec<Value> {
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
             let (title, cwd, skip) = discover_meta(&path);
-            if skip {
-                continue; // slash-command / skill one-off or sub-agent sidechain, not a session
-            }
-            rows.push((
-                mtime,
-                json!({ "sessionId": sid, "title": title, "cwd": cwd, "mtime": mtime }),
-            ));
+            rows.push((mtime, sid, title, cwd, skip));
         }
     }
-    rows.sort_by_key(|(mtime, _)| std::cmp::Reverse(*mtime)); // newest first
-    rows.into_iter().take(30).map(|(_, v)| v).collect()
+    select_unmanaged(rows, &managed)
 }
 
 /// Extract a markdown section body: text between "## <heading>\n" and the next "## ".
@@ -1213,6 +1220,36 @@ mod tests {
     };
     use crate::is_valid_session_id;
     use serde_json::json;
+
+    #[test]
+    fn select_unmanaged_excludes_managed_skips_and_caps_at_30() {
+        use std::collections::HashSet;
+        let mut managed = HashSet::new();
+        managed.insert("managed-1".to_string());
+
+        // 32 candidate rows with ascending mtime; two are special-cased.
+        let mut rows: Vec<(u64, String, Option<String>, Option<String>, bool)> = Vec::new();
+        for i in 0..32u64 {
+            rows.push((i, format!("sid-{i}"), Some(format!("title {i}")), Some("/tmp/x".into()), false));
+        }
+        rows.push((999, "managed-1".to_string(), Some("m".into()), Some("/tmp".into()), false)); // managed → dropped
+        rows.push((998, "skipme".to_string(), Some("s".into()), Some("/tmp".into()), true));      // skip=true → dropped
+
+        let out = super::select_unmanaged(rows, &managed);
+
+        // Managed + skipped are gone; result capped to 30.
+        assert_eq!(out.len(), 30);
+        let ids: Vec<&str> = out.iter().map(|v| v["sessionId"].as_str().unwrap()).collect();
+        assert!(!ids.contains(&"managed-1"));
+        assert!(!ids.contains(&"skipme"));
+        // Newest first: the highest surviving mtime (sid-31) leads.
+        assert_eq!(out[0]["sessionId"], "sid-31");
+        assert_eq!(out[0]["title"], "title 31");
+        assert_eq!(out[0]["mtime"], 31);
+        // Cap drops the 2 oldest survivors (sid-0, sid-1).
+        assert!(!ids.contains(&"sid-0"));
+        assert!(!ids.contains(&"sid-1"));
+    }
 
     #[test]
     fn sid_validator_blocks_path_traversal() {

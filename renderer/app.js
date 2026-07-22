@@ -1,6 +1,43 @@
 let sessions = []
 let selectedKey = null   // unique session key (notesPath || sessionId || name), not raw sessionId
 let activeTab = 'running'
+
+// "Recent · unmanaged" section state. Discovery is lazy (on first expand) and NEVER
+// runs on the 5s poll — renderUnmanagedSection is called only from expand / refresh /
+// tab-switch / view-switch, so hundreds of on-disk sessions never inflate the poll.
+let unmanagedState = { expanded: false, loading: false, error: '', model: null, loaded: false }
+
+function renderUnmanagedSection() {
+  const show = activeTab === 'running'
+  const html = window.CSMUnmanaged.unmanagedSectionHtml(unmanagedState)
+  document.querySelectorAll('.unmanaged-section').forEach(el => {
+    el.hidden = !show
+    if (show) el.innerHTML = html
+  })
+}
+
+async function loadUnmanaged() {
+  unmanagedState.loading = true
+  unmanagedState.error = ''
+  renderUnmanagedSection()
+  try {
+    const sessions = await window.api.discoverSessions()
+    unmanagedState.model = window.CSMUnmanaged.buildUnmanagedModel(sessions)
+    unmanagedState.loaded = true
+  } catch (_) {
+    unmanagedState.error = 'Could not scan recent sessions.'
+    unmanagedState.model = null
+  }
+  unmanagedState.loading = false
+  renderUnmanagedSection()
+}
+
+// Re-run discovery + re-render. Exposed for Task 4 (refresh after an adopt).
+window.refreshUnmanaged = function () {
+  if (unmanagedState.expanded) loadUnmanaged()
+  else { unmanagedState.loaded = false; unmanagedState.model = null }
+}
+
 let viewMode = 'list'    // 'list' | 'cards' | 'board'
 let searchQuery = ''
 const activeCatFilters = new Set()  // empty = show all categories
@@ -415,6 +452,7 @@ function switchTab(tab) {
     btn.classList.toggle('active', btn.dataset.tab === tab)
   })
   fetchAndRender(true)  // tab switch → fresh sort
+  renderUnmanagedSection()
 }
 
 function cycleTab(dir) {
@@ -461,6 +499,7 @@ function setViewMode(mode) {
   // Arriving at List from another view (Board hides the terminal pane on the way
   // out) → bring the selected session's live terminal back into view.
   if (mode === 'list' && prevMode !== 'list') restoreTerminalForSelected()
+  renderUnmanagedSection()
 }
 
 // Close the cards-mode drawer
@@ -488,6 +527,29 @@ function onSearchInput(e) {
 SEARCH_FIELD_IDS.forEach(id => {
   const el = document.getElementById(id)
   if (el) el.addEventListener('input', onSearchInput)
+})
+
+// Delegated click handler for unmanaged section controls
+document.body.addEventListener('click', (e) => {
+  // Toggle expand/collapse (ignore clicks on the refresh button inside the header).
+  const toggle = e.target.closest('[data-unmanaged-toggle]')
+  if (toggle && !e.target.closest('[data-unmanaged-refresh]')) {
+    unmanagedState.expanded = !unmanagedState.expanded
+    if (unmanagedState.expanded && !unmanagedState.loaded && !unmanagedState.loading) loadUnmanaged()
+    else renderUnmanagedSection()
+    return
+  }
+  // Refresh / retry (rescan).
+  if (e.target.closest('[data-unmanaged-refresh]')) {
+    e.stopPropagation()
+    unmanagedState.expanded = true
+    loadUnmanaged()
+    return
+  }
+  // Adopt a row (open the Import modal preselected with that session).
+  const adopt = e.target.closest('[data-adopt-sid]')
+  if (!adopt) return
+  openImportModal({ preselectSessionId: adopt.dataset.adoptSid, defaultName: adopt.dataset.adoptName || '' })
 })
 
 // When an embedded terminal opens, it resumes the session — which makes a Closed
@@ -700,25 +762,30 @@ function renderImportList(query) {
     </button>`
   }).join('')
 }
-async function openImportModal() {
-  importSelectedSid = null
+async function openImportModal(opts) {
+  const preselectSessionId = opts && opts.preselectSessionId
+  const defaultName = (opts && opts.defaultName) || ''
+  importSelectedSid = preselectSessionId || null
   importSessions = []
   document.getElementById('import-search').value = ''
   document.getElementById('import-uid').value = ''
-  document.getElementById('import-name').value = ''
+  document.getElementById('import-name').value = defaultName
   hideImportError()
   populateImportCategories()
   // Render the Embedded/Terminal destination toggle reflecting the current pref (like +New).
   const destEl = document.getElementById('import-dest')
   if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
   const goBtn = document.getElementById('import-go')
-  goBtn.disabled = true
+  goBtn.disabled = !importSelectedSid
   document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
   importModal.showModal()
   try { importSessions = await window.api.discoverSessions() } catch (_) { importSessions = [] }
   renderImportList('')
+  updateImportGo()
 }
-document.getElementById('import-session-btn').addEventListener('click', openImportModal)
+// The Import modal is now reached only via a session's Adopt button (opened
+// preselected). The old top-level ＋Import entry point was removed — the
+// Recent·unmanaged section surfaces adoptable sessions inline instead.
 document.getElementById('import-cancel').addEventListener('click', () => importModal.close())
 // Escape closes the modal. The search field is type=search, which natively eats
 // Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
@@ -772,6 +839,7 @@ document.getElementById('import-go').addEventListener('click', async () => {
   const res = await window.api.importSession(sid, category, name, space, embedded)
   if (!res || !res.ok) { showImportError((res && res.error) || 'Import failed.'); goBtn.disabled = false; return }
   importModal.close()
+  if (window.refreshUnmanaged) window.refreshUnmanaged()
   if (embedded && res.command && window.openTerminalPane) {
     // Adopt in the embedded terminal, keyed by the session's REAL id (already known). When
     // /import-session registers it, the card carries this sessionId → it reveals THIS pty
@@ -1190,6 +1258,7 @@ async function boot() {
   seedTabCounts()                             // fill ALL tab badges at launch (not just on visit)
   maybeShowSkillsBanner()                     // first-launch nudge if skills aren't installed yet
   refreshUsage()                              // initial usage bar render
+  renderUnmanagedSection()                    // initial: header present (collapsed), no discovery yet
   // poll → keep order frozen; skip if the previous fetch is still running (no stacking)
   setInterval(() => {
     if (viewMode === 'board') window.refreshBoard()
