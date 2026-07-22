@@ -1839,7 +1839,10 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .unmanaged-name { font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.62); flex: 1; }
 .unmanaged-refresh { background: none; border: none; color: rgba(var(--tint), 0.48); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
 .unmanaged-refresh:hover { color: rgba(var(--tint), 0.92); }
-.unmanaged-body { padding: 2px 0 6px; }
+/* Bounded + self-scrolling so a long list never pushes the managed sessions
+   below off-screen: on a short window the rows scroll here instead of overflowing
+   the (overflow:hidden) panel with no way to reach them. */
+.unmanaged-body { padding: 2px 0 6px; max-height: 38vh; overflow-y: auto; }
 .unmanaged-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; }
 .unmanaged-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .unmanaged-row-title { font-size: 12px; color: rgba(var(--tint), 0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
