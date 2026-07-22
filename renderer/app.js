@@ -783,7 +783,9 @@ async function openImportModal(opts) {
   renderImportList('')
   updateImportGo()
 }
-document.getElementById('import-session-btn').addEventListener('click', () => openImportModal())
+// The Import modal is now reached only via a session's Adopt button (opened
+// preselected). The old top-level ＋Import entry point was removed — the
+// Recent·unmanaged section surfaces adoptable sessions inline instead.
 document.getElementById('import-cancel').addEventListener('click', () => importModal.close())
 // Escape closes the modal. The search field is type=search, which natively eats
 // Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
