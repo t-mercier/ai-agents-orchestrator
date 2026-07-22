@@ -1866,8 +1866,8 @@ body.dl-drag-active .list-card { pointer-events: none; }
 
 .list-group { margin: 4px 6px; border: 1px solid rgba(var(--accent-rgb), 0.4); border-radius: 12px; background: rgba(var(--accent-rgb), 0.05); overflow: hidden; }
 .list-group-head { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: grab; }
-.list-group-chev { color: var(--accent); cursor: pointer; transition: transform 0.15s; }
-.list-group-chev.collapsed { transform: rotate(-90deg); }
+.list-group-chev { display: inline-block; color: var(--accent); cursor: pointer; transform: rotate(90deg); transition: transform 0.15s; line-height: 1; }
+.list-group-chev.collapsed { transform: rotate(0deg); }
 .list-group-name { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.85); cursor: pointer; padding: 1px 3px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-group-name:hover { background: rgba(var(--tint), 0.08); }
 .list-group-edit { display: inline-flex; align-items: center; background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; padding: 0 2px; }
