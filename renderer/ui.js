@@ -277,12 +277,17 @@ function renderListCard(s, selectedKey, changed) {
 
 function groupBlock(category, g, byKey, selectedKey, changedKeys) {
   const gid = escapeHtml(g.id)
+  // Colour the group by its category's colour (like the board colours its groups),
+  // falling back to the app accent when the category has none.
+  const cm = (window.CSM_CONFIG && window.CSM_CONFIG.colorMap) || {}
+  const col = /^#[0-9a-fA-F]{6}$/.test(cm[category] || '') ? cm[category] : ''
+  const accentStyle = col ? ` style="--accent:${col};--accent-rgb:${hexToRgbTriplet(col)}"` : ''
   const memberCards = g.members.map(k => {
     const s = byKey.get(k); if (!s) return ''
     return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(k)}">${renderListCard(s, selectedKey, changedKeys.has(k))}</div>`
   }).join('')
   return `
-    <div class="list-group" data-drag-kind="group" data-drag-id="${gid}">
+    <div class="list-group" data-drag-kind="group" data-drag-id="${gid}"${accentStyle}>
       <div class="list-group-head" data-group="${gid}" data-cat="${escapeHtml(category)}">
         <span class="list-group-chev ${g.collapsed ? 'collapsed' : ''}" data-group-collapse>›</span>
         <span class="list-group-name" data-group-collapse data-nodrag title="Expand / collapse">${escapeHtml(g.name)}</span>
