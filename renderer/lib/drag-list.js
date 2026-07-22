@@ -33,6 +33,9 @@
       if (e.target.closest('button, input, a, .path-link, [data-nodrag]')) return
       e.preventDefault()
       drag = { kind: handle.dataset.dragKind, id: handle.dataset.dragId, el: handle, x: e.clientX, y: e.clientY, active: false, ghost: null, drop: null }
+      // Capture the source container for same-category guard on session drops.
+      const src = handle.closest('[data-drop-key]')
+      drag.srcKey = src ? src.dataset.dropKey : null
     })
     document.addEventListener('mousemove', (e) => {
       if (!drag) return
@@ -52,6 +55,7 @@
       if (!container) return
       const accept = (container.dataset.dropAccept || '').split(/\s+/)
       if (!accept.includes(drag.kind)) return           // cross-container / wrong kind → no-op
+      if (drag.kind === 'session' && container.dataset.dropKey !== drag.srcKey) return  // no cross-category move
       const items = [...container.querySelectorAll(':scope > [data-drag-kind]')].filter(c => c !== drag.el && !c.classList.contains('dl-dragging'))
       let index = items.length
       for (let k = 0; k < items.length; k++) { const r = items[k].getBoundingClientRect(); if (e.clientY < r.top + r.height / 2) { index = k; break } }

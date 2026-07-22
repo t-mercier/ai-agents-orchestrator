@@ -363,6 +363,10 @@ async function fetchAndRender(resort = false) {
     window._lastSelectedKey = selectedKey
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"
     if (tab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
+    // Prune list-org of sessions no longer present (moved to Closed/Archived, etc.).
+    const liveByCat = {}
+    for (const s of sessions) { const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER'); (liveByCat[c] = liveByCat[c] || new Set()).add(s.notesPath || s.sessionId || s.name || '') }
+    window.CSMListOrg.save(window.CSMListOrg.prune(window.CSMListOrg.load(), liveByCat))
     renderAll(filterSessions(sessions, searchQuery), selectedKey, tab, resort)
   } catch (err) {
     console.error('Failed to fetch sessions:', err)
@@ -1266,6 +1270,13 @@ async function boot() {
   window.CSMDragList.init({
     root: document.getElementById('panel-left'),
     onReorder: async ({ kind, id, containerKey, index }) => {
+      if (kind === 'session' && containerKey.startsWith('cat:')) {
+        const category = containerKey.slice(4)
+        const st = window.CSMListOrg.load()
+        window.CSMListOrg.save(window.CSMListOrg.moveSession(st, category, id, index))
+        fetchAndRender(false)
+        return
+      }
       if (containerKey === '__toplevel__' && (kind === 'category' || kind === 'unmanaged')) {
         // Rebuild the top-level order from the current category order + unmanaged slot.
         const cfg = window.CSM_CONFIG || {}

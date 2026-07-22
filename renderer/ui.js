@@ -278,6 +278,17 @@ function renderListCard(s, selectedKey, changed) {
 function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
   const collapsed = collapsedCategories.has(category)
   const active = hasBusy(sessions)
+  const st = window.CSMListOrg.load()
+  const byKey = new Map(sessions.map(s => [sessionKey(s), s]))
+  const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
+  const items = window.CSMListOrg.orderedItems(st, category, liveKeys)
+  const body = items.map(it => {
+    if (it.kind === 'session') {
+      const s = byKey.get(it.key); if (!s) return ''
+      return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(it.key)}">${renderListCard(s, selectedKey, changedKeys.has(it.key))}</div>`
+    }
+    return ''   // 'group' rendered in Task 4
+  }).join('')
   return `
     <div class="category-group" data-drag-kind="category" data-drag-id="${escapeHtml(category)}">
       <div class="category-header ${active ? 'has-active' : ''}" data-category="${escapeHtml(category)}">
@@ -285,8 +296,8 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
         <span class="category-name" data-cat="${escapeHtml(category)}">${escapeHtml(category)}</span>
         <span class="category-count">${sessions.length}</span>
       </div>
-      <div class="category-sessions ${collapsed ? 'collapsed' : ''}">
-        ${sessions.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}
+      <div class="category-sessions ${collapsed ? 'collapsed' : ''}" data-drop-key="cat:${escapeHtml(category)}" data-drop-accept="session">
+        ${body}
       </div>
     </div>
   `
