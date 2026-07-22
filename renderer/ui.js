@@ -285,7 +285,7 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
     <div class="list-group" data-drag-kind="group" data-drag-id="${gid}">
       <div class="list-group-head" data-group="${gid}" data-cat="${escapeHtml(category)}">
         <span class="list-group-chev ${g.collapsed ? 'collapsed' : ''}" data-group-collapse>›</span>
-        <span class="list-group-name" data-group-rename title="Rename group">${escapeHtml(g.name)}</span>
+        <span class="list-group-name" data-group-rename data-nodrag title="Click to rename">${escapeHtml(g.name)}</span>
         <span class="list-group-count">${g.members.length}</span>
         <button type="button" class="list-group-x" data-group-delete title="Delete group (keep sessions)" aria-label="Delete group">✕</button>
       </div>
@@ -924,7 +924,7 @@ function renderDetailPanel(s, tab = 'running') {
 // ── Main render ──
 
 function renderAll(sessions, selectedKey, tab = 'running', resort = false) {
-  if (window._listDragging) return   // never rebuild the DOM under an active drag
+  if (window._listDragging || window._listEditing) return   // never rebuild the DOM under an active drag or inline edit
   // Rebuild the sort order only when explicitly asked (tab switch, search, manual
   // refresh, initial load). On the 5s poll, resort=false keeps the order frozen.
   if (resort || sortRank.size === 0) rebuildSortRank(sessions)

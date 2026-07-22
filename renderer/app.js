@@ -581,12 +581,34 @@ document.body.addEventListener('click', (e) => {
   }
 })
 
-document.body.addEventListener('dblclick', (e) => {
-  const name = e.target.closest('[data-group-rename]')
-  if (!name) return
-  const head = name.closest('.list-group-head')
-  const next = window.prompt('Group name:', name.textContent.trim())
-  if (next != null) { window.CSMListOrg.save(window.CSMListOrg.renameGroup(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group, next)); fetchAndRender(false) }
+document.body.addEventListener('click', (e) => {
+  const nameEl = e.target.closest('[data-group-rename]')
+  if (!nameEl || nameEl.tagName === 'INPUT') return
+  const head = nameEl.closest('.list-group-head')
+  if (!head) return
+  const cat = head.dataset.cat, gid = head.dataset.group
+  const input = document.createElement('input')
+  input.className = 'list-group-name-input'
+  input.value = nameEl.textContent.trim()
+  nameEl.replaceWith(input)
+  window._listEditing = true
+  input.focus(); input.select()
+  let settled = false
+  const settle = (commit) => {
+    if (settled) return; settled = true
+    window._listEditing = false
+    if (document.activeElement === input) input.blur()
+    if (commit) {
+      const v = input.value.trim()
+      if (v) window.CSMListOrg.save(window.CSMListOrg.renameGroup(window.CSMListOrg.load(), cat, gid, v))
+    }
+    fetchAndRender(false)   // repaint (commit persisted, or revert on cancel)
+  }
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); settle(true) }
+    else if (ev.key === 'Escape') { ev.preventDefault(); settle(false) }
+  })
+  input.addEventListener('blur', () => settle(true))
 })
 
 // When an embedded terminal opens, it resumes the session — which makes a Closed
