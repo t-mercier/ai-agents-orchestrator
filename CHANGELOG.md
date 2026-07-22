@@ -10,6 +10,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1-alpha] - 2026-07-23
+
+### Added
+- **"Recent · unmanaged" section + Adopt** — a collapsible section at the top of the Running tab lists recently-active Claude Code sessions that aren't yet managed by the dashboard (on disk under `~/.claude`, no `notes.md`). It's **lazy** (discovered only when you expand it — never on the 5-second poll, so hundreds of on-disk sessions cost nothing) with a ↻ rescan. Each row has a single **Adopt** action = resume + register in one gesture, reusing the Import modal preselected on that session; once adopted, the row leaves the list. The old top-level **＋Import** button was removed — Adopt covers it inline.
+- **List-view organization (drag to reorder + group)** — in the List view you can now **drag-reorder your categories** (persisted) and move the **Recent · unmanaged** block anywhere; **drag-reorder sessions** within their category; and **group related sessions** (e.g. sub-tickets of one parent) by **dragging one session onto another**, Kanban-style. Groups are collapsible, colour-coded by their category (board-style border), renamable via a pencil icon, and auto-dissolve below two members. Everything stays **within a category** (no cross-category moves) and is scoped to the Running tab. Clicking into a session's embedded terminal now **selects + reveals** its card in the list.
+- **Per-session usage bar** — the footer bar's **context %** and **model** now follow the **selected session** instead of "whichever session last rendered its statusline". The bundled `ao-statusline.sh` writes a per-session keyed cache (`{ global, sessions: { <id> } }`); the app shows the selected session's context/model and hides them when a session has no data. The **5-hour / weekly** windows stay account-global. The legacy flat cache is still read, so nothing breaks on upgrade.
+
+### Fixed
+- **Usage bar no longer blanks after a resume** — Claude Code omits `rate_limits` on some renders (notably right after a resume); the wrapper now keeps the last-known 5h/7d values instead of clearing the bars.
+- **macOS "damaged" on first open** — documented the real fix (`xattr -cr` to clear the Gatekeeper quarantine) in the README and release notes; the old "right-click → Open" no longer works on recent macOS.
+
 ## [0.3.0-alpha] - 2026-07-15
 
 ### Added

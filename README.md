@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.3.0--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -31,6 +31,9 @@
 > ## What's new
 > Newest first — full history in the [changelog](CHANGELOG.md).
 >
+> - 📥 **"Recent · unmanaged" section + Adopt** — a lazy, collapsible section at the top of Running lists recent Claude Code sessions that aren't managed yet; one **Adopt** click resumes + registers them. (Replaces the old ＋Import button.)
+> - 🗂 **Reorder & group your list (drag)** — in the List view, drag to reorder your categories and sessions, and **group related sessions** (e.g. sub-tickets of a parent) by dragging one onto another, Kanban-style. Collapsible, colour-coded, renamable groups.
+> - 📊 **Usage bar → per-session** — the bar's **context %** and **model** now follow the **selected session** (the 5-hour & weekly windows stay account-global).
 > - ⚙️ **Config v2, auto-migrated** — named **spaces**, each with its own Obsidian **vault**. A legacy v1 config (work/personal roots + category `scope`) is migrated to v2 on first launch, with a backup kept. Nothing to do by hand.
 > - 📊 **Usage bar** — a slim bottom bar with your **model**, the **5-hour** & **weekly** rate-limit windows (with reset countdowns) and **context %**, right in the app. Automatic for sessions launched from the dashboard; never touches your global settings.
 > - 🖥 **"Claude Desktop" group** — live sessions opened from the Claude Desktop app now group on their own instead of the catch-all "OTHER".
