@@ -304,26 +304,37 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
 function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
   const collapsed = collapsedCategories.has(category)
   const active = hasBusy(sessions)
-  const st = window.CSMListOrg.load()
-  const byKey = new Map(sessions.map(s => [sessionKey(s), s]))
-  const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
-  const items = window.CSMListOrg.orderedItems(st, category, liveKeys)
-  const body = items.map(it => {
-    if (it.kind === 'session') {
-      const s = byKey.get(it.key); if (!s) return ''
-      return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(it.key)}">${renderListCard(s, selectedKey, changedKeys.has(it.key))}</div>`
-    }
-    if (it.kind === 'group') return groupBlock(category, it, byKey, selectedKey, changedKeys)
-    return ''
-  }).join('')
+  // The reorg model (manual order + groups + drag) is a RUNNING-tab feature. On
+  // Closed/Archived the same category name holds DIFFERENT sessions (other keys), so
+  // applying the model would render empty groups (title only, nothing inside). Those
+  // tabs render plainly — no model, no groups, no drag.
+  let body, dragAttrs = '', dropAttrs = ''
+  if (activeTab === 'running') {
+    const st = window.CSMListOrg.load()
+    const byKey = new Map(sessions.map(s => [sessionKey(s), s]))
+    const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
+    const items = window.CSMListOrg.orderedItems(st, category, liveKeys)
+    body = items.map(it => {
+      if (it.kind === 'session') {
+        const s = byKey.get(it.key); if (!s) return ''
+        return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(it.key)}">${renderListCard(s, selectedKey, changedKeys.has(it.key))}</div>`
+      }
+      if (it.kind === 'group') return groupBlock(category, it, byKey, selectedKey, changedKeys)
+      return ''
+    }).join('')
+    dragAttrs = ` data-drag-kind="category" data-drag-id="${escapeHtml(category)}"`
+    dropAttrs = ` data-drop-key="cat:${escapeHtml(category)}" data-drop-accept="session"`
+  } else {
+    body = sessions.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')
+  }
   return `
-    <div class="category-group" data-drag-kind="category" data-drag-id="${escapeHtml(category)}">
+    <div class="category-group"${dragAttrs}>
       <div class="category-header ${active ? 'has-active' : ''}" data-category="${escapeHtml(category)}">
         <span class="category-chevron ${collapsed ? 'collapsed' : ''}">›</span>
         <span class="category-name" data-cat="${escapeHtml(category)}">${escapeHtml(category)}</span>
         <span class="category-count">${sessions.length}</span>
       </div>
-      <div class="category-sessions ${collapsed ? 'collapsed' : ''}" data-drop-key="cat:${escapeHtml(category)}" data-drop-accept="session">
+      <div class="category-sessions ${collapsed ? 'collapsed' : ''}"${dropAttrs}>
         ${body}
       </div>
     </div>
@@ -453,16 +464,20 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
       html += `<div class="space-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
     }
     const grouped = groupByCategory(rest)
-    const renderedCats = grouped.map(([c]) => c)
-    window._listRenderedCats = renderedCats
-    const catBlocks = grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
-    // The unmanaged block is moved out of its fixed slot and interleaved here at its
-    // stored index (default = top). The standalone .unmanaged-section container is
-    // hidden in the single-space running list (its content is rendered inline here).
-    const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, catBlocks.length)
-    const blocks = [...catBlocks]
-    blocks.splice(uIdx, 0, `<div class="unmanaged-slot" data-drag-kind="unmanaged" data-drag-id="unmanaged"></div>`)
-    html += `<div class="list-blocks" data-drop-key="__toplevel__" data-drop-accept="category unmanaged">${blocks.join('')}</div>`
+    if (activeTab === 'running') {
+      // Running: draggable category blocks in a top-level drop container, with the
+      // movable unmanaged block interleaved at its stored index.
+      const renderedCats = grouped.map(([c]) => c)
+      window._listRenderedCats = renderedCats
+      const catBlocks = grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
+      const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, catBlocks.length)
+      const blocks = [...catBlocks]
+      blocks.splice(uIdx, 0, `<div class="unmanaged-slot" data-drag-kind="unmanaged" data-drag-id="unmanaged"></div>`)
+      html += `<div class="list-blocks" data-drop-key="__toplevel__" data-drop-accept="category unmanaged">${blocks.join('')}</div>`
+    } else {
+      // Closed/Archived: plain category groups, no reorg wrapper, no unmanaged block.
+      html += grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys)).join('')
+    }
   }
   // Skip DOM rewrite when unchanged — preserves hover/cursor between idle polls.
   setHtml(document.getElementById('panel-list'), html)
