@@ -390,6 +390,7 @@ window.openBoardDetail = (key) => {
   if (window.renderDetailPanel) window.renderDetailPanel(s, tab)
   document.getElementById('panel-detail').classList.add('open')
   document.getElementById('scrim').classList.add('open')
+  if (window.refreshUsage) window.refreshUsage()
 }
 
 // The board is GLOBAL — it resolves placed sessions across all states. Cache the
@@ -433,6 +434,7 @@ function selectSession(key) {
   }
   // resort=false → selecting must never reorder the list under the cursor
   renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, false)
+  if (window.refreshUsage) window.refreshUsage()
 }
 
 // From the board → reveal a session in the List view: switch to its tab (Running /
@@ -592,6 +594,7 @@ document.body.addEventListener('mousedown', (e) => {
     window._lastSelectedKey = key
     window._revealSelected = true
     fetchAndRender(false)
+    if (window.refreshUsage) window.refreshUsage()
   }
 })
 
@@ -1199,7 +1202,17 @@ async function maybeShowSkillsBanner() {
 async function refreshUsage() {
   if (!window.api || !window.api.getUsage) return
 
-  const usage = await window.api.getUsage()
+  // The bar's context % + model reflect the SELECTED session (5h/7d stay global).
+  const key = selectedKey || window._lastSelectedKey
+  let sid = null
+  if (key) {
+    const pool = window._lastSessions || []
+    const s = pool.find(x => (x.notesPath || x.sessionId || x.name || '') === key)
+    sid = s ? s.sessionId
+        : (window._terminalSession && (window._terminalSession.notesPath || window._terminalSession.sessionId || window._terminalSession.name || '') === key
+           ? window._terminalSession.sessionId : null)
+  }
+  const usage = await window.api.getUsage(sid)
   const bar = document.getElementById('usage-bar')
 
   // Cache absent or error → hide the bar.
@@ -1224,7 +1237,8 @@ async function refreshUsage() {
   // Populate model name.
   const modelEl = document.getElementById('usage-model')
   if (modelEl) {
-    modelEl.textContent = model || '(unknown model)'
+    modelEl.textContent = model || ''
+    modelEl.hidden = !model
   }
 
   // Build the bars group.
