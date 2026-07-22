@@ -285,8 +285,9 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
     <div class="list-group" data-drag-kind="group" data-drag-id="${gid}">
       <div class="list-group-head" data-group="${gid}" data-cat="${escapeHtml(category)}">
         <span class="list-group-chev ${g.collapsed ? 'collapsed' : ''}" data-group-collapse>›</span>
-        <span class="list-group-name" data-group-rename data-nodrag title="Click to rename">${escapeHtml(g.name)}</span>
+        <span class="list-group-name" data-group-collapse data-nodrag title="Expand / collapse">${escapeHtml(g.name)}</span>
         <span class="list-group-count">${g.members.length}</span>
+        <button type="button" class="list-group-edit" data-group-rename title="Rename group" aria-label="Rename group"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         <button type="button" class="list-group-x" data-group-delete title="Delete group (keep sessions)" aria-label="Delete group">✕</button>
       </div>
       <div class="list-group-body ${g.collapsed ? 'collapsed' : ''}" data-drop-key="grp:${escapeHtml(category)}:${gid}" data-drop-accept="session">

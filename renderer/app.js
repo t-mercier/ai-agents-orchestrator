@@ -582,10 +582,12 @@ document.body.addEventListener('click', (e) => {
 })
 
 document.body.addEventListener('click', (e) => {
-  const nameEl = e.target.closest('[data-group-rename]')
-  if (!nameEl || nameEl.tagName === 'INPUT') return
-  const head = nameEl.closest('.list-group-head')
+  const trigger = e.target.closest('[data-group-rename]')
+  if (!trigger) return
+  const head = trigger.closest('.list-group-head')
   if (!head) return
+  const nameEl = head.querySelector('.list-group-name')
+  if (!nameEl || head.querySelector('.list-group-name-input')) return   // no name, or already editing
   const cat = head.dataset.cat, gid = head.dataset.group
   const input = document.createElement('input')
   input.className = 'list-group-name-input'
