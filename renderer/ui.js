@@ -491,6 +491,13 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
   }
   // Skip DOM rewrite when unchanged — preserves hover/cursor between idle polls.
   setHtml(document.getElementById('panel-list'), html)
+  // Reveal the selected card when a selection was just asserted from outside the list
+  // (e.g. clicking into the embedded terminal) so the user sees which session it is.
+  if (window._revealSelected) {
+    window._revealSelected = false
+    const sel = document.querySelector('#panel-list .list-card.selected')
+    if (sel) sel.scrollIntoView({ block: 'nearest' })
+  }
 }
 
 // ── Cards view: full-width grid ──
