@@ -969,19 +969,58 @@ fn parse_usage(content: &str) -> Value {
     }
 }
 
+/// Build the renderer's usage payload from the cache. New keyed shape is
+/// `{ global: {rate limits}, sessions: { <session_id>: {model, contextPct} } }`;
+/// the legacy flat shape (all fields at top level) is tolerated. Rate limits always
+/// come from `global` (or the flat root); model + contextPct come from the requested
+/// session (or, for a legacy flat cache with no session requested, the flat root).
+/// Returns Null when `cache` is not an object.
+fn usage_view(cache: &Value, session_id: Option<&str>) -> Value {
+    let obj = match cache.as_object() {
+        Some(o) => o,
+        None => return Value::Null,
+    };
+    let has_new = obj.contains_key("global") || obj.contains_key("sessions");
+    let g = if has_new {
+        obj.get("global").and_then(Value::as_object).cloned().unwrap_or_default()
+    } else {
+        obj.clone()
+    };
+    let mut out = serde_json::Map::new();
+    for k in ["fiveHourPct", "sevenDayPct", "fiveHourResetsAt", "sevenDayResetsAt", "updatedAt"] {
+        if let Some(v) = g.get(k) { out.insert(k.to_string(), v.clone()); }
+    }
+    // model + contextPct: from the session entry (new shape) or the flat root (legacy, no id).
+    let (model, ctx) = if has_new {
+        let s = session_id
+            .and_then(|id| obj.get("sessions").and_then(Value::as_object).and_then(|m| m.get(id)))
+            .and_then(Value::as_object);
+        (s.and_then(|s| s.get("model")).cloned(),
+         s.and_then(|s| s.get("contextPct")).cloned())
+    } else if session_id.is_none() {
+        (obj.get("model").cloned(), obj.get("contextPct").cloned())
+    } else {
+        (None, None)
+    };
+    out.insert("model".to_string(), model.unwrap_or(Value::Null));
+    out.insert("contextPct".to_string(), ctx.unwrap_or(Value::Null));
+    Value::Object(out)
+}
+
 /// Read the Claude Code statusline cache file (~/.claude/statusline-cache.json)
-/// and return its parsed JSON. Returns Null if the file is absent, unreadable, or
-/// contains invalid/non-object JSON. Never errors — always returns a Value.
+/// and return its parsed JSON, optionally filtered for a specific session.
+/// Returns Null if the file is absent, unreadable, or contains invalid/non-object JSON.
+/// Never errors — always returns a Value.
 #[tauri::command]
-fn get_usage() -> Value {
+fn get_usage(session_id: Option<String>) -> Value {
     let cache_path = config::home()
         .join(".claude")
         .join("statusline-cache.json");
-
-    match std::fs::read_to_string(&cache_path) {
+    let cache = match std::fs::read_to_string(&cache_path) {
         Ok(content) => parse_usage(&content),
-        Err(_) => Value::Null,
-    }
+        Err(_) => return Value::Null,
+    };
+    usage_view(&cache, session_id.as_deref())
 }
 
 /// Open a native folder picker for Settings; returns the chosen absolute path, or
@@ -1173,7 +1212,7 @@ mod tests {
     use super::{
         category_root_dir, is_deletable_session_dir, is_pr_url, is_safe_branch, is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
-        set_pr_link_in_frontmatter, slugify, stamp_archived, validate_root_override,
+        set_pr_link_in_frontmatter, slugify, stamp_archived, usage_view, validate_root_override,
     };
     use serde_json::{json, Value};
     use std::path::PathBuf;
@@ -1416,5 +1455,51 @@ mod tests {
         let notes = "## Session history\n";
         let out = stamp_archived(notes, LINE);
         assert!(out.contains("ARCHIVED"));
+    }
+
+    #[test]
+    fn usage_view_keyed_merges_global_and_session() {
+        let cache = serde_json::json!({
+            "global": { "fiveHourPct": 21, "sevenDayPct": 76, "fiveHourResetsAt": 1i64, "sevenDayResetsAt": 2i64, "updatedAt": 9i64 },
+            "sessions": { "sid-1": { "model": "Opus 4.8", "contextPct": 42 } }
+        });
+        let v = usage_view(&cache, Some("sid-1"));
+        assert_eq!(v["fiveHourPct"], 21);
+        assert_eq!(v["sevenDayPct"], 76);
+        assert_eq!(v["model"], "Opus 4.8");
+        assert_eq!(v["contextPct"], 42);
+    }
+
+    #[test]
+    fn usage_view_keyed_unknown_session_has_null_model_context() {
+        let cache = serde_json::json!({
+            "global": { "fiveHourPct": 21 },
+            "sessions": { "sid-1": { "model": "Opus 4.8", "contextPct": 42 } }
+        });
+        let v = usage_view(&cache, Some("other"));
+        assert_eq!(v["fiveHourPct"], 21);
+        assert!(v["model"].is_null());
+        assert!(v["contextPct"].is_null());
+    }
+
+    #[test]
+    fn usage_view_legacy_flat_surfaces_model_only_without_session_id() {
+        let cache = serde_json::json!({ "model": "Opus 4.8", "fiveHourPct": 5, "contextPct": 30 });
+        // no session id → best-effort surface the flat model/context
+        let none = usage_view(&cache, None);
+        assert_eq!(none["fiveHourPct"], 5);
+        assert_eq!(none["model"], "Opus 4.8");
+        assert_eq!(none["contextPct"], 30);
+        // a session id was requested but legacy has no per-session map → model/context null
+        let with = usage_view(&cache, Some("sid-1"));
+        assert_eq!(with["fiveHourPct"], 5);
+        assert!(with["model"].is_null());
+        assert!(with["contextPct"].is_null());
+    }
+
+    #[test]
+    fn usage_view_non_object_is_null() {
+        assert!(usage_view(&serde_json::Value::Null, None).is_null());
+        assert!(usage_view(&serde_json::json!("x"), Some("s")).is_null());
     }
 }
