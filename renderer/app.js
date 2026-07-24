@@ -583,21 +583,6 @@ document.body.addEventListener('click', (e) => {
   }
 })
 
-// Clicking into the embedded terminal selects (and reveals) its session's card in the
-// list, so it's clear which session the open terminal belongs to.
-document.body.addEventListener('mousedown', (e) => {
-  if (!e.target.closest('#detail-terminal-pane') || !window._terminalSession) return
-  const ts = window._terminalSession
-  const key = ts.notesPath || ts.sessionId || ts.name || ''
-  if (key && key !== selectedKey) {
-    selectedKey = key
-    window._lastSelectedKey = key
-    window._revealSelected = true
-    fetchAndRender(false)
-    if (window.refreshUsage) window.refreshUsage()
-  }
-})
-
 document.body.addEventListener('click', (e) => {
   const trigger = e.target.closest('[data-group-rename]')
   if (!trigger) return
