@@ -185,11 +185,13 @@ PROPOSE=$(python3 ~/.claude/skills/lib/aoconfig.py flag skillProposals)
 
 - It is **silent unless one of its four criteria actually fired**, so an ordinary session
   produces nothing. No proposal is the normal outcome.
-- It **never writes into `~/.claude/skills/`**. Proposals are staged under
-  `~/.claude/skills-pending/` and only `/skills-review` can promote them.
+- It **never changes a skill without showing you the exact wording first**. With you here,
+  it offers the change and applies it on your yes; otherwise it stages the proposal under
+  `~/.claude/skills-pending/` for `/skills-review`. Either way the change is appended to
+  `~/.claude/skills-applied.log`, which is the revert.
 
-Mention a staged proposal in the confirmation (one line, with which criterion fired);
-say nothing when there is none.
+Mention what it did in the confirmation (one line, with which criterion fired): applied,
+or staged. Say nothing when there is none.
 
 ## Step 7 — Confirm
 

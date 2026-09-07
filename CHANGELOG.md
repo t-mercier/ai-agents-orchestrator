@@ -10,6 +10,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Six places still promised a staged diff review** after the loop stopped requiring one.
+  The worst was `/skill-propose`'s own first hard rule — "NEVER write to `~/.claude/skills/`,
+  no exceptions" — which its own Step 3c does; an agent reading the file would follow the
+  rule and never use the fast path. The invariant was never "never write", it is "never
+  without the user seeing the exact wording first", and it now says so. `/save-session` and
+  `/close-session` repeated the old claim to their callers; the landing page said it in the
+  hero, the meta description and the Problem→Solution map.
+
 ## [0.12.0-alpha] - 2026-09-07
 
 ### Added

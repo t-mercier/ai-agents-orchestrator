@@ -204,8 +204,9 @@ PROPOSE=$(python3 ~/.claude/skills/lib/aoconfig.py flag skillProposals)
 
 - It is **silent unless one of its four criteria actually fired**, so an ordinary session
   produces nothing. No proposal is the normal outcome.
-- It **never writes into `~/.claude/skills/`**. Proposals are staged under
-  `~/.claude/skills-pending/` and only `/skills-review` can promote them.
+- It **never changes a skill without the user having seen the exact wording**. This runs
+  headless with no one to answer, so here it always stages under
+  `~/.claude/skills-pending/` for `/skills-review`.
 
 Mention a staged proposal in the confirmation (one line, with which criterion fired);
 say nothing when there is none.

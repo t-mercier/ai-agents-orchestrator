@@ -22,10 +22,13 @@ promotes workflows (procedural) to `skills/`.
 
 **Two hard rules, no exceptions:**
 
-1. **NEVER write to `~/.claude/skills/`.** A skill is an instruction that shapes every
-   future session; a wrong one is a silent, persistent regression. Proposals go to
-   `~/.claude/skills-pending/` and only `/skills-review` promotes them, after the user
-   has read the diff.
+1. **NEVER change `~/.claude/skills/` without the user seeing the exact change first.**
+   A skill is an instruction that shapes every future session; a wrong one is a silent,
+   persistent regression. What they see is the verbatim wording, never a summary — a yes
+   on a description they have not read is the thing this rule exists to prevent. With them
+   present, Step 3c shows it and applies on their yes; otherwise the proposal goes to
+   `~/.claude/skills-pending/` and `/skills-review` promotes it. Either way the change is
+   appended to `~/.claude/skills-applied.log`, which is how it gets undone.
 2. **Stay silent when nothing qualifies.** A proposal at every invocation is how you end
    up with forty half-overlapping skills. If no criterion below fires, say so in one
    line and stop. That is a success, not a failure.

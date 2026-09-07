@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI Agents Orchestrator — memory for your AI coding sessions</title>
-<meta name="description" content="Every Claude Code session keeps a notes.md beside its code, writes what it learns into a folder of knowledge notes, and proposes a skill when it learns a procedure — nothing active until you read the diff. A tiny local-first dashboard for macOS &amp; Linux." />
+<meta name="description" content="Every Claude Code session keeps a notes.md beside its code, writes what it learns into a folder of knowledge notes, and proposes a skill when it learns a procedure — nothing active until you say yes. A tiny local-first dashboard for macOS &amp; Linux." />
 <meta property="og:title" content="AI Agents Orchestrator" />
 <meta property="og:description" content="What you learned once, you keep. Every session keeps its notes beside the code, and the agent reads them back before it digs. Local-first, silent on the network until you press Sync." />
 <meta property="og:image" content="media/hero.png" />
@@ -295,7 +295,7 @@
     <span class="pill"><span class="dot"></span> Local-first · macOS & Linux · source-available</span>
     <h1>What you learned once, <span class="grad">you keep.</span></h1>
     <p class="vs">A long session gets <strong>compacted</strong> — the decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p>
-    <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a staged proposal whenever it learns a procedure — nothing becomes active until you have read the diff.</p>
+    <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure — nothing becomes active until you have seen the exact wording and said yes.</p>
     <p class="sub">Local-first, read-only on your sessions, silent on the network until you press Sync. macOS &amp; Linux; the macOS download is 7 MB.</p>
 
     <div class="ba">
@@ -355,7 +355,7 @@
       <div class="ps-row">
         <div class="ps-p"><h3 class="ps-h">You correct the same mistake forever.</h3><p>The agent picks up the fact, never the <em>procedure</em> — and only for the session it is in. Next week you type the correction again.</p></div>
         <div class="ps-arrow" aria-hidden="true">→</div>
-        <div class="ps-s"><h3 class="ps-h">It writes its own skills; you approve them.</h3><p>Every session that teaches it a procedure <a href="#proposals">stages a draft</a> outside the skills folder — a new skill, or a patch to one it already wrote — and nothing runs until you have read the diff.</p></div>
+        <div class="ps-s"><h3 class="ps-h">It writes its own skills; you approve them.</h3><p>Every session that teaches it a procedure <a href="#proposals">offers the change</a> — a new skill, or a patch to one it already wrote — and shows you the exact wording. Nothing runs until you say yes, and every change is logged so it can be undone.</p></div>
       </div>
       <div class="ps-row">
         <div class="ps-p"><h3 class="ps-h">You are the bottleneck, not the agents.</h3><p>Run several in parallel and you become the one holding the state. Which needs an answer? Which finished an hour ago? Where does each one live?</p></div>
