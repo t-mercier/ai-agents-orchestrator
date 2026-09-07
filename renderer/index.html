@@ -133,6 +133,59 @@
     </div>
   </dialog>
 
+  <!-- First-run setup. Three steps, and only the last one writes: step 1 shows what was
+       found on the machine, step 2 builds the taxonomy the import needs (a category the
+       config does not carry is refused, and the seed ships a space pointing at ~/work),
+       step 3 is the single import pass. It is the app's only import path on purpose —
+       once a session is tracked there is no reason to start the next one outside the
+       dashboard. Settings keeps the way back in for anyone who skipped. -->
+  <dialog id="onb-modal" class="modal modal-wide">
+    <div class="modal-form">
+      <h2 class="modal-title" id="onb-title">Bring your sessions in</h2>
+      <div class="onb-steps" id="onb-steps"></div>
+
+      <section class="onb-step" id="onb-step-1">
+        <p class="modal-hint">The Claude Code sessions already on this machine that the dashboard isn't tracking. Tick the ones you still work on — the newest few are ticked for you, and nothing is written until the last step.</p>
+        <div class="onb-list" id="onb-sessions"></div>
+        <button type="button" class="modal-btn onb-more" id="onb-more" hidden>Load more</button>
+        <p class="modal-hint" id="onb-picked"></p>
+      </section>
+
+      <section class="onb-step" id="onb-step-2" hidden>
+        <p class="modal-hint">A <strong>space</strong> is the folder your session notes live under. A <strong>category</strong> sorts them inside it, and its colour is how you pick a session out of a long list at a glance.</p>
+        <div class="onb-group-label">Spaces</div>
+        <div id="onb-spaces"></div>
+        <button type="button" class="modal-btn" id="onb-add-space">+ Add a space</button>
+        <div class="onb-group-label">Categories</div>
+        <div id="onb-cats"></div>
+        <button type="button" class="modal-btn" id="onb-add-cat">+ Add a category</button>
+        <div class="modal-error" id="onb-issues" hidden></div>
+      </section>
+
+      <section class="onb-step" id="onb-step-3" hidden>
+        <p class="modal-hint" id="onb-target-hint"></p>
+        <div class="path-row">
+          <label class="modal-field" id="onb-space-field" hidden>
+            <span class="modal-label">Space</span>
+            <select id="onb-space"></select>
+          </label>
+          <label class="modal-field">
+            <span class="modal-label">Category</span>
+            <select id="onb-category"></select>
+          </label>
+        </div>
+        <div class="onb-list" id="onb-jobs"></div>
+        <p class="modal-hint" id="onb-progress"></p>
+      </section>
+
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="onb-skip">Skip for now</button>
+        <button type="button" class="modal-btn" id="onb-back" hidden>Back</button>
+        <button type="button" class="modal-btn primary" id="onb-next">Next</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Settings: edits the shared config (roots, categories, knowledge notes, Jira). The
        app DOES write here (~/.config/ai-agents-orchestrator/config.json) — this is the
        one write the dashboard makes; session files under ~/.claude stay read-only. -->
@@ -540,5 +593,7 @@
   <script src="lib/clean-model.js"></script>
   <script src="doctor.js"></script>
   <script src="clean.js"></script>
+  <script src="lib/onboarding-model.js"></script>
+  <script src="onboarding.js"></script>
 </body>
 </html>
