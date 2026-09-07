@@ -555,16 +555,7 @@ fn import_session(session_id: String, category: String, name: String, root: Stri
     // Same safe-name set as /start-session (no shell / YAML-breaking chars); may be empty.
     let safe_name = sanitize_session_name(&name);
 
-    let dir = reader::resolve_session_cwd(&session_id)
-        .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
-    let mut prompt = if safe_name.is_empty() {
-        format!("/import-session {category}")
-    } else {
-        format!("/import-session {category} {safe_name}")
-    };
-    if !want_root.is_empty() {
-        prompt.push_str(&format!(" --root {want_root}"));
-    }
+    let (dir, prompt) = import_invocation(&session_id, &category, &safe_name, want_root);
     // --permission-mode auto: /import-session must WRITE the notes.md + register the
     // session; plan mode blocks that (same wall +New hit). Force a writable mode on the
     // resumed session so the adoption goes through. Resume cwd stays the session's own
@@ -1129,6 +1120,97 @@ const WRAP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 /// Always leaves the session Closed. If the wrap fails, times out, or returns without
 /// having stamped the history, `close_session`'s plain marker is written instead — a
 /// session the user asked to close must never stay stale because a summary didn't happen.
+/// Where to resume an import from, and the skill invocation that writes its notes.md.
+///
+/// Split out because two callers need exactly the same string: the interactive import,
+/// which hands the command to a terminal, and the headless one the first-run setup
+/// drives. A second hand-rolled copy is how the two would come to disagree about what
+/// `--root` means.
+fn import_invocation(session_id: &str, category: &str, safe_name: &str, want_root: &str) -> (String, String) {
+    let dir = reader::resolve_session_cwd(session_id)
+        .unwrap_or_else(|| config::home().to_string_lossy().into_owned());
+    let mut prompt = if safe_name.is_empty() {
+        format!("/import-session {category}")
+    } else {
+        format!("/import-session {category} {safe_name}")
+    };
+    if !want_root.is_empty() {
+        prompt.push_str(&format!(" --root {want_root}"));
+    }
+    (dir, prompt)
+}
+
+/// Adopt one existing session WITHOUT opening a terminal — the headless twin of
+/// `import_session`, and the only import path the app still offers.
+///
+/// First-run setup imports several sessions in a row. Doing that through the interactive
+/// path would open one terminal per session, so this runs the same skill the way
+/// `wrap_session` runs its own: `claude --resume … -p`, through a login shell, with a
+/// ceiling so a hung run cannot stall the sequence.
+///
+/// Success is read from the registry, not from the exit code. `/import-session` reporting
+/// done having skipped the registration would otherwise count as an import, and the
+/// session would be missing from the list with nothing to explain why.
+#[tauri::command(async)]
+fn import_session_headless(
+    session_id: String,
+    category: String,
+    name: String,
+    root: String,
+) -> Result<(), String> {
+    if !is_valid_session_id(&session_id) {
+        return Err("invalid sessionId".into());
+    }
+    let category = category.trim().to_uppercase();
+    if !is_safe_category(&category) {
+        return Err("invalid category".into());
+    }
+    let cfg = config::load();
+    let known = cfg.get("categories").and_then(serde_json::Value::as_array).is_some_and(|arr| {
+        arr.iter().any(|c| c.get("name").and_then(serde_json::Value::as_str) == Some(&category))
+    });
+    if !known {
+        return Err(format!("unknown category: {category}"));
+    }
+    let want_root = root.trim();
+    validate_root_override(&cfg, want_root)?;
+    let safe_name = sanitize_session_name(&name);
+    let (dir, prompt) = import_invocation(&session_id, &category, &safe_name, want_root);
+
+    let inner = format!(
+        "cd {} && claude --resume {} --model {} --permission-mode acceptEdits -p {}",
+        pty::shell_quote(&dir),
+        pty::shell_quote(&session_id),
+        pty::shell_quote(pty::CLAUDE_MODEL),
+        pty::shell_quote(&prompt),
+    );
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let mut child = std::process::Command::new(&shell)
+        .args(["-ilc", &inner])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if start.elapsed() < WRAP_TIMEOUT => {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("the import timed out".into());
+            }
+        }
+    }
+    if reader::load_active_sessions().get(&session_id).is_none() {
+        return Err("the session was not registered — nothing was imported".into());
+    }
+    Ok(())
+}
+
 #[tauri::command(async)]
 fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<String, String> {
     let abs = notes_md_under_root(&notes_path)?;
@@ -1417,6 +1499,7 @@ pub fn run() {
             start_session,
             restore_session,
             import_session,
+            import_session_headless,
             detach_session,
             set_always_on_top,
             set_window_bg,
