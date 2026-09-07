@@ -20,7 +20,7 @@
 
 > A long session gets **compacted** — the decisions you made on day one are squeezed out, and the next conversation starts from nothing. Run several in parallel and you also lose track of which one is waiting on you.
 >
-> **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a staged skill proposal whenever it learns a procedure. Nothing becomes active until you have read the diff. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync**.
+> **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure. Nothing becomes active until you have seen the exact wording and said yes. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync**.
 
 ## TL;DR — how you're meant to use it
 
@@ -119,7 +119,7 @@ Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pi
 
 **Local-first. Zero network.**
 
-AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It **never** touches the network and **never** stores secrets — it visualizes what's on disk and lets Claude Code do the rest.
+AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network **only** when you press **Sync** — that button is the opt-in, and nothing else in the app calls out — and it **never** stores secrets: it visualizes what's on disk and lets Claude Code do the rest.
 
 It is **read-only on your session data by design**. The only writes it makes to session files are explicit actions you trigger — **archiving** a session and **saving its PR links / tickets** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, you can ask it to **install the session skills** into `~/.claude/skills/` (a Settings button / first-launch prompt) — a user-triggered write confined to that skills folder, never touching your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
@@ -129,7 +129,7 @@ It is **read-only on your session data by design**. The only writes it makes to 
 
 Grab the newest asset from **[Releases](https://github.com/t-mercier/ai-agents-orchestrator/releases)** —
 universal `.dmg` (Intel & Apple Silicon) · `.deb` · `.AppImage` · `.rpm`. Nothing to compile, and no
-Chromium: it runs on the system WebView, so the download is around 7 MB.
+Chromium: it runs on the system WebView, so the `.dmg` is 7 MB and the `.deb`/`.rpm` about 3 MB. The `.AppImage` is the exception at ~77 MB — the format bundles its own runtime.
 
 You also need **[Claude Code](https://claude.com/claude-code)** — the app is a view onto the sessions it
 writes to `~/.claude`, so it has nothing to show without it. On first launch the app installs its own
@@ -200,7 +200,7 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 | `/archive-session <slug>` | Mark a session archived (drops it from the active list) |
 | `/import-session <CAT> <name>` | Adopt an unmanaged Claude Code session into management, under a chosen space and category |
 | `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
-| `/skill-propose` | Stage what this session taught as a new skill — or a patch to an existing one — in `~/.claude/skills-pending/`. Never writes to `skills/` |
+| `/skill-propose` | Turn what this session taught into a new skill, or a patch to an existing one. With you there on a repeated correction it shows the verbatim change and applies it on your yes, logging it to `~/.claude/skills-applied.log`; otherwise it stages it for `/skills-review` |
 | `/skills-review` | The approval gate for staged proposals: list, diff, then approve or reject. Where a proposal lands when nobody was there to answer it |
 | `/skills-curate` | Periodic pass over the whole set: refresh usage, report `active`/`stale`/`archived`, stage merges of overlapping skills |
 | `/learn` | Write one atomic note into this space's knowledge notes **the moment** something durable is learned — not at session close |
@@ -362,11 +362,11 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 
 | Layer | Tool |
 |---|---|
-| Desktop | **Tauri v2** (Rust + the OS's WebView — ~8 MB app, no Chromium) |
+| Desktop | **Tauri v2** (Rust + the OS's WebView — 7 MB `.dmg`, no Chromium) |
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (73, `cargo test`) + Jest (65, renderer logic) — 138 total |
+| Tests | Rust unit tests (138, `cargo test`) + Jest (137, renderer logic) — 275 total |
 
 ## Roadmap
 
