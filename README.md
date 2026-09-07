@@ -201,7 +201,7 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 | `/import-session <CAT> <name>` | Adopt an unmanaged Claude Code session into management, under a chosen space and category |
 | `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
 | `/skill-propose` | Stage what this session taught as a new skill — or a patch to an existing one — in `~/.claude/skills-pending/`. Never writes to `skills/` |
-| `/skills-review` | The approval gate: list, diff, then approve or reject a staged proposal. The only path by which one goes live |
+| `/skills-review` | The approval gate for staged proposals: list, diff, then approve or reject. Where a proposal lands when nobody was there to answer it |
 | `/skills-curate` | Periodic pass over the whole set: refresh usage, report `active`/`stale`/`archived`, stage merges of overlapping skills |
 | `/learn` | Write one atomic note into this space's knowledge notes **the moment** something durable is learned — not at session close |
 | `/route <ticket \| topic>` | A **Context Brief before you investigate**: this space's knowledge notes + past session notes + your tracker, summarised. Read-only |

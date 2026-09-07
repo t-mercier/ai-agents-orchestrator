@@ -2,18 +2,27 @@
 name: skills-review
 description: >-
   Review staged skill proposals from ~/.claude/skills-pending/ — list them, show the full
-  content or a real diff, then approve (promote into ~/.claude/skills/) or reject. The ONLY
-  path by which a proposed skill becomes active. Also reports when the learning loop last
+  content or a real diff, then approve (promote into ~/.claude/skills/) or reject. The path
+  for proposals nobody was present to answer; a proposal made in a live session is settled
+  there and then by /skill-propose Step 3c. Also reports when the learning loop last
   produced anything, so a silently dead loop is visible. Trigger on "/skills-review",
   "review pending skills", "revois les skills proposées", "/skills-review approve <name>".
 allowed-tools: Bash Read Write Edit AskUserQuestion
 argument-hint: "[list | show <name> | approve <name> | reject <name>]"
 ---
 
-# /skills-review — the approval gate
+# /skills-review — the approval gate for what was staged
 
-Nothing in `~/.claude/skills-pending/` affects a session. This skill is the only way a
-proposal becomes active, and it always shows the user what they are approving first.
+Nothing in `~/.claude/skills-pending/` affects a session. This skill promotes it, and it
+always shows the user what they are approving first.
+
+**What reaches here.** Proposals made when nobody could answer — a headless
+`/wrap-session`, a background run — plus anything a live session offered and did not get a
+clear yes for. A proposal raised in front of the user is applied in the conversation
+instead (`/skill-propose` Step 3c): they see the verbatim change or the scope card, say go,
+and it lands. Deferring that one would mean reading a diff next week with no memory of why
+it was written, which is worse review rather than safer review. Approval never disappears;
+only the waiting does.
 
 Parse `$ARGUMENTS`: no args or `list` → Step 1. `show|diff <name>` → Step 2.
 `approve <name>` → Step 3. `reject <name>` → Step 4.
@@ -73,11 +82,11 @@ if [ -n "$LAST" ]; then
 else
   echo "No agent-proposed skill has ever been approved."
 fi
-echo "(patches are not counted here — see ~/.claude/skills-applied.log)"
+echo "(already-applied changes are not pending — see ~/.claude/skills-applied.log)"
 # Not `grep ... | tail -3 || echo`: a pipeline takes tail's status, which is 0 even on
 # empty input, so the fallback would never fire. Capture first, then test.
 ENTRIES=$(grep '^===' ~/.claude/skills-applied.log 2>/dev/null | tail -3)
-if [ -n "$ENTRIES" ]; then echo "$ENTRIES"; else echo "No patch has been applied since the log was introduced."; fi
+if [ -n "$ENTRIES" ]; then echo "$ENTRIES"; else echo "Nothing has been applied since the log was introduced."; fi
 ```
 
 The trailing lines matter: the scan above only ever sees **new skills**. Patches to existing skills
@@ -176,8 +185,9 @@ python3 ~/.claude/skills/lib/patch_apply.py apply "$PATCH"
 rm -f "$PATCH"
 ```
 
-`~/.claude/skills-applied.log` is append-only and is the ONLY record that a patch was ever
-applied — approval deletes the proposal, and the target file carries no marker. Its job is
+`~/.claude/skills-applied.log` is append-only and is the ONLY record that a change was ever
+applied — approval deletes the proposal, and the target file carries no marker. It holds
+both this step's patches and the ones `/skill-propose` applies directly in a live session. Its job is
 recovery: an installer run, a plugin update or an app reinstall overwrites a bundled skill
 with the upstream copy and silently drops the patch, and without this log there is no way
 to know what was lost, let alone replay it. Never rewrite or prune it.
