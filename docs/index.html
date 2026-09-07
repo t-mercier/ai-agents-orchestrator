@@ -183,10 +183,18 @@
   .terminal .bar i { width: 11px; height: 11px; border-radius: 50%; } .terminal .bar i:nth-child(1){background:#ff5f57}.terminal .bar i:nth-child(2){background:#febc2e}.terminal .bar i:nth-child(3){background:#28c840}
   .terminal pre { padding: 20px 22px; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.85; color: #c8ccd4; overflow-x: auto; }
   .terminal .c { color: var(--accent-3); } .terminal .m { color: var(--faint); } .terminal .k { color: var(--accent-2); }
-  .skill-list { display: grid; gap: 14px; }
-  .skill { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.02); }
-  .skill code { color: var(--tone); font-size: 13.5px; font-weight: 500; flex: none; }
-  .skill span { color: var(--muted); font-size: 14.5px; }
+  /* Fourteen skills grouped by who runs them and what for. Four boxes on two columns beat
+     one 14-item column: the reader can find the group they need before reading a command. */
+  .terminal-wide { max-width: 760px; margin: 0 auto; }
+  .skill-groups { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 40px; text-align: left; align-items: start; }
+  @media (max-width: 860px) { .skill-groups { grid-template-columns: 1fr; } }
+  .skill-group { padding: 22px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.015); }
+  .skill-group h4 { font-size: 15px; margin-bottom: 6px; color: var(--tone); }
+  .sg-lead { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin-bottom: 16px; }
+  .skill { display: flex; flex-direction: column; gap: 4px; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.02); margin-bottom: 8px; }
+  .skill:last-child { margin-bottom: 0; }
+  .skill code { color: var(--tone); font-size: 13px; font-weight: 600; }
+  .skill span { color: var(--muted); font-size: 13px; line-height: 1.55; }
 
   /* ── Security band ── */
   .band { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(106, 215, 200, 0.04), transparent); }
@@ -202,13 +210,11 @@
     padding: 20px 22px; border-radius: 14px; border: 1px solid var(--line);
     background: rgba(255, 255, 255, 0.015);
   }
-  .ps-tag {
-    display: inline-block; margin-bottom: 8px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
-    padding: 3px 9px; border-radius: 999px;
-    color: var(--faint); background: rgba(255,255,255,0.05); border: 1px solid var(--line);
-  }
-  .ps-tag-s { color: var(--accent-3); background: rgba(106,215,200,0.13); border-color: rgba(106,215,200,0.3); }
+  /* The headline IS the label: which side you are on is carried by the layout, the arrow
+     and the colour, so the most readable line goes to the actual problem or the actual
+     solution rather than to the words "Problem" and "Solution". */
+  .ps-h { font-size: 15px; font-weight: 700; line-height: 1.3; margin-bottom: 8px; color: var(--text); }
+  .ps-s .ps-h { color: var(--accent-3); }
   .ps-row p { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
   .ps-s p { color: var(--text); }
   .ps-s a { color: var(--accent-3); text-decoration: none; border-bottom: 1px solid rgba(106,215,200,0.35); }
@@ -332,24 +338,24 @@
     </div>
     <div class="ps">
       <div class="ps-row">
-        <div class="ps-p"><span class="ps-tag">Problem</span><p>A long session gets <strong>compacted</strong>. The decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p></div>
+        <div class="ps-p"><h3 class="ps-h">Day one is gone by day two.</h3><p>A long session gets <strong>compacted</strong>: the older turns are squeezed out or silently dropped, and the next conversation starts from nothing.</p></div>
         <div class="ps-arrow" aria-hidden="true">→</div>
-        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#memory">A <code>notes.md</code> per session</a>, beside its code — goal, decisions, next steps, session id. Pick the work back up weeks later with the thread intact.</p></div>
+        <div class="ps-s"><h3 class="ps-h">Every session writes down what it decided.</h3><p><a href="#memory">A <code>notes.md</code> per session</a>, beside its code — goal, decisions, next steps, session id. Pick the work back up weeks later with the thread intact.</p></div>
       </div>
       <div class="ps-row">
-        <div class="ps-p"><span class="ps-tag">Problem</span><p>A lesson dies with the session that learned it. You re-derive from the code what a past session already settled.</p></div>
+        <div class="ps-p"><h3 class="ps-h">You keep re-learning what you already learned.</h3><p>A lesson dies with the session that learned it. You re-derive from the code what a past session already settled.</p></div>
         <div class="ps-arrow" aria-hidden="true">→</div>
-        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#knowledge">A folder of knowledge notes per space</a>. <code>/learn</code> writes as it learns; <code>/route</code> reads it back before you open the code.</p></div>
+        <div class="ps-s"><h3 class="ps-h">What one session learns, the next one already knows.</h3><p><a href="#knowledge">A folder of knowledge notes per space</a>. <code>/learn</code> writes as it learns; <code>/route</code> reads it back before you open the code.</p></div>
       </div>
       <div class="ps-row">
-        <div class="ps-p"><span class="ps-tag">Problem</span><p>You correct the same mistake over and over. The agent never learns the <em>procedure</em>, only the fact — and only for one session.</p></div>
+        <div class="ps-p"><h3 class="ps-h">You correct the same mistake forever.</h3><p>The agent picks up the fact, never the <em>procedure</em> — and only for the session it is in. Next week you type the correction again.</p></div>
         <div class="ps-arrow" aria-hidden="true">→</div>
-        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#proposals">Skills it proposes and you approve</a>. Drafts are <strong>staged</strong> outside the skills folder; you read the diff before anything runs.</p></div>
+        <div class="ps-s"><h3 class="ps-h">Correct it once, and it drafts the rule.</h3><p><a href="#proposals">Skills it proposes and you approve</a>. Drafts are <strong>staged</strong> outside the skills folder; you read the diff before anything runs.</p></div>
       </div>
       <div class="ps-row">
-        <div class="ps-p"><span class="ps-tag">Problem</span><p>Several sessions in parallel, and the bottleneck is you holding it in your head. Which needs an answer? Which finished an hour ago?</p></div>
+        <div class="ps-p"><h3 class="ps-h">You are the bottleneck, not the agents.</h3><p>Run several in parallel and you become the one holding the state. Which needs an answer? Which finished an hour ago? Where does each one live?</p></div>
         <div class="ps-arrow" aria-hidden="true">→</div>
-        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#features">A dashboard over all of them</a> — a list or a kanban, one click back in, and Doctor and Clean for when it gets away from you.</p></div>
+        <div class="ps-s"><h3 class="ps-h">The whole pile, on one screen.</h3><p><a href="#features">A dashboard over all of them</a> — a list or a kanban, one click back in, and Doctor and Clean for when it gets away from you.</p></div>
       </div>
     </div>
   </div>
@@ -522,9 +528,8 @@
       <h2>The dashboard is only half of it</h2>
       <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes, and the app keeps them current itself — it syncs them into <code>~/.claude/skills</code> at launch, and copies aside anything you had edited before it overwrites. The script below is for installing them <em>without</em> the app.</p>
     </div>
-    <div class="split">
-      <div class="terminal reveal">
-        <div class="bar"><i></i><i></i><i></i></div>
+    <div class="terminal terminal-wide reveal">
+      <div class="bar"><i></i><i></i><i></i></div>
 <pre><span class="m"># only if you want the skills without the app</span>
 <span class="c">$</span> git clone https://github.com/t-mercier/ai-agents-orchestrator
 <span class="c">$</span> cd ai-agents-orchestrator
@@ -537,24 +542,47 @@
 <span class="k">&gt;</span> /start-session FEAT 1842 checkout-redesign
 <span class="m">  ✓ workspace + notes.md created</span>
 <span class="m">  ✓ now live in the dashboard</span></pre>
-      </div>
-      <div class="skill-list reveal">
+    </div>
+
+    <!-- Grouped by WHO runs them and WHAT FOR, not alphabetically: a flat list of fourteen
+         commands says nothing about which ones you type, which ones a button runs for you,
+         and which ones exist to make the next session smarter. -->
+    <div class="skill-groups">
+      <div class="skill-group reveal">
+        <h4>The session lifecycle</h4>
+        <p class="sg-lead">The five you type yourself. Each one moves a session between the states the dashboard shows.</p>
         <div class="skill"><code>/start-session</code><span>Create a session workspace + <code>notes.md</code>, register it, sync the repo.</span></div>
+        <div class="skill"><code>/save-session</code><span>Checkpoint mid-flight — the same summary as close, marked <code>(in progress)</code>, <strong>without</strong> closing. Handy right before a context compaction.</span></div>
         <div class="skill"><code>/close-session</code><span>Wrap up — summarise into <code>notes.md</code> and append a history entry.</span></div>
-        <div class="skill"><code>/save-session</code><span>Checkpoint mid-flight (same summary as close, marked <code>(in progress)</code>) <strong>without</strong> closing it — handy before a context compaction.</span></div>
         <div class="skill"><code>/restart-session</code><span>Reload a session's context from its notes into a fresh session.</span></div>
-        <div class="skill"><code>/sync-refs</code><span>Realign a session's tickets and PRs with the tracker and GitHub — run by the <strong>Sync</strong> button.</span></div>
-        <div class="skill"><code>/wrap-session</code><span>The headless twin of <code>/close-session</code>, run by the <strong>Close</strong> button — summarises and closes without opening a terminal.</span></div>
         <div class="skill"><code>/archive-session</code><span>Mark a session archived and drop it from the active list.</span></div>
-        <div class="skill"><code>/import-session</code><span>Adopt an existing Claude Code session into management under a chosen space/category.</span></div>
-        <div class="skill"><code>/rename-category</code><span>Rename a category everywhere — folder, notes, and config.</span></div>
+      </div>
+
+      <div class="skill-group reveal">
+        <h4>What the buttons run</h4>
+        <p class="sg-lead">The same work, headless. You press a control in the app; it runs one of these and never opens a terminal.</p>
+        <div class="skill"><code>/wrap-session</code><span>The headless twin of <code>/close-session</code> — behind the <strong>Close</strong> button.</span></div>
+        <div class="skill"><code>/sync-refs</code><span>Realign a session's tickets and PRs with the tracker and GitHub — behind <strong>Sync</strong>.</span></div>
+        <div class="skill"><code>/import-session</code><span>Adopt an existing Claude Code session under a chosen space and category.</span></div>
+        <div class="skill"><code>/rename-category</code><span>Rename a category everywhere at once — folder, notes, and config.</span></div>
+      </div>
+
+      <div class="skill-group reveal">
+        <h4>Memory across sessions</h4>
+        <p class="sg-lead">Two halves of one loop: one writes what was learned, the other reads it back before you dig.</p>
         <div class="skill"><code>/learn</code><span>Write what you just learned straight into the space's knowledge notes — or extend the note that already covers it.</span></div>
-        <div class="skill"><code>/route</code><span>Context Brief <em>before</em> you dig: the knowledge notes, your past sessions, and your tracker on one subject.</span></div>
-        <div class="skill"><code>/skill-propose</code><span>Stage what the session taught as a new skill, or a targeted patch to an existing one. Never writes to the live skills folder.</span></div>
-        <div class="skill"><code>/skills-review</code><span>The approval gate — diff, then promote or reject. The only way a proposal becomes active.</span></div>
+        <div class="skill"><code>/route</code><span>A Context Brief <em>before</em> you open the code: the knowledge notes, your past sessions and your tracker on one subject.</span></div>
+      </div>
+
+      <div class="skill-group reveal">
+        <h4>Skills that write skills</h4>
+        <p class="sg-lead">The learning loop, with you as the only gate. Nothing here can make a skill active on its own.</p>
+        <div class="skill"><code>/skill-propose</code><span>Stage what the session taught as a new skill, or a targeted patch to one you have. Never writes to the live skills folder.</span></div>
+        <div class="skill"><code>/skills-review</code><span>The approval gate — diff, then promote or reject. The only path from proposed to active.</span></div>
         <div class="skill"><code>/skills-curate</code><span>Periodic pass over the collection: merge clusters, archive what went stale. Never deletes.</span></div>
       </div>
     </div>
+
     <p style="text-align:center;margin-top:34px;"><a href="https://github.com/t-mercier/ai-agents-orchestrator/blob/master/docs/GUIDE.md" style="color:var(--accent);font-weight:600;text-decoration:none;">📖 Read the full guide — session states &amp; the Start / Resume / Restart difference →</a></p>
   </div>
 </section>
