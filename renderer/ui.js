@@ -484,7 +484,13 @@ function emptyListMessage() {
   const label = activeTab === 'running' ? 'No running or stale sessions.'
     : activeTab === 'archived' ? 'No archived sessions.'
     : 'No closed sessions yet.'
-  return `<div class="list-empty">${label}<span class="list-empty-hint">Start one with ＋ New</span></div>`
+  // The second line only on Running, and only while there is genuinely nothing here: this
+  // is where someone who skipped first-run setup ends up, and Settings → First-run setup is
+  // otherwise the only way back to the import.
+  const bring = activeTab === 'running'
+    ? `<button type="button" class="list-empty-link" data-open-onboarding>or bring in the sessions you already have</button>`
+    : ''
+  return `<div class="list-empty">${label}<span class="list-empty-hint">Start one with ＋ New</span>${bring}</div>`
 }
 
 // Flash detection: keys whose activity advanced since the last render. Shared by the

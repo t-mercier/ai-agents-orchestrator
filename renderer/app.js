@@ -498,6 +498,11 @@ SEARCH_FIELD_IDS.forEach(id => {
   if (el) el.addEventListener('input', onSearchInput)
 })
 
+// The empty state's way back into first-run setup — the same panel Settings opens.
+document.body.addEventListener('click', (e) => {
+  if (e.target.closest('[data-open-onboarding]') && window.openOnboarding) window.openOnboarding()
+})
+
 document.body.addEventListener('click', (e) => {
   const chev = e.target.closest('[data-group-collapse]')
   if (chev) {

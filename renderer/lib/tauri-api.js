@@ -110,6 +110,10 @@
       invoke('import_session_headless', { sessionId: sessionId || '', category: category || '', name: name || '', root: root || '' })
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
+    // What one untracked session was about and where it got to. Read on demand, from the
+    // two ends of its transcript only — see reader::preview_session.
+    previewSession: (sessionId) =>
+      invoke('preview_session', { sessionId }).catch(() => ({ found: false })),
     // Should the wizard open at all? False for every install that already has sessions.
     needsOnboarding: () => invoke('needs_onboarding').catch(() => false),
     // Finished OR skipped — either way it does not open by itself again.

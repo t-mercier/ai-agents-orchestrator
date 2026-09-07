@@ -892,6 +892,107 @@ pub(crate) fn latest_resumable_sid(notes_path: &str, active: &Value) -> Option<S
 
 /// Does this session id still have a conversation on disk? The one bit Doctor needs
 /// from a transcript, so it does not pull the whole cached record for a yes/no.
+/// Locate `~/.claude/projects/*/<sid>.jsonl`. Same scan `read_transcript` does, lifted so
+/// the preview can reach a transcript without folding the whole file into a `Transcript`.
+fn transcript_path(sid: &str) -> Option<std::path::PathBuf> {
+    if !is_valid_session_id(sid) {
+        return None;
+    }
+    let projects = home().join(".claude").join("projects");
+    fs::read_dir(&projects).ok()?.flatten().find_map(|d| {
+        let p = d.path().join(format!("{sid}.jsonl"));
+        p.is_file().then_some(p)
+    })
+}
+
+/// The text of a user turn, skipping the injected blocks `is_title_noise` already knows
+/// about. Shared by both ends of the preview.
+fn user_text(line: &str) -> Option<String> {
+    let ev: Value = serde_json::from_str(line).ok()?;
+    if ev.get("type").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    let content = ev.get("message").and_then(|m| m.get("content"));
+    let texts: Vec<&str> = match content {
+        Some(Value::String(s)) => vec![s.as_str()],
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter(|c| c.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|c| c.get("text").and_then(Value::as_str))
+            .collect(),
+        _ => Vec::new(),
+    };
+    texts.into_iter().map(str::trim).find(|t| !is_title_noise(t)).map(str::to_string)
+}
+
+/// First and last real user turn of a transcript. Pure over the two ends so the tail
+/// slicing is testable without a 12 MB fixture.
+fn preview_ends(head: &[String], tail: &[String], cap: usize) -> (String, String) {
+    let clip = |s: String| -> String { s.chars().take(cap).collect() };
+    let first = head.iter().find_map(|l| user_text(l)).map(clip).unwrap_or_default();
+    let last = tail.iter().rev().find_map(|l| user_text(l)).map(clip).unwrap_or_default();
+    (first, last)
+}
+
+/// What a session was about and where it got to, without reading the file twice over.
+///
+/// Both reads are bounded on purpose. The head stops at the first real user turn, the way
+/// `discover_meta` already does. The tail seeks to the last 64 KB rather than streaming —
+/// a long session's `.jsonl` runs to tens of megabytes, and a preview that costs a full
+/// read is a preview nobody opens twice.
+#[tauri::command]
+pub fn preview_session(session_id: String) -> Value {
+    use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+    const TAIL: u64 = 64 * 1024;
+    const CAP: usize = 600;
+
+    let Some(path) = transcript_path(&session_id) else {
+        return json!({ "found": false });
+    };
+    let Ok(meta) = fs::metadata(&path) else {
+        return json!({ "found": false });
+    };
+
+    // Head: stop as soon as a real user turn is found.
+    let mut head: Vec<String> = Vec::new();
+    if let Ok(f) = fs::File::open(&path) {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
+            let done = user_text(&line).is_some();
+            head.push(line);
+            if done {
+                break;
+            }
+        }
+    }
+
+    // Tail: the last TAIL bytes, first (probably partial) line dropped.
+    let mut tail: Vec<String> = Vec::new();
+    if let Ok(mut f) = fs::File::open(&path) {
+        let len = meta.len();
+        let from = len.saturating_sub(TAIL);
+        if f.seek(SeekFrom::Start(from)).is_ok() {
+            let mut buf = String::new();
+            if f.take(TAIL + 1).read_to_string(&mut buf).is_ok() {
+                let mut it = buf.lines();
+                if from > 0 {
+                    it.next(); // the seek landed mid-line
+                }
+                tail = it.map(str::to_string).collect();
+            }
+        }
+    }
+
+    let (first, last) = preview_ends(&head, &tail, CAP);
+    json!({
+        "found": true,
+        "first": first,
+        // A short session fits entirely in the tail window, so both ends resolve to the
+        // same turn. Say nothing rather than print it twice.
+        "last": if last == first { String::new() } else { last },
+        "bytes": meta.len(),
+    })
+}
+
 pub(crate) fn has_transcript(sid: &str) -> bool {
     read_transcript(sid).found
 }
@@ -1481,6 +1582,7 @@ mod tests {
     use super::{
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, frontmatter_values,
         lead_date, is_resumable_sid, merge_links, notes_records_session, parse_frontmatter,
+        preview_ends,
         pick_pr_url, pick_resumable_sid, reopened_after_close, resolve_pr_links, root_for_notes_path,
         space_root_for_notes,
         session_history_info, Transcript, UnmanagedRow,
@@ -2069,5 +2171,53 @@ mod tests {
         assert_eq!(extract_last_activity_block(&blocks), None);
         // Empty list → None
         assert_eq!(extract_last_activity_block(&[]), None);
+    }
+
+    fn u(text: &str) -> String {
+        serde_json::json!({ "type": "user", "message": { "content": text } }).to_string()
+    }
+
+    /// The preview must skip the same injected blocks the title does, or every session
+    /// previews as a system reminder instead of as what the person actually asked.
+    #[test]
+    fn preview_ends_takes_the_first_and_last_real_user_turn() {
+        let head = vec![
+            serde_json::json!({ "type": "system" }).to_string(),
+            u("<command-name>/start-session</command-name>"),
+            u("  "),
+            u("the tile cache serves stale tiles after backgrounding"),
+        ];
+        let tail = vec![
+            u("ok that fixes it"),
+            serde_json::json!({ "type": "assistant", "message": { "content": "done" } }).to_string(),
+            u("<system-reminder>ignore me</system-reminder>"),
+        ];
+        let (first, last) = preview_ends(&head, &tail, 600);
+        assert_eq!(first, "the tile cache serves stale tiles after backgrounding");
+        assert_eq!(last, "ok that fixes it", "the reminder after it is not a user turn");
+    }
+
+    #[test]
+    fn preview_ends_handles_blocks_emptiness_and_the_cap() {
+        // A turn can be an array of blocks, and the real prompt may sit after an injected one.
+        let blocks = serde_json::json!({ "type": "user", "message": { "content": [
+            { "type": "text", "text": "<system-reminder>x</system-reminder>" },
+            { "type": "text", "text": "the actual question" },
+        ] } }).to_string();
+        assert_eq!(preview_ends(&[blocks], &[], 600).0, "the actual question");
+        // Nothing usable → empty, never a panic.
+        assert_eq!(preview_ends(&[], &[], 600), (String::new(), String::new()));
+        assert_eq!(preview_ends(&[u("<command-name>x</command-name>")], &[], 600).0, "");
+        // The cap counts CHARS, so a multibyte prompt cannot split a code point.
+        assert_eq!(preview_ends(&[u("éé")], &[], 1).0, "é");
+    }
+
+    /// A short transcript fits entirely in the tail window, so both ends land on the same
+    /// turn. The caller prints `last` only when it differs — assert the halves agree.
+    #[test]
+    fn preview_ends_reports_the_same_turn_at_both_ends_of_a_one_turn_session() {
+        let only = vec![u("just the one prompt")];
+        let (first, last) = preview_ends(&only, &only, 600);
+        assert_eq!(first, last);
     }
 }

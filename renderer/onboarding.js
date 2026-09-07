@@ -63,10 +63,86 @@
       text.appendChild(meta)
       row.appendChild(box)
       row.appendChild(text)
+      row.appendChild(previewToggle(r))
       row.appendChild(targetPickers(r))
       list.appendChild(row)
+      // The panel is a sibling, not a child: the row is a <label>, and a click inside it
+      // would toggle the checkbox while you were reading.
+      const panel = document.createElement('div')
+      panel.className = 'onb-preview'
+      panel.hidden = !expanded.has(r.sessionId)
+      panel.dataset.previewFor = r.sessionId
+      if (!panel.hidden) fillPreview(panel, r)
+      list.appendChild(panel)
     }
     renderPicked()
+  }
+
+  /// Which rows have their preview open, and what the backend answered for each. Cached
+  /// per session so re-opening a row costs nothing.
+  const expanded = new Set()
+  const previews = new Map()
+
+  function previewToggle(r) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'onb-peek'
+    b.title = 'What was this session about?'
+    b.textContent = expanded.has(r.sessionId) ? '▾' : '▸'
+    b.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (expanded.has(r.sessionId)) expanded.delete(r.sessionId)
+      else expanded.add(r.sessionId)
+      renderSessions()
+    })
+    return b
+  }
+
+  /// Fills a panel from the cache, or asks the backend once and then fills it.
+  async function fillPreview(panel, r) {
+    const cached = previews.get(r.sessionId)
+    if (!cached) {
+      panel.textContent = 'Reading the transcript…'
+      const res = await window.api.previewSession(r.sessionId)
+      previews.set(r.sessionId, res || { found: false })
+      // The row may have been collapsed while the read was in flight.
+      if (!expanded.has(r.sessionId)) return
+      return fillPreview(panel, r)
+    }
+    panel.textContent = ''
+    if (!cached.found) {
+      const gone = document.createElement('div')
+      gone.className = 'onb-preview-empty'
+      gone.textContent = 'The transcript for this session is no longer on disk — it can still be imported, but there is nothing to show.'
+      panel.appendChild(gone)
+      return
+    }
+    const part = (label, body) => {
+      if (!body) return
+      const wrap = document.createElement('div')
+      wrap.className = 'onb-preview-part'
+      const l = document.createElement('span')
+      l.className = 'onb-preview-label'
+      l.textContent = label
+      const t = document.createElement('p')
+      t.textContent = body
+      wrap.appendChild(l)
+      wrap.appendChild(t)
+      panel.appendChild(wrap)
+    }
+    part('Opened with', cached.first)
+    part('Left off at', cached.last)
+    if (!cached.first && !cached.last) {
+      const none = document.createElement('div')
+      none.className = 'onb-preview-empty'
+      none.textContent = 'No readable prompt in this transcript.'
+      panel.appendChild(none)
+    }
+    const foot = document.createElement('div')
+    foot.className = 'onb-preview-foot'
+    foot.textContent = [r.cwd, cached.bytes ? `${Math.max(1, Math.round(cached.bytes / 1024))} KB` : ''].filter(Boolean).join(' · ')
+    panel.appendChild(foot)
   }
 
   /// The space + category selects for one row. Wrapped in a <span> that swallows the
@@ -428,6 +504,8 @@
     total = 0
     run = null
     running = false
+    expanded.clear()
+    previews.clear()
     // A working copy: nothing the user types in step 2 touches the live config until the
     // step is left, so backing out of the wizard changes nothing.
     const live = window.CSM_CONFIG || {}
