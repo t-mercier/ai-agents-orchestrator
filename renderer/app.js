@@ -2,46 +2,6 @@ let sessions = []
 let selectedKey = null   // unique session key (notesPath || sessionId || name), not raw sessionId
 let activeTab = 'running'
 
-// "Recent · unmanaged" section state. Discovery is lazy (on first expand) and NEVER
-// runs on the 5s poll — renderUnmanagedSection is called only from expand / refresh /
-// tab-switch / view-switch, so hundreds of on-disk sessions never inflate the poll.
-let unmanagedState = { expanded: false, loading: false, error: '', model: null, loaded: false }
-
-function renderUnmanagedSection() {
-  const show = activeTab === 'running'
-  const html = window.CSMUnmanaged.unmanagedSectionHtml(unmanagedState)
-  document.querySelectorAll('.unmanaged-section, .unmanaged-slot').forEach(el => {
-    el.hidden = !show
-    if (show) el.innerHTML = html
-  })
-  // Hide standalone .unmanaged-section when a .unmanaged-slot is present (single-space running list).
-  const hasSlot = document.querySelector('.unmanaged-slot')
-  const standaloneSection = document.querySelector('#panel-list ~ .unmanaged-section')
-  if (standaloneSection) standaloneSection.hidden = !!hasSlot || !show
-}
-
-async function loadUnmanaged() {
-  unmanagedState.loading = true
-  unmanagedState.error = ''
-  renderUnmanagedSection()
-  try {
-    const sessions = await window.api.discoverSessions()
-    unmanagedState.model = window.CSMUnmanaged.buildUnmanagedModel(sessions)
-    unmanagedState.loaded = true
-  } catch (_) {
-    unmanagedState.error = 'Could not scan recent sessions.'
-    unmanagedState.model = null
-  }
-  unmanagedState.loading = false
-  renderUnmanagedSection()
-}
-
-// Re-run discovery + re-render. Exposed for Task 4 (refresh after an adopt).
-window.refreshUnmanaged = function () {
-  if (unmanagedState.expanded) loadUnmanaged()
-  else { unmanagedState.loaded = false; unmanagedState.model = null }
-}
-
 let viewMode = 'list'    // 'list' | 'board'
 let searchQuery = ''
 const activeCatFilters = new Set()  // empty = show all categories
@@ -229,12 +189,8 @@ window.queryMatches = (text) => matchesSearch({ name: text || '' }, searchQuery)
 function renderCategoryFilters() {
   const n = activeCatFilters.size + activeSpaceFilters.size
   const btn = `<button class="filter-btn ${n ? 'active' : ''}" data-filter-open aria-label="Filter" title="Filter by space or category">⚲ <span class="btn-label">Filter</span>${n ? ` <span class="filter-count">${n}</span>` : ''}</button>`
-  // ＋Import sits on the left of the list's filter row: the entry point for adopting a
-  // session by id, or browsing every session the dashboard isn't tracking (the inline
-  // "Recent · unmanaged" section only shows the newest few). Board keeps the filter alone.
-  const importBtn = `<button class="import-btn" data-import-open title="Adopt a session by ID, or browse every untracked session">＋ <span class="btn-label">Import</span></button>`
   const listEl = document.getElementById('cat-filter-list')
-  if (listEl) listEl.innerHTML = importBtn + btn
+  if (listEl) listEl.innerHTML = btn
   const boardEl = document.getElementById('cat-filter-board')
   if (boardEl) boardEl.innerHTML = btn
 }
@@ -470,7 +426,6 @@ function switchTab(tab) {
     btn.classList.toggle('active', btn.dataset.tab === tab)
   })
   fetchAndRender(true)  // tab switch → fresh sort
-  renderUnmanagedSection()
 }
 
 function cycleTab(dir) {
@@ -514,7 +469,6 @@ function setViewMode(mode) {
   // Arriving at List from another view (Board hides the terminal pane on the way
   // out) → bring the selected session's live terminal back into view.
   if (mode === 'list' && prevMode !== 'list') restoreTerminalForSelected()
-  renderUnmanagedSection()
 }
 
 // Close the board's slide-over drawer
@@ -542,33 +496,6 @@ function onSearchInput(e) {
 SEARCH_FIELD_IDS.forEach(id => {
   const el = document.getElementById(id)
   if (el) el.addEventListener('input', onSearchInput)
-})
-
-// Delegated click handler for unmanaged section controls
-document.body.addEventListener('click', (e) => {
-  // Toggle expand/collapse (ignore clicks on the refresh button inside the header).
-  const toggle = e.target.closest('[data-unmanaged-toggle]')
-  if (toggle && !e.target.closest('[data-unmanaged-refresh]')) {
-    unmanagedState.expanded = !unmanagedState.expanded
-    if (unmanagedState.expanded && !unmanagedState.loaded && !unmanagedState.loading) loadUnmanaged()
-    else renderUnmanagedSection()
-    return
-  }
-  // Refresh / retry (rescan).
-  if (e.target.closest('[data-unmanaged-refresh]')) {
-    e.stopPropagation()
-    unmanagedState.expanded = true
-    loadUnmanaged()
-    return
-  }
-  // Adopt a row (open the Import modal preselected with that session).
-  const adopt = e.target.closest('[data-adopt-sid]')
-  if (!adopt) return
-  openImportModal({
-    preselectSessionId: adopt.dataset.adoptSid,
-    defaultName: adopt.dataset.adoptName || '',
-    targetLabel: adopt.dataset.adoptTitle || adopt.dataset.adoptName || '',
-  })
 })
 
 document.body.addEventListener('click', (e) => {
@@ -774,219 +701,6 @@ newSessionModal.addEventListener('click', async (e) => {
   if (!target || !window.api.pickDirectory) return
   const picked = await window.api.pickDirectory()
   if (picked) target.value = picked
-})
-
-// ── ＋Import: adopt an existing (unmanaged) Claude Code session ──
-const importModal = document.getElementById('import-modal')
-let importSelectedSid = null
-let importSessions = []
-let importRoot = ''   // the chosen space (config root name); '' until populated
-// Populate the category dropdown — filtered by the chosen space when >1 exists (mirrors
-// +New's populateNewSessionCategories). Shows the Space <select> only then. UNNAMED fallback.
-function populateImportCategories() {
-  const spaces = configRoots()
-  const multi = spaces.length > 1
-  const field = document.getElementById('import-space-field')
-  const spaceSel = document.getElementById('import-space')
-  if (field) field.hidden = !multi
-  if (multi && spaceSel) {
-    if (!spaces.includes(importRoot)) importRoot = spaces[0]
-    spaceSel.innerHTML = spaces.map(s => `<option value="${importEsc(s)}">${importEsc(s)}</option>`).join('')
-    spaceSel.value = importRoot
-  } else {
-    importRoot = ''
-  }
-  let cats = multi ? categoriesForRoot(importRoot) : filterCategories()
-  if (!cats.length) cats = ['UNNAMED']
-  document.getElementById('import-category').innerHTML = cats.map(c => `<option value="${importEsc(c)}">${importEsc(c)}</option>`).join('')
-}
-const importEsc = (s) => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-const showImportError = (m) => { const el = document.getElementById('import-error'); el.textContent = m; el.hidden = false }
-const hideImportError = () => { document.getElementById('import-error').hidden = true }
-// A pasted session ID (overrides the list selection). Light format check; the backend
-// validates for real. Returns '' when the field is empty or malformed.
-function importValidUid() {
-  const u = (document.getElementById('import-uid').value || '').trim()
-  return /^[A-Za-z0-9_-]+$/.test(u) ? u : ''
-}
-// Import is enabled when there's an effective session id — a pasted UID OR a selected row.
-function updateImportGo() {
-  document.getElementById('import-go').disabled = !(importValidUid() || importSelectedSid)
-}
-function renderImportList(query) {
-  const list = document.getElementById('import-list')
-  const q = (query || '').toLowerCase()
-  const rows = importSessions.filter(s => !q ||
-    (s.title || '').toLowerCase().includes(q) || (s.cwd || '').toLowerCase().includes(q) || (s.sessionId || '').toLowerCase().includes(q))
-  if (!rows.length) {
-    list.innerHTML = `<div class="import-empty">${importSessions.length ? 'No match.' : 'No unmanaged sessions found.'}</div>`
-    return
-  }
-  list.innerHTML = rows.map(s => {
-    const when = s.mtime ? formatTimestamp(new Date(s.mtime * 1000).toISOString()) : ''
-    const title = importEsc(s.title || '(untitled session)')
-    const cwd = importEsc(s.cwd || '')
-    // Full title + path in the native tooltip — the rows are ellipsis-truncated.
-    const tip = `${title}${cwd ? `\n${cwd}` : ''}`
-    return `<button type="button" class="import-row${s.sessionId === importSelectedSid ? ' selected' : ''}" data-import-sid="${importEsc(s.sessionId)}" data-title="${title}" title="${tip}">
-      <span class="import-row-title">${title}</span>
-      <span class="import-row-meta">${cwd}${when ? ' · ' + when : ''}</span>
-    </button>`
-  }).join('')
-}
-// How many sessions one "page" of the browse list holds, and where we are in it.
-const IMPORT_PAGE = 20
-let importOffset = 0
-let importTotal = 0
-
-// Two modes:
-//  • Adopt on a row  → the session is already chosen. No picker, no id field: the modal
-//    only asks where it should land. Showing a list there would invite adopting a
-//    DIFFERENT session than the one clicked.
-//  • ＋Import        → nothing chosen yet: search + page through every untracked session,
-//    or paste an id for one that isn't listed.
-async function openImportModal(opts) {
-  const preselectSessionId = opts && opts.preselectSessionId
-  const defaultName = (opts && opts.defaultName) || ''
-  const single = !!preselectSessionId
-  importSelectedSid = preselectSessionId || null
-  importSessions = []
-  importOffset = 0
-  importTotal = 0
-  document.getElementById('import-uid').value = ''
-  document.getElementById('import-search').value = ''
-  document.getElementById('import-name').value = defaultName
-  hideImportError()
-  populateImportCategories()
-  // Render the Embedded/Terminal destination toggle reflecting the current pref (like +New).
-  const destEl = document.getElementById('import-dest')
-  if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
-
-  const browse = document.getElementById('import-browse')
-  const target = document.getElementById('import-target')
-  const title = document.getElementById('import-title')
-  const hint = document.getElementById('import-hint')
-  if (browse) browse.hidden = single
-  if (target) {
-    target.hidden = !single
-    if (single) {
-      const label = (opts && opts.targetLabel) || defaultName || preselectSessionId
-      target.innerHTML = `<span class="import-target-label">Adopting</span> <span class="import-target-name">${importEsc(label)}</span>`
-    }
-  }
-  if (title) title.textContent = single ? 'Adopt this session' : 'Import a session'
-  if (hint) {
-    hint.textContent = single
-      ? "It resumes and gets a notes.md, so it shows up like any managed session. Choose where it lands."
-      : "Adopt a session the dashboard isn't tracking yet. Search the list, or paste an id."
-  }
-
-  document.getElementById('import-go').disabled = !importSelectedSid
-  importModal.showModal()
-  if (!single) {
-    document.getElementById('import-list').innerHTML = '<div class="import-empty">Loading…</div>'
-    await loadImportPage(true)
-  }
-  updateImportGo()
-}
-
-// Fetch one page of untracked sessions, appending unless `reset`. `total` comes back with
-// the page so "Load more" only shows while there is genuinely more to fetch.
-async function loadImportPage(reset) {
-  if (reset) { importSessions = []; importOffset = 0 }
-  const res = await window.api.discoverSessionsPage(IMPORT_PAGE, importOffset)
-  if (res && res.ok === false) {
-    // Say so rather than leaving a button that appears to do nothing.
-    showImportError(`Could not list sessions: ${res.error}`)
-    const more = document.getElementById('import-more')
-    if (more) more.hidden = true
-    return
-  }
-  const page = (res && res.sessions) || []
-  importTotal = (res && res.total) || 0
-  importSessions = importSessions.concat(page)
-  importOffset += page.length
-  renderImportList(document.getElementById('import-search').value || '')
-  const more = document.getElementById('import-more')
-  if (more) more.hidden = importSessions.length >= importTotal
-}
-
-document.body.addEventListener('click', (e) => {
-  if (e.target.closest('[data-import-open]')) openImportModal()
-})
-document.getElementById('import-more').addEventListener('click', () => loadImportPage(false))
-document.getElementById('import-cancel').addEventListener('click', () => importModal.close())
-// Escape closes the modal. The search field is type=search, which natively eats
-// Escape (to clear itself) before the dialog's own cancel — so close it explicitly.
-importModal.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); importModal.close() } })
-// Space select → re-filter the category dropdown (mirrors +New).
-{
-  const spaceSel = document.getElementById('import-space')
-  if (spaceSel) spaceSel.addEventListener('change', () => {
-    importRoot = spaceSel.value
-    populateImportCategories()
-  })
-}
-// Paste-a-session-ID field: a valid id enables Import even with no row selected (and
-// wins over the row when both are set — see the Import handler).
-document.getElementById('import-uid').addEventListener('input', () => { hideImportError(); updateImportGo() })
-document.getElementById('import-search').addEventListener('input', e => renderImportList(e.target.value))
-document.getElementById('import-list').addEventListener('click', (e) => {
-  const row = e.target.closest('[data-import-sid]')
-  if (!row) return
-  importSelectedSid = row.dataset.importSid
-  document.querySelectorAll('#import-list .import-row.selected').forEach(r => r.classList.remove('selected'))
-  row.classList.add('selected')
-  const nameEl = document.getElementById('import-name')
-  if (!nameEl.value.trim()) nameEl.value = (row.dataset.title || '').replace(/^\(untitled session\)$/, '').slice(0, 60)
-  hideImportError()
-  updateImportGo()
-})
-document.getElementById('import-go').addEventListener('click', async () => {
-  const sid = importValidUid() || importSelectedSid   // pasted ID wins over the selected row
-  if (!sid) return
-  const category = document.getElementById('import-category').value
-  const name = document.getElementById('import-name').value.trim()
-  // The space to import under: the chosen one (multi-space) else the only space.
-  const spaces = configRoots()
-  const space = spaces.length > 1 ? importRoot : (spaces[0] || '')
-  const embedded = !!(window.getOpenIn && window.getOpenIn() === 'embedded')
-  const goBtn = document.getElementById('import-go')
-  goBtn.disabled = true
-  // If the chosen category doesn't exist yet (the UNNAMED fallback, or a one-off),
-  // create it in the config first so the backend recognises it + scans its folder.
-  const cfg = window.CSM_CONFIG || {}
-  const existing = cfg.categories || []
-  if (!existing.some(c => c.name === category)) {
-    const newCat = { name: category, color: window.CSM_COLORS.neutral }
-    if (space) newCat.root = space
-    const next = { ...cfg, categories: [...existing, newCat] }
-    const w = await window.api.setConfig(next)
-    if (!w || !w.ok) { showImportError((w && w.error) || 'Could not create the category.'); goBtn.disabled = false; return }
-    if (window.reloadConfig) await window.reloadConfig()
-  }
-  const res = await window.api.importSession(sid, category, name, space, embedded)
-  if (!res || !res.ok) { showImportError((res && res.error) || 'Import failed.'); goBtn.disabled = false; return }
-  importModal.close()
-  if (window.refreshUnmanaged) window.refreshUnmanaged()
-  if (embedded && res.command && window.openTerminalPane) {
-    // Adopt in the embedded terminal, keyed by the session's REAL id (already known). When
-    // /import-session registers it, the card carries this sessionId → it reveals THIS pty
-    // (the normal sessionId reveal), no re-key. The synthetic keeps the panel alive until
-    // the poll discovers the real session (renderAll re-resolves by sessionId).
-    window._terminalSession = {
-      sessionId: sid, name, category, cwd: '', status: 'busy', state: 'active',
-      notesPath: '', ticket: '', prLink: '', branch: '', gitBranch: '',
-      goal: '', lastActivity: '', lastActivityAt: '', updatedAt: '', startedAt: '', nextSteps: '',
-    }
-    selectedKey = sid
-    window._lastSelectedKey = sid
-    if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')   // embedded lives in List
-    window.openTerminalPane(sid, '', '', res.command)
-  } else if (activeTab !== 'running') {
-    // External terminal: it resumes + becomes managed → shows up in Running on the next poll.
-    switchTab('running')
-  }
 })
 
 // Submit: validate, start (Rust pre-flights repo/branch), and ONLY close on
@@ -1439,7 +1153,6 @@ async function boot() {
   seedTabCounts()                             // fill ALL tab badges at launch (not just on visit)
   maybeShowSkillsBanner()                     // first-launch install nudge, then silent per-launch sync
   refreshUsage()                              // initial usage bar render
-  renderUnmanagedSection()                    // initial: header present (collapsed), no discovery yet
   window.CSMDragList.init({
     root: document.getElementById('panel-left'),
     onReorder: async ({ kind, id, action, targetId, containerKey, index }) => {
@@ -1477,20 +1190,15 @@ async function boot() {
         fetchAndRender(false)
         return
       }
-      if (containerKey === '__toplevel__' && (kind === 'category' || kind === 'unmanaged')) {
-        // Rebuild the top-level order from the rendered category list + unmanaged slot.
+      if (containerKey === '__toplevel__' && kind === 'category') {
+        // Reorder the top-level category blocks and persist the new order to the config.
         const cfg = window.CSM_CONFIG || {}
         const cats = (window._listRenderedCats || []).slice()
-        // Compose the display order (categories with the unmanaged slot at its index), move the dragged block, split back out.
-        const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, cats.length)
-        const display = [...cats]; display.splice(uIdx, 0, '__unmanaged__')
-        const from = display.indexOf(kind === 'unmanaged' ? '__unmanaged__' : id)
+        const from = cats.indexOf(id)
         if (from < 0) return
-        display.splice(from, 1)
-        display.splice(index, 0, kind === 'unmanaged' ? '__unmanaged__' : id)
-        const newU = display.indexOf('__unmanaged__')
-        const newCats = display.filter(c => c !== '__unmanaged__')
-        window.CSMListOrg.save(window.CSMListOrg.setUnmanagedIndex(window.CSMListOrg.load(), newU))
+        cats.splice(from, 1)
+        cats.splice(index, 0, id)
+        const newCats = cats
         const configured = (cfg.order || window.CSMCategories.order())
         const merged = [...newCats, ...configured.filter(c => !newCats.includes(c))]
         if (JSON.stringify(merged) !== JSON.stringify(cfg.order || [])) {

@@ -528,57 +528,6 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     terminal::launch_in_terminal(&cmd)
 }
 
-/// Import (adopt) an existing Claude Code session into management: `--resume` it and
-/// run the `/import-session` skill so it gets a notes.md + registration. The app only launches;
-/// the skill does the writing (ADR-012). cwd = the session's launch dir (where
-/// `--resume` must run). Category must be one the user configured.
-#[tauri::command(async)]
-fn import_session(session_id: String, category: String, name: String, root: String, embedded: bool) -> Result<serde_json::Value, String> {
-    if !is_valid_session_id(&session_id) {
-        return Err("invalid sessionId".into());
-    }
-    let category = category.trim().to_uppercase();
-    if !is_safe_category(&category) {
-        return Err("invalid category".into());
-    }
-    let cfg = config::load();
-    let known = cfg.get("categories").and_then(serde_json::Value::as_array).is_some_and(|arr| {
-        arr.iter().any(|c| c.get("name").and_then(serde_json::Value::as_str) == Some(&category))
-    });
-    if !known {
-        return Err("unknown category — add it in Settings first".into());
-    }
-    // Optional space (root): which space the imported session's notes.md lands under,
-    // for a category that exists in several. Mirrors start_session.
-    let want_root = root.trim();
-    validate_root_override(&cfg, want_root)?;
-    // Same safe-name set as /start-session (no shell / YAML-breaking chars); may be empty.
-    let safe_name = sanitize_session_name(&name);
-
-    let (dir, prompt) = import_invocation(&session_id, &category, &safe_name, want_root);
-    // --permission-mode auto: /import-session must WRITE the notes.md + register the
-    // session; plan mode blocks that (same wall +New hit). Force a writable mode on the
-    // resumed session so the adoption goes through. Resume cwd stays the session's own
-    // dir (claude --resume keys by directory); the space only decides where notes land.
-    let settings_arg = statusline_settings_arg();
-    let cmd = format!(
-        "cd {} && claude --resume {} --model {} --permission-mode auto{} {}",
-        pty::shell_quote(&dir),
-        pty::shell_quote(&session_id),
-        pty::shell_quote(pty::CLAUDE_MODEL),
-        settings_arg,
-        pty::shell_quote(&prompt),
-    );
-    if embedded {
-        // Embedded: the dashboard runs this in an in-app pty (not iTerm). The session's
-        // real id is already known (it's what we --resume), so the renderer keys the pane
-        // by it → it links to the card via the normal sessionId reveal, no re-key needed.
-        return Ok(serde_json::json!({ "command": cmd }));
-    }
-    terminal::launch_in_terminal(&cmd)?;
-    Ok(serde_json::json!({}))
-}
-
 /// True for a project-key ticket like `ABC-123` (letter, alnum*, dash, digits).
 fn is_ticket(t: &str) -> bool {
     let (key, num) = match t.split_once('-') {
@@ -1140,6 +1089,14 @@ fn import_invocation(session_id: &str, category: &str, safe_name: &str, want_roo
     (dir, prompt)
 }
 
+/// Which of these paths resolve. Batched: first-run setup checks every configured space
+/// in one round-trip, and a space pointing at a folder that does not exist is the single
+/// likeliest thing wrong on a fresh install — the seed ships `Work` → `~/work`.
+#[tauri::command]
+fn paths_exist(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| config::expand(p)).map(|p| std::path::Path::new(&p).exists()).collect()
+}
+
 /// Does first-run setup need to open? Asked once, at launch.
 #[tauri::command]
 fn needs_onboarding() -> bool {
@@ -1603,8 +1560,8 @@ pub fn run() {
             open_in_terminal,
             start_session,
             restore_session,
-            import_session,
             import_session_headless,
+            paths_exist,
             needs_onboarding,
             finish_onboarding,
             detach_session,

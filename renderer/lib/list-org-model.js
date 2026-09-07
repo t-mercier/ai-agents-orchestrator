@@ -1,5 +1,5 @@
-// List-view organization model: per-category session order + groups + the
-// "Recent · unmanaged" block position. UMD: window.CSMListOrg + require() in jest.
+// List-view organization model: per-category session order + groups.
+// UMD: window.CSMListOrg + require() in jest.
 // Pure mutators (each returns a NEW state) + thin localStorage load/save. No DOM.
 (function (root, factory) {
   const api = factory()
@@ -11,12 +11,11 @@
   const groupRef = (gid) => GROUP_PREFIX + gid
   const isGroupRef = (id) => typeof id === 'string' && id.startsWith(GROUP_PREFIX)
 
-  function emptyState() { return { unmanagedIndex: null, categories: {} } }
+  function emptyState() { return { categories: {} } }
 
   function normalize(obj) {
     const s = (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {}
     const out = emptyState()
-    out.unmanagedIndex = (typeof s.unmanagedIndex === 'number' && s.unmanagedIndex >= 0) ? s.unmanagedIndex : null
     const cats = (s.categories && typeof s.categories === 'object' && !Array.isArray(s.categories)) ? s.categories : {}
     for (const [cat, c] of Object.entries(cats)) {
       if (!c || typeof c !== 'object') continue
@@ -76,7 +75,6 @@
     c.order.splice(i, 0, key)
     return s
   }
-  function setUnmanagedIndex(state, i) { const s = clone(state); s.unmanagedIndex = (typeof i === 'number' && i >= 0) ? i : null; return s }
 
   function createGroup(state, catName, gid, name) {
     const s = clone(state); const c = cat(s, catName)
@@ -176,7 +174,7 @@
   return {
     STORAGE_KEY, GROUP_PREFIX, groupRef, isGroupRef,
     emptyState, normalize, orderedItems,
-    moveSession, setUnmanagedIndex,
+    moveSession,
     createGroup, createGroupWith, renameGroup, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
     prune, load, save,
   }

@@ -45,7 +45,6 @@ function sessionKey(s) {
   return s.notesPath || s.sessionId || s.name || ''
 }
 
-function clampUnmanagedIndex(i, n) { if (typeof i !== 'number' || i < 0) return 0; return Math.min(i, n) }
 
 // Manual order + groups + drag apply only on the Running tab AND when NOT searching.
 // Search is a find mode, not an organize mode: applying the model during a search would
@@ -557,18 +556,12 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
     // Single space → no sections, just the category groups (pins already floated).
     const grouped = groupByCategory(therest)
     if (listReorgActive()) {
-      // Running (no search): draggable category blocks in a top-level drop container,
-      // with the movable unmanaged block interleaved at its stored index.
-      const renderedCats = grouped.map(([c]) => c)
-      window._listRenderedCats = renderedCats
+      // Running (no search): draggable category blocks in a top-level drop container.
+      window._listRenderedCats = grouped.map(([c]) => c)
       const catBlocks = grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
-      const uIdx = clampUnmanagedIndex(window.CSMListOrg.load().unmanagedIndex, catBlocks.length)
-      const blocks = [...catBlocks]
-      blocks.splice(uIdx, 0, `<div class="unmanaged-slot" data-drag-kind="unmanaged" data-drag-id="unmanaged"></div>`)
-      html += `<div class="list-blocks" data-drop-key="__toplevel__" data-drop-accept="category unmanaged">${blocks.join('')}</div>`
+      html += `<div class="list-blocks" data-drop-key="__toplevel__" data-drop-accept="category">${catBlocks.join('')}</div>`
     } else {
-      // Closed/Archived, or Running during a search: plain category groups, no reorg
-      // wrapper, no unmanaged block.
+      // Closed/Archived, or Running during a search: plain category groups, no reorg wrapper.
       html += grouped.map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys)).join('')
     }
   }

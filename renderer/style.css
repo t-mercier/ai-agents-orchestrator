@@ -158,16 +158,6 @@ html, body {
 .modal-title { font-size: 15px; font-weight: 700; }
 .modal-hint { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; margin-top: -4px; }
 .modal-hint code { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; background: rgba(var(--tint), 0.08); padding: 1px 4px; border-radius: 3px; }
-/* ＋Import picker: scrollable list of discovered (unmanaged) sessions. The width
-   goes on the dialog itself (the base .modal is 380px) so the form fits inside. */
-#import-modal { width: 520px; }
-.import-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; border: 0.5px solid var(--card-border); border-radius: 8px; padding: 4px; }
-.import-row { display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border: none; cursor: pointer; font-family: var(--font); color: var(--text-primary); padding: 7px 9px; border-radius: 6px; }
-.import-row:hover { background: rgba(var(--tint), 0.07); }
-.import-row.selected { background: rgba(var(--accent-rgb), 0.15); outline: 1px solid rgba(var(--accent-rgb), 0.5); }
-.import-row-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.import-row-meta { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.import-empty { font-size: 12px; color: var(--text-tertiary); padding: 14px; text-align: center; }
 .modal-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
 .modal-field > span { color: var(--text-secondary); font-weight: 600; }
 .modal-field em { color: var(--text-tertiary); font-style: normal; font-weight: 400; }
@@ -798,38 +788,6 @@ body.mode-board .drawer-ctl { display: inline-flex; }
   -webkit-app-region: no-drag;
 }
 /* ── Category filter: ⚲ button + checkbox popover (replaces the chip row) ── */
-/* ＋Import sits at the left of the list's filter row; the filter is pushed to the right.
-   Scoped to the list row so the board's filter bar keeps its own layout. */
-.import-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--font); font-size: 11px; font-weight: 600;
-  color: var(--text-secondary); background: rgba(var(--tint), 0.06);
-  border: 0.5px solid var(--card-border); border-radius: 7px;
-  padding: 4px 10px; cursor: pointer; -webkit-app-region: no-drag;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.import-btn:hover { color: var(--text-primary); border-color: var(--accent); background: rgba(var(--tint), 0.1); }
-#cat-filter-list .filter-btn { margin-left: auto; }
-
-/* Import modal — single-session mode header + the browse list's pager. */
-.import-target {
-  display: flex; align-items: baseline; gap: 8px; min-width: 0;
-  padding: 8px 10px; margin-bottom: 4px;
-  border: 0.5px solid var(--card-border); border-radius: 8px; background: rgba(var(--tint), 0.05);
-}
-.import-target-label { font-size: 11px; color: var(--text-tertiary); flex: none; }
-.import-target-name { font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-more {
-  display: block; width: 100%; margin: 6px 0 2px;
-  font-family: var(--font); font-size: 11px; font-weight: 600; color: var(--text-secondary);
-  background: rgba(var(--tint), 0.06); border: 0.5px solid var(--card-border);
-  border-radius: 7px; padding: 5px 10px; cursor: pointer;
-}
-.import-more:hover { color: var(--text-primary); border-color: var(--accent); }
-/* An author `display` beats the browser's [hidden] rule, so restate it — otherwise the
-   pager stays visible with nothing left to fetch and clicking it looks broken. */
-.import-more[hidden] { display: none; }
-
 .filter-btn {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font); font-size: 11px; font-weight: 600;
@@ -1891,28 +1849,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   text-align: right;
 }
 
-/* Recent · unmanaged section */
-.unmanaged-section { margin-bottom: 6px; }
-.unmanaged-group { border-bottom: 1px solid rgba(var(--tint), 0.08); }
-.unmanaged-header { display: flex; align-items: center; gap: 6px; padding: 6px 10px; cursor: pointer; user-select: none; }
-.unmanaged-name { font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.62); flex: 1; }
-.unmanaged-refresh { background: none; border: none; color: rgba(var(--tint), 0.48); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
-.unmanaged-refresh:hover { color: rgba(var(--tint), 0.92); }
-/* Bounded + self-scrolling so a long list never pushes the managed sessions
-   below off-screen: on a short window the rows scroll here instead of overflowing
-   the (overflow:hidden) panel with no way to reach them. */
-.unmanaged-body { padding: 2px 0 6px; max-height: 38vh; overflow-y: auto; }
-.unmanaged-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; }
-.unmanaged-row-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.unmanaged-row-title { font-size: 12px; color: rgba(var(--tint), 0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.unmanaged-row-meta { font-size: 11px; color: rgba(var(--tint), 0.48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.unmanaged-row-when { font-size: 11px; color: rgba(var(--tint), 0.42); }
-.unmanaged-adopt { flex: none; font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(var(--tint), 0.18); background: none; color: rgba(var(--tint), 0.92); cursor: pointer; }
-.unmanaged-adopt:hover { background: rgba(var(--tint), 0.08); }
-.unmanaged-empty, .unmanaged-error { font-size: 11px; color: rgba(var(--tint), 0.48); padding: 5px 10px; }
-.unmanaged-retry { background: none; border: none; color: rgba(var(--tint), 0.62); cursor: pointer; text-decoration: underline; }
-
-/* List drag (categories, unmanaged, sessions, groups) */
+/* List drag (categories, sessions, groups) */
 .dl-ghost { position: fixed; z-index: 3000; pointer-events: none; opacity: 0.9; box-shadow: 0 6px 20px rgba(0,0,0,0.35); border-radius: 8px; }
 .dl-dragging { opacity: 0.4; }
 .dl-ins { position: fixed; height: 2px; background: rgba(var(--accent-rgb, var(--tint)), 0.7); border-radius: 2px; z-index: 3001; pointer-events: none; display: none; }
@@ -1921,10 +1858,6 @@ body.dl-drag-active { cursor: grabbing; user-select: none; }
 .category-group[data-drag-kind] .category-header { cursor: grab; }
 .list-drag-item { cursor: grab; }
 body.dl-drag-active .list-card { pointer-events: none; }
-.unmanaged-slot { display: block; }
-/* Same trap as .import-more: renderUnmanagedSection toggles `hidden` on this slot, and an
-   author `display` would beat the browser's [hidden] rule. */
-.unmanaged-slot[hidden] { display: none; }
 
 .list-group { margin: 4px 6px; border: 1px solid rgba(var(--accent-rgb), 0.4); border-radius: 12px; background: rgba(var(--accent-rgb), 0.05); overflow: hidden; }
 .list-group-head { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: grab; }

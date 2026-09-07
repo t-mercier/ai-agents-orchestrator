@@ -32,7 +32,7 @@ fn config_path() -> PathBuf {
 }
 
 /// Expand a leading `~` / `~/` to the home directory (empty/other strings pass through).
-fn expand(p: &str) -> String {
+pub fn expand(p: &str) -> String {
     if p == "~" {
         home().to_string_lossy().into_owned()
     } else if let Some(rest) = p.strip_prefix("~/") {

@@ -20,7 +20,7 @@
     // All three lifecycle buckets ({stale, closed, archived}) from ONE backend scan —
     // for callers that need every bucket at once (badge seed, board index).
     getHistoricalAll: () => invoke('get_historical_sessions_all'),
-    // Unmanaged transcripts (no notes.md) for the "Import a session" picker.
+    // Untracked transcripts (no notes.md) — what first-run setup offers to import.
     discoverSessions: () => invoke('discover_sessions'),
     // One page of ALL untracked sessions + the full count → { sessions, total }.
     // Errors are returned, not swallowed: a missing command (an app built before this
@@ -102,13 +102,20 @@
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
-    // ── Import an existing (unmanaged) session: --resume it + run /import to adopt it ──
-    // root (optional): which space it lands under (when >1). embedded=true launches NOTHING
-    // and returns { ok, command } to run in an in-app pty; else it opens an external tab.
-    importSession: (sessionId, category, name, root, embedded) =>
-      invoke('import_session', { sessionId: sessionId || '', category: category || '', name: name || '', root: root || '', embedded: !!embedded })
-        .then((res) => ({ ok: true, ...(res || {}) }))
+    // ── First-run setup ──
+    // Import one session with no terminal to watch: the backend runs `claude --resume` +
+    // /import-session headless and resolves only once the registry actually carries the
+    // session, so the wizard's per-row tick means imported, not merely attempted.
+    importSessionHeadless: (sessionId, category, name, root) =>
+      invoke('import_session_headless', { sessionId: sessionId || '', category: category || '', name: name || '', root: root || '' })
+        .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
+    // Should the wizard open at all? False for every install that already has sessions.
+    needsOnboarding: () => invoke('needs_onboarding').catch(() => false),
+    // Finished OR skipped — either way it does not open by itself again.
+    finishOnboarding: () => invoke('finish_onboarding').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    // Which configured spaces point at a folder that is actually there.
+    pathsExist: (paths) => invoke('paths_exist', { paths: paths || [] }).catch(() => (paths || []).map(() => false)),
 
     // ── Has the session's notes.md been freshly /close-session'd since `since` (ms)? ──
     // Polled by the embedded "Close session" button after it injects /close-session, to

@@ -89,10 +89,7 @@ describe('groups', () => {
   })
 })
 
-describe('unmanaged position + prune + load', () => {
-  it('setUnmanagedIndex stores the position', () => {
-    expect(M.setUnmanagedIndex(base(), 3).unmanagedIndex).toBe(3)
-  })
+describe('prune + load', () => {
   it('prune drops dead keys and dissolves groups with < 2 live members', () => {
     let s = base()
     s = M.moveSession(s, 'FEAT', 'dead', 0)
@@ -105,6 +102,6 @@ describe('unmanaged position + prune + load', () => {
   })
   it('load tolerates corrupt input', () => {
     expect(M.normalize(null)).toEqual(M.emptyState())
-    expect(M.normalize({ categories: 'nope', unmanagedIndex: 'x' })).toEqual(M.emptyState())
+    expect(M.normalize({ categories: 'nope' })).toEqual(M.emptyState())
   })
 })

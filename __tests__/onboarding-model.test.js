@@ -4,6 +4,12 @@ const NOW = Date.parse('2026-09-07T12:00:00Z')
 const secsAgo = (d) => Math.floor((NOW - d * 86400000) / 1000)
 const s = (id, over) => ({ sessionId: id, mtime: secsAgo(1), ...over })
 
+describe('basename', () => {
+  it('returns the last path segment', () => expect(O.basename('/Users/x/my-repo')).toBe('my-repo'))
+  it('tolerates a trailing slash', () => expect(O.basename('/Users/x/my-repo/')).toBe('my-repo'))
+  it('handles empty', () => expect(O.basename('')).toBe(''))
+})
+
 describe('suggestName', () => {
   it("uses the session's own first prompt", () => {
     expect(O.suggestName({ title: 'fix the tile cache race' })).toBe('fix the tile cache race')
