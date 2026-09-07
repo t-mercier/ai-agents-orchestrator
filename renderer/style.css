@@ -165,7 +165,9 @@ html, body {
 .modal-field .field-hint code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; color: var(--text-secondary); background: rgba(var(--tint), 0.08); padding: 1px 4px; border-radius: 4px; }
 .modal-field select,
 .modal-field input,
-.modal-field textarea {
+.modal-field textarea,
+.onb-edit-row input[type="text"],
+.onb-edit-row select {
   font-family: var(--font);
   font-size: 13px;
   color: var(--text-primary);
@@ -197,6 +199,8 @@ html, body {
 }
 .modal-field select:hover { border-color: rgba(var(--tint), 0.22); }
 .modal input[type="checkbox"] { accent-color: var(--accent); }
+.onb-edit-row input[type="text"]:focus,
+.onb-edit-row select:focus,
 .modal-field select:focus,
 .modal-field textarea:focus,
 .modal-field input:focus { border-color: var(--accent); background: rgba(var(--tint), 0.1); }
@@ -1857,6 +1861,10 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .onb-pip.current { color: var(--text-primary); border-color: var(--accent); background: rgba(var(--accent-rgb), 0.14); }
 .onb-pip.past { color: var(--text-secondary); }
 .onb-step { display: flex; flex-direction: column; gap: 8px; }
+/* The same trap the pager and the unmanaged slot hit: an author `display` beats the
+   browser's [hidden] rule, so every step showed at once and the wizard read as one long
+   form. Restate it. */
+.onb-step[hidden] { display: none; }
 /* Bounded + self-scrolling: a machine with a long history must not push the wizard's own
    buttons off the bottom of the screen, where they cannot be reached. */
 .onb-list { display: flex; flex-direction: column; gap: 1px; max-height: 300px; overflow-y: auto; border: 0.5px solid var(--card-border); border-radius: 8px; padding: 4px; }

@@ -142,6 +142,30 @@ describe('the sequential runner', () => {
     expect(O.progress(st)).toEqual({ total: 2, settled: 2, imported: 1, failed: 1 })
   })
 
+  // The regression that the per-transition tests could not see: the controller settles a
+  // job and immediately dispatches the next import, with no 'start' in between. Before the
+  // fix, `current` pointed at a job still marked 'pending', the next settle found nothing
+  // 'running' and returned the state untouched — so the runner re-imported job 2 for ever.
+  // Drive it exactly the way the controller does.
+  it('runs a whole queue to completion the way the controller drives it', () => {
+    let st = O.reduce(mk(3), { type: 'start' })
+    const dispatched = []
+    let guard = 0
+    while (!st.done && st.current >= 0) {
+      if (++guard > 10) throw new Error('the runner never finished — it is looping')
+      dispatched.push(st.jobs[st.current].sessionId)
+      st = O.reduce(st, { type: 'ok' })
+    }
+    expect(dispatched).toEqual(['s0', 's1', 's2'])   // each one exactly once, in order
+    expect(st.done).toBe(true)
+    expect(O.progress(st)).toEqual({ total: 3, settled: 3, imported: 3, failed: 0 })
+  })
+
+  it('a second start on a run already under way changes nothing', () => {
+    const st = O.reduce(mk(2), { type: 'start' })
+    expect(O.reduce(st, { type: 'start' })).toEqual(st)
+  })
+
   it('reports done when nothing is left', () => {
     expect(O.reduce({ jobs: [], current: -1, done: false }, { type: 'start' }).done).toBe(true)
   })

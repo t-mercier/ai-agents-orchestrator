@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Agents Orchestrator</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="xterm.css">
+  <link rel="stylesheet" href="style.css?v=1788782313">
+  <link rel="stylesheet" href="xterm.css?v=1788782313">
   <!-- Apply saved theme + accent before first paint (no flash). Full logic in app.js. -->
   <script>
     try {
@@ -575,34 +575,74 @@
   <!-- Scrim behind the drawer (board mode only) -->
   <div class="scrim" id="scrim"></div>
 
-  <script src="lib/tauri-api.js"></script>
-  <script src="xterm-bundle.js"></script>
-  <script src="lib/formatters.js"></script>
-  <script src="lib/markdown.js"></script>
-  <script src="lib/categories.js"></script>
-  <script src="lib/board-model.js"></script>
-  <script src="lib/list-org-model.js"></script>
-  <script src="lib/drag-list.js"></script>
-  <script src="lib/skills-status-copy.js"></script>
-  <script src="lib/onboarding-model.js"></script>
-  <script src="looks.js"></script>
-  <script src="prstate.js"></script>
-  <script src="ui.js"></script>
-  <script src="terminal.js"></script>
+  
+<script>
+// Smoke harness: stubs Tauri's invoke so the REAL renderer stack (tauri-api.js, app.js,
+// onboarding.js) runs unchanged in a browser. Canned answers only — the point is to catch
+// a ReferenceError or a missing element at click, which node --check cannot see.
+window.__ONB_CALLS = [];
+const CFG = {
+  version: 2,
+  roots: [{ name: 'Work', path: '/tmp/onb-work' }, { name: 'Perso', path: '/tmp/onb-perso' }],
+  categories: [
+    { name: 'FEAT', color: '#7df0c0', root: 'Work' },
+    { name: 'PERSO', color: '#8fd9ff', root: 'Perso' },
+  ],
+  order: ['FEAT', 'PERSO'], colorMap: { FEAT: '#7df0c0', PERSO: '#8fd9ff' },
+  scanDirs: [], knowledge: { enabled: false }, home: '/tmp', ticketBaseUrl: '',
+};
+const SESSIONS = [
+  { sessionId: 'aaaa1111-0000-0000-0000-000000000001', title: 'fix the tile cache race', cwd: '/tmp/repo-a', mtime: Math.floor(Date.now()/1000) - 3600 },
+  { sessionId: 'bbbb2222-0000-0000-0000-000000000002', title: '', cwd: '/tmp/repo-b', mtime: Math.floor(Date.now()/1000) - 7200 },
+  { sessionId: 'cccc3333-0000-0000-0000-000000000003', title: 'refactor the settings pane\nsecond line', cwd: '/tmp/repo-c', mtime: Math.floor(Date.now()/1000) - 99999 },
+  { sessionId: 'dddd4444-0000-0000-0000-000000000004', title: 'a fourth one, not preselected', cwd: '/tmp/repo-d', mtime: Math.floor(Date.now()/1000) - 199999 },
+];
+window.__TAURI__ = { event: { listen: () => Promise.resolve(() => {}) }, core: { invoke: (cmd, args) => {
+  window.__ONB_CALLS.push({ cmd, args });
+  switch (cmd) {
+    case 'get_config': return Promise.resolve(CFG);
+    case 'set_config': return Promise.resolve(null);
+    case 'needs_onboarding': return Promise.resolve(true);
+    case 'finish_onboarding': return Promise.resolve(null);
+    case 'paths_exist': return Promise.resolve((args.paths || []).map(() => true));
+    case 'discover_sessions_page': return Promise.resolve({ sessions: SESSIONS.slice(args.offset || 0, (args.offset||0) + (args.limit||20)), total: SESSIONS.length });
+    case 'import_session_headless': return new Promise(r => setTimeout(() => r(null), 120));
+    case 'pick_directory': return Promise.resolve('/tmp/picked-dir');
+    case 'get_sessions': return Promise.resolve([]);
+    case 'get_historical_sessions': return Promise.resolve([]);
+    case 'get_historical_sessions_all': return Promise.resolve({ stale: [], closed: [], archived: [] });
+    default: return Promise.resolve(null);
+  }
+} } };
+</script>
+<script src="lib/tauri-api.js?v=1788782313"></script>
+  <script src="xterm-bundle.js?v=1788782313"></script>
+  <script src="lib/formatters.js?v=1788782313"></script>
+  <script src="lib/markdown.js?v=1788782313"></script>
+  <script src="lib/categories.js?v=1788782313"></script>
+  <script src="lib/board-model.js?v=1788782313"></script>
+  <script src="lib/list-org-model.js?v=1788782313"></script>
+  <script src="lib/drag-list.js?v=1788782313"></script>
+  <script src="lib/skills-status-copy.js?v=1788782313"></script>
+  <script src="lib/onboarding-model.js?v=1788782313"></script>
+  <script src="looks.js?v=1788782313"></script>
+  <script src="prstate.js?v=1788782313"></script>
+  <script src="ui.js?v=1788782313"></script>
+  <script src="terminal.js?v=1788782313"></script>
   <!-- Before app.js: boot() calls maybeOpenOnboarding, so it has to exist by then. -->
-  <script src="onboarding.js"></script>
-  <script src="app.js"></script>
-  <script src="board.js"></script>
-  <script src="settings/core.js"></script>
-  <script src="settings/general.js"></script>
-  <script src="settings/appearance.js"></script>
-  <script src="settings/shortcuts.js"></script>
-  <script src="settings/terminal.js"></script>
-  <script src="settings/board.js"></script>
-  <script src="settings/categories.js"></script>
-  <script src="settings/integrations.js"></script>
-  <script src="lib/clean-model.js"></script>
-  <script src="doctor.js"></script>
-  <script src="clean.js"></script>
+  <script src="onboarding.js?v=1788782313"></script>
+  <script src="app.js?v=1788782313"></script>
+  <script src="board.js?v=1788782313"></script>
+  <script src="settings/core.js?v=1788782313"></script>
+  <script src="settings/general.js?v=1788782313"></script>
+  <script src="settings/appearance.js?v=1788782313"></script>
+  <script src="settings/shortcuts.js?v=1788782313"></script>
+  <script src="settings/terminal.js?v=1788782313"></script>
+  <script src="settings/board.js?v=1788782313"></script>
+  <script src="settings/categories.js?v=1788782313"></script>
+  <script src="settings/integrations.js?v=1788782313"></script>
+  <script src="lib/clean-model.js?v=1788782313"></script>
+  <script src="doctor.js?v=1788782313"></script>
+  <script src="clean.js?v=1788782313"></script>
 </body>
 </html>

@@ -116,6 +116,11 @@
   function reduce(state, event) {
     const jobs = state.jobs.map((j) => ({ ...j }))
     if (event.type === 'start') {
+      // Idempotent: a settle already starts the next job, so a second 'start' on a run
+      // that is under way must not touch it — and must not report done just because
+      // nothing is left PENDING while one is still in flight.
+      const running = jobs.findIndex((j) => j.status === 'running')
+      if (running !== -1) return { ...state, jobs, current: running, done: false }
       const i = jobs.findIndex((j) => j.status === 'pending')
       if (i === -1) return { ...state, jobs, current: -1, done: true }
       jobs[i].status = 'running'
@@ -126,7 +131,13 @@
       if (i === -1) return { ...state, jobs }
       jobs[i].status = event.type === 'ok' ? 'done' : 'failed'
       if (event.type === 'fail') jobs[i].error = event.error || 'import failed'
+      // Settling one job STARTS the next: `current` must always point at a job whose
+      // status is 'running', because that is what the next settle looks for. Leaving it
+      // on a 'pending' job made the runner re-dispatch the same import for ever — the
+      // reducer found nothing running, returned the state untouched, and the caller's
+      // loop saw no progress to stop on.
       const next = jobs.findIndex((j) => j.status === 'pending')
+      if (next !== -1) jobs[next].status = 'running'
       return { ...state, jobs, current: next, done: next === -1 }
     }
     return { ...state, jobs }
