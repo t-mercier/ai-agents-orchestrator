@@ -53,12 +53,38 @@
         mtime: s.mtime || 0,
         when: s.mtime ? F.formatTimestamp(new Date(s.mtime * 1000).toISOString(), now) : '',
         name: suggestName(s),
+        // Each row carries where it lands. One target for the whole batch was the wrong
+        // grain: sessions come from different repos, and filing them all under one category
+        // is work the user then has to undo one card at a time.
+        category: '',
+        root: '',
       }))
   }
 
   function preselect(rows, n) {
     const take = typeof n === 'number' ? n : PRESELECT
     return (rows || []).slice(0, Math.max(0, take)).map((r) => r.sessionId)
+  }
+
+  /// The first category that belongs to a space which exists — the destination a row gets
+  /// before the user touches anything. Without a default, every row would demand two
+  /// choices before the step could be left, which is the taxonomy form all over again.
+  function defaultTarget(cfg, exists) {
+    const roots = (cfg && cfg.roots) || []
+    const bad = new Set(unusableSpaces(roots, exists))
+    const usable = roots.filter((r) => !bad.has(r.name)).map((r) => r.name)
+    const cat = ((cfg && cfg.categories) || []).find((c) => usable.includes(c.root))
+    return cat ? { category: cat.name, root: cat.root } : { category: '', root: '' }
+  }
+
+  /// Give every row a destination, keeping any the user already chose.
+  function applyDefaultTargets(rows, cfg, exists) {
+    const d = defaultTarget(cfg, exists)
+    return (rows || []).map((r) => ({
+      ...r,
+      category: r.category || d.category,
+      root: r.root || d.root,
+    }))
   }
 
   /// Spaces whose path does not resolve. `exists` is injected because the renderer has to
@@ -96,19 +122,28 @@
     return issues
   }
 
-  /// The ordered jobs step 3 runs, one at a time.
-  function importJobs(rows, selectedIds, target) {
+  /// The ordered jobs the last step runs, one at a time — each to its OWN destination.
+  function importJobs(rows, selectedIds) {
     const picked = new Set(selectedIds || [])
     return (rows || [])
       .filter((r) => picked.has(r.sessionId))
       .map((r) => ({
         sessionId: r.sessionId,
         name: r.name,
-        category: (target && target.category) || '',
-        root: (target && target.root) || '',
+        category: r.category || '',
+        root: r.root || '',
         status: 'pending',
         error: '',
       }))
+  }
+
+  /// Rows that are ticked but have nowhere to go. `import_session_headless` refuses an
+  /// unknown category, so catching it here turns a mid-run failure into a disabled button.
+  function unroutable(rows, selectedIds) {
+    const picked = new Set(selectedIds || [])
+    return (rows || [])
+      .filter((r) => picked.has(r.sessionId) && !r.category)
+      .map((r) => r.name || r.sessionId)
   }
 
   /// The sequential runner. One job in flight at a time — N concurrent `claude --resume`
@@ -156,6 +191,7 @@
 
   return {
     PRESELECT, basename, suggestName, buildRows, preselect,
-    unusableSpaces, setupIssues, importJobs, reduce, progress,
+    unusableSpaces, setupIssues, defaultTarget, applyDefaultTargets,
+    importJobs, unroutable, reduce, progress,
   }
 })

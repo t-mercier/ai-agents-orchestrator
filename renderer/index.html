@@ -144,15 +144,10 @@
       <h2 class="modal-title" id="onb-title">Bring your sessions in</h2>
       <div class="onb-steps" id="onb-steps"></div>
 
+      <!-- 1. The taxonomy, first: import_session_headless refuses a category the config
+              does not carry, and the seed ships "Work" pointing at ~/work. -->
       <section class="onb-step" id="onb-step-1">
-        <p class="modal-hint">The Claude Code sessions already on this machine that the dashboard isn't tracking. Tick the ones you still work on — the newest few are ticked for you, and nothing is written until the last step.</p>
-        <div class="onb-list" id="onb-sessions"></div>
-        <button type="button" class="modal-btn onb-more" id="onb-more" hidden>Load more</button>
-        <p class="modal-hint" id="onb-picked"></p>
-      </section>
-
-      <section class="onb-step" id="onb-step-2" hidden>
-        <p class="modal-hint">A <strong>space</strong> is the folder your session notes live under. A <strong>category</strong> sorts them inside it, and its colour is how you pick a session out of a long list at a glance.</p>
+        <p class="modal-hint">A <strong>space</strong> is the folder your session notes live under. A <strong>category</strong> sorts them inside it, and its colour is how you pick a session out of a long list at a glance. Set these up first — the next step files each session into them.</p>
         <div class="onb-group-label">Spaces</div>
         <div id="onb-spaces"></div>
         <button type="button" class="modal-btn" id="onb-add-space">+ Add a space</button>
@@ -162,18 +157,18 @@
         <div class="modal-error" id="onb-issues" hidden></div>
       </section>
 
+      <!-- 2. The sessions, each with its OWN destination. Still writes nothing. -->
+      <section class="onb-step" id="onb-step-2" hidden>
+        <p class="modal-hint">The Claude Code sessions already on this machine that the dashboard isn't tracking. Tick the ones you still work on and say where each one belongs — the newest few are ticked for you, and nothing is written until the last step.</p>
+        <div class="onb-list" id="onb-sessions"></div>
+        <button type="button" class="modal-btn onb-more" id="onb-more" hidden>Load more</button>
+        <p class="modal-hint" id="onb-picked"></p>
+        <div class="modal-error" id="onb-unroutable" hidden></div>
+      </section>
+
+      <!-- 3. The single write pass. -->
       <section class="onb-step" id="onb-step-3" hidden>
         <p class="modal-hint" id="onb-target-hint"></p>
-        <div class="path-row">
-          <label class="modal-field" id="onb-space-field" hidden>
-            <span class="modal-label">Space</span>
-            <select id="onb-space"></select>
-          </label>
-          <label class="modal-field">
-            <span class="modal-label">Category</span>
-            <select id="onb-category"></select>
-          </label>
-        </div>
         <div class="onb-list" id="onb-jobs"></div>
         <p class="modal-hint" id="onb-progress"></p>
       </section>

@@ -105,11 +105,50 @@ describe('unusableSpaces / setupIssues', () => {
   })
 })
 
-describe('importJobs', () => {
-  it('keeps only what was ticked, in list order, with the chosen target', () => {
-    const rows = O.buildRows([s('a', { mtime: secsAgo(1), title: 'A' }), s('b', { mtime: secsAgo(2), title: 'B' })], NOW)
-    const jobs = O.importJobs(rows, ['b'], { category: 'PERSO', root: 'Perso' })
-    expect(jobs).toEqual([{ sessionId: 'b', name: 'B', category: 'PERSO', root: 'Perso', status: 'pending', error: '' }])
+describe('per-row destinations', () => {
+  const CFG = {
+    roots: [{ name: 'Work', path: '/w' }, { name: 'Perso', path: '/p' }],
+    categories: [{ name: 'FEAT', root: 'Work' }, { name: 'PERSO', root: 'Perso' }],
+  }
+  const all = () => true
+
+  it('defaults to the first category under a space that exists', () => {
+    expect(O.defaultTarget(CFG, all)).toEqual({ category: 'FEAT', root: 'Work' })
+    // Work missing → the default moves to the category that is still reachable, rather
+    // than routing every session into a folder that is not there.
+    expect(O.defaultTarget(CFG, (p) => p === '/p')).toEqual({ category: 'PERSO', root: 'Perso' })
+    // Nothing usable → no destination, and `unroutable` below is what blocks the import.
+    expect(O.defaultTarget(CFG, () => false)).toEqual({ category: '', root: '' })
+  })
+
+  it('fills empty destinations and never overwrites a chosen one', () => {
+    const rows = O.buildRows([s('a', { title: 'A' }), s('b', { title: 'B' })], NOW)
+    rows[1].category = 'PERSO'; rows[1].root = 'Perso'
+    const out = O.applyDefaultTargets(rows, CFG, all)
+    expect(out[0]).toMatchObject({ category: 'FEAT', root: 'Work' })
+    expect(out[1]).toMatchObject({ category: 'PERSO', root: 'Perso' })  // the user's choice survives
+  })
+
+  it('sends each ticked row to its own destination, in list order', () => {
+    const rows = O.applyDefaultTargets(
+      O.buildRows([s('a', { mtime: secsAgo(1), title: 'A' }), s('b', { mtime: secsAgo(2), title: 'B' })], NOW),
+      CFG, all,
+    )
+    rows[1].category = 'PERSO'; rows[1].root = 'Perso'
+    expect(O.importJobs(rows, ['a', 'b'])).toEqual([
+      { sessionId: 'a', name: 'A', category: 'FEAT', root: 'Work', status: 'pending', error: '' },
+      { sessionId: 'b', name: 'B', category: 'PERSO', root: 'Perso', status: 'pending', error: '' },
+    ])
+    expect(O.importJobs(rows, ['b'])).toHaveLength(1)   // untick and it is gone
+  })
+
+  // import_session_headless refuses an unknown category, so a row with no destination must
+  // stop the button rather than fail halfway through the run.
+  it('names ticked rows that have nowhere to go, and ignores unticked ones', () => {
+    const rows = O.buildRows([s('a', { title: 'A' }), s('b', { title: 'B' })], NOW)
+    expect(O.unroutable(rows, ['a'])).toEqual(['A'])
+    expect(O.unroutable(O.applyDefaultTargets(rows, CFG, all), ['a', 'b'])).toEqual([])
+    expect(O.unroutable(rows, [])).toEqual([])
   })
 })
 

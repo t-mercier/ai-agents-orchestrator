@@ -4,8 +4,12 @@
 //
 // The step order is load-bearing, not cosmetic. `import_session_headless` refuses a
 // category the config does not carry, and the shipped seed points its "Work" space at
-// `~/work` — a path that exists on almost no machine. So step 1 only *shows* what was
-// found, step 2 makes the taxonomy real, and step 3 is the one pass that writes.
+// `~/work` — a path that exists on almost no machine. So the taxonomy is built first, the
+// sessions are then filed INTO it one by one, and only the last step writes.
+//
+// Each row carries its own space and category. One target for the whole batch was the
+// wrong grain: sessions come from different repos, and filing them all under one category
+// is work the user has to undo a card at a time afterwards.
 ;(function () {
   const $ = (id) => document.getElementById(id)
   const modal = $('onb-modal')
@@ -20,7 +24,8 @@
   let picked = new Set()
   let offset = 0
   let total = 0
-  let cfg = null              // working copy of the config; written when step 2 is left
+  let cfg = null              // working copy of the config; written when step 1 is left
+  let spacePresent = new Map() // space path -> does it resolve (filled by validate())
   let run = null              // { jobs, current, done } once step 3 starts
   let running = false
 
@@ -58,9 +63,54 @@
       text.appendChild(meta)
       row.appendChild(box)
       row.appendChild(text)
+      row.appendChild(targetPickers(r))
       list.appendChild(row)
     }
     renderPicked()
+  }
+
+  /// The space + category selects for one row. Wrapped in a <span> that swallows the
+  /// click, because the row is a <label> and a click anywhere in it would otherwise toggle
+  /// the checkbox — choosing a category would untick the session you were routing.
+  function targetPickers(r) {
+    const wrap = document.createElement('span')
+    wrap.className = 'onb-row-target'
+    wrap.addEventListener('click', (e) => e.preventDefault())
+    const roots = (cfg.roots || []).map((x) => x.name).filter(Boolean)
+    const spaceSel = document.createElement('select')
+    spaceSel.title = 'Space'
+    roots.forEach((n) => spaceSel.appendChild(opt(n)))
+    spaceSel.value = r.root || roots[0] || ''
+    const catSel = document.createElement('select')
+    catSel.title = 'Category'
+    const fillCats = () => {
+      catSel.textContent = ''
+      const cats = (cfg.categories || []).filter((c) => c.root === spaceSel.value)
+      cats.forEach((c) => catSel.appendChild(opt(c.name)))
+      if (!cats.some((c) => c.name === r.category)) r.category = (cats[0] || {}).name || ''
+      catSel.value = r.category || ''
+    }
+    fillCats()
+    spaceSel.addEventListener('change', () => {
+      r.root = spaceSel.value
+      // A category belongs to one space, so moving the space invalidates the choice —
+      // re-fill and fall back to that space's first category rather than keep a pairing
+      // the backend would refuse.
+      r.category = ''
+      fillCats()
+      renderPicked()
+    })
+    catSel.addEventListener('change', () => { r.category = catSel.value; renderPicked() })
+    if (roots.length > 1) wrap.appendChild(spaceSel)
+    wrap.appendChild(catSel)
+    return wrap
+  }
+
+  function opt(v) {
+    const o = document.createElement('option')
+    o.value = v
+    o.textContent = v
+    return o
   }
 
   function renderPicked() {
@@ -68,7 +118,15 @@
     $('onb-picked').textContent = total
       ? `${n} of ${rows.length} shown selected — ${total} untracked session${total > 1 ? 's' : ''} in all.`
       : ''
-    $('onb-next').disabled = step === 1 && n === 0 && rows.length > 0
+    const stuck = O.unroutable(rows, [...picked])
+    const box = $('onb-unroutable')
+    box.textContent = stuck.length
+      ? `Nowhere to file: ${stuck.join(', ')}. Go back and add a category under a space that exists.`
+      : ''
+    box.hidden = stuck.length === 0
+    // Nothing ticked is a valid answer (finish with a clean slate); a ticked row with no
+    // destination is not — the backend would refuse it halfway through the run.
+    if (step === 2) $('onb-next').disabled = stuck.length > 0
   }
 
   async function loadPage() {
@@ -88,7 +146,10 @@
     // fills a display title, and feeding that back in would make "(untitled session)"
     // the imported name instead of the cwd basename.
     raw = raw.concat(page)
-    rows = O.buildRows(raw, Date.now())
+    // Keep any destination the user already chose for a row that is already on screen.
+    const chosen = new Map(rows.map((r) => [r.sessionId, { category: r.category, root: r.root }]))
+    rows = O.buildRows(raw, Date.now()).map((r) => ({ ...r, ...(chosen.get(r.sessionId) || {}) }))
+    rows = O.applyDefaultTargets(rows, cfg, (p) => spacePresent.get(p) !== false)
     if (offset <= PAGE) picked = new Set(O.preselect(rows))
     $('onb-more').hidden = rows.length >= total
     renderSessions()
@@ -191,50 +252,35 @@
   async function validate() {
     const roots = cfg.roots || []
     const flags = await window.api.pathsExist(roots.map((r) => r.path || ''))
-    const present = new Map(roots.map((r, i) => [r.path || '', !!flags[i]]))
-    const issues = O.setupIssues(cfg, (p) => !!present.get(p))
+    spacePresent = new Map(roots.map((r, i) => [r.path || '', !!flags[i]]))
+    const issues = O.setupIssues(cfg, (p) => !!spacePresent.get(p))
     const box = $('onb-issues')
     box.textContent = issues.join(' ')
     box.hidden = issues.length === 0
-    if (step === 2) $('onb-next').disabled = issues.length > 0
+    if (step === 1) $('onb-next').disabled = issues.length > 0
   }
 
   // ── Step 3: the one write pass ──────────────────────────────────────────────────
 
-  function populateTarget() {
-    const roots = (cfg.roots || []).map((r) => r.name).filter(Boolean)
-    const multi = roots.length > 1
-    $('onb-space-field').hidden = !multi
-    const spaceSel = $('onb-space')
-    spaceSel.textContent = ''
-    roots.forEach((n) => {
-      const o = document.createElement('option')
-      o.value = n
-      o.textContent = n
-      spaceSel.appendChild(o)
-    })
-    if (multi) spaceSel.value = roots[0]
-    populateCategories()
-  }
-
-  function populateCategories() {
-    const roots = (cfg.roots || []).map((r) => r.name).filter(Boolean)
-    const space = roots.length > 1 ? $('onb-space').value : roots[0] || ''
-    const sel = $('onb-category')
-    sel.textContent = ''
-    ;(cfg.categories || [])
-      .filter((c) => !space || c.root === space)
-      .forEach((c) => {
-        const o = document.createElement('option')
-        o.value = c.name
-        o.textContent = c.name
-        sel.appendChild(o)
-      })
-    const n = picked.size
-    $('onb-target-hint').textContent = n
-      ? `${n} session${n > 1 ? 's' : ''} will be imported here. Each one resumes briefly to write its own notes, so this takes a moment per session.`
-      : 'Nothing selected — you can go back, or finish and start fresh sessions from the dashboard.'
-    $('onb-next').textContent = n ? 'Import' : 'Finish'
+  /// The last step's line: how many, and where they are going. Names the destinations
+  /// rather than a count, since the whole point of the previous step is that they differ.
+  function summariseTargets() {
+    const jobs = O.importJobs(rows, [...picked])
+    const n = jobs.length
+    if (!n) {
+      $('onb-target-hint').textContent = 'Nothing selected — finish, and start fresh sessions from the dashboard.'
+      $('onb-next').textContent = 'Finish'
+      return
+    }
+    const counts = new Map()
+    for (const j of jobs) {
+      const key = j.root ? `${j.root} / ${j.category}` : j.category
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    const where = [...counts].map(([k, c]) => `${c} → ${k}`).join(', ')
+    $('onb-target-hint').textContent =
+      `${n} session${n > 1 ? 's' : ''}: ${where}. Each one resumes briefly to write its own notes, so this takes a moment per session.`
+    $('onb-next').textContent = 'Import'
   }
 
   function renderJobs() {
@@ -268,12 +314,7 @@
   }
 
   async function startImport() {
-    const roots = (cfg.roots || []).map((r) => r.name).filter(Boolean)
-    const target = {
-      category: $('onb-category').value,
-      root: roots.length > 1 ? $('onb-space').value : roots[0] || '',
-    }
-    run = { jobs: O.importJobs(rows, [...picked], target), current: -1, done: false }
+    run = { jobs: O.importJobs(rows, [...picked]), current: -1, done: false }
     running = true
     $('onb-next').disabled = true
     $('onb-back').disabled = true
@@ -303,7 +344,7 @@
   function renderSteps() {
     const bar = $('onb-steps')
     bar.textContent = ''
-    ;['Your sessions', 'Spaces & categories', 'Import'].forEach((label, i) => {
+    ;['Spaces & categories', 'Your sessions', 'Import'].forEach((label, i) => {
       const n = i + 1
       const el = document.createElement('span')
       el.className = `onb-pip ${n === step ? 'current' : n < step ? 'past' : ''}`
@@ -314,14 +355,14 @@
     $('onb-back').hidden = step === 1
     $('onb-skip').hidden = step === 3
     $('onb-next').textContent = step === 3 ? 'Import' : 'Next'
-    if (step === 1) renderPicked()
-    if (step === 2) validate()
+    if (step === 1) validate()
+    if (step === 2) renderPicked()
   }
 
   async function next() {
-    if (step === 1) { step = 2; renderTaxonomy(); renderSteps(); return }
-    if (step === 2) {
-      // The taxonomy write — the only thing step 2 persists, and the import depends on it.
+    if (step === 1) {
+      // The taxonomy write — the only thing this step persists, and every import depends
+      // on it: the backend refuses a category the config does not carry.
       const res = await window.api.setConfig({ ...(window.CSM_CONFIG || {}), roots: cfg.roots, categories: cfg.categories })
       if (!res || !res.ok) {
         const box = $('onb-issues')
@@ -330,9 +371,24 @@
         return
       }
       if (window.reloadConfig) await window.reloadConfig()
+      step = 2
+      // Re-file the rows against the taxonomy that now exists — a category the user just
+      // renamed or removed must not stay as a row's destination.
+      rows = O.applyDefaultTargets(
+        rows.map((r) => {
+          const ok = (cfg.categories || []).some((c) => c.name === r.category && c.root === r.root)
+          return ok ? r : { ...r, category: '', root: '' }
+        }),
+        cfg, (p) => spacePresent.get(p) !== false,
+      )
+      renderSteps()
+      renderSessions()
+      return
+    }
+    if (step === 2) {
       step = 3
       renderSteps()
-      populateTarget()
+      summariseTargets()
       renderJobs()
       return
     }
@@ -384,14 +440,14 @@
     $('onb-next').disabled = false
     $('onb-back').disabled = false
     renderSteps()
+    renderTaxonomy()
     if (!modal.open) modal.showModal()
+    // The scan runs while the user is still on the taxonomy step, so step 2 is already
+    // filled when they get there.
     await loadPage()
   }
 
   $('onb-more').addEventListener('click', () => loadPage())
-  // Without this the category list keeps the FIRST space's categories, and the import
-  // lands under the wrong root with no error to show for it.
-  $('onb-space').addEventListener('change', () => populateCategories())
 
   // Offered once, at launch, and only to an install with nothing in it — see
   // config::onboarding_needed. Everyone else gets it from Settings or not at all.
