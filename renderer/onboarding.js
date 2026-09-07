@@ -389,6 +389,9 @@
   }
 
   $('onb-more').addEventListener('click', () => loadPage())
+  // Without this the category list keeps the FIRST space's categories, and the import
+  // lands under the wrong root with no error to show for it.
+  $('onb-space').addEventListener('change', () => populateCategories())
 
   // Offered once, at launch, and only to an install with nothing in it — see
   // config::onboarding_needed. Everyone else gets it from Settings or not at all.
