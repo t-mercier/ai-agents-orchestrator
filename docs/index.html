@@ -210,11 +210,16 @@
     padding: 20px 22px; border-radius: 14px; border: 1px solid var(--line);
     background: rgba(255, 255, 255, 0.015);
   }
-  /* The headline IS the label: which side you are on is carried by the layout, the arrow
-     and the colour, so the most readable line goes to the actual problem or the actual
-     solution rather than to the words "Problem" and "Solution". */
-  .ps-h { font-size: 15px; font-weight: 700; line-height: 1.3; margin-bottom: 8px; color: var(--text); }
-  .ps-s .ps-h { color: var(--accent-3); }
+  /* The headline IS the label — the actual problem or the actual solution, not the words
+     "Problem" and "Solution" — and it keeps the frame those tags had, which is what makes
+     the two sides read as one pair instead of two paragraphs sitting side by side. */
+  .ps-h {
+    display: inline-block; margin-bottom: 12px;
+    font-size: 14px; font-weight: 700; line-height: 1.35;
+    padding: 7px 13px; border-radius: 10px;
+    color: var(--text); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-2);
+  }
+  .ps-s .ps-h { color: var(--accent-3); background: rgba(106, 215, 200, 0.11); border-color: rgba(106, 215, 200, 0.32); }
   .ps-row p { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
   .ps-s p { color: var(--text); }
   .ps-s a { color: var(--accent-3); text-decoration: none; border-bottom: 1px solid rgba(106,215,200,0.35); }
@@ -340,7 +345,7 @@
       <div class="ps-row">
         <div class="ps-p"><h3 class="ps-h">Day one is gone by day two.</h3><p>A long session gets <strong>compacted</strong>: the older turns are squeezed out or silently dropped, and the next conversation starts from nothing.</p></div>
         <div class="ps-arrow" aria-hidden="true">→</div>
-        <div class="ps-s"><h3 class="ps-h">Every session writes down what it decided.</h3><p><a href="#memory">A <code>notes.md</code> per session</a>, beside its code — goal, decisions, next steps, session id. Pick the work back up weeks later with the thread intact.</p></div>
+        <div class="ps-s"><h3 class="ps-h">Every session writes down what's worth keeping.</h3><p><a href="#memory">A <code>notes.md</code> per session</a>, beside its code — goal, decisions, next steps, session id. Pick the work back up weeks later with the thread intact.</p></div>
       </div>
       <div class="ps-row">
         <div class="ps-p"><h3 class="ps-h">You keep re-learning what you already learned.</h3><p>A lesson dies with the session that learned it. You re-derive from the code what a past session already settled.</p></div>
