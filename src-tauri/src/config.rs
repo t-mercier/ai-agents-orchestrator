@@ -455,6 +455,35 @@ pub fn category_base_dirs() -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+/// First-run setup keeps its own marker file rather than a key in `config.json`:
+/// `derive()` rebuilds a fixed object, so any key it does not name is dropped from the
+/// config the Settings pane sends back — `skillProposals` already survives only because
+/// nothing round-trips it. A flag that decides whether a wizard opens cannot depend on
+/// that.
+fn onboarding_marker_path() -> PathBuf {
+    config_dir().join("onboarded")
+}
+
+pub fn onboarding_marked() -> bool {
+    onboarding_marker_path().exists()
+}
+
+pub fn mark_onboarded() -> Result<(), String> {
+    let path = onboarding_marker_path();
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    crate::atomic_write(&path, "")
+}
+
+/// Whether to open first-run setup. An absent marker is NOT enough: every install that
+/// predates the wizard has one, and those users already have their sessions in the app.
+/// Offering to import for someone with a populated registry would be a wizard about work
+/// they finished long ago — so a non-empty registry counts as setup already done.
+pub fn onboarding_needed(marked: bool, managed_sessions: usize) -> bool {
+    !marked && managed_sessions == 0
+}
+
 #[tauri::command]
 pub fn get_config() -> Value {
     load()
@@ -467,12 +496,22 @@ pub fn set_config(cfg: Value) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_config, derive, migrate_v1_value, validate};
+    use super::{default_config, derive, migrate_v1_value, onboarding_needed, validate};
     use serde_json::json;
 
     // The in-app skills installer seeds default_config() via save() → validate() on first
     // launch. If it didn't validate, install would copy the skills then error out — so lock
     // the invariant here (this path otherwise only runs on a real first launch).
+    // The rule that keeps the wizard away from the people who least need it: her own
+    // install has no marker (it predates the feature) and 113 managed sessions.
+    #[test]
+    fn onboarding_opens_only_for_an_install_with_nothing_in_it() {
+        assert!(onboarding_needed(false, 0), "fresh install → the wizard opens");
+        assert!(!onboarding_needed(false, 113), "pre-wizard install with sessions → never");
+        assert!(!onboarding_needed(true, 0), "already run → never again on its own");
+        assert!(!onboarding_needed(true, 5));
+    }
+
     #[test]
     fn default_config_passes_validation() {
         assert!(validate(&default_config()).is_ok());
