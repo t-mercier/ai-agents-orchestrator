@@ -193,6 +193,32 @@
   .secgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
   @media (max-width: 820px) { .secgrid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 480px) { .secgrid { grid-template-columns: 1fr; } }
+  /* Problem → Solution map. Same three signals as the hero pair — tags, arrow, accent on
+     the resolved side — so the two blocks teach the reader the page's one visual grammar
+     instead of each inventing its own. */
+  .ps { display: flex; flex-direction: column; gap: 12px; margin-top: 34px; text-align: left; }
+  .ps-row {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center;
+    padding: 20px 22px; border-radius: 14px; border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.015);
+  }
+  .ps-tag {
+    display: inline-block; margin-bottom: 8px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px;
+    color: var(--faint); background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+  }
+  .ps-tag-s { color: var(--accent-3); background: rgba(106,215,200,0.13); border-color: rgba(106,215,200,0.3); }
+  .ps-row p { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .ps-s p { color: var(--text); }
+  .ps-s a { color: var(--accent-3); text-decoration: none; border-bottom: 1px solid rgba(106,215,200,0.35); }
+  .ps-s a:hover { border-bottom-color: var(--accent-3); }
+  .ps-arrow { color: var(--accent-3); font-size: 20px; line-height: 1; }
+  @media (max-width: 860px) {
+    .ps-row { grid-template-columns: 1fr; gap: 10px; }
+    .ps-arrow { transform: rotate(90deg); justify-self: center; }
+  }
+
   /* Hero before/after. The pairing has to be readable at a glance, so it carries three
      signals rather than relying on the reader inferring one: the tags name which side is
      which, the arrow gives the direction, and the "after" card is tinted with the accent. */
@@ -279,7 +305,7 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.9c-2.78.62-3.37-1.22-3.37-1.22-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
         Get it on GitHub
       </a>
-      <a class="btn btn-ghost" href="#memory">See the tour ↓</a>
+      <a class="btn btn-ghost" href="#problems">See the tour ↓</a>
     </div>
     <p class="hero-note">Free to use, not for resale · ~8 MB · runs on the system WebView, no Chromium bundled</p>
   </div>
@@ -293,9 +319,44 @@
 
 </header>
 
-<!-- THE PROBLEM -->
+<!-- PROBLEM -> SOLUTION -->
+<!-- The whole argument on one screen, before any section elaborates it. Deliberately not
+     .reveal: it is the map of the page, and a map that waits for scroll JS is a map you
+     can miss. Each solution links to the section that explains it. -->
+<section id="problems">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What it fixes</p>
+      <h2>Four things that cost you a day a week.</h2>
+      <p class="lead">Every one of them is the same failure in a different place: something you already worked out, gone by the time you need it again.</p>
+    </div>
+    <div class="ps">
+      <div class="ps-row">
+        <div class="ps-p"><span class="ps-tag">Problem</span><p>A long session gets <strong>compacted</strong>. The decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p></div>
+        <div class="ps-arrow" aria-hidden="true">→</div>
+        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#memory">A <code>notes.md</code> per session</a>, beside its code — goal, decisions, next steps, session id. Pick the work back up weeks later with the thread intact.</p></div>
+      </div>
+      <div class="ps-row">
+        <div class="ps-p"><span class="ps-tag">Problem</span><p>A lesson dies with the session that learned it. You re-derive from the code what a past session already settled.</p></div>
+        <div class="ps-arrow" aria-hidden="true">→</div>
+        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#knowledge">A folder of knowledge notes per space</a>. <code>/learn</code> writes as it learns; <code>/route</code> reads it back before you open the code.</p></div>
+      </div>
+      <div class="ps-row">
+        <div class="ps-p"><span class="ps-tag">Problem</span><p>You correct the same mistake over and over. The agent never learns the <em>procedure</em>, only the fact — and only for one session.</p></div>
+        <div class="ps-arrow" aria-hidden="true">→</div>
+        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#proposals">Skills it proposes and you approve</a>. Drafts are <strong>staged</strong> outside the skills folder; you read the diff before anything runs.</p></div>
+      </div>
+      <div class="ps-row">
+        <div class="ps-p"><span class="ps-tag">Problem</span><p>Several sessions in parallel, and the bottleneck is you holding it in your head. Which needs an answer? Which finished an hour ago?</p></div>
+        <div class="ps-arrow" aria-hidden="true">→</div>
+        <div class="ps-s"><span class="ps-tag ps-tag-s">Solution</span><p><a href="#features">A dashboard over all of them</a> — a list or a kanban, one click back in, and Doctor and Clean for when it gets away from you.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- MEMORY -->
-<section id="memory">
+<section id="memory" class="teal">
   <div class="wrap">
     <div class="section-head reveal">
       <p class="eyebrow">What makes it compound</p>
@@ -309,7 +370,7 @@
       <div class="sec reveal"><h4>A file you own</h4><p>The source of truth is markdown on your disk — not a context window, and not someone's cloud.</p></div>
     </div>
 
-    <div class="section-head reveal" style="margin-top:56px">
+    <div class="section-head reveal" id="knowledge" style="margin-top:56px">
       <p class="eyebrow alt">And across sessions</p>
       <h2>A lesson that outlives its session.</h2>
       <p class="lead">A <code>notes.md</code> remembers <em>one</em> session. The decision that cost you an afternoon deserves to outlive it. Each space can point at a folder of <strong>knowledge notes</strong>: the agent writes into it as it learns — and the next investigation starts by reading it back — so you stop re-deriving from the code what a past session already settled.</p>
@@ -322,7 +383,7 @@
       <div class="sec reveal"><h4>Read back before you dig</h4><p><code>/route &lt;ticket&gt;</code> builds a Context Brief from those notes, your past sessions and your tracker — <em>before</em> you open the code. It resolves which folder to read from the session's space.</p></div>
     </div>
 
-    <div class="section-head reveal" style="margin-top:56px">
+    <div class="section-head reveal" id="proposals" style="margin-top:56px">
       <p class="eyebrow">And it writes its own skills</p>
       <h2>A mistake you fix once, it stops making.</h2>
       <p class="lead">Notes record <em>what is true</em>; a skill records <em>how to do something</em>. When a session actually teaches a procedure — a dead end whose workaround is worth keeping, an approach you corrected — <code>/skill-propose</code> drafts it. Nothing becomes active on its own: proposals are <strong>staged</strong> outside the skills folder, and you read the diff before anything runs.</p>
@@ -336,10 +397,11 @@
   </div>
 </section>
 
-<section class="teal">
+<!-- FEATURES -->
+<section id="features">
   <div class="wrap">
     <div class="section-head reveal">
-      <p class="eyebrow">The problem</p>
+      <p class="eyebrow">The dashboard</p>
       <h2>Tabs don't scale. Agents do.</h2>
       <p class="lead">When you run many sessions in parallel, the bottleneck isn't the agents — it's <em>you</em> holding it all in your head. Which one needs an answer? Which finished an hour ago? Where does each one live?</p>
       <p class="lead" style="margin-top:18px;color:var(--text);">Lay it all out in front of you, and the pile starts working <em>for</em> you. When it gets away from you anyway, <strong>Doctor</strong> reports what is genuinely broken — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists — and repairs only what you tick. <strong>Clean</strong> audits the rest by age and proposes what to archive.</p>
@@ -361,14 +423,8 @@
         <p>Resume in an embedded terminal, pop it into its own pinned window, or jump to the branch, PR, or notes.</p>
       </div>
     </div>
-  </div>
-</section>
 
-
-<!-- FEATURES -->
-<section id="features">
-  <div class="wrap">
-    <div class="section-head reveal">
+    <div class="section-head reveal" style="margin-top:56px">
       <p class="eyebrow">Two ways to look</p>
       <h2>Two views. Pick how you think.</h2>
       <p class="lead">The same live session data, rendered the way you think — a tidy list, or a full kanban cockpit.</p>
