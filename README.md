@@ -122,7 +122,7 @@ Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pi
 
 AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network **only** when you press **Sync** — that button is the opt-in, and nothing else in the app calls out — and it **never** stores secrets: it visualizes what's on disk and lets Claude Code do the rest.
 
-It is **read-only on your session data by design**. The only writes it makes to session files are explicit actions you trigger — **archiving** a session and **saving its PR links / tickets** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, you can ask it to **install the session skills** into `~/.claude/skills/` (a Settings button / first-launch prompt) — a user-triggered write confined to that skills folder, never touching your transcripts. Your UI preferences live in `localStorage` + your own config file.
+It is **read-only on your session data by design**. The only writes it makes to session files are explicit actions you trigger — **archiving** a session and **saving its PR links / tickets** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which copies anything you had edited into `.archive/` first and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
 
@@ -367,7 +367,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (138, `cargo test`) + Jest (137, renderer logic) — 275 total |
+| Tests | Rust unit tests (144, `cargo test`) + Jest (151, renderer logic) — 295 total |
 
 ## Roadmap
 

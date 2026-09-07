@@ -45,13 +45,22 @@ terminal windows: every session gets its own terminal *inside* the app, and swit
 sessions is a click. Opening in your own terminal still works — but you're back to
 hunting for the right window, which is the problem this replaces.
 
-## Adopting a session you started outside the app
+## Bringing in sessions you started outside the app
 
 Sessions you started yourself (plain `claude` in a shell) aren't managed: they have no
-`notes.md`, so the app can't track them. The **Recent · unmanaged** section at the top of
-Running lists the recent ones; **Adopt** relaunches such a session *and* creates its
-`notes.md` + registers it. It's a one-time step — afterwards it behaves like any other
-session, so you just Resume it.
+`notes.md`, so the app can't track them. **First-run setup** brings them in — three steps:
+your spaces and categories, then the sessions found on this machine, then a single import
+pass. Each session goes to the space and category you pick, and a `▸` on its row shows what
+it opened with and what it left off at so you can tell which ones are still worth keeping.
+
+It runs itself once, on an install with nothing in it. After that — or if you skipped it —
+**Settings → First-run setup → Re-run first-time setup…** opens it again, and the list's
+empty state offers it too.
+
+This is the *only* place the dashboard adopts a session started elsewhere, and that is
+deliberate: once a session is tracked you are meant to start the next one from **＋ New**,
+not from a shell. Importing is a one-time step — afterwards a session behaves like any
+other, so you just Resume it.
 
 ## One session, one process
 
@@ -99,16 +108,19 @@ You run these inside Claude Code (the dashboard buttons trigger them for you). C
 | **`/save-session`** | Checkpoints the active session into `notes.md` mid-flight, marked `(in progress)`, **without** closing it — handy before a context compaction. Stays *Running*. |
 | **`/restart-session <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |
 | **`/archive-session <slug>`** | Marks a session archived and drops it from the active list (the notes file is kept). → *Archived* |
-| **`/import-session <slug>`** | Adopts an unmanaged Claude Code session into management under a chosen space and category. |
-| **`/rename-category <OLD> <NEW>`** | Renames a category everywhere — moves its folder, re-tags every `notes.md`, updates the config. (The app is read-only, so renaming *there* alone would orphan sessions — this skill does the real move.) |
-| **`/skill-propose`** | Stages what this session taught as a reusable skill — or, preferably, a patch to one you already have. Only fires when something reusable actually came up. Writes to `~/.claude/skills-pending/`, never to `skills/`. |
-| **`/skills-review`** | Shows a staged proposal (full content, or a real diff) and promotes it only once you approve. Nothing becomes active any other way. |
+| **`/wrap-session <notes> <id>`** | The headless twin of `/close-session`, behind the dashboard's **Close** button: it summarises and closes without opening a terminal. |
+| **`/sync-refs <notes>`** | Realigns one session's references — each ticket's current status from your tracker, and any pull request whose branch names one of its tickets. Behind the **Sync** button. |
+| **`/import-session <CATEGORY> [name]`** | Binds the session you are in to a `notes.md` under a chosen space and category, and registers it. This is what first-run setup runs for each session you tick. |
+| **`/rename-category <OLD> <NEW>`** | Renames a category everywhere — moves its folder, re-tags every `notes.md`, updates the config. (The app does not move folders, so renaming *there* alone would orphan sessions — this skill does the real move.) |
+| **`/skill-propose`** | Turns what this session taught into a reusable skill — or, preferably, a patch to one you already have. Only fires when something reusable actually came up. With you there it shows the **exact wording** it would change and applies it on your yes; otherwise it stages the proposal for `/skills-review`. Every change is appended to `~/.claude/skills-applied.log`, which is how you undo one. |
+| **`/skills-review`** | Shows a staged proposal (full content, or a real diff) and promotes it only once you approve. Where a proposal lands when nobody was there to answer it — a headless close, a background run. |
 | **`/skills-curate`** | Occasional housekeeping over the whole set: refreshes per-skill usage from your transcripts, flags what has gone dormant, and proposes merging skills that should be one. Never deletes — archives. |
 | **`/learn`** | Records one durable fact — a preference you stated, an environment quirk, a gotcha and its workaround — into this space's knowledge notes, **as it happens**. Waiting for the session close means the write often never happens. |
 | **`/route <ticket \| topic>`** | A Context Brief *before* you investigate: this space's knowledge notes, your past session notes and — when a tracker is reachable — its tickets, summarised. Read-only. Run it at the start of a bug or an unfamiliar area, not after getting stuck. |
 
 ## A typical day
 
+0. First time only: **first-run setup** names your spaces and categories and brings in the sessions you already had.
 1. **`/start-session FEAT 1842 checkout-redesign`** → new session, ready to work.
 2. Work with Claude; the dashboard shows it as **Active**, and flags it **waiting** when it needs you.
 3. **`/close-session`** when you're done for the day → it moves to **Closed**, notes summarised.
