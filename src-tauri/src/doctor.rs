@@ -155,7 +155,7 @@ pub fn findings(snap: &Snapshot) -> Vec<Finding> {
             severity: "broken".into(),
             title: format!("Session running outside the registry (pid {pid})"),
             detail: format!(
-                "A live session in {cwd} has no registry entry, so it cannot be reached from the list — and Resume reports it as already active. Reopen it from Running, or quit pid {pid} to release the work."
+                "A live session in {cwd} has no registry entry, so it cannot be reached from the list — and Resume reports it as already active. Quit pid {pid} first (a running session cannot be resumed from anywhere else), then bring it in with Settings → first-run setup."
             ),
             target: pid.to_string(),
             repair: None,

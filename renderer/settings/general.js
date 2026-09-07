@@ -114,6 +114,12 @@
     window.location.reload()
   })
 
+  // ── First-run setup: the way back to the wizard. It is the app's only import path, so
+  // this entry is what stops a skipped or long-past setup from being a walled door. ──
+  if ($('set-onboarding')) $('set-onboarding').addEventListener('click', () => {
+    if (window.openOnboarding) window.openOnboarding()
+  })
+
   // ── Clean: same shape as Doctor — Settings opens the panel, the panel decides. ──
   if ($('set-clean')) $('set-clean').addEventListener('click', () => {
     if (window.openClean) window.openClean()

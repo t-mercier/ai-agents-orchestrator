@@ -184,6 +184,30 @@
   .secgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
   @media (max-width: 820px) { .secgrid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 480px) { .secgrid { grid-template-columns: 1fr; } }
+  /* Hero before/after. The pairing has to be readable at a glance, so it carries three
+     signals rather than relying on the reader inferring one: the tags name which side is
+     which, the arrow gives the direction, and the "after" card is tinted with the accent. */
+  .ba {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px;
+    align-items: stretch; text-align: left;
+    margin: 38px 0 40px;
+  }
+  .ba-card { padding: 20px 22px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,0.015); }
+  .ba-card-after { border-color: rgba(155, 140, 255, 0.34); background: rgba(155, 140, 255, 0.06); }
+  .ba-tag {
+    display: inline-block; margin-bottom: 10px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .ba-tag-before { color: var(--faint); background: rgba(255,255,255,0.05); border: 1px solid var(--line); }
+  .ba-tag-after { color: var(--accent); background: rgba(155,140,255,0.13); border: 1px solid rgba(155,140,255,0.3); }
+  .ba-card h4 { font-size: 14.5px; margin-bottom: 7px; line-height: 1.35; }
+  .ba-card p { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .ba-arrow { align-self: center; color: var(--accent); font-size: 22px; line-height: 1; }
+  @media (max-width: 860px) {
+    .ba { grid-template-columns: 1fr; gap: 12px; margin: 30px 0 34px; }
+    .ba-arrow { transform: rotate(90deg); justify-self: center; }
+  }
   .sec { padding: 22px; border-radius: 14px; border: 1px solid var(--line); }
   .sec h4 { font-size: 15px; margin-bottom: 7px; display: flex; align-items: center; gap: 9px; }
   .sec h4 svg { color: var(--accent-3); } .sec p { color: var(--muted); font-size: 13.5px; }
@@ -228,14 +252,17 @@
     <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a staged proposal whenever it learns a procedure — nothing becomes active until you have read the diff.</p>
     <p class="sub">Local-first, read-only on your files, silent on the network until you press Sync. macOS &amp; Linux, ~8 MB.</p>
 
-    <div class="split" style="margin-top:34px;text-align:left;">
-      <div class="sec">
-        <h4>Session 1</h4>
-        <p>You explain your branch convention. The agent applies it — then the session is compacted, and it is gone.</p>
+    <div class="ba">
+      <div class="ba-card">
+        <span class="ba-tag ba-tag-before">Without it</span>
+        <h4>You explain your branch convention</h4>
+        <p>The agent applies it. Then the session is compacted — and by session 12 you are typing the same explanation again.</p>
       </div>
-      <div class="sec">
-        <h4>Session 12</h4>
-        <p>It reads the note it wrote the first time, and applies the convention without being told again.</p>
+      <div class="ba-arrow" aria-hidden="true">→</div>
+      <div class="ba-card ba-card-after">
+        <span class="ba-tag ba-tag-after">With it</span>
+        <h4>You explain it once</h4>
+        <p>Session 12 reads the note session 1 wrote, and applies the convention without being told again.</p>
       </div>
     </div>
     <div class="cta-row">
@@ -277,13 +304,13 @@
       <p class="eyebrow">And across sessions</p>
       <h2>A lesson that outlives its session.</h2>
       <p class="lead">A <code>notes.md</code> remembers <em>one</em> session. The decision that cost you an afternoon deserves to outlive it. Each space can point at a folder of <strong>knowledge notes</strong>: the agent writes into it as it learns — and the next investigation starts by reading it back — so you stop re-deriving from the code what a past session already settled.</p>
+      <p class="lead" style="margin-top:14px;">It is a plain folder of Markdown, so no tool is required to read it. Obsidian is a pleasant way to browse it — so are VS Code, Logseq, or <code>grep</code>.</p>
     </div>
     <div class="secgrid">
       <div class="sec reveal"><h4>Written the moment it's learned</h4><p><code>/learn</code> writes one atomic note as soon as something durable comes up — a preference you stated, a gotcha and its workaround. Waiting for the session to close means depending on a gesture that often never comes.</p></div>
       <div class="sec reveal"><h4>Extended, not duplicated</h4><p>A fifth note on one subject dilutes retrieval instead of adding knowledge. It searches first and <strong>extends or corrects</strong> the note that already owns the subject — then links it into the index, because an orphan note is one nobody finds.</p></div>
       <div class="sec reveal"><h4>Distilled, not dumped</h4><p><code>/close-session</code> promotes only the high-signal decisions, and marks the source, so the same bullet is never promoted twice.</p></div>
       <div class="sec reveal"><h4>Read back before you dig</h4><p><code>/route &lt;ticket&gt;</code> builds a Context Brief from those notes, your past sessions and your tracker — <em>before</em> you open the code. It resolves which folder to read from the session's space.</p></div>
-      <div class="sec reveal"><h4>No Obsidian required</h4><p>It is a plain folder of Markdown. Obsidian is a pleasant way to browse it — so are VS Code, Logseq, or <code>grep</code>. Point a space at any folder.</p></div>
     </div>
 
     <div class="section-head reveal" style="margin-top:56px">

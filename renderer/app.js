@@ -1153,6 +1153,10 @@ async function boot() {
   seedTabCounts()                             // fill ALL tab badges at launch (not just on visit)
   maybeShowSkillsBanner()                     // first-launch install nudge, then silent per-launch sync
   refreshUsage()                              // initial usage bar render
+  // First-run setup, offered only to an install with nothing in it (the marker file plus
+  // an empty registry — see config::onboarding_needed). Last in boot so it opens over a
+  // window that is already drawn rather than a blank one.
+  if (window.maybeOpenOnboarding) window.maybeOpenOnboarding()
   window.CSMDragList.init({
     root: document.getElementById('panel-left'),
     onReorder: async ({ kind, id, action, targetId, containerKey, index }) => {
