@@ -1,14 +1,15 @@
 ---
 name: skill-propose
 description: >-
-  Capture procedural knowledge as a STAGED skill proposal — a new skill, or a targeted
-  patch to an existing one — written to ~/.claude/skills-pending/ and never to
-  ~/.claude/skills/. Use PROACTIVELY, in flight: the moment the user corrects your
-  approach, or the same output goes through a SECOND rewrite pass, stop and consider
-  whether the skill that produced it is the defect. Do not wait for the session to close.
-  Fires only when the session actually taught something reusable; stays silent otherwise.
-  Review with /skills-review. Trigger on "/skill-propose", "propose a skill", "fais-en une
-  skill", "capture ça en skill", "on pourrait pas améliorer la skill ?".
+  Capture procedural knowledge as a skill — a new one, or a targeted patch to an existing
+  one. Use PROACTIVELY, in flight: the moment the user corrects your approach, or the same
+  output goes through a SECOND rewrite pass, stop and consider whether the skill that
+  produced it is the defect. Do not wait for the session to close. With the user present on
+  that second correction, show the verbatim change (or a scope card for a new skill) and
+  apply it on their yes, logging it to ~/.claude/skills-applied.log; otherwise stage it in
+  ~/.claude/skills-pending/ for /skills-review. Fires only when the session actually taught
+  something reusable; stays silent otherwise. Trigger on "/skill-propose", "propose a
+  skill", "fais-en une skill", "capture ça en skill", "on pourrait pas améliorer la skill ?".
 allowed-tools: Bash Read Write Edit
 argument-hint: "[a hint about what to capture]"
 ---
