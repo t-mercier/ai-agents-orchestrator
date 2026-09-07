@@ -41,3 +41,8 @@ __pycache__/
 
 # Jest coverage output (generated)
 coverage/
+
+# Local UI smoke harness: renderer/index.html with window.__TAURI__.core.invoke stubbed,
+# so the real renderer stack can be driven in a browser. Generated, and NEVER committed —
+# `frontendDist` is ../renderer, so anything left here ships inside the .dmg.
+renderer/__smoke.html
