@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Agents Orchestrator — mission control for your AI development sessions</title>
-<meta name="description" content="A tiny native dashboard for macOS & Linux that gives you one unified view over a dozen parallel AI coding sessions, across every project. Local-first, read-only by design, and silent on the network until you ask it to sync." />
+<title>AI Agents Orchestrator — memory for your AI coding sessions</title>
+<meta name="description" content="Every Claude Code session keeps a notes.md beside its code, writes what it learns into a folder of knowledge notes, and proposes a skill when it learns a procedure — nothing active until you read the diff. A tiny local-first dashboard for macOS &amp; Linux." />
 <meta property="og:title" content="AI Agents Orchestrator" />
-<meta property="og:description" content="Every agent you're running, in one window — live status, the work in progress, and a terminal for each. Local-first, and silent on the network until you ask." />
+<meta property="og:description" content="What you learned once, you keep. Every session keeps its notes beside the code, and the agent reads them back before it digs. Local-first, silent on the network until you press Sync." />
 <meta property="og:image" content="media/hero.png" />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -223,16 +223,27 @@
 <header>
   <div class="wrap">
     <span class="pill"><span class="dot"></span> Local-first · macOS & Linux · source-available</span>
-    <h1>Every agent you're running. <span class="grad">One window.</span></h1>
-    <p class="vs">AI coding sessions now run for <strong>days</strong> — and you end up with a dozen terminal windows and no idea which agent is waiting on you.</p>
-    <p class="sub"><strong>AI Agents Orchestrator</strong> puts every session in one place: live status, what each one is working on, and its own terminal — without leaving the app.</p>
+    <h1>What you learned once, <span class="grad">you keep.</span></h1>
+    <p class="vs">A long session gets <strong>compacted</strong> — the decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p>
+    <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a staged proposal whenever it learns a procedure — nothing becomes active until you have read the diff.</p>
     <p class="sub">Local-first, read-only on your files, silent on the network until you press Sync. macOS &amp; Linux, ~8 MB.</p>
+
+    <div class="split" style="margin-top:34px;text-align:left;">
+      <div class="sec">
+        <h4>Session 1</h4>
+        <p>You explain your branch convention. The agent applies it — then the session is compacted, and it is gone.</p>
+      </div>
+      <div class="sec">
+        <h4>Session 12</h4>
+        <p>It reads the note it wrote the first time, and applies the convention without being told again.</p>
+      </div>
+    </div>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/t-mercier/ai-agents-orchestrator">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.9c-2.78.62-3.37-1.22-3.37-1.22-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9l-.01 2.82c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
         Get it on GitHub
       </a>
-      <a class="btn btn-ghost" href="#features">See the tour ↓</a>
+      <a class="btn btn-ghost" href="#memory">See the tour ↓</a>
     </div>
     <p class="hero-note">Free to use, not for resale · ~8 MB · runs on the system WebView, no Chromium bundled</p>
   </div>
@@ -244,43 +255,9 @@
     </div>
   </div>
 
-  <div class="wrap trust reveal">
-    <span><b>Read-only</b> on <code>~/.claude</code></span>
-    <span><b>Zero</b> network calls</span>
-    <span><b>No</b> secrets stored</span>
-    <span><b>239</b> tests</span>
-  </div>
 </header>
 
 <!-- THE PROBLEM -->
-<section>
-  <div class="wrap">
-    <div class="section-head reveal">
-      <p class="eyebrow">The problem</p>
-      <h2>Tabs don't scale. Agents do.</h2>
-      <p class="lead">When you run many sessions in parallel, the bottleneck isn't the agents — it's <em>you</em> holding it all in your head. Which one needs an answer? Which finished an hour ago? Where does each one live?</p>
-      <p class="lead" style="margin-top:18px;color:var(--text);">Built for the way a lot of us actually work — a dozen threads at once, fast and a little scattered. Lay it all out in front of you, and the chaos finally works <em>for</em> you.</p>
-    </div>
-    <div class="grid3">
-      <div class="card reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-        <h4>Status at a glance</h4>
-        <p>Busy, idle, waiting, stale, or a background shell — colour-coded and grouped, refreshed every 5 seconds.</p>
-      </div>
-      <div class="card reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div>
-        <h4>"Needs you" surfaces first</h4>
-        <p>Sessions waiting on your input float to the top with a pulsing marker — so nothing stalls because you forgot it existed.</p>
-      </div>
-      <div class="card reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v6H4zM4 14h16v6H4z"/></svg></div>
-        <h4>One click back in</h4>
-        <p>Resume in an embedded terminal, pop it into its own pinned window, or jump to the branch, PR, or notes.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- MEMORY -->
 <section id="memory">
   <div class="wrap">
@@ -298,7 +275,7 @@
 
     <div class="section-head reveal" style="margin-top:56px">
       <p class="eyebrow">And across sessions</p>
-      <h2>What you learned once, you keep.</h2>
+      <h2>A lesson that outlives its session.</h2>
       <p class="lead">A <code>notes.md</code> remembers <em>one</em> session. The decision that cost you an afternoon deserves to outlive it. Each space can point at a folder of <strong>knowledge notes</strong>: the agent writes into it as it learns — and the next investigation starts by reading it back — so you stop re-deriving from the code what a past session already settled.</p>
     </div>
     <div class="secgrid">
@@ -322,6 +299,35 @@
     </div>
   </div>
 </section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">The problem</p>
+      <h2>Tabs don't scale. Agents do.</h2>
+      <p class="lead">When you run many sessions in parallel, the bottleneck isn't the agents — it's <em>you</em> holding it all in your head. Which one needs an answer? Which finished an hour ago? Where does each one live?</p>
+      <p class="lead" style="margin-top:18px;color:var(--text);">Lay it all out in front of you, and the pile starts working <em>for</em> you. When it gets away from you anyway, <strong>Doctor</strong> reports what is genuinely broken — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists — and repairs only what you tick. <strong>Clean</strong> audits the rest by age and proposes what to archive.</p>
+    </div>
+    <div class="grid3">
+      <div class="card reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <h4>Status at a glance</h4>
+        <p>Busy, idle, waiting, stale, or a background shell — colour-coded and grouped, refreshed every 5 seconds.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div>
+        <h4>"Needs you" surfaces first</h4>
+        <p>Sessions waiting on your input float to the top with a pulsing marker — so nothing stalls because you forgot it existed.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v6H4zM4 14h16v6H4z"/></svg></div>
+        <h4>One click back in</h4>
+        <p>Resume in an embedded terminal, pop it into its own pinned window, or jump to the branch, PR, or notes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 
 <!-- FEATURES -->
 <section id="features">
@@ -422,12 +428,12 @@
     <div class="section-head reveal">
       <p class="eyebrow">Session skills</p>
       <h2>The dashboard is only half of it</h2>
-      <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes. One command installs them.</p>
+      <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes, and the app keeps them current itself — it syncs them into <code>~/.claude/skills</code> at launch, and copies aside anything you had edited before it overwrites. The script below is for installing them <em>without</em> the app.</p>
     </div>
     <div class="split">
       <div class="terminal reveal">
         <div class="bar"><i></i><i></i><i></i></div>
-<pre><span class="m"># clone & install the skills</span>
+<pre><span class="m"># only if you want the skills without the app</span>
 <span class="c">$</span> git clone https://github.com/t-mercier/ai-agents-orchestrator
 <span class="c">$</span> cd ai-agents-orchestrator
 <span class="c">$</span> bash scripts/install.sh
@@ -467,13 +473,20 @@
     <div class="section-head reveal">
       <p class="eyebrow">Local-first by design</p>
       <h2>It watches. It barely touches.</h2>
-      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It never phones home, and it's read-only on your session data — writing only when you explicitly archive a session or save a PR link (installing the session skills is a separate, opt-in copy into <code>~/.claude/skills</code>).</p>
+      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It is silent on the network until you press <strong>Sync</strong> — that button is the opt-in, and it is the only thing that reaches GitHub or your tracker. It is read-only on your session data otherwise, writing only when you archive a session, save a PR link, or let it bring its own skills up to this version.</p>
     </div>
     <div class="secgrid">
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg> No shell strings</h4><p>Every command spawns with separate args — no string interpolation, no injection surface.</p></div>
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Allowlisted inputs</h4><p>Paths, branches and PR URLs are validated against strict patterns before use.</p></div>
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Sandboxed writes</h4><p>The two writes (archive, PR link) are atomic and confined under your configured roots.</p></div>
-      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg> Offline always</h4><p>Zero network calls. Your work, your tickets, your branches never leave the machine.</p></div>
+      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg> Offline until you ask</h4><p>No timer, no telemetry, no background fetch. Nothing leaves the machine until you press Sync.</p></div>
+    </div>
+
+    <div class="trust reveal">
+      <span><b>Read-only</b> on <code>~/.claude</code></span>
+      <span><b>No</b> network calls until Sync</span>
+      <span><b>No</b> secrets stored</span>
+      <span><b>275</b> tests</span>
     </div>
   </div>
 </section>

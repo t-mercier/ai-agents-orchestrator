@@ -1,14 +1,14 @@
 <div align="center">
 
-<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/banner.png" alt="AI Agents Orchestrator — mission control for your AI development sessions" width="820"></a>
+<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/banner.png" alt="AI Agents Orchestrator — memory for your AI coding sessions" width="820"></a>
 
 # AI Agents Orchestrator
 
-**Every AI coding session you're running, in one window — a tiny native dashboard for macOS & Linux.**
+**What you learned once, you keep — a tiny native dashboard for macOS & Linux.**
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.9.0--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.11.4--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -18,9 +18,9 @@
 </div>
 
 
-> AI coding sessions now run for **days, sometimes entire projects** — each with its own context, decisions, repos and agents. Run a few in parallel and you're hunting through a dozen terminal windows to find the one that needs you.
+> A long session gets **compacted** — the decisions you made on day one are squeezed out, and the next conversation starts from nothing. Run several in parallel and you also lose track of which one is waiting on you.
 >
-> **AI Agents Orchestrator puts every session in one window** — live status, the work in progress, and a terminal for each. Local-first, read-only, and silent on the network until you press **Sync**.
+> **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a staged skill proposal whenever it learns a procedure. Nothing becomes active until you have read the diff. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync**.
 
 ## TL;DR — how you're meant to use it
 
@@ -63,6 +63,8 @@ Full tour: **[the guide](docs/GUIDE.md)**.
 > - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
 > - ✅ **Close finishes a stale session properly** — it resumes the session headless, writes the summary, attaches the PRs, and moves it to Closed. No terminal opens.
 > - 🧠 **Knowledge notes build themselves** — `/learn` writes the moment something durable comes up, extending the note that already owns the subject; an opt-in hook now catches it the instant your own wording states a preference or correction, not only when you ask.
+> - 🩺 **Doctor finds what is genuinely broken** — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists, a pidfile for a process that has exited. It reports; you tick what it repairs. A pruned transcript is ordinary ageing, and it says so rather than counting it as damage.
+> - 🧹 **Clean audits the rest by age** — it proposes what to archive and what to delete, using the same last-touched date the list already shows. Nothing is pre-ticked, and a deletion goes to the Trash.
 > - 🛡 **The app's skills keep themselves current** — the lifecycle skills are app-owned, synced silently at launch like any app resource. An older build never reverts a newer install, and anything you'd edited by hand is copied to `.archive/` before being replaced — named in a notice, never silently lost.
 >
 > Earlier releases: the [changelog](CHANGELOG.md) has the full history.
@@ -123,6 +125,30 @@ It is **read-only on your session data by design**. The only writes it makes to 
 
 ## Quick start
 
+### Download a build
+
+Grab the newest asset from **[Releases](https://github.com/t-mercier/ai-agents-orchestrator/releases)** —
+universal `.dmg` (Intel & Apple Silicon) · `.deb` · `.AppImage` · `.rpm`. Nothing to compile, and no
+Chromium: it runs on the system WebView, so the download is around 7 MB.
+
+You also need **[Claude Code](https://claude.com/claude-code)** — the app is a view onto the sessions it
+writes to `~/.claude`, so it has nothing to show without it. On first launch the app installs its own
+session skills into `~/.claude/skills/` and keeps them current from then on; see
+[Session skills](#session-skills).
+
+> [!NOTE]
+> **macOS:** the builds are unsigned for now, so Gatekeeper calls the app "damaged" (it isn't). Move it to
+> `/Applications`, then strip the quarantine flag once — right-click → **Open** no longer clears this on
+> recent macOS:
+> ```bash
+> xattr -cr "/Applications/AI Agents Orchestrator.app"
+> ```
+> Signed and notarized releases come once it is out of alpha.
+
+### Build from source
+
+Only needed to contribute, or to run an unreleased branch.
+
 **Requirements:** [Rust](https://rustup.rs) + the Tauri CLI (`cargo install tauri-cli`) · [Claude Code](https://claude.com/claude-code), plus your platform's WebView toolchain:
 
 - **macOS 13+** — Xcode Command Line Tools (`xcode-select --install`).
@@ -153,11 +179,8 @@ cargo tauri build      # macOS: .app/.dmg · Linux: .deb/.AppImage — in src-ta
 ```
 
 > [!NOTE]
-> **macOS:** built unsigned for now, so Gatekeeper flags it as "damaged" (it isn't). On recent macOS, right-click → **Open** no longer clears this — after moving the app to `/Applications`, strip the quarantine flag once from Terminal:
-> ```bash
-> xattr -cr "/Applications/AI Agents Orchestrator.app"
-> ```
-> Then open it normally. Signed/notarized releases come once it's out of alpha.
+> **macOS:** a bundle you build yourself is unsigned too — clear the quarantine flag the same way as a
+> downloaded build (see [Download a build](#download-a-build)).
 
 > [!NOTE]
 > **Linux:** runs on X11 and Wayland (verified on GNOME/Wayland). One feature is macOS-only: *revealing* an existing external terminal window (there's no portable way to focus a window by tty on X11/Wayland), so that button is hidden on Linux. Opening a new terminal and the in-app embedded terminal both work.
