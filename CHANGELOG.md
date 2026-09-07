@@ -10,6 +10,46 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0-alpha] - 2026-09-07
+
+### Added
+- **First-run setup brings your existing sessions in.** A fresh install opens a three-step
+  wizard: spaces and categories first, then the Claude Code sessions already on the machine,
+  then one import pass. The order is not cosmetic — the backend refuses a category the config
+  does not carry, and the shipped seed points "Work" at `~/work`, a path that exists on almost
+  no machine, so importing before the taxonomy is real would either fail or file someone's
+  notes into a folder they never chose.
+
+  Each session carries **its own** space and category, defaulted to the first category under a
+  space that exists so finishing the step costs no clicks. A `▸` on each row expands what the
+  session opened with and what it left off at, read from the two ends of its transcript only:
+  the head stops at the first real user turn (so previewing one session costs less than the
+  scan that listed it) and the tail seeks the last 64 KB rather than streaming a file that can
+  run to tens of megabytes.
+
+  It only ever opens by itself on an install with nothing in it — an absent marker is not
+  enough, since every install predating the feature has one. **Settings → First-run setup**
+  re-runs it, and the list's empty state offers it too.
+
+### Removed
+- **Adopt and Import are gone from the daily surface.** The `＋ Import` button, the
+  "Recent · unmanaged" section and the Adopt button on its rows are removed, along with the
+  import modal behind them. Once a session is tracked there is no reason to start the next one
+  outside the dashboard, so a permanent import affordance advertised a workflow the product
+  argues against — and it was the part of the app people found least intuitive. Importing now
+  happens in first-run setup, or from the two entry points above.
+
+### Fixed
+- **Doctor's advice for a live unregistered session was impossible to follow.** It said
+  "Reopen it from Running", which a running process cannot do — `claude --resume` refuses a
+  session already in use. It now says to quit the pid first, then re-run first-run setup.
+- **A failed import no longer blocks its own retry.** The `/import-session` skill writes the
+  `notes.md` before it registers the session, so a run that died between the two left an
+  orphan that the skill's own "Already managed" guard then used to refuse every retry. The
+  failure path predicts the path the skill computes and undoes it, guarded by the same
+  two-levels-below-a-space rule the delete path uses. A slow import that *did* register is
+  reported as the success it is rather than as a timeout.
+
 ### Changed
 - **A skill proposal raised in a live session is now settled in that session.** The loop
   always staged its work and pointed at `/skills-review`, so approving meant reading a diff
