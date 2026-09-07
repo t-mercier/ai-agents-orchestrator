@@ -397,11 +397,11 @@
     <div class="section-head reveal" id="proposals" style="margin-top:56px">
       <p class="eyebrow">And it writes its own skills</p>
       <h2>A mistake you fix once, it stops making.</h2>
-      <p class="lead">Notes record <em>what is true</em>; a skill records <em>how to do something</em>. When a session actually teaches a procedure — a dead end whose workaround is worth keeping, an approach you corrected — <code>/skill-propose</code> drafts it. Nothing becomes active on its own: proposals are <strong>staged</strong> outside the skills folder, and you read the diff before anything runs.</p>
+      <p class="lead">Notes record <em>what is true</em>; a skill records <em>how to do something</em>. When a session actually teaches a procedure — a dead end whose workaround is worth keeping, an approach you corrected — <code>/skill-propose</code> drafts it. Nothing becomes active on its own: it shows you the exact wording it would change and waits for your yes — in the conversation while the reason is fresh, or staged for <code>/skills-review</code> when you were not there to answer.</p>
     </div>
     <div class="secgrid">
       <div class="sec reveal"><h4>Staged, never live</h4><p><code>/skill-propose</code> writes to <code>~/.claude/skills-pending/</code> and never to <code>~/.claude/skills/</code> — a new skill, or (preferred) a targeted patch to one you already have.</p></div>
-      <div class="sec reveal"><h4>You are the only gate</h4><p><code>/skills-review</code> is the sole path from proposed to active. It shows the full content or a real diff first, and reports when the loop last produced anything — so a loop that silently died is visible.</p></div>
+      <div class="sec reveal"><h4>You are the only gate</h4><p>Nothing goes live unapproved — but the approval comes to you. Correct the same thing twice and it says so on the spot, shows the exact wording it would change, and applies it on a yes. What you were not there to answer waits in <code>/skills-review</code>, which diffs it and reports when the loop last produced anything, so a loop that silently died is visible.</p></div>
       <div class="sec reveal"><h4>Curated, never deleted</h4><p><code>/skills-curate</code> is the periodic pass over the whole set: it names the umbrella a cluster serves and stages merges or archives. Archived, not removed — recoverable, and only ever skills the agent proposed.</p></div>
       <div class="sec reveal"><h4>It only fires when it learned</h4><p>The proposal step hangs off the session close, and stays <strong>silent</strong> unless the session met one of its criteria. A skill set that inflates on every session is worse than none.</p></div>
     </div>
@@ -581,9 +581,9 @@
 
       <div class="skill-group reveal">
         <h4>Skills that write skills</h4>
-        <p class="sg-lead">The learning loop, with you as the only gate. Nothing here can make a skill active on its own.</p>
-        <div class="skill"><code>/skill-propose</code><span>Stage what the session taught as a new skill, or a targeted patch to one you have. Never writes to the live skills folder.</span></div>
-        <div class="skill"><code>/skills-review</code><span>The approval gate — diff, then promote or reject. The only path from proposed to active.</span></div>
+        <p class="sg-lead">The learning loop, with you as the only gate — asked in the conversation when you are there, staged for later when you are not.</p>
+        <div class="skill"><code>/skill-propose</code><span>Turn what the session taught into a new skill or a patch to one you have. It asks in the conversation and applies on your yes; every change is logged and revertible.</span></div>
+        <div class="skill"><code>/skills-review</code><span>The approval gate for what was staged — diff, then promote or reject. Where a proposal lands when nobody was there to answer it.</span></div>
         <div class="skill"><code>/skills-curate</code><span>Periodic pass over the collection: merge clusters, archive what went stale. Never deletes.</span></div>
       </div>
     </div>

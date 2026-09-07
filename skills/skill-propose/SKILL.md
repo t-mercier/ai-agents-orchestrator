@@ -218,9 +218,103 @@ It parses the blocks, resolves the target and requires every `old_string` to mat
 **exactly once**. If it prints `REFUSED`, fix the proposal — never hand a proposal to the
 user that its own applier rejects.
 
-## Step 4 — Report
+## Step 3c — The fast path: propose it here, apply it on a yes
 
-Two or three lines, no ceremony:
+**When this applies:** the user is present in a live session (not a headless `/wrap-session`
+or a background run) and Step 1 fired on **criterion 3, the second time** — they corrected
+the same thing twice, or one output went through a second rewrite pass. That is the moment
+the missing instruction is obvious to both of you and the context is still in their head.
+
+Then do NOT stage and point at `/skills-review`. Staging is right when nobody is there to
+answer; when they are, a deferred review means reading a diff next week with no memory of
+why it was written, which is worse review, not safer review.
+
+**This is a mode, not a step after 3a/3b.** The file those steps wrote is the draft: on a
+yes it is applied and removed, and on anything else it stays exactly where it is — and that
+is the staged proposal. Nothing here writes a second artifact.
+
+**What replaces the gate.** The gate before becomes a cheap undo after — so the two things
+below are not optional:
+
+- the change goes through `patch_apply.py`, which re-checks every anchor at write time and
+  writes atomically. Never hand-edit a skill on this path.
+- every application appends to `~/.claude/skills-applied.log`, which holds the diff. That
+  log is the revert, and the confirmation line must tell the user it exists.
+
+### A patch to an existing skill
+
+Say it in the conversation, in this shape and nothing longer:
+
+1. **What you noticed** — one sentence, naming the skill and the passage that let the
+   mistake through. Not "I could improve X": *"Second time you've had to tell me the
+   detail must not restate its own headline — `timothee-writing-style` says compress but
+   never says that."*
+2. **The exact change** — the passage as it reads now, and what it would read instead.
+   Verbatim, both sides, in a short block. **Never a summary**: a "go" on a description
+   they have not read is exactly what the staged review existed to prevent, and skipping
+   the review does not make it acceptable.
+3. **One direct question** — "Patch it?" Plain prose, no `AskUserQuestion` dialog: the
+   ceremony is the thing being removed.
+
+On a clear yes, write the patch to `~/.claude/skills-pending/<slug>.patch.md` as Step 3b
+describes, then apply it exactly as `/skills-review` Step 3 does — `check`, capture the
+`diff`, `apply`, append the diff to the log, delete the patch file. The pending file is a
+temporary artifact here, not a proposal waiting for anyone.
+
+**An ambiguous answer is a no.** "ok", "mmh", a reply that moves to another subject, or a
+yes that arrives with a change to what you proposed — none of those are the go-ahead. Stage
+it and say so, or re-ask with the correction folded in. Applying on a maybe is how this path
+loses the right to exist.
+
+### A new skill
+
+A new skill is a larger commitment than a patch: its `description:` decides when it loads
+in **every** future session, so a badly scoped one starts firing in places nobody asked
+for. It still goes on the fast path, but the user validates the **scope** first, the way
+they would approve a plan — not the finished file.
+
+Present a scope card, this and no more:
+
+```
+Name        <slug>
+Fires when  <the description's trigger, in the words that will actually be in it>
+Covers      <two or three bullets — the procedure it encodes>
+Does not    <what it deliberately leaves out, and where that belongs instead>
+```
+
+Then one question: "Scope look right?" On a clear yes, write the full skill straight to
+`~/.claude/skills/<slug>/SKILL.md` per Step 3a — keeping the `origin: agent-proposed` /
+`source_session:` / `version:` frontmatter, which is what tells them later what they wrote
+and what was proposed. Append to `~/.claude/skills-applied.log`, in the header shape the
+log already uses — `/skills-review` lists the last entries with `grep '^==='`, so a line
+that does not start that way is invisible in the timeline rather than merely untidy:
+
+```bash
+printf '=== %s  create  %s\n%s\n\n' "$(date +'%Y-%m-%d %H:%M')" "<slug>" \
+  "created by /skill-propose (fast path) → ~/.claude/skills/<slug>/SKILL.md" \
+  >> ~/.claude/skills-applied.log
+```
+
+If they change the scope in their answer, that is not a no — fold in the correction and
+re-present the card once. Two rounds, then stage it and stop.
+
+### Reporting on the fast path
+
+One line after applying: what changed, the path, and the revert. *"Patched
+`timothee-writing-style` (Compression section) — `~/.claude/skills/timothee-writing-style/`.
+Diff is in `~/.claude/skills-applied.log` if you want it back."*
+
+Say plainly that it is **active now**, and that a skill only reaches a session that starts
+after the write — the one you are in keeps the version it loaded.
+
+If the target is a skill bundled in a repo (the session skills in `ai-agents-orchestrator`,
+say), name that too: the repo copy now differs from the installed one, and a `--force`
+install will silently revert the patch.
+
+## Step 4 — Report (staged proposals only)
+
+When Step 3c did not apply — nobody was there to answer, or the answer was not a clear yes
+— the proposal is staged and this is the report. Two or three lines, no ceremony:
 
 - what was staged (new skill or patch to which skill), and its path;
 - **which criterion fired** — the user needs this to judge whether it was worth it;

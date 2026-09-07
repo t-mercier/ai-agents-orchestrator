@@ -10,6 +10,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **A skill proposal raised in a live session is now settled in that session.** The loop
+  always staged its work and pointed at `/skills-review`, so approving meant reading a diff
+  days later with no memory of why it was written — worse review, not safer review. When the
+  user is present and the trigger is the loud one (they corrected the same thing twice),
+  `/skill-propose` now says so on the spot, shows the **verbatim** change or a scope card for
+  a new skill, and applies it on a clear yes. Anything else — an ambiguous answer, a headless
+  `/wrap-session`, a background run — still stages, and `/skills-review` still promotes it.
+
+  The approval did not go away, only the waiting: the gate before is traded for a cheap undo
+  after, so the fast path is required to go through `patch_apply.py` (which re-checks every
+  anchor at write time) and to append to `~/.claude/skills-applied.log`, which holds the diff
+  and is the revert. New-skill creations are logged in the same header shape, since
+  `/skills-review` lists the log with `grep '^==='` and a free-form line would be invisible
+  there rather than merely untidy.
+
 ## [0.11.4-alpha] - 2026-09-04
 
 ### Added
