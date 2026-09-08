@@ -10,6 +10,28 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1-alpha] - 2026-09-08
+
+### Fixed
+- **First-run setup was hiding sessions someone had worked in.** Reported as "Load more only
+  reaches 25, I'm sure I have more". There is no cap — the paged path has none — but any
+  transcript whose first user turn carried slash-command markup was treated as a one-off,
+  which is true of every `/start-session` as much as of a headless `/sync-refs` run. On a
+  123-transcript store that hid two real sessions among 47 genuine automation runs. What
+  separates them is whether a person went on to type in it, so the command is now remembered
+  rather than acted on and the transcript is skipped only when no human prompt is ever found:
+  27 importable instead of 25, and the automation runs still hidden. Two harness injections
+  also stopped counting as prompts — "Continue from where you left off." on a resume and
+  "[Request interrupted by user]" — or those sessions would have surfaced titled with them.
+- **The wizard now accounts for what the scan left out** — "27 importable, out of 123
+  transcripts on this machine (49 already in the app, 47 automation runs left out)". Someone
+  who counts their own sessions and sees a smaller number cannot tell a filter from a cap,
+  and will read it as a cap.
+- **The session preview was invisible.** It shipped in 0.12.0 — toggle, panel, Rust command,
+  API binding all in the tag — as a bare 11px chevron in the faintest text colour between
+  the title and two dropdowns, which reads as a separator. It is now a labelled
+  "▸ Preview" / "▾ Hide" button. A control that is present and reported missing is missing.
+
 ### Fixed
 - **Six places still promised a staged diff review** after the loop stopped requiring one.
   The worst was `/skill-propose`'s own first hard rule — "NEVER write to `~/.claude/skills/`,
