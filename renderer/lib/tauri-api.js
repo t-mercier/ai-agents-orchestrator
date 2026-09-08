@@ -28,7 +28,7 @@
     discoverSessionsPage: (limit, offset) =>
       invoke('discover_sessions_page', { limit, offset })
         .then((r) => ({ ok: true, ...r }))
-        .catch((e) => ({ ok: false, error: String(e), sessions: [], total: 0 })),
+        .catch((e) => ({ ok: false, error: String(e), sessions: [], total: 0, scanned: 0, alreadyManaged: 0, automationRuns: 0 })),
     // Never let a rejected open (unsupported scheme) become an unhandled promise
     // rejection — that made a link click look like it did nothing at all.
     openExternal: (url) =>

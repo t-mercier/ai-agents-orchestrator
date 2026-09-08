@@ -286,6 +286,12 @@ fn is_title_noise(s: &str) -> bool {
         || t.starts_with("Base directory for this skill")
         || t.starts_with("Contents of ")
         || t.to_lowercase().contains("system-reminder")
+        // Injected by the harness, not typed by anyone: a resumed session opens with the
+        // first, and an interrupted turn leaves the second. Both were being taken as the
+        // session's title, which is how a real session came to be listed as
+        // "Continue from where you left off."
+        || t.starts_with("Continue from where you left off")
+        || t.starts_with("[Request interrupted")
 }
 
 /// A transcript's title + launch dir + whether to skip it. The title is the first
@@ -297,6 +303,7 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
     let mut title: Option<String> = None;
     let mut cwd: Option<String> = None;
     let mut skip = false;
+    let mut opened_by_command = false;
     let mut seen_user = false;
     for line in lines {
         if line.is_empty() {
@@ -327,12 +334,15 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
                     .collect(),
                 _ => Vec::new(),
             };
-            // The first user turn of a slash-command / skill run carries the command
-            // markup → it's a one-off, not a session to import.
+            // A command in the first turn means the session was OPENED by a skill — which
+            // is true of every `/start-session` as much as of a headless `/sync-refs` run.
+            // It is not on its own a reason to hide it; what separates an automation run
+            // from a session is whether a person went on to type in it, which the title
+            // below answers. Remember it and decide at the end.
             if !seen_user {
                 seen_user = true;
                 if texts.iter().any(|t| t.contains("<command-name>") || t.contains("<command-message>")) {
-                    skip = true;
+                    opened_by_command = true;
                 }
             }
             if title.is_none() {
@@ -344,6 +354,12 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
         if title.is_some() && cwd.is_some() && seen_user {
             break;
         }
+    }
+    // A skill-opened transcript with no human prompt in it is an automation run — the Sync
+    // button's `/sync-refs`, a scheduled job. One WITH a prompt is a session someone worked
+    // in, whatever command opened it.
+    if opened_by_command && title.is_none() {
+        skip = true;
     }
     (title, cwd, skip)
 }
@@ -424,10 +440,23 @@ fn select_unmanaged_page(
     limit: usize,
     offset: usize,
 ) -> Value {
+    // Report what was left out, not just what is shown. Someone who counts their
+    // transcripts and sees a smaller number in the wizard has no way to tell a filter from
+    // a cap, and will read it as a cap — which is exactly what happened on a 123-transcript
+    // store: 49 already tracked, 47 automation runs, 27 importable.
+    let scanned = rows.len();
+    let already = rows.iter().filter(|(_, sid, _, _, _)| managed.contains(sid)).count();
     let all = sorted_unmanaged(rows, managed);
     let total = all.len();
     let page: Vec<Value> = all.into_iter().skip(offset).take(limit).collect();
-    json!({ "sessions": page, "total": total })
+    json!({
+        "sessions": page,
+        "total": total,
+        "scanned": scanned,
+        "alreadyManaged": already,
+        // Sidechains and skill runs nobody typed in — the Sync button, a scheduled job.
+        "automationRuns": scanned.saturating_sub(already).saturating_sub(total),
+    })
 }
 
 /// The most-recent *unmanaged* Claude Code transcripts (`~/.claude/projects/**/<id>.jsonl`
@@ -1937,10 +1966,36 @@ mod tests {
         assert_eq!(title.as_deref(), Some("Fix the checkout bug")); // injected noise skipped
         assert_eq!(cwd.as_deref(), Some("/Users/dev/proj")); // FIRST cwd (launch dir)
         assert!(!skip); // a plain session (no command markup) is kept
-        // slash-command run (first user turn carries <command-name>) → skipped
-        let cmd = vec![r#"{"type":"user","message":{"content":"<command-name>/release-notes</command-name>\n<command-args></command-args>"}}"#.to_string(),
-            r#"{"type":"user","message":{"content":"Generate the release notes for the current PR"}}"#.to_string()];
-        assert!(discover_meta_lines(cmd.into_iter()).2);
+        // A skill-opened transcript with NOTHING a person typed is an automation run — the
+        // Sync button's /sync-refs, a scheduled job. Skipped.
+        let auto = vec![
+            r#"{"type":"user","message":{"content":"<command-name>/sync-refs</command-name>\n<command-args></command-args>"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"Base directory for this skill is /x"}}"#.to_string(),
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"synced"}]}}"#.to_string(),
+        ];
+        assert!(discover_meta_lines(auto.into_iter()).2);
+        // The SAME opening with a prompt someone typed is a session they worked in, and must
+        // be importable. Every /start-session opens this way; hiding it on the command alone
+        // buried two real sessions on a 123-transcript store.
+        let worked_in = vec![
+            r#"{"type":"user","message":{"content":"<command-name>/start-session</command-name>\n<command-args>FEAT x</command-args>"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"Base directory for this skill is /x"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"can you change the opening hours to 8h30"}}"#.to_string(),
+        ];
+        let (t, _, sk) = discover_meta_lines(worked_in.into_iter());
+        assert!(!sk, "a command-opened session with a human prompt is kept");
+        assert_eq!(t.as_deref(), Some("can you change the opening hours to 8h30"));
+        // Two harness injections that were being taken as the title, which is how a real
+        // session came to be listed as "Continue from where you left off."
+        let injected = vec![
+            r#"{"type":"user","message":{"content":"<command-name>/restart-session</command-name>"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"Continue from where you left off."}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"[Request interrupted by user]"}}"#.to_string(),
+            r#"{"type":"user","message":{"content":"the duplicate session, can you shut it down"}}"#.to_string(),
+        ];
+        let (t2, _, sk2) = discover_meta_lines(injected.into_iter());
+        assert!(!sk2);
+        assert_eq!(t2.as_deref(), Some("the duplicate session, can you shut it down"));
         // sub-agent sidechain → skipped
         let side = vec![r#"{"type":"user","isSidechain":true,"message":{"content":"do a thing"}}"#.to_string()];
         assert!(discover_meta_lines(side.into_iter()).2);

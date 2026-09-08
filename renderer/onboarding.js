@@ -24,6 +24,7 @@
   let picked = new Set()
   let offset = 0
   let total = 0
+  let counts = {}            // what the scan left out, so the number can be explained
   let cfg = null              // working copy of the config; written when step 1 is left
   let spacePresent = new Map() // space path -> does it resolve (filled by validate())
   let run = null              // { jobs, current, done } once step 3 starts
@@ -191,8 +192,15 @@
 
   function renderPicked() {
     const n = picked.size
+    // Account for the transcripts that are NOT here. Someone who counts their own sessions
+    // and sees a smaller number cannot tell a filter from a cap, and will assume a cap.
+    const aside = [
+      counts.alreadyManaged ? `${counts.alreadyManaged} already in the app` : '',
+      counts.automationRuns ? `${counts.automationRuns} automation runs` : '',
+    ].filter(Boolean).join(', ')
     $('onb-picked').textContent = total
-      ? `${n} of ${rows.length} shown selected — ${total} untracked session${total > 1 ? 's' : ''} in all.`
+      ? `${n} of ${rows.length} shown selected — ${total} importable`
+        + (aside ? `, out of ${counts.scanned} transcripts on this machine (${aside} left out).` : ' in all.')
       : ''
     const stuck = O.unroutable(rows, [...picked])
     const box = $('onb-unroutable')
@@ -217,6 +225,7 @@
     }
     const page = res.sessions || []
     total = res.total || 0
+    counts = { scanned: res.scanned || 0, alreadyManaged: res.alreadyManaged || 0, automationRuns: res.automationRuns || 0 }
     offset += page.length
     // Built from the accumulated RAW pages, never from already-built rows: buildRows
     // fills a display title, and feeding that back in would make "(untitled session)"
@@ -502,6 +511,7 @@
     picked = new Set()
     offset = 0
     total = 0
+    counts = {}
     run = null
     running = false
     expanded.clear()
