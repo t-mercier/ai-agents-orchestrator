@@ -154,6 +154,21 @@
         <div class="onb-group-label">Categories</div>
         <div id="onb-cats"></div>
         <button type="button" class="modal-btn" id="onb-add-cat">+ Add a category</button>
+
+        <div class="onb-group-label">The rest — all optional, all changeable later in Settings</div>
+        <label class="modal-field">
+          <span class="modal-label">Ticket tracker URL</span>
+          <input id="onb-ticket" type="text" placeholder="https://your-org.atlassian.net/browse/" autocomplete="off" spellcheck="false">
+          <span class="field-hint">Turns a ticket key on a card into a link. Paste the part that comes before the key.</span>
+        </label>
+        <label class="modal-field">
+          <span class="modal-label">Card density</span>
+          <select id="onb-density">
+            <option value="detailed">Detailed — goal, next steps, branch on every card</option>
+            <option value="compact">Compact — title, status and refs</option>
+            <option value="minimal">Minimal — one line per session</option>
+          </select>
+        </label>
         <div class="modal-error" id="onb-issues" hidden></div>
       </section>
 

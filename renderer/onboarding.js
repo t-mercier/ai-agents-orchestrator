@@ -278,7 +278,40 @@
       row.appendChild(path)
       row.appendChild(browse)
       row.appendChild(removeBtn(() => { cfg.roots.splice(i, 1); renderTaxonomy() }, (cfg.roots || []).length > 1))
-      spaces.appendChild(row)
+
+      // The knowledge-notes folder belongs to the space, so it sits with it — on its own
+      // line, because a name, a path and two folder pickers on one row leaves neither
+      // placeholder readable.
+      const vaultRow = document.createElement('div')
+      vaultRow.className = 'onb-edit-row onb-vault-row'
+      const vLabel = document.createElement('span')
+      vLabel.className = 'onb-sub-label'
+      vLabel.textContent = 'Knowledge notes'
+      const vault = document.createElement('input')
+      vault.type = 'text'
+      vault.className = 'onb-grow'
+      vault.value = r.vaultPath || ''
+      vault.placeholder = 'optional — any folder of Markdown the agent writes what it learns into'
+      vault.addEventListener('input', () => { cfg.roots[i].vaultPath = vault.value })
+      const vBrowse = document.createElement('button')
+      vBrowse.type = 'button'
+      vBrowse.className = 'modal-btn'
+      vBrowse.textContent = 'Browse…'
+      vBrowse.addEventListener('click', async () => {
+        const dir = window.api.pickDirectory ? await window.api.pickDirectory() : null
+        if (!dir) return
+        cfg.roots[i].vaultPath = dir
+        vault.value = dir
+      })
+      vaultRow.appendChild(vLabel)
+      vaultRow.appendChild(vault)
+      vaultRow.appendChild(vBrowse)
+
+      const block = document.createElement('div')
+      block.className = 'onb-space-block'
+      block.appendChild(row)
+      block.appendChild(vaultRow)
+      spaces.appendChild(block)
     })
 
     const cats = $('onb-cats')
@@ -451,7 +484,26 @@
     if (step === 1) {
       // The taxonomy write — the only thing this step persists, and every import depends
       // on it: the backend refuses a category the config does not carry.
-      const res = await window.api.setConfig({ ...(window.CSM_CONFIG || {}), roots: cfg.roots, categories: cfg.categories })
+      // Card density is a per-viewer UI preference, not shared config — apply it directly.
+      if (window.applyDensity) window.applyDensity($('onb-density').value)
+      // A vaultPath with the knowledge feature off is a folder nothing ever writes to, so
+      // setting one here turns it on. Never turns it OFF: an existing install may have it
+      // on with the vaults configured elsewhere.
+      const anyVault = (cfg.roots || []).some((r) => (r.vaultPath || '').trim())
+      const live = window.CSM_CONFIG || {}
+      const knowledge = anyVault ? { ...(live.knowledge || {}), enabled: true } : (live.knowledge || {})
+      const res = await window.api.setConfig({
+        ...live,
+        roots: cfg.roots.map((r) => {
+          const out = { name: r.name, path: r.path }
+          const v = (r.vaultPath || '').trim()
+          if (v) out.vaultPath = v
+          return out
+        }),
+        categories: cfg.categories,
+        ticketBaseUrl: $('onb-ticket').value.trim(),
+        knowledge,
+      })
       if (!res || !res.ok) {
         const box = $('onb-issues')
         box.textContent = (res && res.error) || 'Could not save the spaces and categories.'
@@ -525,11 +577,14 @@
     cfg = {
       roots: JSON.parse(JSON.stringify(live.roots || [])),
       categories: JSON.parse(JSON.stringify(live.categories || [])),
+      ticketBaseUrl: live.ticketBaseUrl || '',
     }
     if (!cfg.roots.length) cfg.roots = [{ name: 'Work', path: '' }]
     if (!cfg.categories.length) cfg.categories = [{ name: 'FEAT', color: window.CSM_COLORS.newCategory, root: cfg.roots[0].name }]
     $('onb-next').disabled = false
     $('onb-back').disabled = false
+    $('onb-ticket').value = cfg.ticketBaseUrl
+    $('onb-density').value = window.getDensity ? window.getDensity() : 'detailed'
     renderSteps()
     renderTaxonomy()
     if (!modal.open) modal.showModal()
