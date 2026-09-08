@@ -201,7 +201,46 @@ cargo tauri build      # macOS: .app/.dmg · Linux: .deb/.AppImage — in src-ta
 
 ## Session skills
 
-The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a small set of Claude Code skills. `scripts/install.sh` copies them into `~/.claude/skills/`:
+**The app does not do the work — these skills do.** ＋ New, Resume, Restart, Close, Sync
+and Archive are launchers: each one opens Claude Code on one of the skills below, and the
+skill is what creates the folder, writes the `notes.md`, registers the session or files it
+away. That is deliberate (see [ADR-012](docs/adr)) — the app stays a *view* of what Claude
+Code writes, instead of becoming a second writer that drifts from it. **Without these skills
+installed, the buttons open a session that does nothing.**
+
+### Where they live, and what an install touches
+
+They are ordinary Claude Code skills in your ordinary skills folder:
+
+```
+~/.claude/skills/
+├── start-session/SKILL.md        ← the 14 below: this app's, and the only names it touches
+├── close-session/SKILL.md
+├── …
+├── lib/aoconfig.py               ← shared helper: reads your config so skills and app agree
+├── .ao-base/<name>/              ← pristine copy of each, to tell "you edited it" from "it's old"
+├── .archive/<name>.pre-sync-…/   ← your version, kept, whenever one is about to be replaced
+└── your-own-skill/SKILL.md       ← never read, never written, never listed
+```
+
+**Your own skills are not involved.** Both installers — this script and the app's launch sync
+— iterate over the 14 names this app ships. Anything else in that folder is invisible to
+them: not scanned, not compared, not backed up, not touched. If you happen to have a skill of
+your own sharing one of those 14 names, it is the one case that *is* replaced — and its
+content is copied to `.archive/<name>.pre-sync-<timestamp>/` first, and named on screen, so
+it is recoverable.
+
+```bash
+bash scripts/install.sh              # install; a skill you already have is KEPT
+bash scripts/install.sh --force      # replace this app's skills with this checkout's
+bash scripts/install.sh --with-hooks # also copy the two optional hooks (below)
+bash scripts/install.sh --all        # everything: --force + --with-hooks
+```
+
+`--force` overwrites **this app's own 14 skills**, never your personal ones. It is not the
+default because one of those 14 may be a copy you tuned, and replacing that silently is the
+thing this whole design refuses to do.
+
 
 | Skill | What it does |
 |---|---|
@@ -244,10 +283,10 @@ This only catches signal carried in your own wording. A fact or gotcha you never
 > **Working from a clone? `git pull` does not update your skills.** It updates the repo's `skills/`; the copies Claude Code actually loads live in `~/.claude/skills/`. And a plain install **keeps an existing skill untouched** — new skills arrive, but *changed* ones are skipped, so a shipped fix silently never reaches you. After any pull that touches skills:
 >
 > ```bash
-> git pull && bash scripts/install.sh --force
+> git pull && bash scripts/install.sh --all      # or --force, if you don't want the hooks
 > ```
 >
-> `--force` is not the default because it overwrites a skill you may have customised — so the installer names the ones whose updates it withheld, and you decide. Note `npm run install:skills` does **not** force. The app itself needs no button for this: it syncs its own skills silently at launch — an app built before your last `install.sh --force` run stands down rather than revert it, and a skill you'd edited by hand is copied to `~/.claude/skills/.archive/` before being replaced, named in a notice. **Settings → Session skills → Sync skills to this version** forces this build's versions on demand, under the same never-silently-lose rule.
+> `--force` is not the default because it replaces a copy of **this app's** skills you may have tuned — so a plain run names the ones whose updates it withheld, and you decide. When it does replace one you had changed, your version is copied to `~/.claude/skills/.archive/<name>.pre-sync-<timestamp>/` first and named on screen. Skills of your own that this app does not ship are never in scope either way. Note `npm run install:skills` does **not** force. The app itself needs no button for this: it syncs its own skills silently at launch — an app built before your last `install.sh --force` run stands down rather than revert it, and a skill you'd edited by hand is copied to `~/.claude/skills/.archive/` before being replaced, named in a notice. **Settings → Session skills → Sync skills to this version** forces this build's versions on demand, under the same never-silently-lose rule.
 >
 > **Updating from an earlier version?** Your config **auto-migrates to v2** on first launch — named spaces + per-space knowledge-notes folders, with a `.v1-backup` kept (see [ADR-015](docs/adr/ADR-015-config-v1-to-v2-migration-flag-gated-self-cleaning.md)). Nothing to do by hand.
 

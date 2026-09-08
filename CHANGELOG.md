@@ -41,6 +41,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   which is the worst outcome for an option you have to know about to use. Unknown flags now
   exit 2 with a usage block, and `--help` prints it.
 
+### Added
+- **`install.sh --all`** — this app's skills refreshed to your checkout *and* the two optional
+  hooks, in one command, instead of learning two flags from the README.
+- **`--force` now backs up before it replaces.** The app's launch sync had always copied a
+  hand-edited skill into `.archive/<name>.pre-sync-<timestamp>/` first; the installer script
+  did a plain `rm -rf`, so the two disagreed on whether "nothing is ever lost" was true. It
+  is true now on both sides, and the run names every backup it made.
+
+### Changed
+- **The README and the guide now explain what the skills are for and what an install touches.**
+  They are what does the work — the dashboard's buttons only launch them, and without them a
+  button opens a session that does nothing. Both documents now show where the skills live, what
+  `.ao-base/` and `.archive/` are, and state plainly that your own skills are never in scope:
+  both installers work through the 14 names this app ships, and the one exception — a skill of
+  yours sharing one of those names — is archived before being replaced.
+- The guide's `/start-session` row still said git runs "only if a branch was given" — the same
+  claim the README shed in 0.13.1, in its twin table. Corrected.
+
 
 ## [0.14.0-alpha] - 2026-09-08
 

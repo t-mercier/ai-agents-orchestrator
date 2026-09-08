@@ -147,11 +147,43 @@ flowchart LR
 
 ## The skills
 
-You run these inside Claude Code (the dashboard buttons trigger them for you). Categories and folder locations come from your shared config.
+**These are what actually does the work.** The dashboard's buttons — ＋ New, Resume,
+Restart, Close, Sync, Archive — are launchers: each opens Claude Code on one of the skills
+below, and the *skill* creates the folder, writes the `notes.md`, registers the session or
+files it away. The app deliberately never writes those itself, so that what you see is
+always what is really on disk. Install the app without the skills and the buttons open a
+session that does nothing.
+
+You can also run every one of them by hand, in any Claude Code session. Categories and
+folder locations come from your shared config, so the skills and the app always agree.
+
+### Where they live
+
+In your normal skills folder, as normal skills:
+
+```
+~/.claude/skills/
+├── start-session/ close-session/ …   the 14 this app ships
+├── lib/aoconfig.py                   shared helper that reads your config
+├── .ao-base/<name>/                  pristine copy, to tell "you edited it" from "it's old"
+├── .archive/<name>.pre-sync-…/       your version, kept, if one is ever replaced
+└── anything else you have            never touched
+```
+
+**Installing or updating them cannot affect your own skills.** Both the installer script and
+the app's launch sync work through the 14 names this app ships; everything else in that
+folder is invisible to them. The single exception is a skill of yours that happens to share
+one of those names — that one is replaced, after your version is copied into `.archive/` and
+named on screen.
+
+`bash scripts/install.sh --all` installs everything: this app's skills, refreshed to the
+version you have checked out, plus the two optional hooks. Without `--all` (or `--force`) a
+skill you already have is kept rather than replaced, and the installer tells you which
+updates it therefore withheld.
 
 | Skill | What it does |
 |---|---|
-| **`/start-session <CATEGORY> <ticket> <name>`** | Creates the session: a folder holding its `notes.md` under the category's folder, registers it, and — only if a branch was given — fetches and rebases that branch in your repo. |
+| **`/start-session <CATEGORY> <ticket> <name>`** | Creates the session: a folder holding its `notes.md` under the category's folder, registers it, and — only when that folder is inside a git repo — fetches and rebases the branch onto `origin`. It reads the branch from the checkout when you did not name one, so what triggers git is being inside a repo, not the Branch field. |
 | **`/close-session`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry **tagged with the session id**. → *Closed* |
 | **`/save-session`** | Checkpoints the active session into `notes.md` mid-flight, marked `(in progress)`, **without** closing it — handy before a context compaction. Stays *Running*. |
 | **`/restart-session <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |

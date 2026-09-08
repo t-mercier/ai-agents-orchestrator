@@ -18,8 +18,10 @@ Install the bundled session skills + seed the shared config.
   bash scripts/install.sh --force         overwrite existing skills with this checkout's
   bash scripts/install.sh --with-hooks    also copy the optional pr_attach + learn_nudge
                                           hooks (copies + prints; never edits settings.json)
+  bash scripts/install.sh --all           everything: --force + --with-hooks
 
-The flags combine. Re-running is safe.
+Only the 14 skills this app ships are ever touched, by name. Every other skill in
+~/.claude/skills/ is invisible to this script. The flags combine, and re-running is safe.
 USAGE
 }
 FORCE=0; HOOKS=0
@@ -27,6 +29,7 @@ for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --with-hooks) HOOKS=1 ;;
+    --all) FORCE=1; HOOKS=1 ;;
     -h|--help) usage; exit 0 ;;
     # A typo'd flag used to be dropped in silence — `--with-hook` installed no hook and
     # said nothing, which is the worst outcome for an option you must know about to use.
@@ -48,7 +51,7 @@ cp "$SKILLS_SRC/lib/"*.py "$SKILLS_DST/lib/"
 echo "installed: lib/ (config helper)"
 
 # 2. Skills (don't clobber a user's customised skill without --force)
-STALE=()
+STALE=(); ARCHIVED=()
 for d in "$SKILLS_SRC"/*/; do
   name="$(basename "$d")"
   [ "$name" = "lib" ] && continue
@@ -59,6 +62,22 @@ for d in "$SKILLS_SRC"/*/; do
     # user on an old version, which is how a shipped fix quietly fails to arrive.
     diff -rq "$d" "$dst" >/dev/null 2>&1 || STALE+=("$name")
   else
+    # Back up before overwriting, the way the app's sync does. "Hand-edited" is dst
+    # differing from the pristine .ao-base snapshot; with no snapshot to compare against
+    # (a pre-.ao-base install) fall back to "differs from what we are about to write",
+    # which over-archives at worst. An untouched copy is not archived — that would bury
+    # the real backups under one per run.
+    if [ -e "$dst" ]; then
+      base="$SKILLS_DST/.ao-base/$name"
+      ref="$d"; [ -d "$base" ] && ref="$base"
+      if ! diff -rq "$ref" "$dst" >/dev/null 2>&1; then
+        stamp="$(date +%s)"
+        mkdir -p "$SKILLS_DST/.archive"
+        cp -R "$dst" "$SKILLS_DST/.archive/$name.pre-sync-$stamp"
+        echo "  backed up your version → ~/.claude/skills/.archive/$name.pre-sync-$stamp"
+        ARCHIVED+=("$name")
+      fi
+    fi
     rm -rf "$dst"; cp -R "$d" "$dst"; echo "installed skill: /$name"
     # Mirror the pristine snapshot the app's installer keeps (src-tauri/src/skills.rs):
     # the app's launch sync compares each skill against .ao-base/<name> to tell "edited
@@ -138,6 +157,12 @@ if [ "$HOOKS" -eq 1 ]; then
 fi
 
 echo
+if [ ${#ARCHIVED[@]} -gt 0 ]; then
+  echo "↳ ${#ARCHIVED[@]} skill(s) you had changed were backed up before being replaced:"
+  printf '    /%s\n' "${ARCHIVED[@]}"
+  echo "  Copies are in ~/.claude/skills/.archive/ — nothing was lost."
+  echo
+fi
 if [ ${#STALE[@]} -gt 0 ]; then
   echo "⚠ ${#STALE[@]} installed skill(s) are OLDER than this version and were kept:"
   printf '    /%s\n' "${STALE[@]}"
