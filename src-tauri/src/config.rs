@@ -204,6 +204,9 @@ fn derive(user: &Value) -> Value {
         "categories": categories,
         "knowledge": knowledge,
         "ticketBaseUrl": ticket_base,
+        // Empty = send no `--model`, so `claude` uses ~/.claude/settings.json. See
+        // pty::model_flag: the app used to force opus[1m] and silently override it.
+        "claudeModel": user.get("claudeModel").and_then(Value::as_str).unwrap_or("").trim(),
         "terminalApp": terminal_app,
         "scanDirs": scan_dirs,
         "order": order,
@@ -399,6 +402,7 @@ fn migrate_v1_value(raw: &Value) -> Option<Value> {
         "knowledge": { "enabled": raw.get("knowledge").or_else(|| raw.get("obsidian"))
             .and_then(|o| o.get("enabled")).cloned().unwrap_or(json!(false)) },
         "ticketBaseUrl": raw.get("ticketBaseUrl").cloned().unwrap_or(json!("")),
+        "claudeModel": raw.get("claudeModel").cloned().unwrap_or(json!("")),
         "terminalApp": raw.get("terminalApp").cloned().unwrap_or(json!("")),
         "migratedToV2": true,
     }))

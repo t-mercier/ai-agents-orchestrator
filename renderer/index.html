@@ -229,12 +229,27 @@
           </div>
         </div>
 
+        <label class="modal-field">
+          <span>Model for sessions the app opens</span>
+          <select id="onb-model"></select>
+          <span class="field-hint">Leave it on <strong>Follow my Claude Code setting</strong> and the app
+            sends no <code>--model</code> at all, so <code>claude</code> uses the default from your own
+            <code>settings.json</code>. Pick one here to override that, for sessions this app starts.</span>
+        </label>
+
         <p class="modal-hint">
           Two optional <strong>hooks</strong> close gaps the skills can't see from inside a session:
         </p>
         <div class="onb-list" id="onb-hooks"></div>
+        <label class="modal-field">
+          <span>Model for <code>/advisor</code></span>
+          <select id="onb-advisor"></select>
+          <span class="field-hint">Claude Code's own setting (<code>advisorModel</code>), not this app's —
+            it decides which model answers <code>/advisor</code> and has nothing to do with the sessions
+            the dashboard launches. Changing it goes through the same preview and backup as the hooks.</span>
+        </label>
         <div class="onb-kv">
-          <button type="button" class="modal-btn" id="onb-hooks-wire" hidden>Enable the hooks…</button>
+          <button type="button" class="modal-btn" id="onb-hooks-wire" hidden>Apply to settings.json…</button>
         </div>
         <div id="onb-hooks-preview" hidden>
           <p class="modal-hint" id="onb-hooks-preview-hint"></p>
@@ -391,6 +406,13 @@
                 </select>
               </label>
               <p class="modal-hint">Which app “Resume” / ＋ New / Restart open into. The settings below style the in-app embedded terminal.</p>
+              <label class="modal-field inline-field">
+                <span>Claude model</span>
+                <!-- Blank sends no --model, so `claude` uses ~/.claude/settings.json.
+                     Options are filled from window.CLAUDE_MODELS (app.js). -->
+                <select id="set-model"></select>
+              </label>
+              <p class="modal-hint">For the sessions this app opens. <strong>Follow my Claude Code setting</strong> sends no <code>--model</code> at all, so your own <code>settings.json</code> decides; pick one to override it here.</p>
             </div>
             <div class="settings-section">
               <label class="modal-field inline-field">

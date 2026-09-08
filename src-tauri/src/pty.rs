@@ -7,10 +7,33 @@ use std::io::{Read, Write};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
-/// Model passed to `claude --model`. `[1m]` selects the 1M-context variant — it is
-/// NOT a glob/regex, so every command embedding this must shell-quote it (otherwise
-/// the shell tries to glob-expand the `[…]` and the launch fails).
-pub const CLAUDE_MODEL: &str = "opus[1m]";
+/// The ` --model <x>` fragment to splice into a `claude` command line, or an empty
+/// string.
+///
+/// Empty is the default, and it means something specific: **send no `--model` at all**,
+/// so `claude` uses whatever the user set in `~/.claude/settings.json`. The app used to
+/// hard-code `opus[1m]` here, which silently overrode that setting on every ＋New,
+/// Resume, Close and Sync — invisible while the two agreed, and a surprise the day they
+/// did not. Choosing a model in Settings opts back in to overriding it, explicitly.
+pub fn model_flag() -> String {
+    model_flag_from(&crate::config::load())
+}
+
+/// Pure half, so the contract that matters — an unset model sends NO flag, rather than
+/// falling back to a hard-coded one — is tested without a config file on disk. A model
+/// like `opus[1m]` must come out shell-quoted: the brackets are a glob to the shell.
+fn model_flag_from(cfg: &serde_json::Value) -> String {
+    let m = cfg
+        .get("claudeModel")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if m.is_empty() {
+        String::new()
+    } else {
+        format!(" --model {}", shell_quote(m))
+    }
+}
 
 struct Session {
     master: Box<dyn MasterPty + Send>,
@@ -158,10 +181,10 @@ pub fn pty_spawn(
         // +New / Import.
         let settings_arg = crate::statusline_settings_arg();
         format!(
-            "cd {} && claude --resume {} --model {} --permission-mode auto{}",
+            "cd {} && claude --resume {}{} --permission-mode auto{}",
             shell_quote(&cwd),
             shell_quote(&session_id),
-            shell_quote(CLAUDE_MODEL),
+            model_flag(),
             settings_arg,
         )
     } else {
@@ -169,9 +192,9 @@ pub fn pty_spawn(
         // skill (which writes + re-registers) and a later /close-session aren't blocked.
         let settings_arg = crate::statusline_settings_arg();
         format!(
-            "cd {} && claude --model {} --permission-mode auto{} {}",
+            "cd {} && claude{} --permission-mode auto{} {}",
             shell_quote(&cwd),
-            shell_quote(CLAUDE_MODEL),
+            model_flag(),
             settings_arg,
             shell_quote(&format!("/restart-session {restart_slug}")),
         )
@@ -272,6 +295,28 @@ pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
 
 #[cfg(test)]
 mod tests {
+    use super::model_flag_from;
+    use serde_json::json;
+
+    // The default has to be "say nothing", not "say opus": an app that always passes
+    // --model overrides the user's own settings.json on every launch, which is the bug
+    // this key exists to fix.
+    #[test]
+    fn an_unset_model_sends_no_flag_at_all() {
+        assert_eq!(model_flag_from(&json!({})), "");
+        assert_eq!(model_flag_from(&json!({ "claudeModel": "" })), "");
+        assert_eq!(model_flag_from(&json!({ "claudeModel": "   " })), "");
+    }
+
+    // `[1m]` is a glob to the shell; unquoted, the launch fails with no useful error.
+    #[test]
+    fn a_chosen_model_is_shell_quoted() {
+        let out = model_flag_from(&json!({ "claudeModel": "opus[1m]" }));
+        assert!(out.starts_with(" --model "), "{out}");
+        assert!(out.contains("opus[1m]"), "{out}");
+        assert!(out.contains('\'') || out.contains('\\'), "brackets must be escaped: {out}");
+    }
+
     use super::{decode_chunk, shell_quote};
 
     #[test]

@@ -160,6 +160,17 @@ window.getCompactChrome = () => { try { return localStorage.getItem('csm.compact
 
 // Remappable keyboard shortcuts. Only the single-key "jump" actions are remappable;
 // arrows / Enter / Esc stay fixed. Stored as { action: key } in localStorage.csm.keys.
+// The models the app offers for the sessions it launches, and for Claude Code's own
+// /advisor. '' is not "no model" — it means send no --model / leave the key alone, so the
+// user's own settings.json decides. Kept here so Settings and first-run setup share one list.
+window.CLAUDE_MODELS = [
+  ['', ''],
+  ['opus[1m]', 'Opus 5 (1M context)'],
+  ['opus', 'Opus 5'],
+  ['sonnet', 'Sonnet 5'],
+  ['haiku', 'Haiku 4.5'],
+  ['fable', 'Fable 5.1'],
+]
 const DEFAULT_KEYS = { search: '/', viewToggle: 'v', board: 'b', tabRunning: '1', tabClosed: '2', tabArchived: '3' }
 window.KEY_ACTIONS = [
   { id: 'search', label: 'Focus search' },

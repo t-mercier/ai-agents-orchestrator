@@ -29,6 +29,8 @@
   let spacePresent = new Map() // space path -> does it resolve (filled by validate())
   let run = null              // { jobs, current, done } once step 3 starts
   let running = false
+  let advisorSet = ''
+  let hooksAllWired = false
 
   // ── Step 1: what is on the machine ───────────────────────────────────────────────
 
@@ -462,6 +464,18 @@
 
   // ── Step 4: what makes the buttons work ─────────────────────────────────────────
 
+  function fillModelSelect(sel, value, emptyLabel) {
+    sel.textContent = ''
+    for (const [v, label] of window.CLAUDE_MODELS) {
+      const o = document.createElement('option')
+      o.value = v
+      o.textContent = v === '' ? emptyLabel : label
+      if (v === (value || '')) o.selected = true
+      sel.appendChild(o)
+    }
+  }
+
+
   // The skills are already synced at launch, so this step is usually a confirmation
   // rather than an action — which is the point: it is the one place a newcomer is told
   // what these are and that their own skills are not in scope. The button appears only
@@ -473,6 +487,9 @@
       ? `${missing} of this app's skills are missing from ~/.claude/skills/.`
       : `${(st.present || []).length} session skills installed in ~/.claude/skills/.`
     $('onb-skills-install').hidden = missing === 0
+
+    fillModelSelect($('onb-model'), (window.CSM_CONFIG || {}).claudeModel, 'Follow my Claude Code setting')
+    fillModelSelect($('onb-advisor'), await window.api.advisorModel(), 'Leave it as it is')
 
     const hooks = await window.api.hooksStatus()
     const list = $('onb-hooks')
@@ -496,9 +513,18 @@
       row.appendChild(mark); row.appendChild(body)
       list.appendChild(row)
     }
-    // Nothing to offer once both are referenced by settings.json.
-    $('onb-hooks-wire').hidden = hooks.every((h) => h.wired)
+    advisorSet = await window.api.advisorModel()
+    hooksAllWired = hooks.every((h) => h.wired)
+    refreshWireButton()
     $('onb-hooks-preview').hidden = true
+  }
+
+  // Offer the write when a hook is unwired OR the advisor pick differs from what is set.
+  // Deliberately does NOT touch the selects: it runs on their own change event, and
+  // re-filling them here would discard the choice that triggered it.
+  function refreshWireButton() {
+    const changed = ($('onb-advisor').value || '') !== (advisorSet || '')
+    $('onb-hooks-wire').hidden = hooksAllWired && !changed
   }
 
   // Editing ~/.claude/settings.json is the one thing here that changes which code Claude
@@ -506,8 +532,9 @@
   // <pre> is selectable, so "I'd rather paste it myself" costs nothing.
   async function showWirePreview() {
     const files = (await window.api.hooksStatus()).filter((h) => !h.wired).map((h) => h.file)
-    if (!files.length) return
-    const res = await window.api.hooksWirePreview(files)
+    const advisor = ($('onb-advisor').value || '') !== (advisorSet || '') ? $('onb-advisor').value : ''
+    if (!files.length && !advisor) return
+    const res = await window.api.hooksWirePreview(files, advisor)
     const err = $('onb-hooks-error')
     if (!res.ok) { err.textContent = res.error; err.hidden = false; return }
     err.hidden = true
@@ -615,6 +642,14 @@
     b.disabled = false; b.textContent = 'Install skills'
     await renderSkillsAndHooks()
   })
+  // The session model lives in the app's own config, so it saves straight away — it is
+  // not settings.json and needs no ceremony.
+  $('onb-model').addEventListener('change', async () => {
+    const live = window.CSM_CONFIG || {}
+    await window.api.setConfig({ ...live, claudeModel: $('onb-model').value })
+    if (window.reloadConfig) await window.reloadConfig()
+  })
+  $('onb-advisor').addEventListener('change', refreshWireButton)
   $('onb-hooks-wire').addEventListener('click', () => { showWirePreview() })
   $('onb-hooks-cancel').addEventListener('click', () => {
     $('onb-hooks-preview').hidden = true
@@ -624,11 +659,13 @@
     const b = $('onb-hooks-apply')
     b.disabled = true; b.textContent = 'Writing…'
     const files = (await window.api.hooksStatus()).filter((h) => !h.wired).map((h) => h.file)
-    const res = await window.api.wireHooks(files)
+    const advisor = ($('onb-advisor').value || '') !== (advisorSet || '') ? $('onb-advisor').value : ''
+    const res = await window.api.wireHooks(files, advisor)
     b.disabled = false; b.textContent = 'Write it'
     const err = $('onb-hooks-error')
     if (!res.ok) { err.textContent = res.error; err.hidden = false; return }
     err.hidden = true
+    advisorSet = $('onb-advisor').value || advisorSet
     if (res.backup) {
       $('onb-hooks-preview-hint').textContent = `Done. Your previous settings.json is at ${res.backup}.`
       $('onb-hooks-diff').textContent = ''

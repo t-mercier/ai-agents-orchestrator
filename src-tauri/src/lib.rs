@@ -162,14 +162,20 @@ fn install_hooks() -> Result<Vec<String>, String> {
 /// The exact before/after of ~/.claude/settings.json, for the user to approve. Produced by
 /// the same merge that performs the write, so what is shown is what happens.
 #[tauri::command]
-fn hooks_wire_preview(files: Vec<String>) -> Result<hooks::WirePreview, String> {
-    hooks::wire_preview(files)
+fn hooks_wire_preview(files: Vec<String>, advisor: Option<String>) -> Result<hooks::WirePreview, String> {
+    hooks::wire_preview(files, advisor)
 }
 
 /// Write the approved settings.json, after copying the current one aside.
 #[tauri::command]
-fn wire_hooks(files: Vec<String>) -> Result<serde_json::Value, String> {
-    hooks::wire(files)
+fn wire_hooks(files: Vec<String>, advisor: Option<String>) -> Result<serde_json::Value, String> {
+    hooks::wire(files, advisor)
+}
+
+/// The advisorModel currently in ~/.claude/settings.json (Claude Code's key, read-only here).
+#[tauri::command]
+fn advisor_model() -> String {
+    hooks::advisor_model()
 }
 
 /// Strict category token — the real injection boundary, since the config JSON is
@@ -246,17 +252,17 @@ fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
     let settings_arg = statusline_settings_arg();
     let cmd = if std::path::Path::new(&cwd).is_absolute() {
         format!(
-            "cd {} && claude --resume {} --model {} --permission-mode auto{}",
+            "cd {} && claude --resume {}{} --permission-mode auto{}",
             pty::shell_quote(&cwd),
             session_id,
-            pty::shell_quote(pty::CLAUDE_MODEL),
+            pty::model_flag(),
             settings_arg,
         )
     } else {
         format!(
-            "claude --resume {} --model {} --permission-mode auto{}",
+            "claude --resume {}{} --permission-mode auto{}",
             session_id,
-            pty::shell_quote(pty::CLAUDE_MODEL),
+            pty::model_flag(),
             settings_arg,
         )
     };
@@ -431,7 +437,7 @@ fn start_session(
     if !want_root.is_empty() {
         prompt.push_str(&format!(" --root {want_root}"));
     }
-    let model = pty::CLAUDE_MODEL;
+    let model_flag = pty::model_flag();
     // Start NEW sessions in auto mode. /start-session must WRITE notes.md + register the
     // session in active-sessions.json — plan mode BLOCKS that (the skill aborts at its
     // mode check), so a +New in plan mode silently does nothing. `--permission-mode auto`
@@ -440,8 +446,8 @@ fn start_session(
     // literal, no quoting needed.
     let settings_arg = statusline_settings_arg();
     let claude = format!(
-        "claude --model {} --permission-mode auto{} {}",
-        pty::shell_quote(model),
+        "claude{} --permission-mode auto{} {}",
+        model_flag,
         settings_arg,
         pty::shell_quote(&prompt),
     );
@@ -569,9 +575,9 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     // plan mode. Matches +New / Import / Resume.
     let settings_arg = statusline_settings_arg();
     let cmd = format!(
-        "cd {} && claude --model {} --permission-mode auto{} {}",
+        "cd {} && claude{} --permission-mode auto{} {}",
         pty::shell_quote(&dir),
-        pty::shell_quote(pty::CLAUDE_MODEL),
+        pty::model_flag(),
         settings_arg,
         pty::shell_quote(&prompt),
     );
@@ -1246,10 +1252,10 @@ fn import_session_headless(
     let preexisting = expected.as_ref().is_some_and(|p| p.exists());
 
     let inner = format!(
-        "cd {} && claude --resume {} --model {} --permission-mode acceptEdits -p {}",
+        "cd {} && claude --resume {}{} --permission-mode acceptEdits -p {}",
         pty::shell_quote(&dir),
         pty::shell_quote(&session_id),
-        pty::shell_quote(pty::CLAUDE_MODEL),
+        pty::model_flag(),
         pty::shell_quote(&prompt),
     );
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
@@ -1340,10 +1346,10 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
     // Through a login shell: launched from Finder, the app's PATH does not contain
     // `claude` (same reason pty.rs spawns `$SHELL -ilc`).
     let inner = format!(
-        "cd {} && claude --resume {} --model {} --permission-mode acceptEdits -p {}",
+        "cd {} && claude --resume {}{} --permission-mode acceptEdits -p {}",
         pty::shell_quote(&cwd),
         pty::shell_quote(&session_id),
-        pty::shell_quote(pty::CLAUDE_MODEL),
+        pty::model_flag(),
         pty::shell_quote(&format!("/wrap-session {} {}", abs.display(), session_id)),
     );
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
@@ -1641,6 +1647,7 @@ pub fn run() {
             install_hooks,
             hooks_wire_preview,
             wire_hooks,
+            advisor_model,
             get_usage,
             skills::install_skills,
             skills::skills_status,

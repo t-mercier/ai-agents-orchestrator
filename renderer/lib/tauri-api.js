@@ -163,16 +163,17 @@
     // Copying a hook script is inert; WIRING it edits ~/.claude/settings.json, which is
     // never done without the user seeing the exact result first — hence preview + wire.
     hooksStatus: () => invoke('hooks_status').catch(() => []),
+    advisorModel: () => invoke('advisor_model').catch(() => ''),
     installHooks: () =>
       invoke('install_hooks')
         .then((files) => ({ ok: true, files }))
         .catch((e) => ({ ok: false, error: String(e) })),
-    hooksWirePreview: (files) =>
-      invoke('hooks_wire_preview', { files })
+    hooksWirePreview: (files, advisor) =>
+      invoke('hooks_wire_preview', { files, advisor: advisor || null })
         .then((p) => ({ ok: true, ...p }))
         .catch((e) => ({ ok: false, error: String(e) })),
-    wireHooks: (files) =>
-      invoke('wire_hooks', { files })
+    wireHooks: (files, advisor) =>
+      invoke('wire_hooks', { files, advisor: advisor || null })
         .then((r) => ({ ok: true, ...(r || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
 

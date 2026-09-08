@@ -97,6 +97,16 @@ fn read_settings() -> Value {
         .unwrap_or_else(|| json!({}))
 }
 
+/// The `advisorModel` currently in settings.json, if any — so the UI shows what is set
+/// rather than presenting an empty box over a real value.
+pub fn advisor_model() -> String {
+    read_settings()
+        .get("advisorModel")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
+}
+
 /// What the UI shows: for each shipped hook, whether its script is on disk and whether
 /// settings.json already runs it.
 pub fn status() -> Vec<HookStatus> {
@@ -133,7 +143,7 @@ pub fn install_scripts() -> Result<Vec<String>, String> {
 /// Insert the two entries into a settings object, skipping any already present. Pure, so
 /// the merge is tested without touching a real settings.json — and so the preview the
 /// user approves is produced by exactly the code that will do the write.
-pub fn merge_hooks(mut settings: Value, wanted: &[&str]) -> Value {
+pub fn merge_settings(mut settings: Value, wanted: &[&str], advisor: Option<&str>) -> Value {
     if !settings.is_object() {
         settings = json!({});
     }
@@ -182,6 +192,20 @@ pub fn merge_hooks(mut settings: Value, wanted: &[&str]) -> Value {
             None => arr.push(json!({ "hooks": [entry] })),
         }
     }
+    // `advisorModel` is Claude Code's own key, not this app's — it decides which model
+    // answers /advisor and has nothing to do with the sessions the dashboard launches.
+    // It rides this path because this is the one place that edits settings.json with the
+    // result shown first and a backup taken. An empty choice means "leave it alone",
+    // never "clear it".
+    if let Some(m) = advisor.map(str::trim).filter(|m| !m.is_empty()) {
+        if !settings.is_object() {
+            settings = json!({});
+        }
+        settings
+            .as_object_mut()
+            .unwrap()
+            .insert("advisorModel".into(), json!(m));
+    }
     settings
 }
 
@@ -196,10 +220,10 @@ pub struct WirePreview {
 
 /// The exact before/after the user approves. Pretty-printed both sides so the UI can diff
 /// them line by line and the user reads real JSON, not a description of it.
-pub fn wire_preview(wanted: Vec<String>) -> Result<WirePreview, String> {
+pub fn wire_preview(wanted: Vec<String>, advisor: Option<String>) -> Result<WirePreview, String> {
     let refs: Vec<&str> = wanted.iter().map(String::as_str).collect();
     let before_val = read_settings();
-    let after_val = merge_hooks(before_val.clone(), &refs);
+    let after_val = merge_settings(before_val.clone(), &refs, advisor.as_deref());
     let before = serde_json::to_string_pretty(&before_val).map_err(|e| e.to_string())?;
     let after = serde_json::to_string_pretty(&after_val).map_err(|e| e.to_string())?;
     Ok(WirePreview {
@@ -214,11 +238,11 @@ pub fn wire_preview(wanted: Vec<String>) -> Result<WirePreview, String> {
 /// undo: this is the one file in the system where "I can put it back" has to be literally
 /// true, so it is made before the write and its path is returned even when the write then
 /// fails.
-pub fn wire(wanted: Vec<String>) -> Result<Value, String> {
+pub fn wire(wanted: Vec<String>, advisor: Option<String>) -> Result<Value, String> {
     let refs: Vec<&str> = wanted.iter().map(String::as_str).collect();
     let path = settings_path();
     let before = read_settings();
-    let after = merge_hooks(before.clone(), &refs);
+    let after = merge_settings(before.clone(), &refs, advisor.as_deref());
     if before == after {
         return Ok(json!({ "ok": true, "unchanged": true, "backup": Value::Null }));
     }
@@ -246,7 +270,7 @@ mod tests {
 
     #[test]
     fn merge_adds_both_entries_in_the_shape_claude_code_expects() {
-        let out = merge_hooks(json!({}), &["pr_attach.py", "learn_nudge.py"]);
+        let out = merge_settings(json!({}), &["pr_attach.py", "learn_nudge.py"], None);
         let post = &out["hooks"]["PostToolUse"];
         assert_eq!(post[0]["matcher"], "Bash", "PostToolUse is matcher-scoped");
         assert!(post[0]["hooks"][0]["command"]
@@ -265,8 +289,8 @@ mod tests {
     // per PR and no way to tell which line to delete.
     #[test]
     fn merging_twice_changes_nothing_the_second_time() {
-        let once = merge_hooks(json!({}), &["pr_attach.py", "learn_nudge.py"]);
-        let twice = merge_hooks(once.clone(), &["pr_attach.py", "learn_nudge.py"]);
+        let once = merge_settings(json!({}), &["pr_attach.py", "learn_nudge.py"], None);
+        let twice = merge_settings(once.clone(), &["pr_attach.py", "learn_nudge.py"], None);
         assert_eq!(once, twice);
     }
 
@@ -279,7 +303,7 @@ mod tests {
                 { "matcher": "Bash", "hooks": [ { "type": "command", "command": "mine.sh" } ] }
             ] }
         });
-        let out = merge_hooks(existing, &["pr_attach.py"]);
+        let out = merge_settings(existing, &["pr_attach.py"], None);
         let groups = out["hooks"]["PostToolUse"].as_array().unwrap();
         assert_eq!(groups.len(), 1, "still a single Bash matcher");
         let inner = groups[0]["hooks"].as_array().unwrap();
@@ -295,7 +319,7 @@ mod tests {
                 { "hooks": [ { "type": "command", "command": "uv run ~/.claude/hooks/learn_nudge.py" } ] }
             ] }
         });
-        let out = merge_hooks(custom.clone(), &["learn_nudge.py"]);
+        let out = merge_settings(custom.clone(), &["learn_nudge.py"], None);
         assert_eq!(out, custom);
     }
 
@@ -307,7 +331,7 @@ mod tests {
             "permissions": { "deny": ["Read(**/.env)"] },
             "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "say done" } ] } ] }
         });
-        let out = merge_hooks(mine.clone(), &["pr_attach.py"]);
+        let out = merge_settings(mine.clone(), &["pr_attach.py"], None);
         assert_eq!(out["statusLine"], mine["statusLine"]);
         assert_eq!(out["permissions"], mine["permissions"]);
         assert_eq!(out["hooks"]["Stop"], mine["hooks"]["Stop"]);
@@ -316,8 +340,21 @@ mod tests {
     // A settings.json that is not an object (empty file, a stray array) must not panic.
     #[test]
     fn a_malformed_settings_object_is_replaced_rather_than_panicking() {
-        let out = merge_hooks(json!([1, 2, 3]), &["pr_attach.py"]);
+        let out = merge_settings(json!([1, 2, 3]), &["pr_attach.py"], None);
         assert!(out["hooks"]["PostToolUse"].is_array());
+    }
+
+    #[test]
+    fn the_advisor_model_is_set_only_when_one_was_chosen() {
+        // No choice → the key is left exactly as it was, set or unset.
+        assert_eq!(merge_settings(json!({}), &[], None).get("advisorModel"), None);
+        let had = json!({ "advisorModel": "fable" });
+        assert_eq!(merge_settings(had.clone(), &[], None), had);
+        assert_eq!(merge_settings(had.clone(), &[], Some("  ")), had, "blank is not a clear");
+        // A choice replaces it, and nothing else moves.
+        let out = merge_settings(json!({ "theme": "dark", "advisorModel": "fable" }), &[], Some("opus"));
+        assert_eq!(out["advisorModel"], "opus");
+        assert_eq!(out["theme"], "dark");
     }
 
     #[test]
