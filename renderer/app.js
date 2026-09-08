@@ -123,6 +123,32 @@ window.applyDensity = (d) => {
 }
 window.getDensity = () => { try { return localStorage.getItem('csm.density') || 'detailed' } catch { return 'detailed' } }
 
+// The density picker — three choices plus a live sample card that inherits the global
+// data-density and so morphs as you click. Settings and first-run setup both need it, and a
+// second hand-written copy would drift, so it lives in a <template> that every
+// [data-density-slot] instantiates. Idempotent: mounting twice replaces, never appends.
+window.mountDensityPickers = () => {
+  const tpl = document.getElementById('tpl-density')
+  if (!tpl) return
+  document.querySelectorAll('[data-density-slot]').forEach(slot => {
+    if (!slot.firstElementChild) slot.appendChild(tpl.content.cloneNode(true))
+  })
+  window.syncDensityChoices()
+}
+window.syncDensityChoices = () => {
+  const d = window.getDensity()
+  document.querySelectorAll('[data-density-choice]').forEach(b =>
+    b.classList.toggle('active', b.dataset.densityChoice === d))
+}
+// Delegated, so a picker mounted later is wired without re-binding anything.
+document.body.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-density-choice]')
+  if (!btn) return
+  e.preventDefault()
+  window.applyDensity(btn.dataset.densityChoice)
+  window.syncDensityChoices()
+})
+
 // Compact chrome: hide the text labels on the view switch + New button (icons only),
 // for an Android-style pared-back UI. Applied as a class on <html> (so the head can
 // set it pre-paint); CSS hides .btn-label under .compact-chrome.
@@ -1151,6 +1177,7 @@ async function boot() {
   // Whatever the last Sync learned, so PR marks are already coloured on first paint.
   // Purely a disk read — nothing reaches the network until Sync is pressed.
   if (window.api.getPrStatus) window.api.getPrStatus().then(st => { window._prStatus = st || {} })
+  window.mountDensityPickers()                // fill every [data-density-slot] from the template
   window.installDelegatedHandlers()           // one delegated click handler on <body>
   renderCategoryFilters()                     // build the ⚲ Filter button (from config)
   populateNewSessionCategories()              // fill the +New dropdown (from config)

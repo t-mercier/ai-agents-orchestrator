@@ -484,8 +484,6 @@
     if (step === 1) {
       // The taxonomy write — the only thing this step persists, and every import depends
       // on it: the backend refuses a category the config does not carry.
-      // Card density is a per-viewer UI preference, not shared config — apply it directly.
-      if (window.applyDensity) window.applyDensity($('onb-density').value)
       // A vaultPath with the knowledge feature off is a folder nothing ever writes to, so
       // setting one here turns it on. Never turns it OFF: an existing install may have it
       // on with the vaults configured elsewhere.
@@ -584,7 +582,7 @@
     $('onb-next').disabled = false
     $('onb-back').disabled = false
     $('onb-ticket').value = cfg.ticketBaseUrl
-    $('onb-density').value = window.getDensity ? window.getDensity() : 'detailed'
+    if (window.syncDensityChoices) window.syncDensityChoices()
     renderSteps()
     renderTaxonomy()
     if (!modal.open) modal.showModal()

@@ -40,9 +40,7 @@
     document.querySelectorAll('.theme-toggle [data-theme-choice]').forEach(b =>
       b.classList.toggle('active', b.dataset.themeChoice === theme))
     if (window.getAccent) $('set-accent').value = window.getAccent()
-    const density = window.getDensity ? window.getDensity() : 'detailed'
-    document.querySelectorAll('[data-density-choice]').forEach(b =>
-      b.classList.toggle('active', b.dataset.densityChoice === density))
+    if (window.syncDensityChoices) window.syncDensityChoices()
     renderLooks()
     highlightActiveLook(window.getLook ? window.getLook().id : 'ardoise')
     const compact = window.getCompactChrome ? window.getCompactChrome() : false
@@ -85,12 +83,6 @@
     })
   })
 
-  // Card density — applies live via CSS (data-attr on <html>); no re-render needed.
-  document.querySelectorAll('[data-density-choice]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (window.applyDensity) window.applyDensity(btn.dataset.densityChoice)
-      document.querySelectorAll('[data-density-choice]').forEach(b =>
-        b.classList.toggle('active', b === btn))
-    })
-  })
+  // Card density is owned by window.mountDensityPickers/syncDensityChoices in app.js —
+  // one delegated handler serves this panel and first-run setup alike.
 })()
