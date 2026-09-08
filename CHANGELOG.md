@@ -10,6 +10,26 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0-alpha] - 2026-09-08
+
+### Added
+- **A session can now open in any folder, not only a git checkout.** The ＋New form's
+  **Repo** field became **Start in** and accepts any directory — a notes tree, a scratch
+  folder, a docs directory. Before, `validate_repo` refused anything without a `.git`, so
+  **Browse…** let you pick a folder and Start then rejected it with *"that folder is not a
+  git repository"*; without a repo the session always opened at the space root, and there was
+  no way to say "open here". **Branch** is the one thing that still requires a checkout,
+  since there is otherwise nothing to check it out in — and it now says so.
+- This also gives the git behaviour an off switch that is not "leave it blank": point
+  **Start in** at a folder outside any repo and session start never touches git at all.
+
+### Fixed
+- **Regenerated `docs/media/*.png`.** Every shot still showed `＋ Import` and the
+  "Recent · unmanaged" row, both removed in 0.12.0 — so the README banner and the landing
+  page advertised a surface that no longer exists. Reshot from `scripts/screenshots/`, which
+  serves the real renderer against a synthetic fixture, so the hero, the board, the light and
+  Rose Poudré looks, Settings, the terminal and the landing-page banner are all current.
+
 ## [0.13.1-alpha] - 2026-09-08
 
 ### Fixed
