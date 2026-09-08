@@ -252,51 +252,72 @@ fn is_safe_branch(b: &str) -> bool {
         && b.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'/' | b'-'))
 }
 
-/// Validate a repo path BEFORE spawning iTerm: absolute, no leading dash, exists,
-/// is a directory, and is actually a git repo. Returns the canonical path. This is
-/// the only feedback channel — once iTerm is spawned, a failed `cd`/`checkout` is
-/// invisible to the form (the spawn already succeeded), so we pre-flight here.
-fn validate_repo(repo: &str) -> Result<std::path::PathBuf, String> {
-    if repo.starts_with('-') {
-        return Err("invalid repo path".into());
+/// Validate the folder a session will open in BEFORE spawning iTerm: absolute, no
+/// leading dash, exists, is a directory. Returns the canonical path. This is the only
+/// feedback channel — once iTerm is spawned, a failed `cd`/`checkout` is invisible to
+/// the form (the spawn already succeeded), so we pre-flight here.
+///
+/// Deliberately NOT a git check. A session opens where the work is, and plenty of work
+/// is not a checkout — a notes folder, a scratch directory, a docs tree. Git only enters
+/// when a Branch is asked for, which is what `is_git_repo` below gates.
+fn validate_launch_dir(dir: &str) -> Result<std::path::PathBuf, String> {
+    if dir.starts_with('-') {
+        return Err("invalid folder path".into());
     }
-    let p = std::path::Path::new(repo);
+    let p = std::path::Path::new(dir);
     if !p.is_absolute() {
-        return Err("repo must be an absolute path".into());
+        return Err("the folder must be an absolute path".into());
     }
-    let abs = p.canonicalize().map_err(|_| "repo folder not found".to_string())?;
+    let abs = p.canonicalize().map_err(|_| "folder not found".to_string())?;
     if !abs.is_dir() {
-        return Err("repo is not a directory".into());
+        return Err("that path is not a directory".into());
     }
-    let is_git = std::process::Command::new("git")
+    Ok(abs)
+}
+
+fn is_git_repo(dir: &std::path::Path) -> bool {
+    std::process::Command::new("git")
         .arg("-C")
-        .arg(&abs)
+        .arg(dir)
         .args(["rev-parse", "--git-dir"])
         .output()
         .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !is_git {
-        return Err("that folder is not a git repository".into());
+        .unwrap_or(false)
+}
+
+/// Whether a requested Branch can be honoured, given what the form supplied. A branch
+/// needs somewhere to be checked out, and that somewhere has to be a git checkout —
+/// pure so the two refusals are tested without a repo on disk.
+fn branch_target_error(branch_given: bool, dir_given: bool, dir_is_git: bool) -> Option<String> {
+    if !branch_given {
+        return None;
     }
-    Ok(abs)
+    if !dir_given {
+        return Some("pick a folder for the branch to be checked out in".into());
+    }
+    if !dir_is_git {
+        return Some("that folder is not a git repository — Branch needs one".into());
+    }
+    None
 }
 
 /// Launch a NEW session: open `claude` + the `/start-session` skill. Default (external)
 /// opens a new iTerm tab; `embedded` instead returns the command + the notes.md path the
 /// skill will create, so the dashboard can run it in an in-app pty (the renderer keys the
 /// embedded terminal by that notesPath — see the embedded branch).
-/// Launches from a chosen repo (cd + checkout the branch so the session starts on
-/// it) when given, else the category's scope root. The app writes nothing itself —
-/// /start-session creates the workspace (ADR-001/ADR-012). Category must pass the strict
-/// token regex AND exist in config. Repo/branch are pre-flight-validated so errors
-/// surface in the form, not as a dead iTerm tab.
+/// Launches from the chosen folder when given — any folder, not only a git checkout —
+/// else the category's scope root. A Branch additionally requires that folder to be a
+/// checkout, and is checked out there so the session starts on it. The app writes nothing
+/// itself — /start-session creates the notes folder (ADR-001/ADR-012). Category must pass
+/// the strict token regex AND exist in config. Folder/branch are pre-flight-validated so
+/// errors surface in the form, not as a dead iTerm tab.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // tauri command: one param per form field
 fn start_session(
     category: String,
     name: String,
     ticket: String,
-    repo: String,
+    start_in: String,
     branch: String,
     pr_link: String,
     root: String,
@@ -333,20 +354,22 @@ fn start_session(
     let t = ticket.trim();
     let safe_ticket = if is_ticket(t) { t.to_uppercase() } else { String::new() };
 
-    // Optional repo + branch: validate up front (see validate_repo). A branch with
-    // no repo is meaningless (nothing to check it out in) — reject early.
-    let repo = repo.trim();
+    // Optional launch folder + branch, both pre-flighted (see validate_launch_dir). The
+    // folder may be any directory; only a Branch requires it to be a git checkout, since
+    // there is otherwise nothing to check the branch out in.
+    let start_in = start_in.trim();
     let branch = branch.trim();
-    if !branch.is_empty() && repo.is_empty() {
-        return Err("pick a repo to check the branch out in".into());
+    let dir_abs = if start_in.is_empty() { None } else { Some(validate_launch_dir(start_in)?) };
+    let dir_is_git = dir_abs.as_deref().map(is_git_repo).unwrap_or(false);
+    if let Some(e) = branch_target_error(!branch.is_empty(), dir_abs.is_some(), dir_is_git) {
+        return Err(e);
     }
-    let repo_abs = if repo.is_empty() { None } else { Some(validate_repo(repo)?) };
     if !branch.is_empty() {
         if !is_safe_branch(branch) {
             return Err("invalid branch name".into());
         }
-        // Confirm the branch resolves in this repo (local or remote-tracking ref).
-        let abs = repo_abs.as_ref().unwrap();
+        // Confirm the branch resolves in that checkout (local or remote-tracking ref).
+        let abs = dir_abs.as_ref().unwrap();
         let exists = std::process::Command::new("git")
             .arg("-C")
             .arg(abs)
@@ -396,8 +419,8 @@ fn start_session(
         pty::shell_quote(&prompt),
     );
 
-    // Launch dir: the repo (start ON the branch) when given, else the scope root.
-    let cmd = if let Some(abs) = &repo_abs {
+    // Launch dir: the chosen folder (on the branch, when one was given) else the scope root.
+    let cmd = if let Some(abs) = &dir_abs {
         let cd = pty::shell_quote(&abs.to_string_lossy());
         if branch.is_empty() {
             format!("cd {cd} && {claude}")
@@ -1610,7 +1633,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        atomic_write, category_root_dir, discard_partial_import, import_notes_path,
+        atomic_write, branch_target_error, category_root_dir, discard_partial_import,
+        import_notes_path, is_git_repo, validate_launch_dir,
         is_deletable_session_dir, is_pr_url, is_safe_branch,
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
@@ -1854,6 +1878,44 @@ mod tests {
         assert!(!is_safe_branch("a b")); // space
         assert!(!is_safe_branch("a;rm -rf")); // shell metachars
         assert!(!is_safe_branch(&"x".repeat(201))); // > 200 chars
+    }
+
+    // A session opens where the work is, and plenty of work is not a checkout. The old
+    // validator refused any folder without a `.git`, which meant Browse… let you pick one
+    // and Start then rejected it.
+    #[test]
+    fn launch_dir_accepts_a_plain_folder_and_rejects_non_directories() {
+        let tmp = std::env::temp_dir().join(format!("ao-launch-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let canon = tmp.canonicalize().unwrap();
+        // Not a git repo, and accepted anyway.
+        assert!(!is_git_repo(&canon));
+        assert_eq!(validate_launch_dir(canon.to_str().unwrap()).unwrap(), canon);
+
+        let file = canon.join("a-file");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(validate_launch_dir(file.to_str().unwrap()).is_err());
+        assert!(validate_launch_dir("relative/path").is_err());
+        assert!(validate_launch_dir("-rf").is_err());
+        assert!(validate_launch_dir(canon.join("missing").to_str().unwrap()).is_err());
+        std::fs::remove_dir_all(&canon).ok();
+    }
+
+    // Branch is the one thing that still needs git: there has to be somewhere to check it
+    // out, and that somewhere has to be a checkout.
+    #[test]
+    fn a_branch_needs_a_folder_and_that_folder_must_be_a_checkout() {
+        assert_eq!(branch_target_error(false, false, false), None);
+        assert_eq!(branch_target_error(false, true, false), None); // plain folder, no branch
+        assert_eq!(branch_target_error(true, true, true), None);
+        assert_eq!(
+            branch_target_error(true, false, false).unwrap(),
+            "pick a folder for the branch to be checked out in"
+        );
+        assert_eq!(
+            branch_target_error(true, true, false).unwrap(),
+            "that folder is not a git repository — Branch needs one"
+        );
     }
 
     #[test]

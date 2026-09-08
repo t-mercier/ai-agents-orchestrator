@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.13.1--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.14.0--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -38,7 +38,7 @@ Nothing moves on its own — you close, you archive.
 
 | Action | What it does |
 |---|---|
-| **＋ New** | Creates the session's folder + its `notes.md`, registers it, launches it. **Start here** — you never need the terminal first. Repo and branch are both optional; leave **Repo** blank and git is never touched at all. |
+| **＋ New** | Creates the session's folder + its `notes.md`, registers it, launches it. **Start here** — you never need the terminal first. **Start in** takes any folder the session should open in, not only a git checkout, and is optional; leave it blank for the space root and git is never touched unless that folder sits inside a repo. |
 | **Resume** | Relaunches a session the app already manages. |
 | **First-run setup** | Names your spaces, categories and colours — plus the optional knowledge-notes folder, tracker URL and card density — then brings the Claude Code sessions already on this machine in, each to the space and category you pick, after a look at what it opened with and what it left off at. Runs itself once on a fresh install; **Settings → First-run setup** re-runs it. |
 | **Close session ✕** | Wraps it up with a summary → Closed. From a stale session, the **Close** button does the same headlessly, no terminal needed. |
@@ -125,9 +125,10 @@ AI Agents Orchestrator is a *projection* of the session state Claude Code alread
 **No `git worktree` anywhere.** A session's folder holds its `notes.md` and nothing else — your
 repo stays where it is, and a "Worktree" row appears in the detail panel only when a session
 happens to already be running in one. Git runs only when a session starts **inside a repo** —
-the **Repo** field if you give one, the space's root otherwise. When it does, session start
-fetches and **rebases that branch onto `origin`**, so giving a Repo is enough to trigger it
-even with **Branch** left blank. Leave both blank and your checkout is never touched.
+the **Start in** field if you give one, the space's root otherwise — and that field takes any
+folder, not only a checkout. When the folder *is* inside a repo, session start fetches and
+**rebases that branch onto `origin`**, enough to trigger it even with **Branch** left blank.
+Point it outside any repo, or leave it blank, and your checkout is never touched.
 
 It is **read-only on your session data by design**. The only writes it makes to session files are explicit actions you trigger — **archiving** a session and **saving its PR links / tickets** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which copies anything you had edited into `.archive/` first and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
@@ -360,7 +361,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 ## Security
 
 - **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
-- Repo / branch / URL inputs are **allowlist-validated** (absolute path, real git repo, safe branch, `github.com/owner/repo/pull/N`).
+- Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
 - The session-file writes (archive, PR links, tickets) are **atomic**, target a real `notes.md`, and are **confined under your configured roots** (canonicalized — no `../` escape).
 - **Installing the session skills** (optional, user-triggered) writes only under `~/.claude/skills/` — it copies the app's bundled skills there; it never touches session transcripts.
 - External links open in your **system browser**, never inside the app.
@@ -374,7 +375,7 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (144, `cargo test`) + Jest (151, renderer logic) — 295 total |
+| Tests | Rust unit tests (146, `cargo test`) + Jest (151, renderer logic) — 297 total |
 
 ## Roadmap
 

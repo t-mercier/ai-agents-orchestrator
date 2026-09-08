@@ -57,10 +57,10 @@
     // embedded=false (default): launches an external iTerm tab, returns { ok }.
     // embedded=true: launches NOTHING — returns { ok, command, notesPath } so the renderer
     // can run the command in an in-app pty keyed by notesPath.
-    startSession: ({ category, name, ticket, repo, branch, prLink, root, embedded } = {}) =>
+    startSession: ({ category, name, ticket, startIn, branch, prLink, root, embedded } = {}) =>
       invoke('start_session', {
         category: category || '', name: name || '', ticket: ticket || '',
-        repo: repo || '', branch: branch || '', prLink: prLink || '', root: root || '',
+        startIn: startIn || '', branch: branch || '', prLink: prLink || '', root: root || '',
         embedded: !!embedded,
       })
         .then((res) => ({ ok: true, ...(res || {}) }))

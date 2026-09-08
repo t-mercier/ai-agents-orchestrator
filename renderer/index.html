@@ -73,20 +73,20 @@
         <input id="ns-ticket" type="text" placeholder="PROJ-1234" autocomplete="off" spellcheck="false">
       </label>
 
-      <!-- Optional: start the session ON an existing branch in an existing repo.
-           /start-session then detects the checked-out branch and syncs it. -->
+      <!-- Optional: the folder the session opens in. ANY folder — a checkout, a notes
+           tree, a scratch directory. Only Branch requires it to be a git checkout. -->
       <label class="modal-field">
-        <span>Repo <em>(optional — start from an existing checkout; leave blank and git is never touched)</em></span>
+        <span>Start in <em>(optional — the folder this session opens in)</em></span>
         <div class="path-row">
-          <input id="ns-repo" type="text" placeholder="(none — uses the category root)" autocomplete="off" spellcheck="false">
-          <button type="button" class="modal-btn path-browse" data-browse="ns-repo">Browse…</button>
+          <input id="ns-startin" type="text" placeholder="(none — uses the space root)" autocomplete="off" spellcheck="false">
+          <button type="button" class="modal-btn path-browse" data-browse="ns-startin">Browse…</button>
         </div>
       </label>
 
       <label class="modal-field">
-        <span>Branch <em>(optional — checked out in that repo)</em></span>
+        <span>Branch <em>(optional — needs a git checkout above)</em></span>
         <input id="ns-branch" type="text" placeholder="feat/my-branch" autocomplete="off" spellcheck="false">
-        <span class="field-hint field-warn">Starting inside a repo also runs <code>git fetch</code> and <strong>rebases the branch onto <code>origin</code></strong> — with Branch blank it uses the branch you are already on. Leave <strong>Repo</strong> blank to skip git entirely.</span>
+        <span class="field-hint field-warn">Starting <strong>inside a repo</strong> also runs <code>git fetch</code> and <strong>rebases the branch onto <code>origin</code></strong> — with Branch blank it uses the branch you are already on. Pick a folder outside any repo, or leave <strong>Start in</strong> blank, to skip git entirely.</span>
       </label>
 
       <!-- REVIEW only: the GitHub PR being reviewed → shows a GitHub icon to open it. -->

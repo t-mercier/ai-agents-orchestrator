@@ -700,7 +700,7 @@ function syncPrField() {
 }
 
 document.getElementById('new-session-btn').addEventListener('click', () => {
-  for (const id of ['ns-name', 'ns-ticket', 'ns-repo', 'ns-branch', 'ns-pr']) {
+  for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
     document.getElementById(id).value = ''
   }
   hideNsError()
@@ -724,7 +724,7 @@ document.getElementById('ns-category').addEventListener('change', syncPrField)
   })
 }
 
-// Browse → native folder picker for the optional repo field (untouched on cancel).
+// Browse → native folder picker for the optional launch folder (untouched on cancel).
 newSessionModal.addEventListener('click', async (e) => {
   const browse = e.target.closest('.path-browse[data-browse]')
   if (!browse) return
@@ -742,11 +742,11 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   const category = document.getElementById('ns-category').value
   const name = document.getElementById('ns-name').value.trim()
   const ticket = document.getElementById('ns-ticket').value.trim()
-  const repo = document.getElementById('ns-repo').value.trim()
+  const startIn = document.getElementById('ns-startin').value.trim()
   const branch = document.getElementById('ns-branch').value.trim()
   const prLink = category === 'REVIEW' ? document.getElementById('ns-pr').value.trim() : ''
   if (!name) { showNsError('Title is required.'); return }
-  if (branch && !repo) { showNsError('Pick a repo for the branch to be checked out in.'); return }
+  if (branch && !startIn) { showNsError('Pick a folder for the branch to be checked out in.'); return }
   if (prLink && !isPrUrl(prLink)) { showNsError('PR link must be a GitHub PR URL (…/owner/repo/pull/123).'); return }
   // Space the session launches under — only meaningful when >1 space (the picker is
   // shown); empty otherwise, in which case start_session uses the category's own root.
@@ -756,7 +756,7 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   // from its historical always-iTerm behaviour. The modal toggle shows the current pick.
   // 'terminal' = external iTerm tab (the old behaviour).
   const embedded = !!(window.getOpenIn && window.getOpenIn() === 'embedded')
-  const res = await window.api.startSession({ category, name, ticket, repo, branch, prLink, root, embedded })
+  const res = await window.api.startSession({ category, name, ticket, startIn, branch, prLink, root, embedded })
   if (!res || !res.ok) {
     showNsError('Could not start: ' + ((res && res.error) || 'unknown error'))
     return

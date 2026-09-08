@@ -86,8 +86,10 @@ not a checkout: your repo stays exactly where it is, nothing is copied, duplicat
 checked out.
 
 **What decides whether git runs is not the Branch field — it is whether the session starts
-inside a repo.** The session's launch directory is the **Repo** field when you give one, and
-the space's root folder otherwise.
+inside a repo.** The session's launch directory is the **Start in** field when you give one,
+and the space's root folder otherwise. **Start in** accepts *any* folder — a checkout, a
+notes tree, a scratch directory — so picking one outside every repo is how you say "open
+here, and leave git alone".
 
 - **Launch directory is not inside a git repo** — git is skipped entirely. Nothing is
   fetched, checked out or rebased. This is the normal case, because a space's root is
@@ -100,11 +102,13 @@ the space's root folder otherwise.
   local-only branch skips the first and still gets the second. A rebase that conflicts is
   aborted and reported, never left half-applied.
 
-Read that second case twice if you keep long-lived local work on one branch: **giving a Repo
-is enough to trigger the rebase, even with the Branch field left blank**, because the branch
-is then read from the checkout. If you would rather drive git yourself, leave **Repo** blank
-too — the session still gets its notes, its category and its terminal, and your checkout is
-never touched.
+Read that second case twice if you keep long-lived local work on one branch: **pointing
+Start in at a checkout is enough to trigger the rebase, even with the Branch field left
+blank**, because the branch is then read from that checkout. If you would rather drive git
+yourself, point **Start in** somewhere outside any repo, or leave it blank — the session
+still gets its notes, its category and its terminal, and your checkout is never touched.
+Only **Branch** still requires a git checkout, since there is otherwise nothing to check it
+out in.
 
 ## One session, one process
 
