@@ -10,6 +10,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.1-alpha] - 2026-09-08
+
+### Fixed
+- **A session reopened the same day it was closed no longer sits in Closed for two days.**
+  The check for "closed, then resumed and worked on" compared `/close-session`'s **local**
+  calendar stamp against the transcript's **UTC** mtime. Those are different frames, off by
+  up to a day at the boundary, and the fix for that had been to demand a gap of more than a
+  full day — which made a same-day reopen invisible until the day after next. Reported from a
+  real session: closed at 11:49, worked in until 19:03, and it stayed in Closed all
+  afternoon, out of the board group its owner had put it in, with nothing to do but wait.
+  The check now also compares the transcript's mtime against the notes file's own mtime —
+  two instants off the same clock, so no timezone conversion exists to be wrong — with a
+  30-minute margin for the close turn still writing itself into the transcript. The old
+  day-granularity rule stays as a floor, for the case where no `notes.md` is on disk.
+
+
 ## [0.14.0-alpha] - 2026-09-08
 
 ### Added
