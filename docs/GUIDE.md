@@ -176,10 +176,35 @@ folder is invisible to them. The single exception is a skill of yours that happe
 one of those names — that one is replaced, after your version is copied into `.archive/` and
 named on screen.
 
-`bash scripts/install.sh --all` installs everything: this app's skills, refreshed to the
-version you have checked out, plus the two optional hooks. Without `--all` (or `--force`) a
-skill you already have is kept rather than replaced, and the installer tells you which
-updates it therefore withheld.
+`bash scripts/install.sh --all` refreshes this app's skills to the version you have checked
+out. Without `--all` (or `--force`) a skill you already have is kept rather than replaced,
+and the installer tells you which updates it therefore withheld.
+
+### The two hooks
+
+The skills run *inside* a session, so there are two moments they cannot see. A **hook** is a
+small script that **Claude Code** runs at one of those moments — not the app. Once enabled
+they work with the dashboard closed.
+
+- **`pr_attach`** — a session's pull requests live in its `notes.md`, and only the skills
+  write there. So a PR you open mid-session stays invisible until your next
+  `/save-session` — exactly when the link is most useful. This attaches it the moment
+  `gh pr create` prints the URL.
+- **`learn_nudge`** — `/learn` says "use PROACTIVELY", but nothing forces the check at the
+  turn where you actually state a preference. This reads your message and, when your own
+  wording carries that signal ("always", "toujours", "from now on", "ne … plus"…), reminds
+  the model for that one turn. Nothing else; it never writes.
+
+**Both scripts are copied for you**, with the skills, every launch — copying is harmless,
+since a script nothing points at never runs. **Switching one on** is the part that isn't
+harmless: it adds a line to `~/.claude/settings.json`, the file that decides which code
+Claude Code runs on your machine, so it never happens on its own.
+
+The last step of first-run setup does it properly when you ask: it shows you the exact file
+it would write, copies your current one to a timestamped backup, then writes. It also says
+which are already on, and offers nothing when both are. **Settings → first-run setup**
+reopens it any time. If you would rather do it by hand,
+`bash scripts/install.sh --with-hooks` prints the exact lines to paste.
 
 | Skill | What it does |
 |---|---|

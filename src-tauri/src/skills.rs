@@ -284,6 +284,14 @@ fn install_into(dst: &Path, force: bool, epoch: i64) -> std::io::Result<(Vec<Str
 pub fn install_skills(force: bool) -> Result<InstallReport, String> {
     let dst = config::home().join(".claude").join("skills");
     let (installed, skipped) = install_into(&dst, force, bundle_epoch()).map_err(|e| e.to_string())?;
+    // The hook SCRIPTS ride along with the skills, always. Copying one is inert — a hook
+    // nothing references never runs — so there is nothing to ask about, and the
+    // alternative is worse: an install that offers to WIRE a script it never placed
+    // would point settings.json at a missing file, and both hooks end in
+    // `2>/dev/null; true`, so it would fail in complete silence. Wiring stays a separate,
+    // explicit act. Errors are swallowed: a hook that cannot be copied must not fail a
+    // skills install.
+    let _ = crate::hooks::install_scripts();
     let config_seeded = config::seed_default_if_absent()?;
     let mut dirs_created = Vec::new();
     for base in config::category_base_dirs() {
@@ -448,6 +456,8 @@ pub fn sync_skills(manual: bool) -> Result<SyncReport, String> {
     let dst = config::home().join(".claude").join("skills");
     let (skipped_ahead, installed, updated, backed_up) =
         sync_into(&dst, manual, bundle_epoch()).map_err(|e| e.to_string())?;
+    // Same as install_skills: the scripts travel with the skills, on every launch.
+    let _ = crate::hooks::install_scripts();
     let config_seeded = config::seed_default_if_absent()?;
     let mut dirs_created = Vec::new();
     for base in config::category_base_dirs() {

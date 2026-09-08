@@ -221,6 +221,10 @@ They are ordinary Claude Code skills in your ordinary skills folder:
 ├── .ao-base/<name>/              ← pristine copy of each, to tell "you edited it" from "it's old"
 ├── .archive/<name>.pre-sync-…/   ← your version, kept, whenever one is about to be replaced
 └── your-own-skill/SKILL.md       ← never read, never written, never listed
+
+~/.claude/hooks/
+├── pr_attach.py                  ← copied with the skills; inert until you enable it
+└── learn_nudge.py                ← same
 ```
 
 **Your own skills are not involved.** Both installers — this script and the app's launch sync
@@ -233,9 +237,13 @@ it is recoverable.
 ```bash
 bash scripts/install.sh              # install; a skill you already have is KEPT
 bash scripts/install.sh --force      # replace this app's skills with this checkout's
-bash scripts/install.sh --with-hooks # also copy the two optional hooks (below)
+bash scripts/install.sh --with-hooks # also print the lines that ENABLE the two hooks
 bash scripts/install.sh --all        # everything: --force + --with-hooks
 ```
+
+The hook scripts themselves are copied by every run, flag or not — see
+[The two hooks](#the-two-hooks). `--with-hooks` only decides whether the installer prints
+the `settings.json` lines that switch them on.
 
 `--force` overwrites **this app's own 14 skills**, never your personal ones. It is not the
 default because one of those 14 may be a copy you tuned, and replacing that silently is the
@@ -261,23 +269,50 @@ thing this whole design refuses to do.
 
 Categories, note locations and knowledge-notes folders all come from your shared config, so the skills and the app stay in sync.
 
-### Optional: attach PRs automatically
+### The two hooks
 
-A session's pull requests are read from its `notes.md`, which only the skills above write — so a PR opened mid-session stays invisible until your next `/save-session`. The bundled `hooks/pr_attach.py` closes that gap: it attaches the URL the moment `gh pr create` prints it.
+The skills run *inside* a session, so there are two moments they cannot see. A hook is a
+script **Claude Code** runs at one of those moments — not the app: the app only puts the
+script on disk and offers you the line that declares it. Once enabled they work with the
+dashboard closed.
 
-```bash
-bash scripts/install.sh --with-hooks
-```
+Both ship inside the app and are **copied automatically** — with the skills, on every
+launch, and by `scripts/install.sh` with no flag needed. Copying is inert: a script nothing
+references never runs. **Enabling** one is the part that isn't, because it means adding a
+line to `~/.claude/settings.json`, the file that decides which code Claude Code runs on
+your machine. Nothing does that behind your back.
 
-That copies the script and prints the one-line entry to paste into the `PostToolUse` → `Bash` hooks of `~/.claude/settings.json`. **Already ran a plain `install.sh`?** Re-run it with the flag — it is idempotent, it re-does nothing you have customised, and a plain run now ends by naming the two hooks it did not install, so you are not left to find out from here. Wiring is left to you on purpose — that file decides which code Claude Code runs on your machine, and nothing here edits it for you. The hook only ever *adds* a link, never replaces or removes one.
+| Hook | Event | What it closes |
+|---|---|---|
+| `pr_attach.py` | `PostToolUse` (`Bash`) | A session's PRs are read from its `notes.md`, which only the skills write — so a PR opened mid-session is invisible until your next `/save-session`, exactly when the link matters most. This attaches the URL the moment `gh pr create` prints it. |
+| `learn_nudge.py` | `UserPromptSubmit` | `/learn` and `/skill-propose` say "use PROACTIVELY", but nothing forces the check at the turn a correction actually lands. This reads your message and, on a short high-precision phrase list, injects a one-line reminder for that turn. |
 
-### Optional: a nudge toward `/learn`
+**Three ways to enable them**, all equivalent:
 
-`/learn` and `/skill-propose` both say "use PROACTIVELY" in their own description, but that framing only helps if the model happens to re-read it at the right moment — nothing forces the check at the exact turn a correction lands, so the knowledge base ends up depending on you asking for it. The bundled `hooks/learn_nudge.py` closes that gap on the input side: on `UserPromptSubmit`, it checks your message against a short, high-precision phrase list ("always", "never", "from now on", "je préfère", "ne ... plus"...) and, when one matches, injects a one-line reminder for the model to check `/learn`'s or `/skill-propose`'s own criteria — silently, so a message that doesn't actually qualify produces no visible output at all. Throttled to once per session per 15 minutes.
+- **From the app** — first-run setup's last step, or **Settings → first-run setup** later.
+  It shows the exact `settings.json` it would write, copies your current one to a
+  timestamped backup, then writes atomically. It also tells you which are already enabled,
+  and offers nothing when both are.
+- **From the installer** — `bash scripts/install.sh --with-hooks` (or `--all`) prints the
+  exact lines to paste. The flag only decides whether they are *printed*; the scripts are
+  copied either way.
+- **By hand** — they are ordinary Claude Code hook entries.
 
-Same install path — it's the second script `--with-hooks` copies and prints a settings.json entry for, this time under `UserPromptSubmit`.
+Two things worth knowing about how they behave. `pr_attach` is the only one that **writes**:
+it requires a `gh pr create` (never `edit`, `list` or `view`, whose output is full of other
+people's PR URLs) and takes the URL from the tool's *response*, not the command — a failed
+create prints none, and a `--body` mentioning "depends on …/pull/12" is not the PR you just
+opened. Its writes are additive, idempotent and atomic. `learn_nudge` writes nothing at all;
+its phrase list is deliberately narrow ("always", "never", "toujours", "from now on",
+"je préfère", "ne … plus"…), because matching an ordinary mid-conversation redirect would
+fire on most turns and teach the model to ignore the nudge — which is the very problem it
+exists to fix. Throttled to once per session per 15 minutes.
 
-This only catches signal carried in your own wording. A fact or gotcha you never phrase as a standing preference still relies on the model's own judgment, or on `/save-session`/`/close-session`'s distil step — the hook narrows the gap, it doesn't close it.
+Both are silent and exit 0 on every path: a broken hook must never make a successful
+`gh pr create` look like a failure, or turn sending a message into a visible error. And
+`learn_nudge` only catches signal carried in your own wording — a gotcha you never phrase as
+a standing preference still relies on the model's judgment, or on the distil step of
+`/save-session` and `/close-session`.
 
 > [!IMPORTANT]
 > **Working from a clone? `git pull` does not update your skills.** It updates the repo's `skills/`; the copies Claude Code actually loads live in `~/.claude/skills/`. And a plain install **keeps an existing skill untouched** — new skills arrive, but *changed* ones are skipped, so a shipped fix silently never reaches you. After any pull that touches skills:

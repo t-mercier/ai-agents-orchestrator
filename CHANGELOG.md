@@ -11,12 +11,44 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- **`install.sh --all`** — this app's skills refreshed to your checkout *and* the two optional
-  hooks, in one command, instead of learning two flags from the README.
+- **The two hooks ship with the app, and first-run setup can switch them on.** They existed
+  only in the repo, copied by `install.sh --with-hooks` — so anyone installing the `.dmg`,
+  the path the README recommends, could not reach them at all. They are embedded in the
+  binary now like the skills, and copied on every launch. Copying is inert (a script nothing
+  references never runs); **enabling** one adds a line to `~/.claude/settings.json`, so it
+  stays a separate, explicit act: the wizard's new last step shows the exact file it would
+  write, backs the current one up with a timestamp, then writes atomically. The merge is
+  pure and tested — it joins an existing `Bash` matcher instead of adding a rival one, is
+  idempotent, treats a hand-tuned command line as already-enabled, and preserves everything
+  else in the file.
+- **First-run setup ends on step 4, "Skills & hooks"** — the place a newcomer learns that the
+  buttons don't do the work (each opens Claude Code on a session skill), where the skills
+  live, and that their own skills are never in scope. The launch banner stands down while
+  the wizard is pending: it asked the same question, and its dismiss is permanent.
+- **The model is choosable, and the app stops overriding your Claude Code default.**
+  `opus[1m]` was hard-coded into `claude --model` at nine call sites, so every ＋New, Resume,
+  Close and Sync silently overrode whatever `model` you had set in `settings.json`. The new
+  `claudeModel` key defaults to empty, which means **send no `--model` at all** and let your
+  own setting decide; pick one in step 4 or Settings → Terminal to override it explicitly.
+- **`install.sh --all`** — `--force` plus the hook-enabling lines, in one command, instead of
+  learning two flags from the README.
+- **`advisorModel` too**, at the same place. It is Claude Code's own key — nothing to do with
+  the sessions this app launches — but this is now the one screen that edits `settings.json`
+  with the result shown first and a backup taken, so it rides that path rather than growing
+  a second one. An empty choice leaves the key alone rather than clearing it.
+
+### Fixed
+- **The hook scripts were embedded but nothing copied them.** Wiring would have pointed
+  `settings.json` at a missing file — and both hooks end in `2>/dev/null; true`, so it would
+  have failed in complete silence. They now travel with the skills, in `install_skills` and
+  `sync_skills` alike.
 - **`--force` now backs up before it replaces.** The app's launch sync had always copied a
   hand-edited skill into `.archive/<name>.pre-sync-<timestamp>/` first; the installer script
   did a plain `rm -rf`, so the two disagreed on whether "nothing is ever lost" was true. It
   is true now on both sides, and the run names every backup it made.
+- **`install.sh` still gated the *copy* behind `--with-hooks`.** Gating an inert copy is what
+  made the hooks unreachable in the first place; every run copies them now, and the flag only
+  decides whether the lines that enable them are printed.
 
 ### Changed
 - **The README and the guide now explain what the skills are for and what an install touches.**

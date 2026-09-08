@@ -2,8 +2,9 @@
 # Install the bundled session skills + seed the shared config.
 #
 #   bash scripts/install.sh              # install (won't overwrite existing skills)
-#   bash scripts/install.sh --force      # overwrite existing skills
-#   bash scripts/install.sh --with-hooks # also copy the optional PR-attach + learn-nudge hooks
+#   bash scripts/install.sh --force      # replace this app's skills (yours untouched)
+#   bash scripts/install.sh --with-hooks # print the settings.json lines that ENABLE the hooks
+#                                        (the scripts themselves are copied by every run)
 #
 # Copies skills/* → ~/.claude/skills/, writes a default config if none exists, and
 # creates the category folders. Never touches your session data.
@@ -15,9 +16,12 @@ usage() {
 Install the bundled session skills + seed the shared config.
 
   bash scripts/install.sh                 install (keeps skills you already have)
-  bash scripts/install.sh --force         overwrite existing skills with this checkout's
-  bash scripts/install.sh --with-hooks    also copy the optional pr_attach + learn_nudge
-                                          hooks (copies + prints; never edits settings.json)
+  bash scripts/install.sh --force         replace THIS APP'S skills with this checkout's
+                                          (your own are never in scope; a copy of one of
+                                          the 14 that you had changed is archived first)
+  bash scripts/install.sh --with-hooks    print the settings.json lines that ENABLE the two
+                                          hooks (never edits the file). The scripts are
+                                          copied by every run, flag or not.
   bash scripts/install.sh --all           everything: --force + --with-hooks
 
 Only the 14 skills this app ships are ever touched, by name. Every other skill in
@@ -136,9 +140,16 @@ python3 "$SKILLS_DST/lib/aoconfig.py" categories | while IFS= read -r cat; do
   mkdir -p "$base" && echo "  $base"
 done
 
-# 5. Optional PR-attach hook. Copying the script is safe; wiring it is not, so the
-# settings.json entry is printed for you to paste — this installer never edits the file
-# that decides which code Claude Code runs on your machine.
+# 5. The hooks. Copying the scripts is inert — a hook nothing references never runs — so
+# it happens unconditionally, exactly like the skills. WIRING them is the part that is not
+# inert, so the settings.json entry is printed for you to paste: this installer never edits
+# the file that decides which code Claude Code runs on your machine.
+# ($HOOKS only decides whether the entries are printed; --with-hooks is kept as an alias
+# for that, since the README and muscle memory both still reach for it.)
+mkdir -p "$HOME/.claude/hooks"
+cp "$HERE/hooks/pr_attach.py" "$HOME/.claude/hooks/pr_attach.py"
+cp "$HERE/hooks/learn_nudge.py" "$HOME/.claude/hooks/learn_nudge.py"
+echo "installed hooks: ~/.claude/hooks/{pr_attach,learn_nudge}.py"
 if [ "$HOOKS" -eq 1 ]; then
   mkdir -p "$HOME/.claude/hooks"
   cp "$HERE/hooks/pr_attach.py" "$HOME/.claude/hooks/pr_attach.py"
@@ -171,8 +182,10 @@ if [ ${#STALE[@]} -gt 0 ]; then
   echo
 fi
 if [ "$HOOKS" -eq 0 ]; then
-  echo "→ Two optional hooks were NOT installed (re-run with --with-hooks; it is safe to"
-  echo "  re-run, and it only ever copies the scripts and prints the settings.json entry):"
+  echo "→ The two hooks are copied but not ENABLED — enabling one means adding a line to"
+  echo "  ~/.claude/settings.json, which this installer will not do for you. Re-run with"
+  echo "  --with-hooks (or --all) to print the exact lines to paste, or enable them from"
+  echo "  the app: Settings → first-run setup, last step, shows the diff and backs the file up."
   echo "    pr_attach.py   attaches a PR to the session notes the moment \`gh pr create\` opens it"
   echo "    learn_nudge.py nudges /learn when your own wording states a preference or correction"
   echo
