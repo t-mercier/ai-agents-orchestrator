@@ -10,6 +10,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0-alpha] - 2026-09-08
+
+### Added
+- **First-run setup now sets up the three things a new install otherwise has to go looking
+  for.** Step 1 gained each space's **knowledge-notes folder** (on its own line inside the
+  space's block, since a name, a path and two folder pickers side by side leave neither
+  placeholder readable), the **ticket tracker URL** that turns a ticket key on a card into a
+  link, and the **card density**. Without them a first session ran with no vault, unlinked
+  ticket keys, and whatever density happened to be the default.
+
+  Setting a vault here also switches the knowledge feature on — a `vaultPath` with
+  `knowledge.enabled` false is a folder nothing ever writes to. It never switches it off.
+- **The density choice shows you the result instead of describing it.** Settings has answered
+  the same question since 0.9 with three choices beside a live sample card that loses its
+  prose line, then its icon row, as you click. Rather than write a second copy of that block,
+  it moved into a `<template>` that both places instantiate, and its click handler became one
+  delegated listener — so the two pickers cannot drift, and either one updates the other.
+
 ## [0.12.1-alpha] - 2026-09-08
 
 ### Fixed

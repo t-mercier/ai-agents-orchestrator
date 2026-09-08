@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.12.1--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.13.0--alpha-9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -40,7 +40,7 @@ Nothing moves on its own — you close, you archive.
 |---|---|
 | **＋ New** | Creates the workspace + its `notes.md`, registers the session, launches it. **Start here** — you never need the terminal first. |
 | **Resume** | Relaunches a session the app already manages. |
-| **First-run setup** | Brings the Claude Code sessions already on this machine into the app — each one to the space and category you pick, after a look at what it opened with and what it left off at. Runs itself once on a fresh install; **Settings → First-run setup** re-runs it. |
+| **First-run setup** | Names your spaces, categories and colours — plus the optional knowledge-notes folder, tracker URL and card density — then brings the Claude Code sessions already on this machine in, each to the space and category you pick, after a look at what it opened with and what it left off at. Runs itself once on a fresh install; **Settings → First-run setup** re-runs it. |
 | **Close session ✕** | Wraps it up with a summary → Closed. From a stale session, the **Close** button does the same headlessly, no terminal needed. |
 
 Two things that save pain: a session's **`notes.md` is its memory** (it survives compaction —
@@ -63,7 +63,7 @@ Full tour: **[the guide](docs/GUIDE.md)**.
 > - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
 > - ✅ **Close finishes a stale session properly** — it resumes the session headless, writes the summary, attaches the PRs, and moves it to Closed. No terminal opens.
 > - 🧠 **Knowledge notes build themselves** — `/learn` writes the moment something durable comes up, extending the note that already owns the subject; an opt-in hook now catches it the instant your own wording states a preference or correction, not only when you ask.
-> - 📥 **First-run setup brings your existing sessions in** — three steps: spaces and categories, then the Claude Code sessions already on this machine, then one import pass. Each session goes to the space and category you pick, and a `▸` shows what it opened with and what it left off at before you decide. It is the only place the app adopts a session started outside it: `＋ Import` and *Recent · unmanaged* are gone, because once a session is tracked you are not meant to start the next one outside the dashboard.
+> - 📥 **First-run setup brings your existing sessions in** — three steps: spaces and categories, then the Claude Code sessions already on this machine, then one import pass. Each session goes to the space and category you pick, and **▸ Preview** shows what it opened with and what it left off at before you decide. The first step also sets each space's knowledge-notes folder, your ticket tracker URL and the card density — the last with a live sample card, so you pick by looking. It is the only place the app adopts a session started outside it: `＋ Import` and *Recent · unmanaged* are gone, because once a session is tracked you are not meant to start the next one outside the dashboard.
 > - 🩺 **Doctor finds what is genuinely broken** — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists, a pidfile for a process that has exited. It reports; you tick what it repairs. A pruned transcript is ordinary ageing, and it says so rather than counting it as damage.
 > - 🧹 **Clean audits the rest by age** — it proposes what to archive and what to delete, using the same last-touched date the list already shows. Nothing is pre-ticked, and a deletion goes to the Trash.
 > - 🛡 **The app's skills keep themselves current** — the lifecycle skills are app-owned, synced silently at launch like any app resource. An older build never reverts a newer install, and anything you'd edited by hand is copied to `.archive/` before being replaced — named in a notice, never silently lost.

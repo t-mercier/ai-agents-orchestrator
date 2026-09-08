@@ -49,9 +49,20 @@ hunting for the right window, which is the problem this replaces.
 
 Sessions you started yourself (plain `claude` in a shell) aren't managed: they have no
 `notes.md`, so the app can't track them. **First-run setup** brings them in — three steps:
-your spaces and categories, then the sessions found on this machine, then a single import
-pass. Each session goes to the space and category you pick, and a `▸` on its row shows what
-it opened with and what it left off at so you can tell which ones are still worth keeping.
+
+1. **Spaces and categories** — the folders your notes live under, and the colour-coded
+   buckets inside them. This comes first because an import needs a category to file into.
+   The same step sets each space's **knowledge-notes folder**, your **ticket tracker URL**
+   (which turns a ticket key on a card into a link) and the **card density**, the last with
+   a live sample card so you pick by looking rather than by reading. All three are optional,
+   and all three are in Settings afterwards.
+2. **Your sessions** — tick the ones you still work on and say where each one belongs; the
+   newest few are ticked for you. **▸ Preview** on a row shows what that session opened with
+   and what it left off at, so you can tell which ones are still worth keeping. The line
+   underneath accounts for what the scan left out — transcripts already in the app, and
+   automation runs like the ones behind the Sync button.
+3. **Import** — the one step that writes. Each session resumes briefly to write its own
+   notes, so it takes a moment per session, and each row reports its own result.
 
 It runs itself once, on an install with nothing in it. After that — or if you skipped it —
 **Settings → First-run setup → Re-run first-time setup…** opens it again, and the list's
@@ -120,7 +131,7 @@ You run these inside Claude Code (the dashboard buttons trigger them for you). C
 
 ## A typical day
 
-0. First time only: **first-run setup** names your spaces and categories and brings in the sessions you already had.
+0. First time only: **first-run setup** names your spaces, categories and colours, points a space at a knowledge-notes folder if you want one, and brings in the sessions you already had.
 1. **`/start-session FEAT 1842 checkout-redesign`** → new session, ready to work.
 2. Work with Claude; the dashboard shows it as **Active**, and flags it **waiting** when it needs you.
 3. **`/close-session`** when you're done for the day → it moves to **Closed**, notes summarised.
