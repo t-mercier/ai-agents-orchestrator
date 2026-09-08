@@ -10,19 +10,6 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- **The installer's own last line was recommending a git-worktree plugin.** After every
-  install from source it printed *"Optional: install the Superpowers plugin for git-worktree
-  support"* — the loudest surviving source of the belief that this app needs worktrees, which
-  the README, the guide and `/start-session` all spent 0.13.1 disowning. The recommendation
-  stays, stripped of the implication and prefixed by what is actually true: nothing here uses
-  or creates a worktree.
-- **A plain `install.sh` no longer hides the two optional hooks.** It copied neither and named
-  neither, so the only way to learn `--with-hooks` existed was to read the README. The run now
-  ends by naming `pr_attach.py` and `learn_nudge.py`, what each does, and that re-running with
-  the flag is safe.
-
-
 ## [0.14.1-alpha] - 2026-09-08
 
 ### Fixed
@@ -37,6 +24,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   two instants off the same clock, so no timezone conversion exists to be wrong — with a
   30-minute margin for the close turn still writing itself into the transcript. The old
   day-granularity rule stays as a floor, for the case where no `notes.md` is on disk.
+- **The installer's own last line was recommending a git-worktree plugin.** After every
+  install from source it printed *"Optional: install the Superpowers plugin for git-worktree
+  support"* — the loudest surviving source of the belief that this app needs worktrees, which
+  the README, the guide and `/start-session` all spent 0.13.1 disowning. The recommendation
+  stays, stripped of the implication and prefixed by what is actually true: nothing here uses
+  or creates a worktree.
+- **A plain `install.sh` no longer hides the two optional hooks.** It copied neither and named
+  neither, so the only way to learn `--with-hooks` existed was to read the README. The run now
+  ends by naming `pr_attach.py` and `learn_nudge.py`, what each does, and that re-running with
+  the flag is safe.
 
 
 ## [0.14.0-alpha] - 2026-09-08
