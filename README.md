@@ -20,7 +20,7 @@
 
 > A long session gets **compacted** — the decisions you made on day one are squeezed out, and the next conversation starts from nothing. Run several in parallel and you also lose track of which one is waiting on you.
 >
-> **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure. Nothing becomes active until you have seen the exact wording and said yes. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync**.
+> **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure. Nothing becomes active until you have seen the exact wording and said yes. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync** or **Close**.
 
 ## TL;DR — how you're meant to use it
 
@@ -63,6 +63,8 @@ Full tour: **[the guide](docs/GUIDE.md)**.
 > - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
 > - ✅ **Close finishes a stale session properly** — it resumes the session headless, writes the summary, attaches the PRs, and moves it to Closed. No terminal opens.
 > - 🧠 **Knowledge notes build themselves** — `/learn` writes the moment something durable comes up, extending the note that already owns the subject; an opt-in hook now catches it the instant your own wording states a preference or correction, not only when you ask.
+> - 📂 **A session can start in any folder** — the ＋New form's **Start in** takes any directory, not only a git checkout: a notes tree, a scratch folder, wherever the work is. Only **Branch** still needs a checkout. It is also the way to keep git out of it entirely — a folder outside any repo means session start never fetches or rebases.
+> - 🌱 **Git is optional, and no worktree is ever created** — said outright now, because a tester gave up believing otherwise. What decides whether git runs is whether the session opens inside a repo; the ＋New form carries that warning where the decision is made.
 > - 📥 **First-run setup brings your existing sessions in** — three steps: spaces and categories, then the Claude Code sessions already on this machine, then one import pass. Each session goes to the space and category you pick, and **▸ Preview** shows what it opened with and what it left off at before you decide. The first step also sets each space's knowledge-notes folder, your ticket tracker URL and the card density — the last with a live sample card, so you pick by looking. It is the only place the app adopts a session started outside it: `＋ Import` and *Recent · unmanaged* are gone, because once a session is tracked you are not meant to start the next one outside the dashboard.
 > - 🩺 **Doctor finds what is genuinely broken** — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists, a pidfile for a process that has exited. It reports; you tick what it repairs. A pruned transcript is ordinary ageing, and it says so rather than counting it as damage.
 > - 🧹 **Clean audits the rest by age** — it proposes what to archive and what to delete, using the same last-touched date the list already shows. Nothing is pre-ticked, and a deletion goes to the Trash.
@@ -81,10 +83,10 @@ Terminal tabs don't scale. You need mission control.
 - **Live dashboard** — polled every 5s. Every session's status at a glance: **busy** · **idle** · **waiting** (pulsing) · **stale** (terminal gone, work not wrapped up) · **background shell**.
 - **Two views** — a grouped **List** and a **Board** (kanban).
 - **Kanban board** — drag to reorder (insertion line), **drop a card onto another to group** them (named, collapsible), **attach notes** to a card or group, flag **urgent**, and add sessions from the board itself. Generative **column colours** (pick one seed → a harmonious set across however many columns you have), with each column tinting its own accent.
-- **In-context detail** — click any card to open a **slide-over** with the session's goal, last activity, branch, Jira / PR links, and one-click **Resume / Restart / terminal** — without leaving the view.
+- **In-context detail** — click any card to open a **slide-over** with the session's goal, last activity, branch, ticket and PR links, and one-click **Resume / Restart / terminal** — without leaving the view.
 - **Tickets & PRs on the card** — the ticket id and a GitHub icon sit on every card, clickable straight through to your tracker. A session can carry **several** of each (a task split across two PRs, an epic plus its sub-task): the icon then shows a count and opens a picker. Editable from the app, and `/save-session` · `/close-session` keep the lists filled as the work grows.
 - **Start & resume your way** — open a **new** session or pick an existing one back up in the **built-in terminal** (in the app, xterm.js + portable-pty) *or* in **your own terminal** (iTerm / Terminal) — your choice, one toggle. Detach the built-in one into its own always-on-top window if you like.
-- **Keyboard-first** — arrows / `j` `k` to navigate, `Enter` to launch, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs, `v` to toggle list ⇄ board, `b` for board. **Remap any of it** in Settings → Shortcuts.
+- **Keyboard-first** — arrows / `j` `k` to navigate (`h` `l` too, across board columns), `Enter` to launch or open the focused card, `/` to search, `1`–`3` for tabs, `←/→` to switch tabs in the list, `v` to toggle list ⇄ board, `b` for board. The six named actions — search, the three tabs, the view toggle and board — are **remappable** in Settings → Shortcuts; the navigation keys are fixed.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and a **⚲ Filter** popover (category checkboxes, one control across every view).
 - **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client). The **List** organises into collapsible **space sections** → category groups; the **Board** gets its own space filter next to its search. Pinned and ⚡ waiting cards float above every space section — they're your shortlist, so they stay at the top of the column. A single space configured ⇒ no space chrome at all.
@@ -120,19 +122,20 @@ Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pi
 
 ## How it works
 
-**Local-first. Zero network.**
+**Local-first. Nothing in the background.**
 
-AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network **only** when you press **Sync** — that button is the opt-in, and nothing else in the app calls out — and it **never** stores secrets: it visualizes what's on disk and lets Claude Code do the rest.
+AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network **only** when you press **Sync** or **Close** — Sync reads ticket statuses and pull requests, Close runs `gh pr view` to attach the PR while filing the session; nothing else calls out, and nothing runs in the background — and it **never** stores secrets: it visualizes what's on disk and lets Claude Code do the rest.
 
 **No `git worktree` anywhere.** A session's folder holds its `notes.md` and nothing else — your
 repo stays where it is, and a "Worktree" row appears in the detail panel only when a session
 happens to already be running in one. Git runs only when a session starts **inside a repo** —
 the **Start in** field if you give one, the space's root otherwise — and that field takes any
 folder, not only a checkout. When the folder *is* inside a repo, session start fetches and
-**rebases that branch onto `origin`**, enough to trigger it even with **Branch** left blank.
-Point it outside any repo, or leave it blank, and your checkout is never touched.
+**rebases that branch onto `origin`** — and it reads the branch from the checkout, so this
+fires even with **Branch** left blank. Point **Start in** outside any repo, or leave it
+blank, and your checkout is never touched.
 
-It is **read-only on your session data by design**. The only writes it makes to session files are explicit actions you trigger — **archiving** a session and **saving its PR links / tickets** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which copies anything you had edited into `.archive/` first and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
+It is **read-only on your session data by design**: every write is an action you trigger, and there are five of them — **archiving** a session, **saving its PR links / tickets**, the repairs you tick in **Doctor**, what you tick in **Clean** (archive, or delete to the OS Trash), and the rollback of a first-run import that died half-done. All written atomically and confined under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which copies anything you had edited into `.archive/` first and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
 
@@ -202,7 +205,7 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 
 | Skill | What it does |
 |---|---|
-| `/start-session <CAT> <ticket> <name>` | Create the session's folder + `notes.md` under the category's folder, register it, and — only if a branch was given — fetch and rebase it in your repo |
+| `/start-session <CAT> <ticket> <name>` | Create the session's folder + `notes.md` under the category's folder, register it, and — only when that folder is inside a git repo — fetch and rebase the branch onto `origin`. The branch is read from the checkout when you did not name one, so being inside a repo is what triggers this, not the Branch field |
 | `/close-session` | Wrap up the session: summarise into `notes.md` + append a history entry tagged with the session id |
 | `/save-session` | Checkpoint mid-flight (same summary as close, marked `(in progress)`) **without** closing it — handy before a context compaction |
 | `/sync-refs <notes>` | Realign one session's references: each ticket's current status from the tracker (via MCP) and any pull request whose branch names one of its tickets. Run by the dashboard's **Sync** |
@@ -257,7 +260,8 @@ Long sessions force the assistant to **compact** its own history — silently dr
 The skill ships, but the *trigger* has to be in front of the assistant at all times to fire on its own — so add this to your `~/.claude/CLAUDE.md`:
 
 > When something durable emerges mid-session — a preference or correction I stated, a stable fact about the environment, a gotcha with its workaround — invoke `/learn` then, not at the end. The test is: does writing this stop me repeating myself?
- `/route <ticket | topic>` then reads that folder, your past session notes and — when a tracker is reachable — its tickets, to build a **Context Brief before you open the code**. It resolves *which* folder from the current session's space, so work and personal knowledge never bleed into each other.
+
+`/route <ticket | topic>` then reads that folder, your past session notes and — when a tracker is reachable — its tickets, to build a **Context Brief before you open the code**. It resolves *which* folder from the current session's space, so work and personal knowledge never bleed into each other.
 
 ```mermaid
 flowchart LR
@@ -316,7 +320,7 @@ dims as *stale* if you've only worked outside the app, and hides entirely when n
 
 ## Customization
 
-Edit everything in the app's **Settings (⚙)** — categories & colours, scan roots, terminal app, themes/looks, density, keyboard shortcuts. It all persists to `~/.config/ai-agents-orchestrator/config.json` (which the skills read too):
+Edit everything in the app's **Settings (⚙)** — spaces & their paths, categories & colours, knowledge-notes folders, terminal app, ticket tracker URL, themes/looks, density, keyboard shortcuts. Two stores, deliberately: anything the **skills also need** persists to `~/.config/ai-agents-orchestrator/config.json`, while what is purely how the app looks to you — theme, accent, look, density, compact chrome, shortcuts, pinned cards — stays in `localStorage`, so it never travels through the file the skills read.
 
 ```json
 {
@@ -330,7 +334,7 @@ Edit everything in the app's **Settings (⚙)** — categories & colours, scan r
     { "name": "REVIEW", "color": "#d9a86e", "root": "Work" },
     { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
   ],
-  "obsidian": { "enabled": false },
+  "knowledge": { "enabled": false },
   "ticketBaseUrl": ""
 }
 ```
@@ -352,22 +356,21 @@ Leave it blank and ticket IDs simply show as a (non-clickable) tag. *(The legacy
 
 **Does it show all my sessions, or only ones started with `/start-session`?** Two sources, both automatic:
 
-- **Running** — *every live Claude Code session* on your machine shows up, managed or not. Unmanaged ones just carry less metadata (no goal/category/ticket) until you `/start-session` or `/restart-session` them.
+- **Running** — *every live Claude Code session* on your machine shows up, managed or not. Unmanaged ones just carry less metadata (no goal/category/ticket) until you bring them in — through **first-run setup**, or with `/restart-session` for one you had managed before.
 - **Closed / Archived / Stale** — these list **managed** sessions: ones with a `notes.md` under your category roots (created by `/start-session`). That `notes.md` is what gives the dashboard the goal, history, and lifecycle state.
 
-**Can I import my existing / older Claude sessions?** Live ones need nothing — they're already in **Running**. Past sessions that were never `/start-session`-ed have no `notes.md`, so they don't show in the historical tabs. To bring one under management, run `/restart-session <slug>` (or `/start-session`) for that work — it creates the `notes.md` and registers it. Setting your category **root dir** only tells the app *where* to scan for managed sessions; it doesn't ingest arbitrary `~/.claude` transcripts on its own.
+**Can I import my existing / older Claude Code sessions?** Yes — that is what **first-run setup** is for. It scans `~/.claude` for every transcript a person actually typed in, shows you what each one opened with and left off at (**▸ Preview**), and imports the ones you tick, each to the space and category you choose. It runs itself once on a fresh install, and **Settings → First-run setup** re-runs it whenever you want. Live sessions need nothing either way — they are already in **Running**.
 
-> [!TIP]
-> Auto-importing *any* past session (not just managed ones) isn't built yet — it's a great idea on the roadmap. Open an issue if you want it.
+Under the hood each import runs `/import-session`, which writes the `notes.md` and registers the session; `/restart-session <slug>` reopens one later. Setting a space's **path** only tells the app *where* to scan for managed sessions — it does not ingest transcripts on its own; the import pass does, and only for what you ticked.
 
 ## Security
 
 - **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
 - Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
-- The session-file writes (archive, PR links, tickets) are **atomic**, target a real `notes.md`, and are **confined under your configured roots** (canonicalized — no `../` escape).
-- **Installing the session skills** (optional, user-triggered) writes only under `~/.claude/skills/` — it copies the app's bundled skills there; it never touches session transcripts.
+- The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.
+- **The session skills** are app-owned: the app copies its bundled versions into `~/.claude/skills/` **silently at each launch**, plus on the Settings button. The write is confined to that folder and never touches session transcripts, and it cannot lose your work — a skill you edited by hand is copied to `.archive/` first and named in a notice, and an older build stands down rather than revert a newer install.
 - External links open in your **system browser**, never inside the app.
-- Nothing is sent over the network; no secrets stored.
+- **The app itself makes no network calls**, and stores no secrets. Two buttons do reach out, through Claude Code rather than the app: **Sync** (tracker via MCP, `gh` for pull requests) and **Close** (`/wrap-session` runs `gh pr view` to attach the PR before filing the session). Both are things you press.
 
 ## Tech stack
 

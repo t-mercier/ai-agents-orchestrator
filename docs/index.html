@@ -6,7 +6,7 @@
 <title>AI Agents Orchestrator — memory for your AI coding sessions</title>
 <meta name="description" content="Every Claude Code session keeps a notes.md beside its code, writes what it learns into a folder of knowledge notes, and proposes a skill when it learns a procedure — nothing active until you say yes. A tiny local-first dashboard for macOS &amp; Linux." />
 <meta property="og:title" content="AI Agents Orchestrator" />
-<meta property="og:description" content="What you learned once, you keep. Every session keeps its notes beside the code, and the agent reads them back before it digs. Local-first, silent on the network until you press Sync." />
+<meta property="og:description" content="What you learned once, you keep. Every session keeps its notes beside the code, and the agent reads them back before it digs. Local-first, silent on the network until you press Sync or Close." />
 <meta property="og:image" content="media/hero.png" />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -296,7 +296,7 @@
     <h1>What you learned once, <span class="grad">you keep.</span></h1>
     <p class="vs">A long session gets <strong>compacted</strong> — the decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p>
     <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure — nothing becomes active until you have seen the exact wording and said yes.</p>
-    <p class="sub">Local-first, read-only on your sessions, silent on the network until you press Sync. macOS &amp; Linux; the macOS download is 7 MB.</p>
+    <p class="sub">Local-first, read-only on your sessions, silent on the network until you press Sync or Close. macOS &amp; Linux; the macOS download is 7 MB.</p>
 
     <div class="ba">
       <div class="ba-card">
@@ -598,20 +598,20 @@
     <div class="section-head reveal">
       <p class="eyebrow">Local-first by design</p>
       <h2>It watches. It barely touches.</h2>
-      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It is silent on the network until you press <strong>Sync</strong> — that button is the opt-in, and it is the only thing that reaches GitHub or your tracker. It is read-only on your session data otherwise, writing only when you archive a session, save a PR link, or let it bring its own skills up to this version.</p>
+      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It is silent on the network until you press <strong>Sync</strong> or <strong>Close</strong> — Sync reads your tracker and your pull requests, Close runs <code>gh pr view</code> to attach the PR while it files the session. Nothing else reaches out, and nothing runs in the background. It is read-only on your session data otherwise: it writes when you archive a session, save a PR link or ticket, tick a repair in Doctor, tick an archive-or-delete in Clean, or let it bring its own skills up to this version.</p>
     </div>
     <div class="secgrid">
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg> No shell strings</h4><p>Every command spawns with separate args — no string interpolation, no injection surface.</p></div>
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Allowlisted inputs</h4><p>Paths, branches and PR URLs are validated against strict patterns before use.</p></div>
-      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Sandboxed writes</h4><p>The two writes (archive, PR link) are atomic and confined under your configured roots.</p></div>
-      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg> Offline until you ask</h4><p>No timer, no telemetry, no background fetch. Nothing leaves the machine until you press Sync.</p></div>
+      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Sandboxed writes</h4><p>Every write is one you triggered — archive, PR link or ticket, a Doctor repair, a Clean archive-or-delete — atomic and confined under your configured roots.</p></div>
+      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg> Offline until you ask</h4><p>No timer, no telemetry, no background fetch. Nothing leaves the machine until you press Sync or Close.</p></div>
     </div>
 
     <div class="trust reveal">
       <span><b>Never writes</b> your transcripts</span>
-      <span><b>No</b> network calls until Sync</span>
+      <span><b>No</b> network calls until Sync or Close</span>
       <span><b>No</b> secrets stored</span>
-      <span><b>295</b> tests</span>
+      <span><b>297</b> tests</span>
     </div>
   </div>
 </section>
