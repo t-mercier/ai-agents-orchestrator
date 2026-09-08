@@ -23,6 +23,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - This also gives the git behaviour an off switch that is not "leave it blank": point
   **Start in** at a folder outside any repo and session start never touches git at all.
 
+### Changed
+- **The README's banner is now the app, not a screenshot of the landing page.** That banner
+  repeated the three things directly under it — the title, the headline and the opening line
+  on compaction — as an 820px image nobody can select, search or read on a phone, and it had
+  to be re-shot whenever the landing copy changed. It shows `hero.png` instead, so the top of
+  the README answers "what does this look like?" and is no longer coupled to marketing copy.
+  The `banner` scene is gone from `scripts/screenshots/`, and the List/Board table below now
+  shows only the Board, since the List view is the shot at the top.
+
 ### Fixed
 - **Regenerated `docs/media/*.png`.** Every shot still showed `＋ Import` and the
   "Recent · unmanaged" row, both removed in 0.12.0 — so the README banner and the landing

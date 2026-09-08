@@ -18,8 +18,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="${OUT:-$ROOT/docs/media}"
 PORT="${PORT:-8752}"
 
-# scene:file:width:height — banner LAST: it screenshots the landing page, which embeds
-# the freshly written hero.png.
+# scene:file:width:height
 SHOTS=(
   "list:hero.png:1440:900"
   "light:light.png:1440:900"
@@ -27,7 +26,6 @@ SHOTS=(
   "board:board.png:1440:900"
   "settings:settings.png:1440:900"
   "terminal:terminal.png:1440:900"
-  "banner:banner.png:1500:1000"
 )
 
 find_chrome() {
@@ -120,11 +118,7 @@ want=("$@")
 for entry in "${SHOTS[@]}"; do
   IFS=: read -r scene file w h <<< "$entry"
   if [ ${#want[@]} -gt 0 ] && [[ ! " ${want[*]} " == *" ${scene} "* ]]; then continue; fi
-  if [ "$scene" = "banner" ]; then
-    url="http://127.0.0.1:$PORT/docs/index.html"
-  else
-    url="http://127.0.0.1:$PORT/shots/app.html?scene=$scene"
-  fi
+  url="http://127.0.0.1:$PORT/shots/app.html?scene=$scene"
   printf '%-10s → %s\n' "$scene" "$file"
   shoot "$url" "$OUT/$file" "$w" "$h"
   python3 - "$OUT/$file" "$w" "$h" <<'PY'

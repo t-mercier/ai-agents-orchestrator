@@ -32,7 +32,6 @@ loudly if `index.html` moves them.
 | `board` | `board.png` | Board: a group, an urgent flag, attached notes |
 | `settings` | `settings.png` | Settings → Appearance over the board |
 | `terminal` | `terminal.png` | Embedded terminal, output pushed through the real `pty-data` path |
-| `banner` | `banner.png` | The landing page itself — runs **last**, it embeds the fresh `hero.png` |
 
 Add a shot: add a scene to `fixture.js`, then a `scene:file:w:h` line to `SHOTS` in
 `capture.sh`.
@@ -44,10 +43,13 @@ Add a shot: add a scene to `fixture.js`, then a `scene:file:w:h` line to `SHOTS`
   own. `capture.sh` launches it detached, waits for the file size to settle, then kills
   it. The fixture also clears pending timers once a scene is set, which is what lets the
   screenshot fire at all.
-- **A full-height capture of the landing page comes out black.** `docs/index.html` fades
-  its sections in on scroll (IntersectionObserver), so anything below the viewport is
-  transparent at capture time. Shoot it at viewport height (as `banner` does) and verify
-  the rest through the DOM.
+- **Should a landing-page scene ever come back**: a full-height capture of
+  `docs/index.html` comes out black. It fades its sections in on scroll
+  (IntersectionObserver), so anything below the viewport is transparent at capture time.
+  Shoot it at viewport height and verify the rest through the DOM. The README used to carry
+  such a shot as its banner; it now shows `hero.png`, because a screenshot of the landing
+  page repeated the title, the headline and the opening line as an unreadable image, and had
+  to be re-shot whenever that copy changed.
 
 ## Fidelity notes
 

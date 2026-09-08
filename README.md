@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/banner.png" alt="AI Agents Orchestrator — memory for your AI coding sessions" width="820"></a>
+<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/hero.png" alt="The dashboard: sessions grouped by category on the left, the selected session's notes, tickets and PRs on the right" width="820"></a>
 
 # AI Agents Orchestrator
 
@@ -93,12 +93,14 @@ Terminal tabs don't scale. You need mission control.
 
 ### Two ways to look at your work
 
-| List | Board |
-|:---:|:---:|
-| ![List view](docs/media/hero.png) | ![Kanban board](docs/media/board.png) |
-| Grouped by space → category, with the detail inline beside it. | Kanban with groups, attached notes, urgent flags, and generative column colours. |
+The shot at the top of this page is the **List** view — grouped by space → category, with
+the detail inline beside it. The other way in is a **Board**:
 
-On the Board, click any card for a **detail slide-over** — goal, branch, links, and one-click Resume / Restart — without leaving the board.
+![Kanban board with groups, attached notes and urgent flags](docs/media/board.png)
+
+Kanban with groups, attached notes, urgent flags and generative column colours. Click any
+card for a **detail slide-over** — goal, branch, links, and one-click Resume / Restart —
+without leaving the board.
 
 Make it yours — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, density, dark **and** light themes:
 
