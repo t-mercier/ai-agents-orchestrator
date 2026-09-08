@@ -1213,27 +1213,56 @@ fn date_to_days(s: &str) -> Option<i64> {
     Some(days_from_civil(y, m, d))
 }
 
-/// True when the transcript was modified MORE THAN A DAY after the session's last
-/// `/close-session` — i.e. the session was reopened (resumed) and worked on without a
-/// fresh `/close-session`.
+/// True when a session filed as closed was reopened (resumed) and worked on without a
+/// fresh `/close-session`. Two independent signals, either one enough:
 ///
-/// `close_date` is a LOCAL calendar day (`/close-session` stamps `date +%Y-%m-%d`), but
-/// `tr.mtime` is a UTC instant. Bucketing the UTC mtime into a UTC day and comparing it
-/// to a local day can be off by one at the day boundary: in a negative-UTC-offset zone
-/// (the Americas), an evening close writes today's local date while the UTC mtime has
-/// already rolled to tomorrow — so a plain `mtime_day > close_day` fired the instant the
-/// session was closed and flipped it Closed→Stale. The max civil-offset skew is <24h, so
-/// requiring a *strictly-more-than-one-day* gap (`+ 1`) absorbs it in every timezone. The
-/// cost is that a genuine same-/next-day reopen isn't flagged stale until the following
-/// day — an acceptable, self-healing lag versus a wrong flip right after closing.
-fn reopened_after_close(tr: &Transcript, close_date: &str) -> bool {
-    let close_days = match date_to_days(close_date) {
-        Some(d) => d,
-        None => return false,
+/// **(a) The transcript kept growing after the notes were last written.** Both are
+/// filesystem instants off the same clock, which is the entire point — no timezone
+/// conversion is involved, so none can be wrong. `/close-session` writes notes.md as it
+/// closes, so a transcript still growing well after that is work done since.
+///
+/// **(b) The old day-granularity rule, kept as a floor.** `close_date` is a LOCAL calendar
+/// day (`/close-session` stamps `date +%Y-%m-%d`) while `tr.mtime` is a UTC instant, and
+/// bucketing one into the other is off by up to a day at the boundary: in a
+/// negative-UTC-offset zone an evening close writes today's local date while the UTC mtime
+/// has already rolled to tomorrow, so a plain `mtime_day > close_day` fired the moment a
+/// session was closed and flipped it Closed→Stale. Demanding a gap of more than one day
+/// absorbs the skew in every timezone. It stays because it needs no notes.md on disk.
+///
+/// (b) alone used to be the whole rule, and its documented cost — "a genuine same-/next-day
+/// reopen isn't flagged stale until the following day, an acceptable, self-healing lag" —
+/// turned out not to be acceptable: a session closed at 11:49 and worked in until 19:03 the
+/// same day sat in **Closed** all afternoon, out of the group its owner had put it in, with
+/// nothing she could do but wait two days. (a) fixes that without loosening (b).
+///
+/// The margin on (a) covers the close turn itself: `/close-session` writes notes.md
+/// mid-turn and the transcript keeps growing for the rest of it — the tool result, the
+/// closing message, whatever the user types before quitting. Thirty minutes swallows that
+/// and still beats the old rule by two orders of magnitude.
+fn reopened_after_close(tr: &Transcript, close_date: &str, notes_path: &str) -> bool {
+    const CLOSE_TURN_MARGIN: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+    let Some(t_mtime) = tr.mtime else {
+        return false;
     };
-    let mtime_days = match tr.mtime.and_then(|m| m.duration_since(SystemTime::UNIX_EPOCH).ok()) {
-        Some(d) => (d.as_secs() / 86400) as i64,
-        None => return false,
+    // (a) transcript touched meaningfully after the notes themselves.
+    if let Ok(n_mtime) = fs::metadata(notes_path).and_then(|m| m.modified()) {
+        if t_mtime
+            .duration_since(n_mtime)
+            .is_ok_and(|gap| gap > CLOSE_TURN_MARGIN)
+        {
+            return true;
+        }
+    }
+    // (b) more than a full day past the close stamp, whatever the timezone.
+    let Some(close_days) = date_to_days(close_date) else {
+        return false;
+    };
+    let Some(mtime_days) = t_mtime
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|d| (d.as_secs() / 86400) as i64)
+    else {
+        return false;
     };
     mtime_days > close_days + 1
 }
@@ -1471,14 +1500,14 @@ fn scan_historical() -> Vec<Value> {
                 || latest_resumable_sid(&notes_path, &active_registry),
             );
             let tr = eff_sid.as_deref().map(read_transcript);
-            // A "closed" session whose transcript was touched on a LATER day than its
-            // last /close-session was reopened (resumed) + worked on without re-closing →
-            // surface it as stale (open work) rather than closed. (Resume/restart-session don't
-            // write the notes, so this transcript-mtime check is the only reliable
-            // signal; genuinely-closed sessions, untouched since, stay closed.)
+            // A "closed" session whose transcript kept growing after the close was
+            // reopened (resumed) + worked on without re-closing → surface it as stale
+            // (open work) rather than closed. Resume/restart-session don't write the notes,
+            // so the transcript is the only reliable signal; genuinely-closed sessions,
+            // untouched since, stay closed.
             if hist_status == "closed" {
                 if let (Some(t), Some(date)) = (tr.as_ref(), hist_date.as_deref()) {
-                    if reopened_after_close(t, date) {
+                    if reopened_after_close(t, date, &notes_path) {
                         hist_status = "stale".to_string();
                     }
                 }
@@ -2013,24 +2042,55 @@ mod tests {
         assert_eq!(discover_meta_lines(none.into_iter()).0, None);
     }
 
+    // Signal (b), the day-granularity floor, on its own: no notes.md on disk, so only the
+    // close stamp is available. Unchanged semantics — it still absorbs the local/UTC skew.
     #[test]
-    fn reopened_after_close_needs_more_than_a_days_gap() {
+    fn reopened_after_close_day_floor_still_absorbs_the_timezone_skew() {
         use std::time::{Duration, UNIX_EPOCH};
         let close = "2026-06-10";
         let day = date_to_days(close).unwrap() as u64;
+        let gone = "/nonexistent/notes.md"; // forces the fallback: signal (a) can't apply
         let with_mtime = |secs: u64| Transcript {
             mtime: Some(UNIX_EPOCH + Duration::from_secs(secs)),
             ..Default::default()
         };
-        // same calendar day (a few hours later) → NOT reopened
-        assert!(!reopened_after_close(&with_mtime(day * 86400 + 5 * 3600), close));
-        // next UTC day → NOT reopened: this is exactly the local-vs-UTC-day skew a
-        // negative-offset (Americas) evening close produces, and must not flip Closed→Stale.
-        assert!(!reopened_after_close(&with_mtime((day + 1) * 86400 + 2 * 3600), close));
+        // same calendar day (a few hours later) → NOT reopened on this signal alone
+        assert!(!reopened_after_close(&with_mtime(day * 86400 + 5 * 3600), close, gone));
+        // next UTC day → NOT reopened: exactly the local-vs-UTC-day skew a negative-offset
+        // (Americas) evening close produces, and it must not flip Closed→Stale.
+        assert!(!reopened_after_close(&with_mtime((day + 1) * 86400 + 2 * 3600), close, gone));
         // two days later → genuinely reopened
-        assert!(reopened_after_close(&with_mtime((day + 2) * 86400), close));
+        assert!(reopened_after_close(&with_mtime((day + 2) * 86400), close, gone));
         // no transcript mtime → false
-        assert!(!reopened_after_close(&Transcript::default(), close));
+        assert!(!reopened_after_close(&Transcript::default(), close, gone));
+    }
+
+    // The case that sent this rule back to the drawing board: a session closed at 11:49 and
+    // worked in until 19:03 THE SAME DAY sat in Closed all afternoon, because the day floor
+    // cannot see inside a day. Signal (a) compares two filesystem mtimes, so it can.
+    #[test]
+    fn a_same_day_reopen_is_seen_now_not_two_days_later() {
+        use std::fs;
+        use std::time::Duration;
+        let dir = std::env::temp_dir().join(format!("ao-reopen-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let notes = dir.join("notes.md");
+        fs::write(&notes, b"# notes").unwrap();
+        let notes_s = notes.to_string_lossy().to_string();
+        let n_mtime = fs::metadata(&notes).unwrap().modified().unwrap();
+        let tr = |offset: Duration| Transcript { mtime: Some(n_mtime + offset), ..Default::default() };
+        // A close stamp far in the future pins the day floor to false for every case here,
+        // so any `true` below can only have come from signal (a).
+        let never = "2999-01-01";
+
+        // 7h14m of work after the close → reopened, the same afternoon.
+        assert!(reopened_after_close(&tr(Duration::from_secs(7 * 3600 + 14 * 60)), never, &notes_s));
+        // Three minutes: the close turn still writing itself into the transcript → NOT a reopen.
+        assert!(!reopened_after_close(&tr(Duration::from_secs(3 * 60)), never, &notes_s));
+        // A transcript OLDER than the notes is a genuinely closed session → not reopened.
+        let older = Transcript { mtime: Some(n_mtime - Duration::from_secs(3600)), ..Default::default() };
+        assert!(!reopened_after_close(&older, never, &notes_s));
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
