@@ -389,8 +389,8 @@
     const jobs = O.importJobs(rows, [...picked])
     const n = jobs.length
     if (!n) {
-      $('onb-target-hint').textContent = 'Nothing selected — finish, and start fresh sessions from the dashboard.'
-      $('onb-next').textContent = 'Finish'
+      $('onb-target-hint').textContent = 'Nothing selected — that is fine, you can start fresh sessions from the dashboard.'
+      $('onb-next').textContent = 'Next'
       return
     }
     const counts = new Map()
@@ -451,7 +451,7 @@
     running = false
     $('onb-back').disabled = false
     $('onb-next').disabled = false
-    $('onb-next').textContent = 'Finish'
+    $('onb-next').textContent = 'Next'
     const p = O.progress(run)
     // Say what actually happened. A partial run is the honest outcome to report — the
     // failed rows keep their reason on screen, and the successful ones are already in.
@@ -460,22 +460,81 @@
       : `${p.imported} session${p.imported > 1 ? 's' : ''} imported. They're in the dashboard now.`
   }
 
+  // ── Step 4: what makes the buttons work ─────────────────────────────────────────
+
+  // The skills are already synced at launch, so this step is usually a confirmation
+  // rather than an action — which is the point: it is the one place a newcomer is told
+  // what these are and that their own skills are not in scope. The button appears only
+  // when something is genuinely missing.
+  async function renderSkillsAndHooks() {
+    const st = await window.api.skillsStatus()
+    const missing = (st.missing || []).length
+    $('onb-skills-state').textContent = missing
+      ? `${missing} of this app's skills are missing from ~/.claude/skills/.`
+      : `${(st.present || []).length} session skills installed in ~/.claude/skills/.`
+    $('onb-skills-install').hidden = missing === 0
+
+    const hooks = await window.api.hooksStatus()
+    const list = $('onb-hooks')
+    list.textContent = ''
+    for (const h of hooks) {
+      const row = document.createElement('div')
+      row.className = 'onb-hook-row'
+      const mark = document.createElement('span')
+      mark.className = 'onb-job-mark'
+      mark.textContent = h.wired ? '✓' : '·'
+      const body = document.createElement('div')
+      const name = document.createElement('div')
+      name.className = 'onb-hook-name'
+      name.textContent = h.file.replace(/\.py$/, '')
+      const desc = document.createElement('div')
+      desc.className = 'onb-hook-desc'
+      desc.textContent = h.wired
+        ? `${h.describes} Already enabled.`
+        : h.describes
+      body.appendChild(name); body.appendChild(desc)
+      row.appendChild(mark); row.appendChild(body)
+      list.appendChild(row)
+    }
+    // Nothing to offer once both are referenced by settings.json.
+    $('onb-hooks-wire').hidden = hooks.every((h) => h.wired)
+    $('onb-hooks-preview').hidden = true
+  }
+
+  // Editing ~/.claude/settings.json is the one thing here that changes which code Claude
+  // Code runs, so it is a two-step: the exact file it would write, then the write. The
+  // <pre> is selectable, so "I'd rather paste it myself" costs nothing.
+  async function showWirePreview() {
+    const files = (await window.api.hooksStatus()).filter((h) => !h.wired).map((h) => h.file)
+    if (!files.length) return
+    const res = await window.api.hooksWirePreview(files)
+    const err = $('onb-hooks-error')
+    if (!res.ok) { err.textContent = res.error; err.hidden = false; return }
+    err.hidden = true
+    if (res.unchanged) { await renderSkillsAndHooks(); return }
+    $('onb-hooks-preview-hint').textContent =
+      `This is exactly what ${res.settings_path} would become. Your current file is copied to a timestamped backup beside it first — or select this and paste it yourself.`
+    $('onb-hooks-diff').textContent = res.after
+    $('onb-hooks-preview').hidden = false
+    $('onb-hooks-wire').hidden = true
+  }
+
   // ── Navigation ──────────────────────────────────────────────────────────────────
 
   function renderSteps() {
     const bar = $('onb-steps')
     bar.textContent = ''
-    ;['Spaces & categories', 'Your sessions', 'Import'].forEach((label, i) => {
+    ;['Spaces & categories', 'Your sessions', 'Import', 'Skills & hooks'].forEach((label, i) => {
       const n = i + 1
       const el = document.createElement('span')
       el.className = `onb-pip ${n === step ? 'current' : n < step ? 'past' : ''}`
       el.textContent = `${n}. ${label}`
       bar.appendChild(el)
     })
-    for (const n of [1, 2, 3]) $(`onb-step-${n}`).hidden = n !== step
+    for (const n of [1, 2, 3, 4]) $(`onb-step-${n}`).hidden = n !== step
     $('onb-back').hidden = step === 1
-    $('onb-skip').hidden = step === 3
-    $('onb-next').textContent = step === 3 ? 'Import' : 'Next'
+    $('onb-skip').hidden = step >= 3
+    $('onb-next').textContent = step === 3 ? 'Import' : step === 4 ? 'Finish' : 'Next'
     if (step === 1) validate()
     if (step === 2) renderPicked()
   }
@@ -530,22 +589,62 @@
       renderJobs()
       return
     }
-    // Step 3: the first press imports, the second closes.
-    if (!run) { await startImport(); return }
+    if (step === 3) {
+      // First press imports; the second moves on. Nothing was selected → straight through.
+      const nothing = O.importJobs(rows, [...picked]).length === 0
+      if (!run && !nothing) { await startImport(); return }
+      step = 4
+      renderSteps()
+      await renderSkillsAndHooks()
+      return
+    }
     await done()
   }
 
   async function done() {
+    window.onboardingPending = false
     await window.api.finishOnboarding()
     modal.close()
     if (window.fetchAndRender) window.fetchAndRender(false)
   }
+
+  $('onb-skills-install').addEventListener('click', async () => {
+    const b = $('onb-skills-install')
+    b.disabled = true; b.textContent = 'Installing…'
+    await window.api.installSkills(false)
+    b.disabled = false; b.textContent = 'Install skills'
+    await renderSkillsAndHooks()
+  })
+  $('onb-hooks-wire').addEventListener('click', () => { showWirePreview() })
+  $('onb-hooks-cancel').addEventListener('click', () => {
+    $('onb-hooks-preview').hidden = true
+    $('onb-hooks-wire').hidden = false
+  })
+  $('onb-hooks-apply').addEventListener('click', async () => {
+    const b = $('onb-hooks-apply')
+    b.disabled = true; b.textContent = 'Writing…'
+    const files = (await window.api.hooksStatus()).filter((h) => !h.wired).map((h) => h.file)
+    const res = await window.api.wireHooks(files)
+    b.disabled = false; b.textContent = 'Write it'
+    const err = $('onb-hooks-error')
+    if (!res.ok) { err.textContent = res.error; err.hidden = false; return }
+    err.hidden = true
+    if (res.backup) {
+      $('onb-hooks-preview-hint').textContent = `Done. Your previous settings.json is at ${res.backup}.`
+      $('onb-hooks-diff').textContent = ''
+      $('onb-hooks-preview').hidden = false
+    } else {
+      $('onb-hooks-preview').hidden = true
+    }
+    await renderSkillsAndHooks()
+  })
 
   $('onb-next').addEventListener('click', () => { if (!running) next() })
   $('onb-back').addEventListener('click', () => {
     if (running || step === 1) return
     step -= 1
     renderSteps()
+    if (step === 3) { summariseTargets(); renderJobs(); if (run) $('onb-next').textContent = 'Next' }
   })
   // Skipping still counts as answered: Settings is the way back, so re-opening this
   // unasked at every launch would just be nagging someone who already said no.
@@ -597,6 +696,10 @@
   // config::onboarding_needed. Everyone else gets it from Settings or not at all.
   window.maybeOpenOnboarding = async function maybeOpenOnboarding() {
     if (!window.api || !window.api.needsOnboarding) return
-    if (await window.api.needsOnboarding()) window.openOnboarding()
+    if (!(await window.api.needsOnboarding())) return
+    // Tell the skills banner to stand down: step 4 covers the same ground, with the
+    // explanation, and the banner's dismiss is permanent.
+    window.onboardingPending = true
+    window.openOnboarding()
   }
 })()

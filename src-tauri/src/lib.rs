@@ -4,6 +4,7 @@ mod reader;
 mod git;
 mod terminal;
 mod skills;
+mod hooks;
 mod statusline;
 mod prstatus;
 mod doctor;
@@ -143,6 +144,32 @@ fn reveal_terminal(pid: i64) -> Result<(), String> {
     } else {
         Err("couldn't find that terminal window".into())
     }
+}
+
+/// The two shipped hooks: is each script on disk, and does settings.json already run it?
+#[tauri::command]
+fn hooks_status() -> Vec<hooks::HookStatus> {
+    hooks::status()
+}
+
+/// Copy the embedded hook scripts into ~/.claude/hooks/. Inert on its own — a script
+/// nothing references never runs — so this needs no confirmation.
+#[tauri::command]
+fn install_hooks() -> Result<Vec<String>, String> {
+    hooks::install_scripts()
+}
+
+/// The exact before/after of ~/.claude/settings.json, for the user to approve. Produced by
+/// the same merge that performs the write, so what is shown is what happens.
+#[tauri::command]
+fn hooks_wire_preview(files: Vec<String>) -> Result<hooks::WirePreview, String> {
+    hooks::wire_preview(files)
+}
+
+/// Write the approved settings.json, after copying the current one aside.
+#[tauri::command]
+fn wire_hooks(files: Vec<String>) -> Result<serde_json::Value, String> {
+    hooks::wire(files)
 }
 
 /// Strict category token — the real injection boundary, since the config JSON is
@@ -1610,6 +1637,10 @@ pub fn run() {
             prstatus::sync_refs,
             can_reveal_terminal,
             reveal_terminal,
+            hooks_status,
+            install_hooks,
+            hooks_wire_preview,
+            wire_hooks,
             get_usage,
             skills::install_skills,
             skills::skills_status,

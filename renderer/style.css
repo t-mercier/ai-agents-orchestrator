@@ -1918,6 +1918,18 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .onb-job-failed .onb-job-mark { color: var(--danger, #ff9eb1); }
 .onb-job-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .onb-job-pending { opacity: 0.55; }
+/* Step 4. The <pre> holds a real settings.json the user may want to select and paste,
+   so it wraps rather than clipping, and scrolls instead of stretching the dialog. */
+.onb-pre {
+  margin: 6px 0; padding: 8px 10px; max-height: 220px; overflow: auto;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; line-height: 1.5;
+  color: var(--text-secondary); background: rgba(var(--tint), 0.06);
+  border: 1px solid var(--border); border-radius: 8px; white-space: pre-wrap; user-select: text;
+}
+.onb-hook-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 2px; }
+.onb-hook-name { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+.onb-hook-desc { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
+.onb-kv { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .onb-job-error { font-size: 10px; color: var(--danger, #ff9eb1); }
 
 /* List drag (categories, sessions, groups) */

@@ -159,6 +159,23 @@
         .then((r) => ({ ok: true, summary: String((r && r.summary) || ''), prs: (r && r.prs) || [] }))
         .catch((e) => ({ ok: false, error: String(e) })),
 
+    // ── Shipped Claude Code hooks (src-tauri/src/hooks.rs) ──
+    // Copying a hook script is inert; WIRING it edits ~/.claude/settings.json, which is
+    // never done without the user seeing the exact result first — hence preview + wire.
+    hooksStatus: () => invoke('hooks_status').catch(() => []),
+    installHooks: () =>
+      invoke('install_hooks')
+        .then((files) => ({ ok: true, files }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+    hooksWirePreview: (files) =>
+      invoke('hooks_wire_preview', { files })
+        .then((p) => ({ ok: true, ...p }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+    wireHooks: (files) =>
+      invoke('wire_hooks', { files })
+        .then((r) => ({ ok: true, ...(r || {}) }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+
     // ── Session skills installer (src-tauri/src/skills.rs) ──
     // status: which bundled skills are already in ~/.claude/skills (drives the banner).
     skillsStatus: () => invoke('skills_status').catch(() => ({

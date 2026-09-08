@@ -966,6 +966,10 @@ async function maybeShowSkillsBanner() {
   if (!status) return
   if (!status.installed) {
     if (localStorage.getItem('csm.skillsBannerDismissed') === '1') return
+    // First run owns this: the wizard's last step installs the skills and explains what
+    // they are. Two prompts for the same thing on a fresh install is one too many — and
+    // this one carries a permanent "dismiss", so the wizard could lose the argument.
+    if (window.onboardingPending) return
     el.innerHTML =
       '<span class="sb-text">The session skills (<code>/start-session</code>…) aren\'t installed yet. ' +
       'Install them into <code>~/.claude/skills</code> to drive ＋New, Resume and Restart.</span>' +

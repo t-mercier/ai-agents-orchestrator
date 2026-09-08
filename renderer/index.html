@@ -214,6 +214,39 @@
         <p class="modal-hint" id="onb-progress"></p>
       </section>
 
+      <!-- 4. What makes the buttons work at all: the skills, plus the two hooks. -->
+      <section class="onb-step" id="onb-step-4" hidden>
+        <p class="modal-hint">
+          The dashboard's buttons — ＋ New, Resume, Close, Sync — don't do the work themselves.
+          Each one opens Claude Code on one of this app's <strong>session skills</strong>, and the
+          skill is what writes your <code>notes.md</code>. They live in
+          <code>~/.claude/skills/</code> alongside your own, and only the names this app ships are
+          ever touched — anything else of yours is invisible to it.
+        </p>
+        <div class="onb-space-block" id="onb-skills-block">
+          <div class="onb-kv"><span id="onb-skills-state">Checking…</span>
+            <button type="button" class="modal-btn" id="onb-skills-install" hidden>Install skills</button>
+          </div>
+        </div>
+
+        <p class="modal-hint">
+          Two optional <strong>hooks</strong> close gaps the skills can't see from inside a session:
+        </p>
+        <div class="onb-list" id="onb-hooks"></div>
+        <div class="onb-kv">
+          <button type="button" class="modal-btn" id="onb-hooks-wire" hidden>Enable the hooks…</button>
+        </div>
+        <div id="onb-hooks-preview" hidden>
+          <p class="modal-hint" id="onb-hooks-preview-hint"></p>
+          <pre class="onb-pre" id="onb-hooks-diff"></pre>
+          <div class="onb-kv">
+            <button type="button" class="modal-btn primary" id="onb-hooks-apply">Write it</button>
+            <button type="button" class="modal-btn" id="onb-hooks-cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="modal-error" id="onb-hooks-error" hidden></div>
+      </section>
+
       <div class="modal-actions">
         <button type="button" class="modal-btn" id="onb-skip">Skip for now</button>
         <button type="button" class="modal-btn" id="onb-back" hidden>Back</button>
