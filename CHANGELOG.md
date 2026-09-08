@@ -34,6 +34,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   neither, so the only way to learn `--with-hooks` existed was to read the README. The run now
   ends by naming `pr_attach.py` and `learn_nudge.py`, what each does, and that re-running with
   the flag is safe.
+- **`install.sh` seeded the deprecated `obsidian` key** while the app's own seeder writes
+  `knowledge`, so which installer ran first decided what a fresh config said. Both work — the
+  legacy name is still read — but a new install started life on the old one.
+- **A typo'd flag was dropped in silence.** `--with-hook` installed nothing and said nothing,
+  which is the worst outcome for an option you have to know about to use. Unknown flags now
+  exit 2 with a usage block, and `--help` prints it.
 
 
 ## [0.14.0-alpha] - 2026-09-08

@@ -10,11 +10,27 @@
 set -euo pipefail
 shopt -s nullglob
 
+usage() {
+  cat <<'USAGE'
+Install the bundled session skills + seed the shared config.
+
+  bash scripts/install.sh                 install (keeps skills you already have)
+  bash scripts/install.sh --force         overwrite existing skills with this checkout's
+  bash scripts/install.sh --with-hooks    also copy the optional pr_attach + learn_nudge
+                                          hooks (copies + prints; never edits settings.json)
+
+The flags combine. Re-running is safe.
+USAGE
+}
 FORCE=0; HOOKS=0
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --with-hooks) HOOKS=1 ;;
+    -h|--help) usage; exit 0 ;;
+    # A typo'd flag used to be dropped in silence — `--with-hook` installed no hook and
+    # said nothing, which is the worst outcome for an option you must know about to use.
+    *) echo "unknown option: $arg" >&2; echo >&2; usage >&2; exit 2 ;;
   esac
 done
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -84,7 +100,7 @@ if [ ! -f "$CONFIG" ]; then
     { "name": "TEST",   "color": "#cdd0d6", "root": "Work" },
     { "name": "PERSO",  "color": "#8fd9ff", "root": "Perso" }
   ],
-  "obsidian": { "enabled": false },
+  "knowledge": { "enabled": false },
   "ticketBaseUrl": ""
 }
 JSON
