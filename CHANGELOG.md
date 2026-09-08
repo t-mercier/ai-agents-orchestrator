@@ -10,23 +10,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.1-alpha] - 2026-09-08
+
 ### Fixed
-- **Documented that git is optional and no worktree is ever involved.** A tester abandoned
-  the app on the belief that it required `git worktree` — which it does not, and never
-  creates: a "Worktree" row appears in the detail panel only when a session already happens
-  to run inside a linked one. The docs invited the mistake by calling a session's folder a
-  **workspace** and its git step *"syncs the repo"*. That folder holds only its `notes.md` —
-  it is not a checkout — and the git step is driven entirely by the optional **Branch** field:
-  git runs only when a session starts **inside a repo**, and the guide now says all of that
-  outright, including the rebase.
-- **Corrected the same day: it is not the Branch field that decides whether git runs.** The
-  first version of the note above said leaving Branch blank touches nothing. `/start-session`
-  resolves the branch from `git branch --show-current` whenever its launch directory is inside
-  a repo, so **giving a Repo is enough to trigger the fetch and rebase with Branch left
-  blank**. The launch directory is the Repo field when given and the space's root otherwise —
-  usually a notes folder, which is why git is skipped in the normal case. The ＋New form now
-  carries the warning where the decision is made, not only in a guide: leave **Repo** blank to
-  skip git entirely.
+- **Said plainly that git is optional and that no worktree is ever involved.** A tester
+  abandoned the app on the belief that it required `git worktree` — which it does not, and
+  never creates: a "Worktree" row appears in the detail panel only when a session already
+  happens to run inside a linked one. The docs invited the mistake by calling a session's
+  folder a **workspace** and its git step *"syncs the repo"*, so both wordings are gone from
+  the README, the guide and `/start-session`'s own description. That folder holds only its
+  `notes.md`; it is not a checkout.
+- **The ＋New form now warns where the decision is actually made.** What triggers git is not
+  the Branch field but whether the session starts **inside a repo** — the **Repo** field when
+  you give one, the space's root otherwise. `/start-session` reads the branch from
+  `git branch --show-current`, so giving a Repo alone runs `git fetch --all --prune` and
+  rebases, with Branch left blank. The Branch field carries that warning, and the guide now
+  states which of the two rebases actually fires: `origin/<branch>` only when the branch
+  exists on `origin`, `origin/<default>` whenever your branch is not the default one.
 
 ## [0.13.0-alpha] - 2026-09-08
 
