@@ -10,6 +10,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Documented that git is optional and no worktree is ever involved.** A tester abandoned
+  the app on the belief that it required `git worktree` — which it does not, and never
+  creates: a "Worktree" row appears in the detail panel only when a session already happens
+  to run inside a linked one. The docs invited the mistake by calling a session's folder a
+  **workspace** and its git step *"syncs the repo"*. That folder holds only its `notes.md` —
+  it is not a checkout — and the git step is driven entirely by the optional **Branch** field:
+  blank touches nothing, filled in makes session start checkout, fetch and **rebase that
+  branch onto `origin`** in the repo you named. The guide now says all of that outright,
+  including the rebase, which is the part worth knowing before using the field.
+
 ## [0.13.0-alpha] - 2026-09-08
 
 ### Added

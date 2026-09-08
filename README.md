@@ -38,7 +38,7 @@ Nothing moves on its own — you close, you archive.
 
 | Action | What it does |
 |---|---|
-| **＋ New** | Creates the workspace + its `notes.md`, registers the session, launches it. **Start here** — you never need the terminal first. |
+| **＋ New** | Creates the session's folder + its `notes.md`, registers it, launches it. **Start here** — you never need the terminal first. Repo and branch are optional: leave the branch blank and nothing in your git is touched. |
 | **Resume** | Relaunches a session the app already manages. |
 | **First-run setup** | Names your spaces, categories and colours — plus the optional knowledge-notes folder, tracker URL and card density — then brings the Claude Code sessions already on this machine in, each to the space and category you pick, after a look at what it opened with and what it left off at. Runs itself once on a fresh install; **Settings → First-run setup** re-runs it. |
 | **Close session ✕** | Wraps it up with a summary → Closed. From a stale session, the **Close** button does the same headlessly, no terminal needed. |
@@ -122,6 +122,12 @@ Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pi
 
 AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network **only** when you press **Sync** — that button is the opt-in, and nothing else in the app calls out — and it **never** stores secrets: it visualizes what's on disk and lets Claude Code do the rest.
 
+**No `git worktree` anywhere.** A session's folder holds its `notes.md` and nothing else — your
+repo stays where it is, and a "Worktree" row appears in the detail panel only when a session
+happens to already be running in one. Git is driven by the optional **Branch** field: blank
+touches nothing, filled in makes session start checkout, fetch and **rebase that branch onto
+`origin`** in the repo you named.
+
 It is **read-only on your session data by design**. The only writes it makes to session files are explicit actions you trigger — **archiving** a session and **saving its PR links / tickets** — written atomically and confined to a `notes.md` under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which copies anything you had edited into `.archive/` first and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
@@ -192,7 +198,7 @@ The launcher buttons (**＋ New**, **Resume**, **Restart**, **Archive**) drive a
 
 | Skill | What it does |
 |---|---|
-| `/start-session <CAT> <ticket> <name>` | Create a session workspace + `notes.md` under the category's folder, register it, sync the repo |
+| `/start-session <CAT> <ticket> <name>` | Create the session's folder + `notes.md` under the category's folder, register it, and — only if a branch was given — fetch and rebase it in your repo |
 | `/close-session` | Wrap up the session: summarise into `notes.md` + append a history entry tagged with the session id |
 | `/save-session` | Checkpoint mid-flight (same summary as close, marked `(in progress)`) **without** closing it — handy before a context compaction |
 | `/sync-refs <notes>` | Realign one session's references: each ticket's current status from the tracker (via MCP) and any pull request whose branch names one of its tickets. Run by the dashboard's **Sync** |

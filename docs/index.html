@@ -545,7 +545,7 @@
 <span class="m"># start a tracked session, from anywhere</span>
 <span class="c">$</span> claude
 <span class="k">&gt;</span> /start-session FEAT 1842 checkout-redesign
-<span class="m">  ✓ workspace + notes.md created</span>
+<span class="m">  ✓ session folder + notes.md created</span>
 <span class="m">  ✓ now live in the dashboard</span></pre>
     </div>
 
@@ -556,7 +556,7 @@
       <div class="skill-group reveal">
         <h4>The session lifecycle</h4>
         <p class="sg-lead">The five you type yourself. Each one moves a session between the states the dashboard shows.</p>
-        <div class="skill"><code>/start-session</code><span>Create a session workspace + <code>notes.md</code>, register it, sync the repo.</span></div>
+        <div class="skill"><code>/start-session</code><span>Create the session's folder + <code>notes.md</code>, register it, and — only if you gave a branch — fetch and rebase it in your repo.</span></div>
         <div class="skill"><code>/save-session</code><span>Checkpoint mid-flight — the same summary as close, marked <code>(in progress)</code>, <strong>without</strong> closing. Handy right before a context compaction.</span></div>
         <div class="skill"><code>/close-session</code><span>Wrap up — summarise into <code>notes.md</code> and append a history entry.</span></div>
         <div class="skill"><code>/restart-session</code><span>Reload a session's context from its notes into a fresh session.</span></div>

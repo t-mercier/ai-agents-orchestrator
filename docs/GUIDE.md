@@ -73,6 +73,31 @@ deliberate: once a session is tracked you are meant to start the next one from *
 not from a shell. Importing is a one-time step — afterwards a session behaves like any
 other, so you just Resume it.
 
+## Git is optional, and no worktree is ever involved
+
+A tester bounced off this one, so it is worth stating plainly: **the dashboard does not use
+`git worktree`, and it never creates one.** If a session happens to run inside a linked
+worktree it shows a "Worktree" row in the detail panel — an observation, nothing more. Work
+in a plain clone and that row simply never appears.
+
+The confusion comes from the word *workspace*, which this guide used to use. A session's
+folder — `<space>/<CATEGORY>/<slug>/` — holds **only its `notes.md`**. It is a notes folder,
+not a checkout: your repo stays exactly where it is, nothing is copied, duplicated or
+checked out.
+
+What git you get is driven entirely by the **Branch** field in **＋ New**, and it is optional:
+
+- **Leave it blank** — nothing in your repo is touched. The session records no branch, and
+  session start skips git altogether.
+- **Fill it in** — the session start does three things in the repo you pointed it at:
+  `git checkout <branch> --`, `git fetch --all --prune`, and then **`git rebase
+  origin/<branch>`** (plus a rebase onto the default branch, when yours is not it). Any
+  rebase that conflicts is aborted and reported, never left half-applied.
+
+That last one is the part worth knowing before you use the field: if you keep long-lived
+local work on one branch, a session start with a branch filled in will try to rebase you onto
+`origin`. Leave the field blank and drive git yourself.
+
 ## One session, one process
 
 Resuming a session doesn't attach to a running one: `claude --resume` starts a **second
@@ -114,7 +139,7 @@ You run these inside Claude Code (the dashboard buttons trigger them for you). C
 
 | Skill | What it does |
 |---|---|
-| **`/start-session <CATEGORY> <ticket> <name>`** | Creates the session: a workspace + `notes.md` under the category's folder, registers it, and syncs the git repo. |
+| **`/start-session <CATEGORY> <ticket> <name>`** | Creates the session: a folder holding its `notes.md` under the category's folder, registers it, and — only if a branch was given — fetches and rebases that branch in your repo. |
 | **`/close-session`** | Wraps up the current session — summarises what you did into `notes.md` and stamps a history entry **tagged with the session id**. → *Closed* |
 | **`/save-session`** | Checkpoints the active session into `notes.md` mid-flight, marked `(in progress)`, **without** closing it — handy before a context compaction. Stays *Running*. |
 | **`/restart-session <slug>`** | Reloads a session's notes **and its recorded session id** into a fresh conversation, and checks out its branch — so the history stays linked (and `claude --resume` still works). |
