@@ -1877,8 +1877,8 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .onb-row-meta { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The destination pickers sit at the end of the row. The row is a <label>, so the wrapper
    cancels the click that would otherwise toggle the checkbox while choosing a category. */
-.onb-peek { flex: none; background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 11px; padding: 2px 5px; }
-.onb-peek:hover { color: var(--text-primary); }
+.onb-peek { flex: none; font-family: var(--font); font-size: 10.5px; font-weight: 600; color: var(--text-secondary); background: rgba(var(--tint), 0.07); border: 0.5px solid var(--card-border); border-radius: 6px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+.onb-peek:hover { color: var(--text-primary); border-color: var(--accent); }
 /* A sibling of the row, not a child: the row is a <label>, so a click inside a nested
    panel would toggle the checkbox while you were reading it. */
 .onb-preview { margin: 0 8px 8px 30px; padding: 10px 12px; border-radius: 8px; border: 0.5px solid var(--card-border); background: rgba(var(--tint), 0.04); }

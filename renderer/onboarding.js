@@ -88,8 +88,11 @@
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'onb-peek'
-    b.title = 'What was this session about?'
-    b.textContent = expanded.has(r.sessionId) ? '▾' : '▸'
+    b.title = 'What was this session about, and where did it get to?'
+    // Labelled, not a bare chevron: an 11px ▸ in the faintest text colour, wedged between
+    // the title and two dropdowns, reads as a separator. The feature was shipped and
+    // reported missing, which for a control is the same thing.
+    b.textContent = expanded.has(r.sessionId) ? '▾ Hide' : '▸ Preview'
     b.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
