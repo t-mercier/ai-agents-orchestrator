@@ -129,8 +129,17 @@ if [ ${#STALE[@]} -gt 0 ]; then
   echo "    bash scripts/install.sh --force"
   echo
 fi
+if [ "$HOOKS" -eq 0 ]; then
+  echo "→ Two optional hooks were NOT installed (re-run with --with-hooks; it is safe to"
+  echo "  re-run, and it only ever copies the scripts and prints the settings.json entry):"
+  echo "    pr_attach.py   attaches a PR to the session notes the moment \`gh pr create\` opens it"
+  echo "    learn_nudge.py nudges /learn when your own wording states a preference or correction"
+  echo
+fi
 echo "✓ Done. Edit categories/colors/paths in the app's Settings (⚙), or in $CONFIG."
-echo "→ Optional: install the Superpowers plugin for git-worktree support:"
+echo "→ Note: nothing here uses or creates a git worktree — a session's folder holds its"
+echo "  notes, not a checkout. If you happen to work with worktrees anyway, the Superpowers"
+echo "  plugin (unrelated to this app) has skills for them:"
 echo "    https://github.com/obra/superpowers"
 printf 'Skills available now:'
 for d in "$SKILLS_SRC"/*/; do

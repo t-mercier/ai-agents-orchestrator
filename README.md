@@ -230,7 +230,7 @@ A session's pull requests are read from its `notes.md`, which only the skills ab
 bash scripts/install.sh --with-hooks
 ```
 
-That copies the script and prints the one-line entry to paste into the `PostToolUse` → `Bash` hooks of `~/.claude/settings.json`. Wiring is left to you on purpose — that file decides which code Claude Code runs on your machine, and nothing here edits it for you. The hook only ever *adds* a link, never replaces or removes one.
+That copies the script and prints the one-line entry to paste into the `PostToolUse` → `Bash` hooks of `~/.claude/settings.json`. **Already ran a plain `install.sh`?** Re-run it with the flag — it is idempotent, it re-does nothing you have customised, and a plain run now ends by naming the two hooks it did not install, so you are not left to find out from here. Wiring is left to you on purpose — that file decides which code Claude Code runs on your machine, and nothing here edits it for you. The hook only ever *adds* a link, never replaces or removes one.
 
 ### Optional: a nudge toward `/learn`
 
