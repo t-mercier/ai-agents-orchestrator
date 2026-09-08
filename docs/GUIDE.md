@@ -94,8 +94,10 @@ the space's root folder otherwise.
   usually a notes folder.
 - **Launch directory IS inside a repo** — session start records the branch (the one you
   typed, checked out with `git checkout <branch> --`, or else whatever branch you were
-  already on), then runs `git fetch --all --prune` and **`git rebase origin/<branch>`** —
-  plus a rebase onto the default branch when yours is not it. A rebase that conflicts is
+  already on), runs `git fetch --all --prune`, then attempts up to two rebases:
+  **`git rebase origin/<branch>`**, but only if that branch exists on `origin`, and
+  **`git rebase origin/<default-branch>`** whenever your branch is not the default one. So a
+  local-only branch skips the first and still gets the second. A rebase that conflicts is
   aborted and reported, never left half-applied.
 
 Read that second case twice if you keep long-lived local work on one branch: **giving a Repo

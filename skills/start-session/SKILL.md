@@ -1,10 +1,12 @@
 ---
 name: start-session
 description: >-
-  Open a new session: creates a workspace + notes.md under the category's
-  configured folder, registers it in ~/.claude/active-sessions.json, syncs the
-  git repo, and renames the session. Categories & note locations come from your
-  config. Aborts if the workspace already exists (use /restart-session instead).
+  Open a new session: creates a notes folder + notes.md under the category's
+  configured folder, registers it in ~/.claude/active-sessions.json, renames the
+  session, and — only when that folder is inside a git repo — fetches and rebases
+  the branch onto origin. No checkout and no worktree is ever created. Categories
+  & note locations come from your config. Aborts if the folder already exists
+  (use /restart-session instead).
   Trigger on "/start-session", "start a session", "/start-session FEAT PROJ-123 short-name".
 allowed-tools: Bash Read Write AskUserQuestion
 argument-hint: "<CATEGORY> <TICKET-OR-NAME> [name]"
@@ -12,8 +14,10 @@ argument-hint: "<CATEGORY> <TICKET-OR-NAME> [name]"
 
 # /start-session — open a session
 
-Bootstraps a per-session workspace with a `notes.md`, registers the active
-session, and syncs the git repo. Categories and their folders come from your
+Bootstraps a per-session notes folder with a `notes.md`, registers the active
+session, and — only if that folder is inside a git repo — fetches and rebases the
+branch onto `origin` (Step 8). Nothing is checked out and no worktree is created:
+the folder holds notes, not code. Categories and their folders come from your
 config (`~/.config/ai-agents-orchestrator/config.json`) — edit them in the app's
 Settings, not here.
 

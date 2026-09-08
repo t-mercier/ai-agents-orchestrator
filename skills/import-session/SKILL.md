@@ -6,7 +6,7 @@ description: >-
   ~/.claude/active-sessions.json, so the dashboard tracks it like a /start-ed one.
   Meant to run right after `claude --resume <id>` — which is what the dashboard's
   first-run setup does for each session you tick. Unlike /start-session it does NOT create
-  a fresh workspace or sync a repo — it binds the session you're already in.
+  a fresh notes folder or touch git — it binds the session you're already in.
   Trigger on "/import-session", "/import-session FEAT name".
 allowed-tools: Bash Read Write AskUserQuestion
 argument-hint: "<CATEGORY> [name]"
