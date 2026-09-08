@@ -85,18 +85,24 @@ folder — `<space>/<CATEGORY>/<slug>/` — holds **only its `notes.md`**. It is
 not a checkout: your repo stays exactly where it is, nothing is copied, duplicated or
 checked out.
 
-What git you get is driven entirely by the **Branch** field in **＋ New**, and it is optional:
+**What decides whether git runs is not the Branch field — it is whether the session starts
+inside a repo.** The session's launch directory is the **Repo** field when you give one, and
+the space's root folder otherwise.
 
-- **Leave it blank** — nothing in your repo is touched. The session records no branch, and
-  session start skips git altogether.
-- **Fill it in** — the session start does three things in the repo you pointed it at:
-  `git checkout <branch> --`, `git fetch --all --prune`, and then **`git rebase
-  origin/<branch>`** (plus a rebase onto the default branch, when yours is not it). Any
-  rebase that conflicts is aborted and reported, never left half-applied.
+- **Launch directory is not inside a git repo** — git is skipped entirely. Nothing is
+  fetched, checked out or rebased. This is the normal case, because a space's root is
+  usually a notes folder.
+- **Launch directory IS inside a repo** — session start records the branch (the one you
+  typed, checked out with `git checkout <branch> --`, or else whatever branch you were
+  already on), then runs `git fetch --all --prune` and **`git rebase origin/<branch>`** —
+  plus a rebase onto the default branch when yours is not it. A rebase that conflicts is
+  aborted and reported, never left half-applied.
 
-That last one is the part worth knowing before you use the field: if you keep long-lived
-local work on one branch, a session start with a branch filled in will try to rebase you onto
-`origin`. Leave the field blank and drive git yourself.
+Read that second case twice if you keep long-lived local work on one branch: **giving a Repo
+is enough to trigger the rebase, even with the Branch field left blank**, because the branch
+is then read from the checkout. If you would rather drive git yourself, leave **Repo** blank
+too — the session still gets its notes, its category and its terminal, and your checkout is
+never touched.
 
 ## One session, one process
 

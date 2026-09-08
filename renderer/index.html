@@ -76,7 +76,7 @@
       <!-- Optional: start the session ON an existing branch in an existing repo.
            /start-session then detects the checked-out branch and syncs it. -->
       <label class="modal-field">
-        <span>Repo <em>(optional — start from an existing checkout)</em></span>
+        <span>Repo <em>(optional — start from an existing checkout; leave blank and git is never touched)</em></span>
         <div class="path-row">
           <input id="ns-repo" type="text" placeholder="(none — uses the category root)" autocomplete="off" spellcheck="false">
           <button type="button" class="modal-btn path-browse" data-browse="ns-repo">Browse…</button>
@@ -85,6 +85,7 @@
 
       <label class="modal-field">
         <span>Branch <em>(optional — checked out in that repo)</em></span>
+        <span class="field-hint">Starting inside a repo also runs <code>git fetch</code> and <strong>rebases the branch onto <code>origin</code></strong> — with Branch blank it uses the branch you are already on. Leave <strong>Repo</strong> blank to skip git entirely.</span>
         <input id="ns-branch" type="text" placeholder="feat/my-branch" autocomplete="off" spellcheck="false">
       </label>
 

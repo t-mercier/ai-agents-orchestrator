@@ -17,9 +17,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   to run inside a linked one. The docs invited the mistake by calling a session's folder a
   **workspace** and its git step *"syncs the repo"*. That folder holds only its `notes.md` —
   it is not a checkout — and the git step is driven entirely by the optional **Branch** field:
-  blank touches nothing, filled in makes session start checkout, fetch and **rebase that
-  branch onto `origin`** in the repo you named. The guide now says all of that outright,
-  including the rebase, which is the part worth knowing before using the field.
+  git runs only when a session starts **inside a repo**, and the guide now says all of that
+  outright, including the rebase.
+- **Corrected the same day: it is not the Branch field that decides whether git runs.** The
+  first version of the note above said leaving Branch blank touches nothing. `/start-session`
+  resolves the branch from `git branch --show-current` whenever its launch directory is inside
+  a repo, so **giving a Repo is enough to trigger the fetch and rebase with Branch left
+  blank**. The launch directory is the Repo field when given and the space's root otherwise —
+  usually a notes folder, which is why git is skipped in the normal case. The ＋New form now
+  carries the warning where the decision is made, not only in a guide: leave **Repo** blank to
+  skip git entirely.
 
 ## [0.13.0-alpha] - 2026-09-08
 
