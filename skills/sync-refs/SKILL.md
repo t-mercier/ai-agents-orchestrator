@@ -85,7 +85,7 @@ checkout — the dashboard's Sync runs from the session folder, which usually is
 do not skip. Search by ticket instead, across everything the account can see:
 
 ```bash
-gh search prs "<TICKET>" --author @me --state all --limit 20 --json url,title,repository
+gh search prs "<TICKET>" --author @me --limit 20 --json url,title,repository   # open and closed alike; --state would narrow it
 ```
 
 GitHub's search reads titles and bodies, not branch names, so this catches a PR whose
