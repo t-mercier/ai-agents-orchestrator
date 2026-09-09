@@ -95,6 +95,8 @@ def run(payload, registry, when):
 
 
 def main():
+    if os.environ.get("AO_HEADLESS"):           # the dashboard's own headless runs; see ao_autosave
+        return
     try:
         payload = json.loads(sys.stdin.read())
     except Exception:

@@ -296,7 +296,7 @@ pub fn sync_refs(notes_path: String, cwd: String) -> Result<Value, String> {
         crate::config::home().to_string_lossy().to_string()
     };
     let inner = format!(
-        "cd {} && claude{} --permission-mode acceptEdits -p {}",
+        "cd {} && AO_HEADLESS=1 claude{} --permission-mode acceptEdits -p {}",
         crate::pty::shell_quote(&dir),
         crate::pty::model_flag(),
         crate::pty::shell_quote(&format!("/sync-refs {}", abs.display())),

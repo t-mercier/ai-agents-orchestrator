@@ -136,7 +136,7 @@ pub fn import_session_headless(
     let preexisting = expected.as_ref().is_some_and(|p| p.exists());
 
     let inner = format!(
-        "cd {} && claude --resume {}{} --permission-mode acceptEdits -p {}",
+        "cd {} && AO_HEADLESS=1 claude --resume {}{} --permission-mode acceptEdits -p {}",
         pty::shell_quote(&dir),
         pty::shell_quote(&session_id),
         pty::model_flag(),

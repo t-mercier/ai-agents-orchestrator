@@ -27,7 +27,9 @@ use serde_json::Value;
 ///   session without anyone editing settings.json.
 ///
 /// Headless runs (`wrap_session`, imports, `/sync-refs`) deliberately do not pass this
-/// argument: a Stop hook that asks an agent-in-a-pipe to save would be noise.
+/// argument, and export `AO_HEADLESS=1` besides, which the `ao_*` hooks honour — so even a
+/// user who wired them globally never has an agent-in-a-pipe blocked into a /save-session
+/// after its close line.
 pub(crate) fn launch_settings_arg() -> String {
     let config_dir = config::home().join(".config").join("ai-agents-orchestrator");
     if std::fs::create_dir_all(&config_dir).is_err() {
@@ -1115,7 +1117,7 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
     // Through a login shell: launched from Finder, the app's PATH does not contain
     // `claude` (same reason pty.rs spawns `$SHELL -ilc`).
     let inner = format!(
-        "cd {} && claude --resume {}{} --permission-mode acceptEdits -p {}",
+        "cd {} && AO_HEADLESS=1 claude --resume {}{} --permission-mode acceptEdits -p {}",
         pty::shell_quote(&cwd),
         pty::shell_quote(&session_id),
         pty::model_flag(),

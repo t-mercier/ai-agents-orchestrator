@@ -105,19 +105,57 @@ pub struct HookStatus {
     pub wired: bool,
 }
 
+fn walk(v: &Value, needle: &str) -> bool {
+    match v {
+        Value::String(s) => s.contains(needle),
+        Value::Array(a) => a.iter().any(|x| walk(x, needle)),
+        Value::Object(o) => o.values().any(|x| walk(x, needle)),
+        _ => false,
+    }
+}
+
 /// Is this hook already referenced anywhere under `settings.hooks`? Matching on the file
 /// name rather than the exact command means a user who tuned the one-liner by hand is
 /// still recognised as wired, and is never handed a duplicate.
 fn is_wired(settings: &Value, file: &str) -> bool {
-    fn walk(v: &Value, needle: &str) -> bool {
-        match v {
-            Value::String(s) => s.contains(needle),
-            Value::Array(a) => a.iter().any(|x| walk(x, needle)),
-            Value::Object(o) => o.values().any(|x| walk(x, needle)),
-            _ => false,
-        }
-    }
     settings.get("hooks").is_some_and(|h| walk(h, file))
+}
+
+const PR_ATTACH: &str = "pr_attach.py";
+/// The matcher to add when `pr_attach` is already declared under a group that cannot see
+/// the MCP tool (a plain `Bash`, the shape every install before 0.15 wrote). Not
+/// `Bash|…`: the Bash half is already covered, and a second Bash group would attach every
+/// PR twice.
+const PR_ATTACH_MCP_ONLY: &str = "mcp__.*__create_pull_request";
+
+/// Does some PostToolUse group that runs `pr_attach` also match the MCP create tool?
+fn pr_attach_sees_mcp(settings: &Value) -> bool {
+    settings
+        .get("hooks")
+        .and_then(|h| h.get("PostToolUse"))
+        .and_then(Value::as_array)
+        .is_some_and(|groups| {
+            groups.iter().any(|g| {
+                g.get("matcher").and_then(Value::as_str).is_some_and(|m| m.contains("create_pull_request"))
+                    && walk(g, PR_ATTACH)
+            })
+        })
+}
+
+/// What `settings` still lacks for this hook: `None` when it is fully declared;
+/// `Some(matcher)` when a group with that matcher (or none, for matcher-less events) must
+/// be added. `pr_attach` is the one hook with a partial state: declared under a group that
+/// matches only `Bash`, it attaches `gh` PRs and misses MCP ones — the gap is then an
+/// MCP-only group, never a rewrite of the user's own group, whose other hooks must not be
+/// widened to a tool they never asked to see.
+fn gap(settings: &Value, file: &str, matcher: Option<&str>) -> Option<Option<String>> {
+    if !is_wired(settings, file) {
+        return Some(matcher.map(String::from));
+    }
+    if file == PR_ATTACH && !pr_attach_sees_mcp(settings) {
+        return Some(Some(PR_ATTACH_MCP_ONLY.to_string()));
+    }
+    None
 }
 
 fn read_settings() -> Value {
@@ -145,12 +183,12 @@ pub fn status() -> Vec<HookStatus> {
     let settings = read_settings();
     SHIPPED
         .iter()
-        .map(|(file, event, _, describes)| HookStatus {
+        .map(|(file, event, _matcher, describes)| HookStatus {
             file: (*file).to_string(),
             event: (*event).to_string(),
             describes: (*describes).to_string(),
             copied: dir.join(file).is_file(),
-            wired: is_wired(&settings, file),
+            wired: gap(&settings, file, *_matcher).is_none(),
         })
         .collect()
 }
@@ -171,57 +209,63 @@ pub fn install_scripts() -> Result<Vec<String>, String> {
     Ok(written)
 }
 
-/// Insert the two entries into a settings object, skipping any already present. Pure, so
-/// the merge is tested without touching a real settings.json — and so the preview the
-/// user approves is produced by exactly the code that will do the write.
+/// Declare `file` under `event` in `settings`, with `matcher` when the event takes one.
+/// Joins an existing group for the SAME matcher rather than adding a second, which Claude
+/// Code would run as a separate matcher; a group for a different matcher is a different
+/// rule and is left alone.
+fn add_group(settings: &mut Value, file: &str, event: &str, matcher: Option<&str>) {
+    let entry = json!({ "type": "command", "command": command_for(file) });
+    let hooks = settings
+        .as_object_mut()
+        .unwrap()
+        .entry("hooks")
+        .or_insert_with(|| json!({}));
+    if !hooks.is_object() {
+        *hooks = json!({});
+    }
+    let list = hooks
+        .as_object_mut()
+        .unwrap()
+        .entry(event)
+        .or_insert_with(|| json!([]));
+    if !list.is_array() {
+        *list = json!([]);
+    }
+    let arr = list.as_array_mut().unwrap();
+    match matcher {
+        Some(m) => {
+            if let Some(group) = arr.iter_mut().find(|g| g.get("matcher").and_then(Value::as_str) == Some(m)) {
+                let inner = group
+                    .as_object_mut()
+                    .unwrap()
+                    .entry("hooks")
+                    .or_insert_with(|| json!([]));
+                if !inner.is_array() {
+                    *inner = json!([]);
+                }
+                inner.as_array_mut().unwrap().push(entry);
+            } else {
+                arr.push(json!({ "matcher": m, "hooks": [entry] }));
+            }
+        }
+        None => arr.push(json!({ "hooks": [entry] })),
+    }
+}
+
+/// Insert the shipped entries into a settings object, skipping whatever is already
+/// declared (see `gap`). Pure, so the merge is tested without touching a real
+/// settings.json — and so the preview the user approves is produced by exactly the code
+/// that will do the write.
 pub fn merge_settings(mut settings: Value, wanted: &[&str], advisor: Option<&str>) -> Value {
     if !settings.is_object() {
         settings = json!({});
     }
     for (file, event, matcher, _) in SHIPPED {
-        if !wanted.contains(&file) || is_wired(&settings, file) {
+        if !wanted.contains(&file) {
             continue;
         }
-        let entry = json!({ "type": "command", "command": command_for(file) });
-        let hooks = settings
-            .as_object_mut()
-            .unwrap()
-            .entry("hooks")
-            .or_insert_with(|| json!({}));
-        if !hooks.is_object() {
-            *hooks = json!({});
-        }
-        let list = hooks
-            .as_object_mut()
-            .unwrap()
-            .entry(event)
-            .or_insert_with(|| json!([]));
-        if !list.is_array() {
-            *list = json!([]);
-        }
-        let arr = list.as_array_mut().unwrap();
-        match matcher {
-            // A matcher-scoped event: join the existing group for that matcher rather than
-            // adding a second one, which Claude Code would run as a separate matcher.
-            Some(m) => {
-                if let Some(group) = arr.iter_mut().find(|g| {
-                    g.get("matcher").and_then(Value::as_str) == Some(m)
-                }) {
-                    let inner = group
-                        .as_object_mut()
-                        .unwrap()
-                        .entry("hooks")
-                        .or_insert_with(|| json!([]));
-                    if !inner.is_array() {
-                        *inner = json!([]);
-                    }
-                    inner.as_array_mut().unwrap().push(entry);
-                } else {
-                    arr.push(json!({ "matcher": m, "hooks": [entry] }));
-                }
-            }
-            None => arr.push(json!({ "hooks": [entry] })),
-        }
+        let Some(needed) = gap(&settings, file, matcher) else { continue };
+        add_group(&mut settings, file, event, needed.as_deref());
     }
     // `advisorModel` is Claude Code's own key, not this app's — it decides which model
     // answers /advisor and has nothing to do with the sessions the dashboard launches.
@@ -245,15 +289,16 @@ pub fn merge_settings(mut settings: Value, wanted: &[&str], advisor: Option<&str
 /// `merge_settings` would wire them. `None` when nothing is left to inject — the user
 /// wired them all, so injecting again would run each hook twice per event.
 pub fn launch_hooks(user_settings: &Value) -> Option<Value> {
-    let wanted: Vec<&str> = SHIPPED
-        .iter()
-        .map(|(file, _, _, _)| *file)
-        .filter(|file| !is_wired(user_settings, file))
-        .collect();
-    if wanted.is_empty() {
-        return None;
+    let mut out = json!({});
+    for (file, event, matcher, _) in SHIPPED {
+        // The gap is measured against the USER's file, then declared in ours — so a
+        // Bash-only pr_attach in theirs gets exactly the MCP-only group here, not a second
+        // Bash one that would attach every gh PR twice.
+        if let Some(needed) = gap(user_settings, file, matcher) {
+            add_group(&mut out, file, event, needed.as_deref());
+        }
     }
-    merge_settings(json!({}), &wanted, None).get("hooks").cloned()
+    out.get("hooks").cloned()
 }
 
 #[derive(Serialize)]
@@ -342,9 +387,12 @@ mod tests {
         // pr_attach wired by hand, with a tuned command line: recognised by file name.
         let user = json!({ "hooks": { "PostToolUse": [ { "matcher": "Bash", "hooks": [
             { "type": "command", "command": "python3 ~/.claude/hooks/pr_attach.py || true" } ] } ] } });
-        let hooks = launch_hooks(&user).expect("four hooks remain");
+        let hooks = launch_hooks(&user).expect("hooks remain");
         let text = hooks.to_string();
-        assert!(!text.contains("pr_attach.py"), "already wired globally → not injected again");
+        // Their Bash-only pr_attach covers gh; ours adds the MCP tool and nothing else.
+        let post = hooks["PostToolUse"].as_array().unwrap();
+        assert_eq!(post.len(), 1);
+        assert_eq!(post[0]["matcher"], PR_ATTACH_MCP_ONLY, "MCP-only, never a second Bash group");
         for file in ["ao_autosave.py", "ao_precompact.py", "ao_session_start.py", "learn_nudge.py"] {
             assert!(text.contains(file), "{file} must ride in the launch settings");
         }
@@ -356,6 +404,29 @@ mod tests {
         // No settings at all → all five.
         let none = launch_hooks(&json!({})).unwrap();
         assert_eq!(none.as_object().unwrap().len(), 5, "five distinct events");
+    }
+
+    // The shape every install before 0.15 wrote, and hers: pr_attach under a plain Bash
+    // group next to other Bash hooks. Step 4 must report it as not fully enabled, and the
+    // write must add an MCP-only group — never widen their group's matcher, which would
+    // hand their other hooks a tool they never asked to see.
+    #[test]
+    fn a_bash_only_pr_attach_gets_an_mcp_only_group_and_nothing_else_moves() {
+        let theirs = json!({ "hooks": { "PostToolUse": [ { "matcher": "Bash", "hooks": [
+            { "type": "command", "command": "IN=$(cat); printf '%s' \"$IN\" | python3 \"$HOME/.claude/hooks/pr_description_check.py\"" },
+            { "type": "command", "command": "IN=$(cat); printf '%s' \"$IN\" | python3 \"$HOME/.claude/hooks/pr_attach.py\" 2>/dev/null; true" } ] } ] } });
+        assert!(is_wired(&theirs, PR_ATTACH));
+        assert!(!pr_attach_sees_mcp(&theirs));
+        assert_eq!(gap(&theirs, PR_ATTACH, Some("Bash|mcp__.*__create_pull_request")), Some(Some(PR_ATTACH_MCP_ONLY.to_string())));
+        let out = merge_settings(theirs.clone(), &[PR_ATTACH], None);
+        let groups = out["hooks"]["PostToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0], theirs["hooks"]["PostToolUse"][0], "their Bash group is byte-identical");
+        assert_eq!(groups[1]["matcher"], PR_ATTACH_MCP_ONLY);
+        assert!(groups[1]["hooks"][0]["command"].as_str().unwrap().contains("pr_attach.py"));
+        // Now fully declared: a second merge changes nothing, and nothing is left to inject.
+        assert_eq!(merge_settings(out.clone(), &[PR_ATTACH], None), out);
+        assert!(gap(&out, PR_ATTACH, None).is_none());
     }
 
     #[test]

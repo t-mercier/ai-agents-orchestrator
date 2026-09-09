@@ -19,8 +19,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   catches a PR adopted mid-session. The URL is still taken only from the tool's result, never
   from its input. And `/sync-refs` Step 3 no longer skips when no repository is known: it
   searches your PRs by ticket (`gh search prs`), the fallback for a Sync run from a session
-  folder that is not a checkout. A hand-wired `pr_attach` with a plain `Bash` matcher keeps
-  working for `gh` and will not see the MCP tool — re-run step 4 to widen it.
+  folder that is not a checkout. A `pr_attach` already declared under a plain `Bash` matcher (every install before 0.15)
+  keeps working for `gh` and cannot see the MCP tool; step 4 now reports it as not fully
+  enabled and adds an MCP-only group beside yours — never widening your own group, whose
+  other hooks must not start seeing a tool they never asked for. Sessions started from the
+  app get that same MCP-only group injected without any edit.
 - **The checkpoint happens on its own.** `/save-session` only ever ran when someone typed it,
   and the moment it matters — context nearly full, a compaction about to erase the detail — is
   the moment nobody remembers to. Three new hooks ship with the app: `ao_autosave` (`Stop`) has

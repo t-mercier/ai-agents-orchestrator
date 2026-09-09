@@ -51,6 +51,20 @@ class TestDecide(unittest.TestCase):
         self.assertIsNotNone(reason)
         self.assertEqual(state["tiers"], [60, 80])
 
+    # After a compaction the figure drops to ~25 %; the next climb to 60 % must ask again.
+    def test_tiers_re_arm_below_the_lowest_tier(self):
+        state = {"tiers": [60, 80], "last": NOW - 60 * MIN}
+        reason, state = A.decide(25, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW)
+        self.assertIsNone(reason)
+        self.assertEqual(state.get("tiers", []), [60, 80], "a quiet turn leaves the stored state alone")
+        reason, state = A.decide(25, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW, state=state, now=NOW)
+        self.assertIsNotNone(reason, "the time rule still applies")
+        self.assertEqual(state["tiers"], [], "and the stored tiers are cleared with it")
+        reason, state = A.decide(61, notes_mtime=NOW - MIN, transcript_mtime=NOW, state={"tiers": [60, 80], "last": 0}, now=NOW)
+        self.assertIsNone(reason, "61 with tiers still marked and no dip recorded: hovering, not climbing")
+        reason, state = A.decide(61, notes_mtime=NOW - MIN, transcript_mtime=NOW, state={"tiers": [], "last": 0}, now=NOW)
+        self.assertIn("61%", reason)
+
     def test_stale_notes_with_a_moving_transcript(self):
         reason, state = A.decide(20, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW - MIN, state={}, now=NOW)
         self.assertIn("45 min ago", reason)

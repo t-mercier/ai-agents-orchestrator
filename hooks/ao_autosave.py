@@ -59,6 +59,11 @@ def decide(context, notes_mtime, transcript_mtime, state, now):
     last = float(state.get("last") or 0)
 
     if context is not None:
+        # A compaction drops the figure back to 20-30 %. The tiers were "once each" so a
+        # session hovering at 61 % is not nagged every turn — not so that the second climb
+        # to 60 % passes in silence. Below the lowest tier, they re-arm.
+        if context < CONTEXT_TIERS[0]:
+            tiers = set()
         due = [t for t in CONTEXT_TIERS if context >= t and t not in tiers]
         if due:
             tiers.update(t for t in CONTEXT_TIERS if context >= t)
@@ -92,6 +97,10 @@ def load_json(path, default):
 
 
 def main():
+    # The dashboard's own headless runs (wrap, import, /sync-refs) export this. Blocking an
+    # agent-in-a-pipe into a /save-session after its close line would be noise.
+    if os.environ.get("AO_HEADLESS"):
+        return
     try:
         payload = json.loads(sys.stdin.read())
     except Exception:
