@@ -153,6 +153,24 @@ Use the Edit tool to: append new bullets to **Decisions made** and **Files touch
 update **Open questions** (tick resolved, add new); replace **Next steps** with the
 updated list.
 
+## Step 5c — Optional: distil to the knowledge notes (gated)
+
+The same step `/close-session` runs at its Step 7, here at every checkpoint — because a
+checkpoint is when a decision is fresh, and a session that is never closed would otherwise
+teach the next one nothing. Only if a vault is configured for this category's scope:
+
+```bash
+VAULT=$(python3 ~/.claude/skills/lib/aoconfig.py vault "<CATEGORY>")
+```
+
+`$VAULT` empty → skip silently.
+
+Otherwise **follow `/learn` (its Steps 3–5)** for each decision from THIS checkpoint worth
+keeping — one note per decision, `origin: save-session`, `session: <CATEGORY>/<slug>`. The
+bar is the same as `/learn`'s: would a *future, different* session be glad to find it? Most
+checkpoints promote nothing; that is the normal outcome. Mark each promoted bullet in
+`notes.md` with a trailing `↑` so the close does not promote it again.
+
 ## Step 6 — Append an "(in progress)" Session history entry
 
 ```bash
@@ -171,8 +189,8 @@ only checkpoints; the session stays open.
 
 ## Step 6b — Optional: propose a skill from what this session taught (gated)
 
-The procedural twin of the knowledge distil above: that one promotes *facts*, this one
-promotes *how we got there*. Gated, so it is off unless explicitly enabled:
+The procedural twin of Step 5c: that one promotes *facts*, this one promotes *how we got
+there*. Gated, so it is off unless explicitly enabled:
 
 ```bash
 PROPOSE=$(python3 ~/.claude/skills/lib/aoconfig.py flag skillProposals)

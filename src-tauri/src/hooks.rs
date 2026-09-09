@@ -1,5 +1,5 @@
-//! The two Claude Code hooks this app ships, and the one file it will not write behind
-//! your back.
+//! The Claude Code hooks this app ships, and the one file it will not write behind your
+//! back.
 //!
 //! Until now the hooks existed only in the repo: `install.sh --with-hooks` copied them,
 //! so anyone who installed the `.dmg` — the path the README recommends — could not reach
@@ -15,6 +15,15 @@
 //!   shown the exact before/after, the current file is copied to a timestamped backup,
 //!   and only then is the new one written — atomically, so a crash mid-write cannot leave
 //!   a truncated settings file behind.
+//!
+//! And a third path that needs neither: every session this app launches gets a
+//! `--settings <file>` the app writes itself (`launch_settings_arg`). Claude Code MERGES
+//! that file's hooks with the user's global ones (verified empirically: an injected hook
+//! and a global one both fired in a single run — only `statusLine` is replace-not-merge).
+//! So `launch_hooks` puts every shipped hook the user has NOT wired globally into that
+//! file, and sessions started from the dashboard run all of them without anyone touching
+//! settings.json. Wiring stays what it was: the way to extend that to sessions started
+//! from a plain terminal.
 
 use include_dir::{include_dir, Dir};
 use serde::Serialize;
@@ -28,7 +37,25 @@ static HOOKS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../hooks");
 
 /// The hooks this app ships, in the order the UI lists them.
 /// (`file`, the settings.json event, the matcher it needs, one line of what it does)
-const SHIPPED: [(&str, &str, Option<&str>, &str); 2] = [
+const SHIPPED: [(&str, &str, Option<&str>, &str); 5] = [
+    (
+        "ao_autosave.py",
+        "Stop",
+        None,
+        "Has the model run /save-session itself at 60% and 80% of context, and after 30 minutes without a checkpoint — from the real context figure, not a byte count.",
+    ),
+    (
+        "ao_precompact.py",
+        "PreCompact",
+        None,
+        "Before a compaction, appends an (in progress) line to the session history so nothing forgets where the conversation lived.",
+    ),
+    (
+        "ao_session_start.py",
+        "SessionStart",
+        None,
+        "Tells each tracked session, as it starts, to /learn as it goes and to save when asked; after a compaction, to save first.",
+    ),
     (
         "pr_attach.py",
         "PostToolUse",
@@ -51,9 +78,10 @@ fn settings_path() -> PathBuf {
     config::home().join(".claude").join("settings.json")
 }
 
-/// The shell one-liner that runs a hook. `pr_attach` is fed the tool payload on stdin;
-/// both swallow their own errors and exit 0, because a hook that fails must never be the
-/// reason a turn breaks.
+/// The shell one-liner that runs a hook. Claude Code hands every hook its payload on
+/// stdin; `pr_attach` reads it through a variable so the Bash one-liner it is documented
+/// with stays pasteable. All of them swallow their own errors and exit 0, because a hook
+/// that fails must never be the reason a turn breaks.
 fn command_for(file: &str) -> String {
     match file {
         "pr_attach.py" => {
@@ -210,6 +238,22 @@ pub fn merge_settings(mut settings: Value, wanted: &[&str], advisor: Option<&str
     settings
 }
 
+/// The `hooks` object for the per-launch settings file: every shipped hook the user has
+/// not wired in `user_settings` (their global settings.json), grouped the way
+/// `merge_settings` would wire them. `None` when nothing is left to inject — the user
+/// wired them all, so injecting again would run each hook twice per event.
+pub fn launch_hooks(user_settings: &Value) -> Option<Value> {
+    let wanted: Vec<&str> = SHIPPED
+        .iter()
+        .map(|(file, _, _, _)| *file)
+        .filter(|file| !is_wired(user_settings, file))
+        .collect();
+    if wanted.is_empty() {
+        return None;
+    }
+    merge_settings(json!({}), &wanted, None).get("hooks").cloned()
+}
+
 #[derive(Serialize)]
 pub struct WirePreview {
     pub before: String,
@@ -290,6 +334,27 @@ pub fn wire_hooks(files: Vec<String>, advisor: Option<String>) -> Result<Value, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_hooks_inject_only_what_the_user_has_not_wired() {
+        // pr_attach wired by hand, with a tuned command line: recognised by file name.
+        let user = json!({ "hooks": { "PostToolUse": [ { "matcher": "Bash", "hooks": [
+            { "type": "command", "command": "python3 ~/.claude/hooks/pr_attach.py || true" } ] } ] } });
+        let hooks = launch_hooks(&user).expect("four hooks remain");
+        let text = hooks.to_string();
+        assert!(!text.contains("pr_attach.py"), "already wired globally → not injected again");
+        for file in ["ao_autosave.py", "ao_precompact.py", "ao_session_start.py", "learn_nudge.py"] {
+            assert!(text.contains(file), "{file} must ride in the launch settings");
+        }
+        assert!(hooks.get("Stop").is_some() && hooks.get("PreCompact").is_some() && hooks.get("SessionStart").is_some());
+        // Every shipped hook wired → nothing to inject, not an empty object.
+        let all: Vec<&str> = SHIPPED.iter().map(|(f, _, _, _)| *f).collect();
+        let wired = merge_settings(json!({}), &all, None);
+        assert!(launch_hooks(&wired).is_none());
+        // No settings at all → all five.
+        let none = launch_hooks(&json!({})).unwrap();
+        assert_eq!(none.as_object().unwrap().len(), 5, "five distinct events");
+    }
 
     #[test]
     fn merge_adds_both_entries_in_the_shape_claude_code_expects() {

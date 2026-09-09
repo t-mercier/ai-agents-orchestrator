@@ -269,30 +269,38 @@ thing this whole design refuses to do.
 
 Categories, note locations and knowledge-notes folders all come from your shared config, so the skills and the app stay in sync.
 
-### The two hooks
+### The hooks
 
-The skills run *inside* a session, so there are two moments they cannot see. A hook is a
-script **Claude Code** runs at one of those moments — not the app: the app only puts the
-script on disk and offers you the line that declares it. Once enabled they work with the
-dashboard closed.
+The skills run *inside* a session, so there are moments they cannot see — a turn ending
+with the context nearly full, a compaction, a PR opened in passing. A hook is a script
+**Claude Code** runs at one of those moments — not the app: the app puts the script on
+disk and decides where it is declared.
 
-Both ship inside the app and are **copied automatically** — with the skills, on every
-launch, and by `scripts/install.sh` with no flag needed. Copying is inert: a script nothing
-references never runs. **Enabling** one is the part that isn't, because it means adding a
-line to `~/.claude/settings.json`, the file that decides which code Claude Code runs on
-your machine. Nothing does that behind your back.
+All five ship inside the app and are **copied automatically** — with the skills, on every
+launch, and by `scripts/install.sh` with no flag needed. **Every session started from the
+dashboard runs all five** without touching your settings: the app passes Claude Code a
+`--settings` file of its own, and Claude Code merges that file's hooks with your global
+ones (only `statusLine` is replace-not-merge, which is why the app wraps yours rather than
+setting its own). A hook you have already enabled globally is not injected a second time.
 
 | Hook | Event | What it closes |
 |---|---|---|
+| `ao_autosave.py` | `Stop` | The checkpoint only happened when someone typed `/save-session`. This has the model run it itself — at 60 % and again at 80 % of context, and after 30 minutes without a checkpoint while the conversation moved. The figure is the session's real context percentage from the statusline cache, not a transcript byte count. |
+| `ao_precompact.py` | `PreCompact` | Compaction is when a session forgets. This appends an `(in progress)` line to the session history with the transcript path and the moment — the summary stays the model's to write, and the next hook says so once tools are back. |
+| `ao_session_start.py` | `SessionStart` | The `/learn` habit — write a durable fact the moment it emerges — depended on whose `CLAUDE.md` the session loaded. This states it at every tracked session's start; after a compaction with stale notes, it asks for `/save-session` first. |
 | `pr_attach.py` | `PostToolUse` (`Bash`) | A session's PRs are read from its `notes.md`, which only the skills write — so a PR opened mid-session is invisible until your next `/save-session`, exactly when the link matters most. This attaches the URL the moment `gh pr create` prints it. |
 | `learn_nudge.py` | `UserPromptSubmit` | `/learn` and `/skill-propose` say "use PROACTIVELY", but nothing forces the check at the turn a correction actually lands. This reads your message and, on a short high-precision phrase list, injects a one-line reminder for that turn. |
+
+**Enabling** them in `~/.claude/settings.json` — the file that decides which code Claude Code
+runs on your machine — extends all of this to sessions you start from a plain terminal.
+Nothing does that behind your back.
 
 **Three ways to enable them**, all equivalent:
 
 - **From the app** — first-run setup's last step, or **Settings → first-run setup** later.
   It shows the exact `settings.json` it would write, copies your current one to a
   timestamped backup, then writes atomically. It also tells you which are already enabled,
-  and offers nothing when both are.
+  and offers nothing when all five are.
 - **From the installer** — `bash scripts/install.sh --with-hooks` (or `--all`) prints the
   exact lines to paste. The flag only decides whether they are *printed*; the scripts are
   copied either way.

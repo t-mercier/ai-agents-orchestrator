@@ -164,9 +164,12 @@ done
 # ($HOOKS only decides whether the entries are printed; --with-hooks is kept as an alias
 # for that, since the README and muscle memory both still reach for it.)
 mkdir -p "$HOME/.claude/hooks"
-cp "$HERE/hooks/pr_attach.py" "$HOME/.claude/hooks/pr_attach.py"
-cp "$HERE/hooks/learn_nudge.py" "$HOME/.claude/hooks/learn_nudge.py"
-echo "installed hooks: ~/.claude/hooks/{pr_attach,learn_nudge}.py"
+for h in ao_autosave ao_precompact ao_session_start pr_attach learn_nudge; do
+  cp "$HERE/hooks/$h.py" "$HOME/.claude/hooks/$h.py"
+done
+echo "installed hooks: ~/.claude/hooks/{ao_autosave,ao_precompact,ao_session_start,pr_attach,learn_nudge}.py"
+echo "  Sessions started from the app run all five already (they ride in its --settings file)."
+echo "  Enabling them in settings.json extends that to sessions you start from a terminal."
 if [ "$HOOKS" -eq 1 ]; then
   mkdir -p "$HOME/.claude/hooks"
   cp "$HERE/hooks/pr_attach.py" "$HOME/.claude/hooks/pr_attach.py"
@@ -182,6 +185,15 @@ if [ "$HOOKS" -eq 1 ]; then
   echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/learn_nudge.py\" 2>/dev/null; true" } ] }'
   echo "  It nudges the model to check /learn or /skill-propose the moment a message reads"
   echo "  like a standing preference or correction (\"always\", \"from now on\", \"ne ... plus\"...)."
+  echo
+  echo "installed hook scripts: ~/.claude/hooks/ao_autosave.py, ao_precompact.py, ao_session_start.py"
+  echo "  To enable them, add to the Stop, PreCompact and SessionStart hooks respectively:"
+  echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_autosave.py\" 2>/dev/null; true" } ] }'
+  echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_precompact.py\" 2>/dev/null; true" } ] }'
+  echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_session_start.py\" 2>/dev/null; true" } ] }'
+  echo "  Auto-save at 60%/80% of context and after 30 min without a checkpoint; a history line"
+  echo "  before each compaction; the /learn habit stated at every session start."
+  echo "  (The first-run setup in the app writes these for you, with a preview and a backup.)"
 fi
 
 echo

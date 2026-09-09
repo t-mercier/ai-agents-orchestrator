@@ -189,12 +189,23 @@ above. Dismissing it silences that one pull, not the next. Installed from the `.
 with no clone? Then there is nothing to compare and the notice never appears — the app
 keeps its own skills current at launch.
 
-### The two hooks
+### The hooks
 
-The skills run *inside* a session, so there are two moments they cannot see. A **hook** is a
-small script that **Claude Code** runs at one of those moments — not the app. Once enabled
-they work with the dashboard closed.
+The skills run *inside* a session, so there are moments they cannot see. A **hook** is a
+small script that **Claude Code** runs at one of those moments — not the app. Five ship
+with it:
 
+- **`ao_autosave`** — the checkpoint used to happen only when you typed `/save-session`.
+  Now, when a turn ends with the context at 60 % (and again at 80 %), or 30 minutes after
+  the last checkpoint while the conversation kept moving, the model is told to run it —
+  and does, then stops. The percentage is the real one from the statusline, not a guess
+  from the transcript's size.
+- **`ao_precompact`** — before a compaction, a bare `(in progress)` line goes into the
+  session history with the transcript path and the moment. The summary is still written by
+  the model, which is reminded of it as soon as it can act again.
+- **`ao_session_start`** — every tracked session starts with the two habits stated: `/learn`
+  the moment something durable emerges, `/save-session` when asked. After a compaction with
+  stale notes, save first.
 - **`pr_attach`** — a session's pull requests live in its `notes.md`, and only the skills
   write there. So a PR you open mid-session stays invisible until your next
   `/save-session` — exactly when the link is most useful. This attaches it the moment
@@ -204,14 +215,18 @@ they work with the dashboard closed.
   wording carries that signal ("always", "toujours", "from now on", "ne … plus"…), reminds
   the model for that one turn. Nothing else; it never writes.
 
-**Both scripts are copied for you**, with the skills, every launch — copying is harmless,
-since a script nothing points at never runs. **Switching one on** is the part that isn't
-harmless: it adds a line to `~/.claude/settings.json`, the file that decides which code
-Claude Code runs on your machine, so it never happens on its own.
+**All five scripts are copied for you**, with the skills, every launch. **Every session you
+start from the dashboard runs all five already**: the app hands Claude Code a `--settings`
+file of its own, and Claude Code merges its hooks with yours. So for the ordinary case
+there is nothing to switch on.
+
+**Enabling them in `~/.claude/settings.json`** is for sessions you start from a plain
+terminal. That file decides which code Claude Code runs on your machine, so it never
+happens on its own.
 
 The last step of first-run setup does it properly when you ask: it shows you the exact file
 it would write, copies your current one to a timestamped backup, then writes. It also says
-which are already on, and offers nothing when both are. **Settings → first-run setup**
+which are already on, and offers nothing when all five are. **Settings → first-run setup**
 reopens it any time. If you would rather do it by hand,
 `bash scripts/install.sh --with-hooks` prints the exact lines to paste.
 

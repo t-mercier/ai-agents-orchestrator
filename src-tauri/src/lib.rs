@@ -13,41 +13,42 @@ mod doctor;
 use tauri::{Manager, Emitter};
 use serde_json::Value;
 
-/// Build a `--settings '<path>'` argument (with leading space) that injects the
-/// statusLine wrapper, or return an empty string if settings file writing fails.
-/// Writes a per-session launch-settings.json to ~/.config/ai-agents-orchestrator/
-/// that injects ao-statusline.sh as the statusLine, preserving the user's own
-/// statusline command (read read-only from ~/.claude/settings.json).
-/// Any error (can't write settings, can't read user config) returns "", so the
-/// launch proceeds without injection.
-pub(crate) fn statusline_settings_arg() -> String {
+/// Build a `--settings '<path>'` argument (with leading space) for every session this app
+/// launches, or return an empty string if the file cannot be written (the launch then
+/// proceeds without injection). The file, `launch-settings.json` under
+/// `~/.config/ai-agents-orchestrator/`, carries two things:
+///
+/// - the `statusLine` wrapper (`ao-statusline.sh`, with the user's own statusline command
+///   as its argument — read read-only from `~/.claude/settings.json`). `statusLine` is a
+///   replace-key in Claude Code's settings merge, hence the wrapping;
+/// - the shipped hooks the user has not wired globally (`hooks::launch_hooks`). Hooks are
+///   MERGED with the global file's, so this adds without duplicating, and it is how
+///   auto-save, the post-compaction reminder, the PR attach and the learn nudge reach a
+///   session without anyone editing settings.json.
+///
+/// Headless runs (`wrap_session`, imports, `/sync-refs`) deliberately do not pass this
+/// argument: a Stop hook that asks an agent-in-a-pipe to save would be noise.
+pub(crate) fn launch_settings_arg() -> String {
     let config_dir = config::home().join(".config").join("ai-agents-orchestrator");
     if std::fs::create_dir_all(&config_dir).is_err() {
         return String::new();
     }
 
-    // Read the user's current statusLine command (if any) from ~/.claude/settings.json.
-    let user_statusline = {
+    // The user's global settings, read once: the statusLine command to wrap, and the
+    // hooks already wired (so they are not injected a second time).
+    let user_settings: Value = {
         let settings_path = config::home().join(".claude").join("settings.json");
-        match std::fs::read_to_string(&settings_path) {
-            Ok(content) => {
-                if let Ok(Value::Object(map)) = serde_json::from_str::<Value>(&content) {
-                    if let Some(statusline) = map.get("statusLine") {
-                        if let Some(cmd) = statusline.get("command").and_then(Value::as_str) {
-                            cmd.to_string()
-                        } else {
-                            String::new()
-                        }
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            }
-            Err(_) => String::new(),
-        }
+        std::fs::read_to_string(&settings_path)
+            .ok()
+            .and_then(|c| serde_json::from_str::<Value>(&c).ok())
+            .unwrap_or_else(|| serde_json::json!({}))
     };
+    let user_statusline = user_settings
+        .get("statusLine")
+        .and_then(|s| s.get("command"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
 
     // Build the wrapper command: ao-statusline.sh with the user's original as an arg.
     let ao_statusline = config::home().join(".claude").join("ao-statusline.sh");
@@ -57,13 +58,16 @@ pub(crate) fn statusline_settings_arg() -> String {
         pty::shell_quote(&user_statusline)
     );
 
-    // Build the settings JSON: inject the wrapper as the statusLine.
-    let settings = serde_json::json!({
+    // Build the settings JSON: the wrapper as the statusLine, plus the hooks to inject.
+    let mut settings = serde_json::json!({
         "statusLine": {
             "type": "command",
             "command": wrapper_cmd
         }
     });
+    if let Some(hooks) = hooks::launch_hooks(&user_settings) {
+        settings["hooks"] = hooks;
+    }
 
     let settings_file = config_dir.join("launch-settings.json");
     let settings_json = match serde_json::to_string(&settings) {
@@ -218,7 +222,7 @@ fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
     // /save-session, which WRITE notes.md (and so bail in plan mode at their Step 0). Plan
     // mode would leave the session perpetually "stale" because the close never records.
     // Matches +New / Import (which already force auto for the same reason).
-    let settings_arg = statusline_settings_arg();
+    let settings_arg = launch_settings_arg();
     let cmd = if std::path::Path::new(&cwd).is_absolute() {
         format!(
             "cd {} && claude --resume {}{} --permission-mode auto{}",
@@ -413,7 +417,7 @@ fn start_session(
     // forces a writable mode regardless of the user's persisted default. (Resume/Restart
     // keep the session's own mode — this is only for fresh sessions.) `auto` is a fixed
     // literal, no quoting needed.
-    let settings_arg = statusline_settings_arg();
+    let settings_arg = launch_settings_arg();
     let claude = format!(
         "claude{} --permission-mode auto{} {}",
         model_flag,
@@ -542,7 +546,7 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     // --permission-mode auto: /restart-session writes (re-registers + checks out the
     // branch) and the reopened session must be able to /close-session later — both bail in
     // plan mode. Matches +New / Import / Resume.
-    let settings_arg = statusline_settings_arg();
+    let settings_arg = launch_settings_arg();
     let cmd = format!(
         "cd {} && claude{} --permission-mode auto{} {}",
         pty::shell_quote(&dir),

@@ -11,6 +11,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **The checkpoint happens on its own.** `/save-session` only ever ran when someone typed it,
+  and the moment it matters — context nearly full, a compaction about to erase the detail — is
+  the moment nobody remembers to. Three new hooks ship with the app: `ao_autosave` (`Stop`) has
+  the model run `/save-session` itself at 60 % and 80 % of context and after 30 minutes without
+  a checkpoint, from the session's real context figure in the statusline cache rather than a
+  transcript byte count; `ao_precompact` appends an `(in progress)` history line with the
+  transcript path before each compaction; `ao_session_start` states the `/learn` habit at every
+  tracked session's start and, after a compaction with stale notes, asks for the save first.
+  **Every session started from the dashboard runs all five hooks with no settings.json edit**:
+  the app already passed Claude Code a `--settings` file for the statusline, Claude Code merges
+  that file's hooks with the global ones (verified: an injected hook and a global one both fired
+  in one run), so the shipped hooks the user has not wired globally ride in it. Wiring them in
+  the wizard's step 4 remains the way to cover sessions started from a plain terminal.
+- **`/save-session` distils to the knowledge notes** (new Step 5c, gated on a configured vault,
+  the same step `/close-session` had). Its skill-proposal step already referred to "the distil
+  above" — there was none. A checkpoint is when a decision is fresh, and a session that is never
+  closed taught the next one nothing.
 - **Sync all** — one titlebar button runs the per-card Sync for every open session that has
   a ticket or a pull request. Ten open sessions used to mean ten clicks and ten waits. The
   order is what makes it one wait: every known PR state first, in one `gh` batch (the list is
