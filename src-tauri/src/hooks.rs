@@ -99,6 +99,7 @@ fn read_settings() -> Value {
 
 /// The `advisorModel` currently in settings.json, if any — so the UI shows what is set
 /// rather than presenting an empty box over a real value.
+#[tauri::command]
 pub fn advisor_model() -> String {
     read_settings()
         .get("advisorModel")
@@ -262,6 +263,28 @@ pub fn wire(wanted: Vec<String>, advisor: Option<String>) -> Result<Value, Strin
     let body = serde_json::to_string_pretty(&after).map_err(|e| e.to_string())?;
     crate::atomic_write(&path, &format!("{body}\n"))?;
     Ok(json!({ "ok": true, "unchanged": false, "backup": backup }))
+}
+
+// ── The Tauri commands. Thin on purpose: the functions above are the testable surface,
+// these are the names the wrapper invokes (tauri-api.js) and generate_handler! registers.
+
+/// The two shipped hooks: is each script on disk, and does settings.json already run it?
+#[tauri::command]
+pub fn hooks_status() -> Vec<HookStatus> {
+    status()
+}
+
+/// The exact before/after of ~/.claude/settings.json, for the user to approve. Produced by
+/// the same merge that performs the write, so what is shown is what happens.
+#[tauri::command]
+pub fn hooks_wire_preview(files: Vec<String>, advisor: Option<String>) -> Result<WirePreview, String> {
+    wire_preview(files, advisor)
+}
+
+/// Write the approved settings.json, after copying the current one aside.
+#[tauri::command]
+pub fn wire_hooks(files: Vec<String>, advisor: Option<String>) -> Result<Value, String> {
+    wire(files, advisor)
 }
 
 #[cfg(test)]
