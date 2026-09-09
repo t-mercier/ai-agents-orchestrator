@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **`/sync-refs` is a fixed sequence of five calls.** Transcripts showed one run making a
+  single JQL query and the next a lookup per ticket, and `gh` loops without `< /dev/null`
+  (gh reads the loop's stdin and truncates the list). Now: one read, one `key in (…)` JQL,
+  one `gh pr list --json` per known repo filtered locally by `jq` (or one `gh search prs` by
+  ticket when no repo is known — no `--state` flag, search has none), one edit, one line.
+  A run that needs more is a run that went wrong, and says so.
+
 ## [0.16.0-alpha] - 2026-09-09
 
 ### Changed

@@ -41,12 +41,23 @@ Read `<notes_path>` and note:
 
 No tickets and no PRs → nothing to sync. Say so in one line and stop.
 
-## Step 2 — Ticket statuses, from the tracker
+## Step 2 — Ticket statuses, from the tracker — ONE query
 
-For each ticket, fetch its **current status** through the Atlassian MCP tools (or whichever
-tracker MCP is configured). Use the tracker's own wording — `Ready For Review`, `Triaged`,
-`Aborted` — never a normalised version of it: the dashboard derives its colour from the
-word but shows the word itself, and a project's vocabulary is the useful part.
+**One** tracker call for all the tickets, never one per ticket: the Atlassian MCP
+`searchJiraIssuesUsingJql` (or the tracker's equivalent) with
+
+```
+key in (GOSDK-201341, GOSDK-221110, NAV-206836)      # every ticket from Step 1
+fields: key, status
+```
+
+Transcripts of this skill showed the drift this rule removes: one run made a single JQL
+call, the next made a `getJiraIssue` call per ticket. Same result, N times the cost, and
+N chances to hit a rate limit.
+
+Use the tracker's own wording — `Ready For Review`, `Triaged`, `Aborted` — never a
+normalised version of it: the dashboard derives its colour from the word but shows the word
+itself, and a project's vocabulary is the useful part.
 
 Rewrite `ticket_states:` in full:
 
@@ -65,27 +76,33 @@ If no tracker MCP is available, leave `ticket_states:` **untouched** and say so 
 confirmation. Silently wiping the statuses because a tool was missing would look like every
 ticket lost its status.
 
-## Step 3 — Pull requests, from `gh`
+## Step 3 — Pull requests, from `gh` — a fixed sequence
 
 A session's PRs are the ones whose branch names one of its tickets — that is the convention
 the branches follow (`fix/GOSDK-221743-…`, `test/GOSDK-201341-…`).
 
-Search each repository that already appears in `pr_link:` / `pr_links:`; that is how the
-repo is known without guessing. With no PR attached yet, use the git repository of the
-current directory if it is one.
+The repositories to search are the ones already appearing in `pr_link:` / `pr_links:`, plus
+the git repository of the current directory when it is one. **One `gh pr list` per
+repository, the filtering done locally by `jq`** — never a `gh` call per ticket, and
+`< /dev/null` on every `gh` inside a loop (gh reads the loop's stdin and truncates it: a
+run once got 15 of 57 PRs that way):
 
 ```bash
-gh pr list --repo <owner/repo> --state all --limit 60 --json number,url,headRefName,title
+TICKETS='GOSDK-201341|GOSDK-221110'            # the session's ticket ids, `|`-joined
+for repo in owner/repo-a owner/repo-b; do
+  gh pr list --repo "$repo" --state all --limit 60 --json number,url,headRefName,title < /dev/null \
+    | jq -r --arg t "$TICKETS" '.[] | select(.headRefName | test($t)) | .url'
+done
 ```
-
-Keep a PR when its `headRefName` contains one of the session's ticket ids.
 
 **No repository known at all** (no PR attached, and the current directory is not a
 checkout — the dashboard's Sync runs from the session folder, which usually is not one):
-do not skip. Search by ticket instead, across everything the account can see:
+do not skip. Search by ticket instead, across everything the account can see — one call,
+all tickets. No `--state` flag: search does not have `--state all`, and its default already
+returns open and closed.
 
 ```bash
-gh search prs "<TICKET>" --author @me --limit 20 --json url,title,repository   # open and closed alike; --state would narrow it
+gh search prs "GOSDK-201341 OR GOSDK-221110" --author @me --limit 30 --json url,title < /dev/null
 ```
 
 GitHub's search reads titles and bodies, not branch names, so this catches a PR whose
@@ -101,6 +118,10 @@ as `pr_links:` entries.
 **Append only. Never remove a PR link**, whatever `gh` says: a link the user attached by
 hand is a deliberate act, and a branch can be deleted while its PR still matters. Pruning
 is the dashboard's editor, on purpose.
+
+**The whole sync is those calls and no others**: one read of the file, one JQL, one
+`gh pr list` per known repo (or one `gh search prs`), one edit, one line of confirmation.
+A run that needs more than that is a run that went wrong — say so rather than improvise.
 
 ## Step 4 — Confirm in one line
 
