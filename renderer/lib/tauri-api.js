@@ -162,10 +162,6 @@
     // never done without the user seeing the exact result first — hence preview + wire.
     hooksStatus: () => invoke('hooks_status').catch(() => []),
     advisorModel: () => invoke('advisor_model').catch(() => ''),
-    installHooks: () =>
-      invoke('install_hooks')
-        .then((files) => ({ ok: true, files }))
-        .catch((e) => ({ ok: false, error: String(e) })),
     hooksWirePreview: (files, advisor) =>
       invoke('hooks_wire_preview', { files, advisor: advisor || null })
         .then((p) => ({ ok: true, ...p }))

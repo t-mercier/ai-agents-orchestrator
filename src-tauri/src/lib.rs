@@ -152,13 +152,6 @@ fn hooks_status() -> Vec<hooks::HookStatus> {
     hooks::status()
 }
 
-/// Copy the embedded hook scripts into ~/.claude/hooks/. Inert on its own — a script
-/// nothing references never runs — so this needs no confirmation.
-#[tauri::command]
-fn install_hooks() -> Result<Vec<String>, String> {
-    hooks::install_scripts()
-}
-
 /// The exact before/after of ~/.claude/settings.json, for the user to approve. Produced by
 /// the same merge that performs the write, so what is shown is what happens.
 #[tauri::command]
@@ -1643,7 +1636,6 @@ pub fn run() {
             can_reveal_terminal,
             reveal_terminal,
             hooks_status,
-            install_hooks,
             hooks_wire_preview,
             wire_hooks,
             advisor_model,
