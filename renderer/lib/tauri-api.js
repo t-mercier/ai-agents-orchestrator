@@ -50,6 +50,10 @@
     ptyKill: (sessionId) => invoke('pty_kill', { sessionId }),
     onPtyData: (cb) => window.__TAURI__.event.listen('pty-data', (e) => cb(e.payload.sessionId, e.payload.data)),
     onPtyExit: (cb) => window.__TAURI__.event.listen('pty-exit', (e) => cb(e.payload.sessionId)),
+    // Generic listener for the rare non-terminal event. app.js:1281 has subscribed to
+    // `config_migrated_v2` through this since the v2 migration shipped — behind a guard that
+    // silently skipped, because this method did not exist. The migration toast never showed.
+    onEvent: (name, cb) => window.__TAURI__.event.listen(name, (e) => cb(e.payload)),
 
     // ── New-session launcher (src-tauri/src/lib.rs) ──
     // embedded=false (default): launches an external iTerm tab, returns { ok }.
