@@ -11,6 +11,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Every pull request reaches its session, whichever road it took.** `pr_attach` matched
+  only `gh pr create` inside a Bash call, so a PR opened through the GitHub MCP server's
+  `create_pull_request` was never attached, silently. The hook now also fires for that tool
+  (matcher `Bash|mcp__.*__create_pull_request`, the tool name whatever the server is
+  registered as) and for `gh pr edit` / `gh pr reopen` — same URL, no extra cost, and it
+  catches a PR adopted mid-session. The URL is still taken only from the tool's result, never
+  from its input. And `/sync-refs` Step 3 no longer skips when no repository is known: it
+  searches your PRs by ticket (`gh search prs`), the fallback for a Sync run from a session
+  folder that is not a checkout. A hand-wired `pr_attach` with a plain `Bash` matcher keeps
+  working for `gh` and will not see the MCP tool — re-run step 4 to widen it.
 - **The checkpoint happens on its own.** `/save-session` only ever ran when someone typed it,
   and the moment it matters — context nearly full, a compaction about to erase the detail — is
   the moment nobody remembers to. Three new hooks ship with the app: `ao_autosave` (`Stop`) has

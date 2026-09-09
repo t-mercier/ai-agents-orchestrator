@@ -208,8 +208,10 @@ with it:
   stale notes, save first.
 - **`pr_attach`** — a session's pull requests live in its `notes.md`, and only the skills
   write there. So a PR you open mid-session stays invisible until your next
-  `/save-session` — exactly when the link is most useful. This attaches it the moment
-  `gh pr create` prints the URL.
+  `/save-session` — exactly when the link is most useful. This attaches it the moment it
+  exists, whichever road it took: `gh pr create` (or `edit`, `reopen`) in a shell, or the
+  GitHub MCP server's create tool. And `/sync-refs` no longer gives up when no repository
+  is known — it searches your PRs by ticket instead.
 - **`learn_nudge`** — `/learn` says "use PROACTIVELY", but nothing forces the check at the
   turn where you actually state a preference. This reads your message and, when your own
   wording carries that signal ("always", "toujours", "from now on", "ne … plus"…), reminds

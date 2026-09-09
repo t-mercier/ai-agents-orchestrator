@@ -72,15 +72,31 @@ the branches follow (`fix/GOSDK-221743-…`, `test/GOSDK-201341-…`).
 
 Search each repository that already appears in `pr_link:` / `pr_links:`; that is how the
 repo is known without guessing. With no PR attached yet, use the git repository of the
-current directory if it is one, and otherwise skip this step.
+current directory if it is one.
 
 ```bash
 gh pr list --repo <owner/repo> --state all --limit 60 --json number,url,headRefName,title
 ```
 
-Keep a PR when its `headRefName` contains one of the session's ticket ids. Add every one
-not already listed, keeping the existing `pr_link:` as the primary — a session's first PR
-stays its headline — and writing the rest as `pr_links:` entries.
+Keep a PR when its `headRefName` contains one of the session's ticket ids.
+
+**No repository known at all** (no PR attached, and the current directory is not a
+checkout — the dashboard's Sync runs from the session folder, which usually is not one):
+do not skip. Search by ticket instead, across everything the account can see:
+
+```bash
+gh search prs "<TICKET>" --author @me --state all --limit 20 --json url,title,repository
+```
+
+GitHub's search reads titles and bodies, not branch names, so this catches a PR whose
+title or description names the ticket (`Implements: <TICKET>`) and misses one that only
+names it in the branch. Keep a result when its `title` names one of the session's ticket
+ids; treat the rest as noise, not as the session's. This is the fallback, not the rule —
+when a repo IS known, the branch-name rule above stays authoritative.
+
+Add every PR kept, by either route, that is not already listed — keeping the existing
+`pr_link:` as the primary (a session's first PR stays its headline) and writing the rest
+as `pr_links:` entries.
 
 **Append only. Never remove a PR link**, whatever `gh` says: a link the user attached by
 hand is a deliberate act, and a branch can be deleted while its PR still matters. Pruning

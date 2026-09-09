@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
-"""PostToolUse(Bash) hook: attach a freshly created PR to the session's notes.md.
+"""PostToolUse hook: attach a pull request to the session's notes.md the moment it exists.
 
 The dashboard reads a session's pull requests from the `pr_link:` / `pr_links:`
 frontmatter of its notes.md, and only /start-session, /save-session and /close-session
 ever write those keys. A PR opened mid-session therefore stays invisible until the next
 checkpoint — the session shows no PR at all, which is exactly when the link matters.
 
-This hook closes that gap: `gh pr create` prints the URL it just opened, so the URL is
-attached the moment the PR exists.
+This hook closes that gap, on both roads a PR takes to exist from inside a session:
+  - `gh pr create` / `gh pr edit` / `gh pr reopen` in a Bash call — each prints the URL of
+    the one PR it acted on, and nothing else. (`edit` and `reopen` cost nothing extra: the
+    URL is the same one, already attached or not yet.)
+  - a GitHub MCP tool named `…create_pull_request` — its result carries the new PR's
+    `html_url`.
 
 Two guards, because unlike the other hooks this one WRITES:
-  1. the command must be a `gh pr create` — never `edit`, `list`, `view`, whose output
-     is full of other people's PR URLs;
-  2. the URL must come from the tool RESPONSE, not the command. A create that failed
-     prints no URL, and a `--body` mentioning "depends on .../pull/12" must not be
-     mistaken for the PR that was just opened.
+  1. the Bash command must be one of those three — never `list`, `view`, `checks`, whose
+     output is full of other people's PR URLs;
+  2. the URL must come from the tool RESPONSE, not the input. A create that failed prints
+     no URL, and a `--body` mentioning "depends on .../pull/12" must not be mistaken for
+     the PR that was just opened.
 
 Writes are idempotent (a URL already attached is a no-op), additive (an existing link is
 never replaced or removed) and atomic (the app polls notes.md every 5s and must never
@@ -32,19 +36,32 @@ import tempfile
 
 # Same shape the Rust side validates (lib.rs `is_pr_url`): https only, owner/repo, number.
 PR_URL = re.compile(r"https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/\d+")
-CREATE_CMD = re.compile(r"\bgh\s+pr\s+create\b")
+PR_CMD = re.compile(r"\bgh\s+pr\s+(create|edit|reopen)\b")
+# The GitHub MCP server's create tool, whatever the server is registered as
+# (`mcp__github__create_pull_request`, `mcp__claude_ai_GitHub__create_pull_request`, …).
+MCP_CREATE = re.compile(r"^mcp__.*__create_pull_request$")
 
 ACTIVE_SESSIONS = "~/.claude/active-sessions.json"
 
 
-def pr_url_from(payload):
-    """The URL of the PR this command just created, or None.
+def concerns_a_pr(payload):
+    """Did this tool call create, edit or reopen one PR? Bash: the command says so. MCP:
+    the tool's name does. Anything else is not ours — its output may list PRs, none of
+    them this session's by construction."""
+    if MCP_CREATE.match(payload.get("tool_name") or ""):
+        return True
+    return bool(PR_CMD.search((payload.get("tool_input") or {}).get("command", "") or ""))
 
-    Read from the tool response only — the command string may legitimately quote other
-    PR URLs (a `--body` that references a dependency). `gh pr create` prints the new
-    PR's URL last, so the last match wins when the output holds several.
+
+def pr_url_from(payload):
+    """The URL of the PR this call just created (or edited, or reopened), or None.
+
+    Read from the tool response only — the input may legitimately quote other PR URLs (a
+    `--body` that references a dependency). `gh` prints the PR's URL last; an MCP result
+    repeats the same PR under several keys (`html_url`, `diff_url`…) — either way the last
+    match is the right one.
     """
-    if not CREATE_CMD.search((payload.get("tool_input") or {}).get("command", "") or ""):
+    if not concerns_a_pr(payload):
         return None
     response = payload.get("tool_response")
     if response is None:

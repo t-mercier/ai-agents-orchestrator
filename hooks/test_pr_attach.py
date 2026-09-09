@@ -29,9 +29,33 @@ class TestUrlExtraction(unittest.TestCase):
     def test_failed_create_prints_no_url(self):
         self.assertIsNone(pr_attach.pr_url_from(payload(CREATE, "pull request create failed")))
 
-    def test_ignores_non_create_commands(self):
-        for cmd in ("gh pr list", "gh pr view 7", "gh pr edit 7 --body x"):
+    def test_ignores_commands_whose_output_lists_other_prs(self):
+        for cmd in ("gh pr list", "gh pr view 7", "gh pr checks 7", "gh pr status", "gh search prs x"):
             self.assertIsNone(pr_attach.pr_url_from(payload(cmd, URL)), cmd)
+
+    # Same URL, same session: attaching on edit/reopen costs nothing and catches a PR that
+    # was created outside the session (a colleague's, the web UI) and adopted here.
+    def test_edit_and_reopen_count(self):
+        for cmd in ("gh pr edit 7 --body x", "gh pr reopen 7"):
+            self.assertEqual(pr_attach.pr_url_from(payload(cmd, URL)), URL, cmd)
+
+    def test_mcp_create_pull_request_by_tool_name(self):
+        for name in ("mcp__github__create_pull_request", "mcp__claude_ai_GitHub__create_pull_request"):
+            p = {"session_id": "s1", "tool_name": name,
+                 "tool_input": {"owner": "o", "repo": "r", "title": "t", "head": "b", "base": "main"},
+                 "tool_response": {"content": [{"type": "text", "text":
+                     '{"number": 7, "html_url": "%s", "diff_url": "%s.diff", "url": "https://api.github.com/repos/o/r/pulls/7"}' % (URL, URL)}]}}
+            self.assertEqual(pr_attach.pr_url_from(p), URL, name)
+
+    def test_other_mcp_tools_are_not_ours(self):
+        p = {"session_id": "s1", "tool_name": "mcp__github__list_pull_requests",
+             "tool_input": {}, "tool_response": {"content": [{"type": "text", "text": URL}]}}
+        self.assertIsNone(pr_attach.pr_url_from(p))
+
+    def test_mcp_create_that_failed_has_no_url(self):
+        p = {"session_id": "s1", "tool_name": "mcp__github__create_pull_request",
+             "tool_input": {"body": "see " + OTHER}, "tool_response": {"content": [{"type": "text", "text": "Validation Failed"}]}}
+        self.assertIsNone(pr_attach.pr_url_from(p))
 
     def test_url_in_the_command_is_not_enough(self):
         # A --body referencing a dependency PR must not be attached.

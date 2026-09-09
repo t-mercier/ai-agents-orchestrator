@@ -175,9 +175,11 @@ if [ "$HOOKS" -eq 1 ]; then
   cp "$HERE/hooks/pr_attach.py" "$HOME/.claude/hooks/pr_attach.py"
   echo
   echo "installed hook script: ~/.claude/hooks/pr_attach.py"
-  echo "  To enable it, add this to the PostToolUse \"Bash\" hooks in ~/.claude/settings.json:"
-  echo '    { "type": "command", "command": "IN=$(cat); printf '"'"'%s'"'"' \"$IN\" | python3 \"$HOME/.claude/hooks/pr_attach.py\" 2>/dev/null; true" }'
-  echo "  It attaches a PR to the session notes the moment \`gh pr create\` opens it."
+  echo "  To enable it, add this PostToolUse group to ~/.claude/settings.json (the matcher is a"
+  echo "  regex: gh in a Bash call, or the GitHub MCP server's create tool):"
+  echo '    { "matcher": "Bash|mcp__.*__create_pull_request", "hooks": [ { "type": "command", "command": "IN=$(cat); printf '"'"'%s'"'"' \"$IN\" | python3 \"$HOME/.claude/hooks/pr_attach.py\" 2>/dev/null; true" } ] }'
+  echo "  It attaches a PR to the session notes the moment \`gh pr create\`/\`edit\`/\`reopen\` or the MCP"
+  echo "  tool returns its URL."
   echo
   cp "$HERE/hooks/learn_nudge.py" "$HOME/.claude/hooks/learn_nudge.py"
   echo "installed hook script: ~/.claude/hooks/learn_nudge.py"

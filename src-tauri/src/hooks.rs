@@ -59,8 +59,10 @@ const SHIPPED: [(&str, &str, Option<&str>, &str); 5] = [
     (
         "pr_attach.py",
         "PostToolUse",
-        Some("Bash"),
-        "Attaches a pull request to the session notes the moment `gh pr create` prints its URL.",
+        // A regex over the tool name: the Bash call that runs `gh pr create|edit|reopen`, or
+        // the GitHub MCP server's create tool under whatever name the server is registered.
+        Some("Bash|mcp__.*__create_pull_request"),
+        "Attaches a pull request to the session notes the moment `gh pr create` (or `edit`, `reopen`, or the GitHub MCP tool) returns its URL.",
     ),
     (
         "learn_nudge.py",
@@ -360,7 +362,7 @@ mod tests {
     fn merge_adds_both_entries_in_the_shape_claude_code_expects() {
         let out = merge_settings(json!({}), &["pr_attach.py", "learn_nudge.py"], None);
         let post = &out["hooks"]["PostToolUse"];
-        assert_eq!(post[0]["matcher"], "Bash", "PostToolUse is matcher-scoped");
+        assert_eq!(post[0]["matcher"], "Bash|mcp__.*__create_pull_request", "PostToolUse is matcher-scoped: gh in Bash, or the MCP create tool");
         assert!(post[0]["hooks"][0]["command"]
             .as_str()
             .unwrap()
@@ -382,20 +384,25 @@ mod tests {
         assert_eq!(once, twice);
     }
 
-    // The whole point of the matcher branch: someone already has Bash hooks, and ours
-    // joins that group instead of creating a rival "Bash" matcher.
+    // The whole point of the matcher branch: someone already has a group for the SAME
+    // matcher, and ours joins it instead of creating a rival group Claude Code would run
+    // as a second matcher. A group for a different matcher ("Bash" alone, say) is left
+    // alone: it is not a rival, it is a different rule, and ours must not be squeezed
+    // into a scope that would never see the MCP tool.
     #[test]
-    fn an_existing_bash_matcher_is_joined_not_duplicated() {
+    fn an_existing_group_for_the_same_matcher_is_joined_not_duplicated() {
         let existing = json!({
             "hooks": { "PostToolUse": [
-                { "matcher": "Bash", "hooks": [ { "type": "command", "command": "mine.sh" } ] }
+                { "matcher": "Bash", "hooks": [ { "type": "command", "command": "theirs.sh" } ] },
+                { "matcher": "Bash|mcp__.*__create_pull_request", "hooks": [ { "type": "command", "command": "mine.sh" } ] }
             ] }
         });
         let out = merge_settings(existing, &["pr_attach.py"], None);
         let groups = out["hooks"]["PostToolUse"].as_array().unwrap();
-        assert_eq!(groups.len(), 1, "still a single Bash matcher");
-        let inner = groups[0]["hooks"].as_array().unwrap();
-        assert_eq!(inner.len(), 2, "their hook kept, ours appended");
+        assert_eq!(groups.len(), 2, "no third group");
+        assert_eq!(groups[0]["hooks"].as_array().unwrap().len(), 1, "the plain Bash group is untouched");
+        let inner = groups[1]["hooks"].as_array().unwrap();
+        assert_eq!(inner.len(), 2, "their hook kept, ours appended to the same-matcher group");
         assert_eq!(inner[0]["command"], "mine.sh");
     }
 
