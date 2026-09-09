@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0-alpha] - 2026-09-09
+
 ### Added
 - **Every pull request reaches its session, whichever road it took.** `pr_attach` matched
   only `gh pr create` inside a Bash call, so a PR opened through the GitHub MCP server's
