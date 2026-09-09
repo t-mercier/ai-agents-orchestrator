@@ -183,7 +183,7 @@ pub fn findings(snap: &Snapshot) -> Vec<Finding> {
             kind: KIND_SKILL_DRIFT.into(),
             severity: "info".into(),
             title: format!("Skill '{name}' was edited by hand"),
-            detail: "It differs from the version the app installed. Settings → Skills keeps a copy in .archive before any sync overwrites it.".into(),
+            detail: "It differs from the version the app installed. This skill is the app's — the next sync restores it. Want different behaviour? Copy it under another name and change that one.".into(),
             target: name.clone(),
             repair: None,
         });

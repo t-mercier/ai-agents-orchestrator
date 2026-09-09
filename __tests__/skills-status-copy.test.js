@@ -1,37 +1,37 @@
 const S = require('../renderer/lib/skills-status-copy')
 
 describe('syncResultText', () => {
-  it('names installed, updated and backed-up skills, with the backup location', () => {
+  it('names installed, updated and restored skills', () => {
     const text = S.syncResultText({
       skipped_ahead: false,
       installed: ['lib', 'new-one'],
       updated: ['close-session', 'start-session'],
-      backed_up: [{ name: 'start-session', backup: '/x/.archive/start-session.pre-sync-1' }],
+      restored: ['start-session'],
     })
     expect(text).toContain('Installed 1 new skill: new-one.')
     expect(text).not.toContain('lib') // filtered out — not a slash-command skill
     expect(text).toContain('Updated 2 to this app version: close-session, start-session.')
-    expect(text).toContain('Your edited copy of start-session was kept in ~/.claude/skills/.archive/.')
+    expect(text).toContain('start-session had been edited and was restored')
   })
 
-  it('pluralises the backed-up sentence', () => {
+  it('pluralises the restored sentence', () => {
     const text = S.syncResultText({
       installed: [],
       updated: ['a', 'b'],
-      backed_up: [{ name: 'a', backup: '/x' }, { name: 'b', backup: '/y' }],
+      restored: ['a', 'b'],
     })
-    expect(text).toContain('Your edited copies of a, b were kept')
+    expect(text).toContain('a, b had been edited and were restored')
   })
 
   it('reports a stood-down sync as such, not as "up to date"', () => {
     // skipped_ahead is the developer case: install.sh ran after this app was built.
     // "Already up to date" would be wrong — the disk is AHEAD, not merely current.
-    const text = S.syncResultText({ skipped_ahead: true, installed: [], updated: [], backed_up: [] })
+    const text = S.syncResultText({ skipped_ahead: true, installed: [], updated: [], restored: [] })
     expect(text).toMatch(/already at \(or past\) this app version/)
   })
 
   it('says "already up to date" when nothing happened', () => {
-    expect(S.syncResultText({ installed: ['lib'], updated: [], backed_up: [] }))
+    expect(S.syncResultText({ installed: ['lib'], updated: [], restored: [] }))
       .toBe('Already up to date.')
   })
 

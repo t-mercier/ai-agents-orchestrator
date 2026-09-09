@@ -175,15 +175,17 @@ pub fn update_from_checkout() -> Result<String, String> {
 /// `.archive/` instead of destroying it. Nothing is ever merged; nothing is ever lost.
 const BASE_DIR: &str = ".ao-base";
 
-/// Where a hand-edited skill's copy goes right before a sync overwrites it. `.archive/`
-/// is the same place `/skills-review` already moves retired skills — one recovery
-/// location, not two.
-const ARCHIVE_DIR: &str = ".archive";
-
 /// Has this skill been edited outside the installers since the last time one wrote it?
 /// No base at all counts as edited — for a skill that differs from the bundle with no
-/// recorded history, backing up before overwriting costs a few kilobytes; guessing
-/// wrong costs someone's work.
+/// recorded history, the answer is unknowable, and "restored" is the honest word for
+/// what the sync then does to it.
+///
+/// The app's skills are the app's, by decision (2026-09-09): the dashboard depends on
+/// what they write, so a customised one breaks it silently, and every release would
+/// overwrite the edit anyway. Different behaviour belongs in a skill of the user's own,
+/// under another name. Three things hold that line — the `ao_skill_guard` hook refuses
+/// an agent's Edit/Write, the files are installed read-only (`lock_files`), and a copy
+/// that was forced anyway is restored here and named, not archived and merged.
 fn hand_edited(base: &Path, target: &Path) -> bool {
     !base.exists() || paths_differ(base, target)
 }
@@ -220,20 +222,31 @@ fn refresh_base(bundle_dir: &Dir, base: &Path) {
     let _ = extract_into(bundle_dir, base);
 }
 
-/// Copy the file tree at `src` into `dst` (created fresh). Used to preserve a
-/// hand-edited skill in `.archive/` before a sync overwrites it.
-fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)?.flatten() {
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if from.is_dir() {
-            copy_tree(&from, &to)?;
+/// Read-only for every file the app writes under `~/.claude/skills` (0o444; directories
+/// stay writable so the app can replace them). An editor opening one says so; an agent
+/// is already refused by the `ao_skill_guard` hook. Best-effort: a filesystem that
+/// refuses the mode change leaves a writable copy, which the next sync restores anyway.
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+}
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _mode: u32) {}
+
+/// Is every file under `dir` read-only? (Test seam for `lock`ing.)
+#[cfg(all(test, unix))]
+fn all_read_only(dir: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    let Ok(entries) = fs::read_dir(dir) else { return false };
+    entries.flatten().all(|e| {
+        let p = e.path();
+        if p.is_dir() {
+            all_read_only(&p)
         } else {
-            fs::copy(&from, &to)?;
+            fs::metadata(&p).map(|m| m.permissions().mode() & 0o222 == 0).unwrap_or(false)
         }
-    }
-    Ok(())
+    })
 }
 
 #[derive(Serialize)]
@@ -324,7 +337,14 @@ fn extract_into(dir: &Dir, target: &Path) -> std::io::Result<()> {
     fs::create_dir_all(target)?;
     for f in dir.files() {
         if let Some(name) = f.path().file_name() {
-            fs::write(target.join(name), f.contents())?;
+            let path = target.join(name);
+            // A previous install left this file read-only; writable for the write, then
+            // locked again. The app is the one writer allowed here.
+            if path.exists() {
+                set_mode(&path, 0o644);
+            }
+            fs::write(&path, f.contents())?;
+            set_mode(&path, 0o444);
         }
     }
     for d in dir.dirs() {
@@ -443,13 +463,6 @@ pub fn skills_status() -> SkillsStatus {
     }
 }
 
-/// One hand-edited skill a sync preserved before overwriting.
-#[derive(Serialize)]
-pub struct BackedUp {
-    pub name: String,
-    /// Where the pre-overwrite copy went, absolute — printed so the user can find it.
-    pub backup: String,
-}
 
 /// Report from `sync_skills()`.
 #[derive(Serialize)]
@@ -462,9 +475,10 @@ pub struct SyncReport {
     pub installed: Vec<String>,
     /// Present skills overwritten with this bundle's version.
     pub updated: Vec<String>,
-    /// The subset of `updated` that had been edited outside the installers — each one's
-    /// previous content was copied under `.archive/` first, never destroyed.
-    pub backed_up: Vec<BackedUp>,
+    /// The subset of `updated` that had been edited outside the installers. The app's
+    /// skills are not the user's to edit (see `hand_edited`): the edit is gone, the
+    /// app's version is back, and the name is reported so nobody wonders why.
+    pub restored: Vec<String>,
     pub config_seeded: bool,
     pub dirs_created: Vec<String>,
 }
@@ -479,13 +493,15 @@ pub struct SyncReport {
 ///   after this app was built — and an older binary must not revert it at every launch.
 ///   A manual sync (the Settings button) skips this guard: the user is explicitly
 ///   asking for THIS build's versions.
-/// - **No silent loss**: a skill whose content doesn't match its `.ao-base/` snapshot
-///   was edited outside the installers. Its current content is copied to
-///   `.archive/<name>.pre-sync-<unix-ts>/` before the overwrite, and reported.
+/// - **No silent change**: a skill whose content doesn't match its `.ao-base/` snapshot
+///   was edited outside the installers. It is restored to the app's version — these
+///   skills are not customisable, by decision — and NAMED in the report, so the person
+///   who forced the edit learns where the line is rather than wondering what happened.
 ///
 /// What one sync pass did to a skills tree: whether the direction guard stood it down,
-/// the skills installed fresh, the ones updated, and the hand-edits copied aside first.
-type SyncOutcome = (bool, Vec<String>, Vec<String>, Vec<BackedUp>);
+/// the skills installed fresh, the ones updated, and the subset of those that had been
+/// hand-edited and were restored.
+type SyncOutcome = (bool, Vec<String>, Vec<String>, Vec<String>);
 
 /// Pure I/O on `dst`, unit-testable against a temp dir.
 fn sync_into(
@@ -502,13 +518,9 @@ fn sync_into(
     }
     let mut installed = Vec::new();
     let mut updated = Vec::new();
-    let mut backed_up = Vec::new();
+    let mut restored = Vec::new();
     let base_root = dst.join(BASE_DIR);
     fs::create_dir_all(dst)?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
     for d in SKILLS.dirs() {
         let Some(name) = d.path().file_name().map(|n| n.to_string_lossy().into_owned()) else {
             continue;
@@ -535,9 +547,7 @@ fn sync_into(
             continue;
         }
         if hand_edited(&base, &target) {
-            let backup = dst.join(ARCHIVE_DIR).join(format!("{name}.pre-sync-{stamp}"));
-            copy_tree(&target, &backup)?;
-            backed_up.push(BackedUp { name: name.clone(), backup: backup.to_string_lossy().into_owned() });
+            restored.push(name.clone());
         }
         fs::remove_dir_all(&target)?;
         extract_into(d, &target)?;
@@ -546,10 +556,10 @@ fn sync_into(
     }
     installed.sort();
     updated.sort();
-    backed_up.sort_by(|a, b| a.name.cmp(&b.name));
+    restored.sort();
     // The tree now fully matches this bundle — the one situation the stamp may claim.
     write_installed_epoch(dst, epoch);
-    Ok((false, installed, updated, backed_up))
+    Ok((false, installed, updated, restored))
 }
 
 /// Keep the app-owned skills current. Called automatically at launch (manual=false,
@@ -558,7 +568,7 @@ fn sync_into(
 #[tauri::command]
 pub fn sync_skills(manual: bool) -> Result<SyncReport, String> {
     let dst = config::home().join(".claude").join("skills");
-    let (skipped_ahead, installed, updated, backed_up) =
+    let (skipped_ahead, installed, updated, restored) =
         sync_into(&dst, manual, bundle_epoch()).map_err(|e| e.to_string())?;
     // Same as install_skills: the scripts travel with the skills, on every launch.
     let _ = crate::hooks::install_scripts();
@@ -569,7 +579,7 @@ pub fn sync_skills(manual: bool) -> Result<SyncReport, String> {
             dirs_created.push(base.to_string_lossy().into_owned());
         }
     }
-    Ok(SyncReport { skipped_ahead, installed, updated, backed_up, config_seeded, dirs_created })
+    Ok(SyncReport { skipped_ahead, installed, updated, restored, config_seeded, dirs_created })
 }
 
 #[cfg(test)]
@@ -580,6 +590,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ao-skills-{}-{}", std::process::id(), tag));
         let _ = fs::remove_dir_all(&dir);
         dir
+    }
+
+    /// What a determined human does: chmod, then edit. The tests need it because the
+    /// files the app writes are read-only.
+    fn force_write(path: &Path, bytes: &[u8]) {
+        set_mode(path, 0o644);
+        fs::write(path, bytes).unwrap();
     }
 
     #[test]
@@ -640,7 +657,7 @@ mod tests {
         // Fresh extract is byte-identical → no diff.
         assert!(!dir_differs(start, &dst.join("start-session")));
         // A user edit is detected.
-        fs::write(dst.join("start-session/SKILL.md"), b"EDITED").unwrap();
+        force_write(&dst.join("start-session/SKILL.md"), b"EDITED");
         assert!(dir_differs(start, &dst.join("start-session")));
         // A missing target counts as differing (force would create it).
         assert!(dir_differs(start, &dst.join("nope")));
@@ -720,18 +737,35 @@ mod tests {
         let _ = fs::remove_dir_all(&dst);
     }
 
-    // ── sync_into: app-owned skills, direction-guarded, backup-on-hand-edit ──
+    // ── sync_into: app-owned skills, direction-guarded, restore-on-hand-edit ──
 
     #[test]
     fn sync_installs_missing_skills_fresh_and_seeds_their_base() {
         let dst = tmp("sync-fresh");
-        let (skipped, installed, updated, backed_up) = sync_into(&dst, false, 100).unwrap();
+        let (skipped, installed, updated, restored) = sync_into(&dst, false, 100).unwrap();
         assert!(!skipped);
         assert!(installed.contains(&"lib".to_string()));
         assert!(installed.contains(&"start-session".to_string()));
-        assert!(updated.is_empty() && backed_up.is_empty());
+        assert!(updated.is_empty() && restored.is_empty());
         assert!(dst.join(BASE_DIR).join("start-session/SKILL.md").exists());
         assert_eq!(read_installed_epoch(&dst), Some(100), "a full sync stamps its epoch");
+        let _ = fs::remove_dir_all(&dst);
+    }
+
+    // The files are the app's: an editor sees read-only, and a re-install over a locked
+    // tree must still succeed (writable for the write, locked again after).
+    #[cfg(unix)]
+    #[test]
+    fn installed_skill_files_are_read_only_and_reinstall_still_works() {
+        let dst = tmp("sync-lock");
+        sync_into(&dst, false, 100).unwrap();
+        assert!(all_read_only(&dst.join("start-session")), "skill files locked");
+        assert!(all_read_only(&dst.join(SHARED_LIB)), "shared helper locked too");
+        assert!(fs::write(dst.join("start-session/SKILL.md"), b"x").is_err(), "a plain write is refused");
+        // A manual sync over the locked tree: lib is rewritten in place, skills replaced.
+        let (_, installed, _, _) = sync_into(&dst, true, 200).unwrap();
+        assert!(installed.contains(&"lib".to_string()));
+        assert!(all_read_only(&dst.join(SHARED_LIB)));
         let _ = fs::remove_dir_all(&dst);
     }
 
@@ -741,33 +775,30 @@ mod tests {
         sync_into(&dst, false, 100).unwrap(); // base == bundle == disk everywhere
         // Simulate an older install: base and disk agree with each other at an older
         // shared point; the (fixed, embedded) bundle has moved past it.
-        fs::write(dst.join(BASE_DIR).join("start-session/SKILL.md"), b"OLDER").unwrap();
-        fs::write(dst.join("start-session/SKILL.md"), b"OLDER").unwrap();
-        let (_, _, updated, backed_up) = sync_into(&dst, false, 200).unwrap();
+        force_write(&dst.join(BASE_DIR).join("start-session/SKILL.md"), b"OLDER");
+        force_write(&dst.join("start-session/SKILL.md"), b"OLDER");
+        let (_, _, updated, restored) = sync_into(&dst, false, 200).unwrap();
         assert!(updated.contains(&"start-session".to_string()));
-        assert!(backed_up.is_empty(), "nothing was hand-edited, nothing to preserve");
+        assert!(restored.is_empty(), "nothing was hand-edited, nothing to report as restored");
         let bundle = SKILLS.get_dir("start-session").unwrap();
         assert!(!dir_differs(bundle, &dst.join("start-session")));
         let _ = fs::remove_dir_all(&dst);
     }
 
     #[test]
-    fn sync_backs_up_a_hand_edit_before_overwriting() {
+    fn sync_restores_a_hand_edited_app_skill_and_names_it() {
         let dst = tmp("sync-hand-edit");
         sync_into(&dst, false, 100).unwrap();
-        // A hand edit (or an approved /skill-propose patch): disk moves, base does not.
-        fs::write(dst.join("start-session/SKILL.md"), b"MY OWN IMPROVEMENT").unwrap();
-        let (_, _, updated, backed_up) = sync_into(&dst, true, 200).unwrap();
+        // Someone forced the lock and edited: disk moves, base does not.
+        force_write(&dst.join("start-session/SKILL.md"), b"MY OWN IMPROVEMENT");
+        let (_, _, updated, restored) = sync_into(&dst, true, 200).unwrap();
         assert!(updated.contains(&"start-session".to_string()));
-        let saved = backed_up.iter().find(|b| b.name == "start-session").expect("named in report");
-        // The previous content survives, byte for byte, at the reported path.
-        assert_eq!(
-            fs::read(Path::new(&saved.backup).join("SKILL.md")).unwrap(),
-            b"MY OWN IMPROVEMENT"
-        );
-        // And the skill itself is now the bundle's version.
+        assert_eq!(restored, vec!["start-session".to_string()], "named, so the person learns where the line is");
+        // The skill is the bundle's version again, and nothing was archived: the app's
+        // skills are not the user's to edit, so there is no "their version" to keep.
         let bundle = SKILLS.get_dir("start-session").unwrap();
         assert!(!dir_differs(bundle, &dst.join("start-session")));
+        assert!(!dst.join(".archive").exists());
         let _ = fs::remove_dir_all(&dst);
     }
 
@@ -775,52 +806,44 @@ mod tests {
     fn an_automatic_sync_stands_down_when_the_tree_is_already_ahead() {
         let dst = tmp("sync-ahead");
         sync_into(&dst, false, 300).unwrap(); // stamped at 300
-        fs::write(dst.join("start-session/SKILL.md"), b"NEWER, FROM INSTALL.SH").unwrap();
+        force_write(&dst.join("start-session/SKILL.md"), b"NEWER, FROM INSTALL.SH");
         // An app built earlier (bundle epoch 200) launches: it must not revert this.
-        let (skipped, installed, updated, backed_up) = sync_into(&dst, false, 200).unwrap();
+        let (skipped, installed, updated, restored) = sync_into(&dst, false, 200).unwrap();
         assert!(skipped);
-        assert!(installed.is_empty() && updated.is_empty() && backed_up.is_empty());
+        assert!(installed.is_empty() && updated.is_empty() && restored.is_empty());
         assert_eq!(fs::read(dst.join("start-session/SKILL.md")).unwrap(), b"NEWER, FROM INSTALL.SH");
         assert_eq!(read_installed_epoch(&dst), Some(300), "the newer stamp survives");
         let _ = fs::remove_dir_all(&dst);
     }
 
     #[test]
-    fn a_manual_sync_ignores_the_direction_guard_but_still_backs_up() {
+    fn a_manual_sync_ignores_the_direction_guard_and_reports_what_it_restored() {
         let dst = tmp("sync-manual");
         sync_into(&dst, false, 300).unwrap();
-        fs::write(dst.join("start-session/SKILL.md"), b"NEWER, FROM INSTALL.SH").unwrap();
+        force_write(&dst.join("start-session/SKILL.md"), b"NEWER, FROM INSTALL.SH");
         // The user explicitly asks Settings for THIS build's versions (epoch 200).
-        let (skipped, _, updated, backed_up) = sync_into(&dst, true, 200).unwrap();
+        let (skipped, _, updated, restored) = sync_into(&dst, true, 200).unwrap();
         assert!(!skipped);
         assert!(updated.contains(&"start-session".to_string()));
-        let saved = backed_up.iter().find(|b| b.name == "start-session").expect("preserved");
-        assert_eq!(
-            fs::read(Path::new(&saved.backup).join("SKILL.md")).unwrap(),
-            b"NEWER, FROM INSTALL.SH"
-        );
+        assert_eq!(restored, vec!["start-session".to_string()]);
         let _ = fs::remove_dir_all(&dst);
     }
 
     #[test]
-    fn sync_bootstraps_a_pre_existing_edited_install_by_backing_it_up() {
+    fn sync_bootstraps_a_pre_existing_edited_install_by_restoring_it() {
         let dst = tmp("sync-bootstrap");
         // An install from before base tracking existed: no .ao-base/ at all, and the
         // skill carries an untracked local edit. With no history, "was this edited or
-        // just stale?" is unknowable — so the sync backs it up (cheap) rather than
-        // guess (potentially someone's work), then brings it to the bundle.
+        // just stale?" is unknowable — either way the app's version comes back, and the
+        // name is reported so an edit that was real is not lost in silence.
         let bundle = SKILLS.get_dir("start-session").unwrap();
         extract_into(bundle, &dst.join("start-session")).unwrap();
-        fs::write(dst.join("start-session/SKILL.md"), b"PRE-EXISTING LOCAL EDIT").unwrap();
+        force_write(&dst.join("start-session/SKILL.md"), b"PRE-EXISTING LOCAL EDIT");
         assert!(!dst.join(BASE_DIR).exists());
 
-        let (_, _, updated, backed_up) = sync_into(&dst, false, 100).unwrap();
+        let (_, _, updated, restored) = sync_into(&dst, false, 100).unwrap();
         assert!(updated.contains(&"start-session".to_string()));
-        let saved = backed_up.iter().find(|b| b.name == "start-session").expect("preserved");
-        assert_eq!(
-            fs::read(Path::new(&saved.backup).join("SKILL.md")).unwrap(),
-            b"PRE-EXISTING LOCAL EDIT"
-        );
+        assert_eq!(restored, vec!["start-session".to_string()]);
         assert!(!dir_differs(bundle, &dst.join("start-session")));
         assert!(dst.join(BASE_DIR).join("start-session/SKILL.md").exists());
         let _ = fs::remove_dir_all(&dst);

@@ -10,6 +10,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The app's 14 skills are the app's — not customisable, by decision.** They write the
+  `notes.md` the dashboard reads; a customised one breaks the app silently, and every release
+  overwrote the edit anyway, keeping a copy in `.archive/` that nobody merged. Three things now
+  hold the line: a new `ao_skill_guard` hook (`PreToolUse` on `Edit|Write|MultiEdit|NotebookEdit`)
+  refuses an agent's edit to one and says to make a skill of your own instead; the files are
+  installed read-only (`chmod 444`, the app unlocks them only to write its own update); and a copy
+  forced anyway is **restored** at the next sync and named — no archive, no merge. `patch_apply.py`
+  refuses an app-owned target and `/skill-propose` turns such a proposal into a new skill seeded
+  from the app's copy. Want different behaviour? Copy the skill under another name and change
+  that one — nothing touches it. `install.sh` follows the same rule (`RESTORED`, not `ARCHIVED`).
+- **The launch notice is one line.** "Session skills updated to this app version: x, y. Open a
+  fresh Claude Code session…" read as an instruction — people looked for what to run. Now:
+  "Skills updated for this version: x, y — nothing to do."
+
 ## [0.15.0-alpha] - 2026-09-09
 
 ### Added

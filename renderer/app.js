@@ -1099,10 +1099,11 @@ async function maybeShowSkillsBanner() {
 // construction on both sides (src-tauri/src/skills.rs sync_into): the direction guard
 // stands the sync down when the on-disk tree is already at or past this bundle's date
 // (the developer case — install.sh ran after this app was built), and a skill edited
-// outside the installers is copied under .archive/ before being overwritten. So no
-// permission dialog — but visibility instead of silence: a passive, dismissible notice
-// says what changed and where any edited copy went. Nothing shows when nothing changed,
-// which is every launch but the first after an app update.
+// outside the installers is restored and named — these skills are the app's, by
+// decision; the files are read-only and the ao_skill_guard hook refuses an agent's edit,
+// so a restore means someone forced it. No permission dialog — but visibility instead of
+// silence: a passive, dismissible notice says what changed. Nothing shows when nothing
+// changed, which is every launch but the first after an app update.
 async function syncSkillsOnLaunch(el) {
   if (!window.api.syncSkills) return
   let res
@@ -1110,17 +1111,19 @@ async function syncSkillsOnLaunch(el) {
   if (!res || !res.ok || res.skipped_ahead) return
   const updated = res.updated || []
   const installed = (res.installed || []).filter(s => s !== 'lib')
-  const backedUp = res.backed_up || []
+  const restored = res.restored || []
   if (!updated.length && !installed.length) return
-  const bits = []
-  if (updated.length) bits.push(`updated to this app version: ${updated.join(', ')}`)
-  if (installed.length) bits.push(`newly installed: ${installed.join(', ')}`)
-  let note = `Session skills ${bits.join('; ')}.`
-  if (backedUp.length) {
-    note += ` Your edited cop${backedUp.length === 1 ? 'y' : 'ies'} of ${backedUp.map(b => b.name).join(', ')} ${backedUp.length === 1 ? 'was' : 'were'} kept in ~/.claude/skills/.archive/.`
+  // One line. "Updated to this app version" read as an instruction — people looked for
+  // what to run. It is a receipt: the skills that changed in this version, done.
+  const names = [...new Set([...installed, ...updated])].sort()
+  let note = `Skills updated for this version: ${names.join(', ')} — nothing to do.`
+  if (restored.length) {
+    // The app's skills are not the user's to edit. Name what was put back, so the
+    // person who forced the edit learns where the line is instead of wondering.
+    note += ` ${restored.join(', ')} had been edited and ${restored.length === 1 ? 'was' : 'were'} restored — for different behaviour, copy a skill under another name.`
   }
   el.innerHTML =
-    `<span class="sb-text">${note} Open a fresh Claude Code session to pick them up.</span>` +
+    `<span class="sb-text">${note}</span>` +
     '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
   el.hidden = false
   el.querySelector('.sb-dismiss').addEventListener('click', () => {
@@ -1163,17 +1166,15 @@ async function maybeOfferCheckoutUpdate(el) {
     if (res && res.ok) {
       // install.sh --all: this app's skills to the checkout's versions, a changed copy
       // archived first, hooks copied. Same rules as the launch sync, just from the clone.
-      // The script lists what it archived as indented "/name" lines under one header.
-      // Name them: "a copy was kept" read as a to-do; it is a receipt, and says so.
-      const archived = (res.report || '').split('\n')
+      // The script lists what it restored as indented "/name" lines under one header.
+      const restored = (res.report || '').split('\n')
         .filter(l => /^\s+\/[a-z0-9-]+\s*$/.test(l)).map(l => l.trim())
       el.innerHTML =
-        `<span class="sb-text">Skills and hooks updated from <code>${esc(upd.repo)}</code>.` +
-        (archived.length
-          ? ` Your edited cop${archived.length === 1 ? 'y' : 'ies'} of <code>${archived.map(esc).join('</code>, <code>')}</code> ` +
-            `${archived.length === 1 ? 'was' : 'were'} kept in <code>~/.claude/skills/.archive/</code> — nothing to do.`
+        `<span class="sb-text">Skills and hooks updated from <code>${esc(upd.repo)}</code> — nothing to do.` +
+        (restored.length
+          ? ` <code>${restored.map(esc).join('</code>, <code>')}</code> had been edited and ${restored.length === 1 ? 'was' : 'were'} restored — these skills are the app's.`
           : '') +
-        ' Sessions you open from now on use the new versions; ones already running keep the old.</span>' +
+        '</span>' +
         '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
       el.querySelector('.sb-dismiss').addEventListener('click', () => { el.hidden = true; el.innerHTML = '' })
     } else {

@@ -68,7 +68,7 @@ Full tour: **[the guide](docs/GUIDE.md)**.
 > - 📥 **First-run setup brings your existing sessions in** — three steps: spaces and categories, then the Claude Code sessions already on this machine, then one import pass. Each session goes to the space and category you pick, and **▸ Preview** shows what it opened with and what it left off at before you decide. The first step also sets each space's knowledge-notes folder, your ticket tracker URL and the card density — the last with a live sample card, so you pick by looking. It is the only place the app adopts a session started outside it: `＋ Import` and *Recent · unmanaged* are gone, because once a session is tracked you are not meant to start the next one outside the dashboard.
 > - 🩺 **Doctor finds what is genuinely broken** — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists, a pidfile for a process that has exited. It reports; you tick what it repairs. A pruned transcript is ordinary ageing, and it says so rather than counting it as damage.
 > - 🧹 **Clean audits the rest by age** — it proposes what to archive and what to delete, using the same last-touched date the list already shows. Nothing is pre-ticked, and a deletion goes to the Trash.
-> - 🛡 **The app's skills keep themselves current** — the lifecycle skills are app-owned, synced silently at launch like any app resource. An older build never reverts a newer install, and anything you'd edited by hand is copied to `.archive/` before being replaced — named in a notice, never silently lost.
+> - 🛡 **The app's skills keep themselves current, and stay the app's** — the 14 lifecycle skills are synced silently at launch like any app resource, installed read-only, and an agent's edit to one is refused by a hook. An older build never reverts a newer install. Want different behaviour? Copy a skill under another name and change that one — it is never touched.
 >
 > Earlier releases: the [changelog](CHANGELOG.md) has the full history.
 
@@ -219,20 +219,23 @@ They are ordinary Claude Code skills in your ordinary skills folder:
 ├── …
 ├── lib/aoconfig.py               ← shared helper: reads your config so skills and app agree
 ├── .ao-base/<name>/              ← pristine copy of each, to tell "you edited it" from "it's old"
-├── .archive/<name>.pre-sync-…/   ← your version, kept, whenever one is about to be replaced
 └── your-own-skill/SKILL.md       ← never read, never written, never listed
 
 ~/.claude/hooks/
-├── pr_attach.py                  ← copied with the skills; inert until you enable it
-└── learn_nudge.py                ← same
+├── ao_skill_guard.py             ← copied with the skills; sessions from the app run them all
+├── ao_autosave.py  ao_precompact.py  ao_session_start.py
+├── pr_attach.py
+└── learn_nudge.py
 ```
 
-**Your own skills are not involved.** Both installers — this script and the app's launch sync
-— iterate over the 14 names this app ships. Anything else in that folder is invisible to
-them: not scanned, not compared, not backed up, not touched. If you happen to have a skill of
-your own sharing one of those 14 names, it is the one case that *is* replaced — and its
-content is copied to `.archive/<name>.pre-sync-<timestamp>/` first, and named on screen, so
-it is recoverable.
+**The 14 are the app's, and your own skills are not involved.** The app's skills write the
+`notes.md` the dashboard reads, so they are not customisable: the files are installed
+read-only, the `ao_skill_guard` hook refuses an agent's edit to one, and a copy that was
+forced anyway is restored at the next sync and named on screen. For different behaviour,
+copy a skill under another name and change that one. Both installers — this script and the
+app's launch sync — iterate over the 14 names this app ships; anything else in that folder
+is invisible to them: not scanned, not compared, not touched. The single case that *is*
+replaced is a skill of your own that happens to share one of those 14 names — pick another.
 
 ```bash
 bash scripts/install.sh              # install; a skill you already have is KEPT
@@ -276,15 +279,16 @@ with the context nearly full, a compaction, a PR opened in passing. A hook is a 
 **Claude Code** runs at one of those moments — not the app: the app puts the script on
 disk and decides where it is declared.
 
-All five ship inside the app and are **copied automatically** — with the skills, on every
+All six ship inside the app and are **copied automatically** — with the skills, on every
 launch, and by `scripts/install.sh` with no flag needed. **Every session started from the
-dashboard runs all five** without touching your settings: the app passes Claude Code a
+dashboard runs all six** without touching your settings: the app passes Claude Code a
 `--settings` file of its own, and Claude Code merges that file's hooks with your global
 ones (only `statusLine` is replace-not-merge, which is why the app wraps yours rather than
 setting its own). A hook you have already enabled globally is not injected a second time.
 
 | Hook | Event | What it closes |
 |---|---|---|
+| `ao_skill_guard.py` | `PreToolUse` (`Edit`, `Write`…) | The 14 skills are the app's; an edit to one is refused with the reason and the alternative — a skill of your own under another name. |
 | `ao_autosave.py` | `Stop` | The checkpoint only happened when someone typed `/save-session`. This has the model run it itself — at 60 % and again at 80 % of context, and after 30 minutes without a checkpoint while the conversation moved. The figure is the session's real context percentage from the statusline cache, not a transcript byte count. |
 | `ao_precompact.py` | `PreCompact` | Compaction is when a session forgets. This appends an `(in progress)` line to the session history with the transcript path and the moment — the summary stays the model's to write, and the next hook says so once tools are back. |
 | `ao_session_start.py` | `SessionStart` | The `/learn` habit — write a durable fact the moment it emerges — depended on whose `CLAUDE.md` the session loaded. This states it at every tracked session's start; after a compaction with stale notes, it asks for `/save-session` first. |
@@ -300,7 +304,7 @@ Nothing does that behind your back.
 - **From the app** — first-run setup's last step, or **Settings → first-run setup** later.
   It shows the exact `settings.json` it would write, copies your current one to a
   timestamped backup, then writes atomically. It also tells you which are already enabled,
-  and offers nothing when all five are.
+  and offers nothing when all six are.
 - **From the installer** — `bash scripts/install.sh --with-hooks` (or `--all`) prints the
   exact lines to paste. The flag only decides whether they are *printed*; the scripts are
   copied either way.
@@ -329,7 +333,7 @@ a standing preference still relies on the model's judgment, or on the distil ste
 > git pull && bash scripts/install.sh --all      # or --force, if you don't want the hooks
 > ```
 >
-> `--force` is not the default because it replaces a copy of **this app's** skills you may have tuned — so a plain run names the ones whose updates it withheld, and you decide. When it does replace one you had changed, your version is copied to `~/.claude/skills/.archive/<name>.pre-sync-<timestamp>/` first and named on screen. Skills of your own that this app does not ship are never in scope either way. Note `npm run install:skills` does **not** force. The app itself needs no button for this: it syncs its own skills silently at launch — an app built before your last `install.sh --force` run stands down rather than revert it, and a skill you'd edited by hand is copied to `~/.claude/skills/.archive/` before being replaced, named in a notice. **Settings → Session skills → Sync skills to this version** forces this build's versions on demand, under the same never-silently-lose rule.
+> `--force` is not the default because a plain run names the skills whose updates it withheld, and you decide. Either way only **this app's** 14 skills are in scope; skills of your own are never touched. One of the 14 you had edited is restored to the checkout's version and named — these skills are the app's, not customisable (see "Where they live"). Note `npm run install:skills` does **not** force. The app itself needs no button for this: it syncs its own skills silently at launch — an app built before your last `install.sh --force` run stands down rather than revert it. **Settings → Session skills → Sync skills to this version** forces this build's versions on demand.
 >
 > **Updating from an earlier version?** Your config **auto-migrates to v2** on first launch — named spaces + per-space knowledge-notes folders, with a `.v1-backup` kept (see [ADR-015](docs/adr/ADR-015-config-v1-to-v2-migration-flag-gated-self-cleaning.md)). Nothing to do by hand.
 
@@ -450,7 +454,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 - **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
 - Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
 - The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.
-- **The session skills** are app-owned: the app copies its bundled versions into `~/.claude/skills/` **silently at each launch**, plus on the Settings button. The write is confined to that folder and never touches session transcripts, and it cannot lose your work — a skill you edited by hand is copied to `.archive/` first and named in a notice, and an older build stands down rather than revert a newer install.
+- **The session skills** are app-owned: the app copies its bundled versions into `~/.claude/skills/` **silently at each launch**, plus on the Settings button. The write is confined to the 14 names it ships plus `lib/` and `.ao-base/`, never touches session transcripts or a skill of yours, and an older build stands down rather than revert a newer install. The files are installed read-only and the `ao_skill_guard` hook refuses an agent's edit to one; a copy forced anyway is restored and named.
 - External links open in your **system browser**, never inside the app.
 - **The app itself makes no network calls**, and stores no secrets. Two buttons do reach out, through Claude Code rather than the app: **Sync** (tracker via MCP, `gh` for pull requests) and **Close** (`/wrap-session` runs `gh pr view` to attach the PR before filing the session). Both are things you press.
 
@@ -462,7 +466,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (162, `cargo test`) + Jest (164, renderer logic) + the hooks' own unittest files (60, `python3 hooks/test_*.py`) — 386 total |
+| Tests | Rust unit tests (163, `cargo test`) + Jest (164, renderer logic) + the hooks' own unittest files (68, `python3 hooks/test_*.py`) — 395 total |
 
 ## Roadmap
 

@@ -166,15 +166,21 @@ In your normal skills folder, as normal skills:
 ├── start-session/ close-session/ …   the 14 this app ships
 ├── lib/aoconfig.py                   shared helper that reads your config
 ├── .ao-base/<name>/                  pristine copy, to tell "you edited it" from "it's old"
-├── .archive/<name>.pre-sync-…/       your version, kept, if one is ever replaced
 └── anything else you have            never touched
 ```
+
+**These 14 are the app's.** They write the `notes.md` the dashboard reads — edit one to save
+somewhere else and the dashboard stops seeing the session, quietly. So they are not
+customisable: the files are read-only, an agent's edit to one is refused (the
+`ao_skill_guard` hook says so and points at the alternative), and a copy that was forced
+anyway is restored at the next sync and named on screen. **Want different behaviour? Copy the
+skill under another name** (`save-session-mine`, say), change `name:` in its frontmatter, and
+change that one — it is yours, and nothing here ever touches it.
 
 **Installing or updating them cannot affect your own skills.** Both the installer script and
 the app's launch sync work through the 14 names this app ships; everything else in that
 folder is invisible to them. The single exception is a skill of yours that happens to share
-one of those names — that one is replaced, after your version is copied into `.archive/` and
-named on screen.
+one of those names — pick another.
 
 `bash scripts/install.sh --all` refreshes this app's skills to the version you have checked
 out. Without `--all` (or `--force`) a skill you already have is kept rather than replaced,
@@ -192,9 +198,12 @@ keeps its own skills current at launch.
 ### The hooks
 
 The skills run *inside* a session, so there are moments they cannot see. A **hook** is a
-small script that **Claude Code** runs at one of those moments — not the app. Five ship
+small script that **Claude Code** runs at one of those moments — not the app. Six ship
 with it:
 
+- **`ao_skill_guard`** — refuses an edit to one of the app's 14 skills, with the reason
+  and the alternative (a skill of your own under another name). The other half of "these
+  are the app's": the files are also read-only on disk.
 - **`ao_autosave`** — the checkpoint used to happen only when you typed `/save-session`.
   Now, when a turn ends with the context at 60 % (and again at 80 %), or 30 minutes after
   the last checkpoint while the conversation kept moving, the model is told to run it —
@@ -217,8 +226,8 @@ with it:
   wording carries that signal ("always", "toujours", "from now on", "ne … plus"…), reminds
   the model for that one turn. Nothing else; it never writes.
 
-**All five scripts are copied for you**, with the skills, every launch. **Every session you
-start from the dashboard runs all five already**: the app hands Claude Code a `--settings`
+**All six scripts are copied for you**, with the skills, every launch. **Every session you
+start from the dashboard runs all six already**: the app hands Claude Code a `--settings`
 file of its own, and Claude Code merges its hooks with yours. So for the ordinary case
 there is nothing to switch on.
 
@@ -228,7 +237,7 @@ happens on its own.
 
 The last step of first-run setup does it properly when you ask: it shows you the exact file
 it would write, copies your current one to a timestamped backup, then writes. It also says
-which are already on, and offers nothing when all five are. **Settings → first-run setup**
+which are already on, and offers nothing when all six are. **Settings → first-run setup**
 reopens it any time. If you would rather do it by hand,
 `bash scripts/install.sh --with-hooks` prints the exact lines to paste.
 

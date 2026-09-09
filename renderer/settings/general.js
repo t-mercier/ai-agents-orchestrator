@@ -132,9 +132,9 @@
 
   // ── Session skills: bring the app-owned skills to exactly this build's versions, on
   // demand. Manual, so it skips the launch sync's direction guard — the user is asking
-  // for THIS build — but the no-silent-loss rule still holds: a skill edited outside the
-  // installers is copied under .archive/ before being overwritten, and named in the
-  // result. No confirm gate; nothing can be destroyed, only moved.
+  // for THIS build. A skill edited outside the installers is restored and named in the
+  // result — the app's skills are not customisable, by decision. No confirm gate: the
+  // only thing that can change is the app's own resources.
   if ($('set-install-skills')) $('set-install-skills').addEventListener('click', async () => {
     if (!window.api || !window.api.syncSkills) return
     const res = await window.api.syncSkills(true)
