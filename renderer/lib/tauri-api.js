@@ -209,6 +209,17 @@
       invoke('sync_skills', { manual: !!manual })
         .then((r) => ({ ok: true, ...(r || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
+    // After `git pull` in a clone: is the checkout install.sh recorded now ahead of what it
+    // installed? → { repo, checkout_epoch, installed_epoch }, or null when there is nothing
+    // to offer. On error → null too: this is a courtesy notice, and a failed check must
+    // read as "nothing to say", never as a banner about an update that may not exist.
+    checkoutUpdate: () => invoke('checkout_update').catch(() => null),
+    // Runs that checkout's `install.sh --all` (the path is the manifest's, never ours).
+    // { ok, report } — the script's own output, which names what it replaced and archived.
+    updateFromCheckout: () =>
+      invoke('update_from_checkout')
+        .then((report) => ({ ok: true, report: String(report || '') }))
+        .catch((e) => ({ ok: false, error: String(e) })),
     // ── Doctor (src-tauri/src/doctor.rs) ──
     // The scan is read-only; the repair applies only the finding ids handed to it. Kept
     // as two calls on purpose — nothing the scan reports is acted on without a round

@@ -1415,6 +1415,8 @@ pub fn run() {
             skills::install_skills,
             skills::skills_status,
             skills::sync_skills,
+            skills::checkout_update,
+            skills::update_from_checkout,
             pty::pty_spawn,
             pty::pty_input,
             pty::pty_resize,

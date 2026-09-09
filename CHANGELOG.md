@@ -11,6 +11,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **After `git pull`, the app offers to update its skills and hooks.** A pull moves the repo's
+  `skills/` and `hooks/`; the copies Claude Code loads in `~/.claude/skills/` stay where they
+  were, and until now the only warning was a paragraph in the README. `install.sh` records the
+  checkout it ran from in the install manifest; the app asks git whether that checkout is ahead
+  of what is installed — at launch and whenever the window regains focus, never on the poll —
+  and, when it is, a notice offers **Update**, which runs that checkout's `install.sh --all`
+  (a changed copy of an app skill archived first, your own skills never in scope). The path
+  executed is the manifest's, not the renderer's. Dismiss is per checkout date, so the next
+  pull asks again. Nothing appears for a `.dmg`-only install, which has no checkout to compare.
+  The bundle date now counts commits to `hooks/` as well as `skills/`, on all three sides
+  (`build.rs`, `install.sh`, the check).
 - **The two hooks ship with the app, and first-run setup can switch them on.** They existed
   only in the repo, copied by `install.sh --with-hooks` — so anyone installing the `.dmg`,
   the path the README recommends, could not reach them at all. They are embedded in the

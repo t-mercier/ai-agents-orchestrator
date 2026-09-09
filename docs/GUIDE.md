@@ -180,6 +180,15 @@ named on screen.
 out. Without `--all` (or `--force`) a skill you already have is kept rather than replaced,
 and the installer tells you which updates it therefore withheld.
 
+You do not have to remember it. The installer records which checkout it ran from, and the
+app compares that checkout's `skills/` and `hooks/` against what is installed — at launch,
+and each time the window regains focus, since a `git pull` happens in a terminal and coming
+back to the app is the moment to say so. When the checkout is ahead, a notice names it and
+offers **Update**, which runs `install.sh --all` from that checkout with the same rules as
+above. Dismissing it silences that one pull, not the next. Installed from the `.dmg` alone,
+with no clone? Then there is nothing to compare and the notice never appears — the app
+keeps its own skills current at launch.
+
 ### The two hooks
 
 The skills run *inside* a session, so there are two moments they cannot see. A **hook** is a

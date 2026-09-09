@@ -20,7 +20,8 @@ use crate::config;
 use include_dir::{include_dir, Dir};
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The repo's `skills/` directory, embedded at compile time.
 static SKILLS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../skills");
@@ -43,21 +44,124 @@ fn bundle_epoch() -> i64 {
     option_env!("AO_SKILLS_BUNDLE_EPOCH").and_then(|s| s.parse().ok()).unwrap_or(0)
 }
 
+/// The manifest as a whole. Two keys matter: `bundle_epoch`, the stamp both installers
+/// write, and `repo`, which only `scripts/install.sh` can write — the checkout it ran
+/// from. The app has no other way to learn that path: a `.dmg` build never sees the
+/// clone, and a `git pull` moves the checkout without touching `~/.claude/skills`.
+fn read_manifest(dst: &Path) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let raw = fs::read_to_string(dst.join(MANIFEST_FILE)).ok()?;
+    match serde_json::from_str(&raw).ok()? {
+        serde_json::Value::Object(map) => Some(map),
+        _ => None,
+    }
+}
+
 /// The `bundle_epoch` recorded the last time `dst`'s skills were confirmed to match a
 /// bundle in full, or `None` if it was never stamped (older app, fresh `install.sh`
 /// without this feature, or a stamp that failed to parse — all read as "can't compare").
 fn read_installed_epoch(dst: &Path) -> Option<i64> {
-    let raw = fs::read_to_string(dst.join(MANIFEST_FILE)).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    value.get("bundle_epoch")?.as_i64()
+    read_manifest(dst)?.get("bundle_epoch")?.as_i64()
 }
 
-/// Stamp `dst` as matching `epoch`. Best-effort: a failed write leaves the previous
-/// (or absent) marker, which only ever makes the next check MORE conservative, never
-/// less — so it's safe to ignore the error here.
+/// Stamp `dst` as matching `epoch`. Every other key is kept — `repo` above all: the
+/// app's own sync stamping a date must not make the checkout forgettable, or the
+/// update offer would vanish at the first launch after `install.sh` ran. Best-effort: a
+/// failed write leaves the previous (or absent) marker, which only ever makes the next
+/// check MORE conservative, never less — so it's safe to ignore the error here.
 fn write_installed_epoch(dst: &Path, epoch: i64) {
-    let body = serde_json::json!({ "bundle_epoch": epoch }).to_string();
-    let _ = fs::write(dst.join(MANIFEST_FILE), body);
+    let mut map = read_manifest(dst).unwrap_or_default();
+    map.insert("bundle_epoch".to_string(), serde_json::json!(epoch));
+    let _ = fs::write(dst.join(MANIFEST_FILE), serde_json::Value::Object(map).to_string());
+}
+
+/// The checkout `install.sh` last ran from, when the manifest records one and it still
+/// looks like this repo. Canonicalized, and required to hold `scripts/install.sh`: this
+/// is the path the app will later EXECUTE, so a moved or deleted clone must read as
+/// "none", not as a command that fails later in a less legible way.
+fn installed_from_checkout(dst: &Path) -> Option<PathBuf> {
+    let repo = read_manifest(dst)?.get("repo")?.as_str()?.to_string();
+    let repo = PathBuf::from(repo).canonicalize().ok()?;
+    repo.join("scripts").join("install.sh").is_file().then_some(repo)
+}
+
+/// Unix seconds of the last commit in `repo` that touched `skills/` or `hooks/` — the
+/// same figure `install.sh` stamps and `build.rs` bakes into `bundle_epoch`, so the
+/// three compare directly. `None` when the directory is not a git checkout (a tarball).
+fn checkout_epoch(repo: &Path) -> Option<i64> {
+    let out = Command::new("git")
+        .args(["log", "-1", "--format=%ct", "--", "skills", "hooks"])
+        .current_dir(repo)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+}
+
+/// The checkout has moved past what is installed. An unstamped tree with a known
+/// checkout counts as behind: `install.sh` only stamps a date when nothing was withheld,
+/// so "repo known, no date" is precisely a plain install that skipped a changed skill.
+fn checkout_is_ahead(checkout: i64, installed: Option<i64>) -> bool {
+    checkout > 0 && installed.is_none_or(|i| checkout > i)
+}
+
+/// What the launch/focus check found: the recorded checkout is ahead of the tree.
+#[derive(Serialize)]
+pub struct CheckoutUpdate {
+    pub repo: String,
+    pub checkout_epoch: i64,
+    /// `0` when the tree was never stamped (see `checkout_is_ahead`).
+    pub installed_epoch: i64,
+}
+
+/// After `git pull` in a clone, the repo's `skills/` and `hooks/` move and
+/// `~/.claude/skills` does not — and nothing said so. This asks git whether the checkout
+/// `install.sh` recorded is now ahead of what it installed. `None` in every quiet case:
+/// no checkout recorded (a `.dmg`-only install), the clone gone, not a git tree, or
+/// simply up to date. Cheap enough for launch and window focus; not for the 5 s poll.
+#[tauri::command]
+pub fn checkout_update() -> Option<CheckoutUpdate> {
+    let dst = config::home().join(".claude").join("skills");
+    let repo = installed_from_checkout(&dst)?;
+    let checkout = checkout_epoch(&repo)?;
+    let installed = read_installed_epoch(&dst);
+    if !checkout_is_ahead(checkout, installed) {
+        return None;
+    }
+    Some(CheckoutUpdate {
+        repo: repo.to_string_lossy().into_owned(),
+        checkout_epoch: checkout,
+        installed_epoch: installed.unwrap_or(0),
+    })
+}
+
+/// Run the recorded checkout's `scripts/install.sh --all` — the one command that closes
+/// the gap `checkout_update` reports, with the same guarantees as the launch sync (a
+/// changed copy of an app skill is archived first, skills of your own are never in
+/// scope). The path comes from the manifest, never from the renderer: the UI may ask for
+/// the update, it does not get to choose what is executed. Returns the script's own
+/// report, which names what it replaced and archived.
+#[tauri::command(async)]
+pub fn update_from_checkout() -> Result<String, String> {
+    let dst = config::home().join(".claude").join("skills");
+    let repo = installed_from_checkout(&dst)
+        .ok_or_else(|| "no checkout is recorded in the skills manifest".to_string())?;
+    let script = repo.join("scripts").join("install.sh");
+    let out = Command::new("bash")
+        .arg(&script)
+        .arg("--all")
+        .current_dir(&repo)
+        .output()
+        .map_err(|e| format!("could not run {}: {e}", script.display()))?;
+    if !out.status.success() {
+        return Err(format!(
+            "install.sh exited with {}: {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// Where the pristine snapshots live — one copy of each skill, as it stood the last
@@ -720,5 +824,97 @@ mod tests {
         assert!(!dir_differs(bundle, &dst.join("start-session")));
         assert!(dst.join(BASE_DIR).join("start-session/SKILL.md").exists());
         let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn stamping_the_epoch_keeps_the_recorded_checkout() {
+        let dst = tmp("manifest-keeps-repo");
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(dst.join(MANIFEST_FILE), r#"{"bundle_epoch": 5, "repo": "/some/clone"}"#).unwrap();
+        write_installed_epoch(&dst, 9);
+        let m = read_manifest(&dst).unwrap();
+        assert_eq!(m.get("bundle_epoch").and_then(|v| v.as_i64()), Some(9));
+        assert_eq!(m.get("repo").and_then(|v| v.as_str()), Some("/some/clone"));
+        // And a tree that was never stamped gets a plain stamp, not a crash on the merge.
+        let fresh = tmp("manifest-fresh");
+        fs::create_dir_all(&fresh).unwrap();
+        write_installed_epoch(&fresh, 3);
+        assert_eq!(read_installed_epoch(&fresh), Some(3));
+        let _ = fs::remove_dir_all(&dst);
+        let _ = fs::remove_dir_all(&fresh);
+    }
+
+    #[test]
+    fn the_checkout_is_ahead_only_when_strictly_newer_or_the_tree_was_never_stamped() {
+        assert!(checkout_is_ahead(10, Some(5)));
+        assert!(!checkout_is_ahead(5, Some(5)), "equal is up to date");
+        assert!(!checkout_is_ahead(4, Some(5)), "an older checkout never offers an update");
+        assert!(checkout_is_ahead(5, None), "repo known but no stamp = a plain install withheld something");
+        assert!(!checkout_is_ahead(0, None), "0 is 'unknown', never 'very old'");
+    }
+
+    #[test]
+    fn a_recorded_checkout_counts_only_while_it_still_holds_the_installer() {
+        let dst = tmp("manifest-repo-check");
+        let clone = tmp("fake-clone");
+        fs::create_dir_all(&dst).unwrap();
+        fs::create_dir_all(clone.join("scripts")).unwrap();
+        fs::write(
+            dst.join(MANIFEST_FILE),
+            format!(r#"{{"bundle_epoch": 1, "repo": "{}"}}"#, clone.display()),
+        )
+        .unwrap();
+        assert!(installed_from_checkout(&dst).is_none(), "no scripts/install.sh yet");
+        fs::write(clone.join("scripts").join("install.sh"), "#!/bin/bash\n").unwrap();
+        assert_eq!(installed_from_checkout(&dst), Some(clone.canonicalize().unwrap()));
+        // No manifest at all → no checkout, no panic.
+        let empty = tmp("manifest-none");
+        fs::create_dir_all(&empty).unwrap();
+        assert!(installed_from_checkout(&empty).is_none());
+        let _ = fs::remove_dir_all(&dst);
+        let _ = fs::remove_dir_all(&clone);
+        let _ = fs::remove_dir_all(&empty);
+    }
+
+    #[test]
+    fn checkout_epoch_is_the_last_commit_touching_skills_or_hooks_not_head() {
+        let repo = tmp("epoch-repo");
+        fs::create_dir_all(repo.join("skills")).unwrap();
+        fs::create_dir_all(repo.join("hooks")).unwrap();
+        // `%ct` is the COMMITTER date, which `--date` does not set — hence the env var.
+        let git = |args: &[&str], date: &str| {
+            let out = Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+                .args(args)
+                .env("GIT_COMMITTER_DATE", date)
+                .env("GIT_AUTHOR_DATE", date)
+                .current_dir(&repo)
+                .output()
+                .expect("git runs in the test environment");
+            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q"], "");
+        fs::write(repo.join("skills").join("a.md"), "a").unwrap();
+        git(&["add", "."], "");
+        git(&["commit", "-q", "-m", "skills"], "2020-01-01T00:00:00+00:00");
+        let skills_ct: i64 = git(&["log", "-1", "--format=%ct"], "").parse().unwrap();
+        fs::write(repo.join("README"), "r").unwrap();
+        git(&["add", "."], "");
+        git(&["commit", "-q", "-m", "docs"], "2021-01-01T00:00:00+00:00");
+        let head_ct: i64 = git(&["log", "-1", "--format=%ct"], "").parse().unwrap();
+        assert_ne!(skills_ct, head_ct);
+        assert_eq!(checkout_epoch(&repo), Some(skills_ct), "an unrelated later commit does not count");
+        fs::write(repo.join("hooks").join("h.py"), "h").unwrap();
+        git(&["add", "."], "");
+        git(&["commit", "-q", "-m", "hooks"], "2022-01-01T00:00:00+00:00");
+        let hooks_ct: i64 = git(&["log", "-1", "--format=%ct"], "").parse().unwrap();
+        assert_eq!(checkout_epoch(&repo), Some(hooks_ct), "hooks/ moves the epoch too");
+        // Not a git tree → None, not a panic and not 0.
+        let plain = tmp("epoch-plain");
+        fs::create_dir_all(&plain).unwrap();
+        assert_eq!(checkout_epoch(&plain), None);
+        let _ = fs::remove_dir_all(&repo);
+        let _ = fs::remove_dir_all(&plain);
     }
 }

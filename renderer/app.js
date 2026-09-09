@@ -1009,7 +1009,8 @@ async function maybeShowSkillsBanner() {
     })
     return
   }
-  syncSkillsOnLaunch(el)
+  await syncSkillsOnLaunch(el)
+  maybeOfferCheckoutUpdate(el)
 }
 
 // Skills are installed → keep them at this build's versions, silently, the way an app
@@ -1045,6 +1046,66 @@ async function syncSkillsOnLaunch(el) {
     el.hidden = true; el.innerHTML = ''
   })
 }
+
+// After `git pull` in a clone, the repo's skills/ and hooks/ move and ~/.claude/skills does
+// not — and nothing said so; the README could only ask people to remember `install.sh`.
+// The manifest install.sh writes records the checkout, so the app can ask git whether that
+// checkout is now ahead of what is installed and offer the one command that closes the
+// gap. Checked at launch and whenever the window regains focus — a pull happens in a
+// terminal, and coming back to the app is the moment to say it — never on the 5 s poll: a
+// `git log` every five seconds for an event that happens once a week is the wrong trade.
+// Dismiss is per checkout date, so the notice comes back for the NEXT pull, not this one.
+let checkoutCheckedAt = 0
+async function maybeOfferCheckoutUpdate(el) {
+  if (!el || !window.api || !window.api.checkoutUpdate) return
+  if (window.onboardingPending) return
+  if (!el.hidden) return                       // another notice has the slot; next focus retries
+  const now = Date.now()
+  if (now - checkoutCheckedAt < 10000) return  // focus can flap; one git call per 10 s is plenty
+  checkoutCheckedAt = now
+  const upd = await window.api.checkoutUpdate()
+  if (!upd || !upd.repo) return
+  if (!el.hidden) return                       // something rendered while we awaited
+  const stamp = String(upd.checkout_epoch || '')
+  if (localStorage.getItem('csm.checkoutUpdateDismissed') === stamp) return
+  const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  el.innerHTML =
+    `<span class="sb-text">Your checkout at <code>${esc(upd.repo)}</code> has newer skills or hooks than ` +
+    '<code>~/.claude/skills</code> — a <code>git pull</code> updates the repo, not the copies Claude Code loads.</span>' +
+    '<button type="button" class="sb-install">Update</button>' +
+    '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
+  el.hidden = false
+  const update = el.querySelector('.sb-install')
+  update.addEventListener('click', async () => {
+    update.disabled = true; update.textContent = 'Updating…'
+    const res = await window.api.updateFromCheckout()
+    if (res && res.ok) {
+      // install.sh --all: this app's skills to the checkout's versions, a changed copy
+      // archived first, hooks copied. Same rules as the launch sync, just from the clone.
+      // The script lists what it archived as indented "/name" lines under one header.
+      // Name them: "a copy was kept" read as a to-do; it is a receipt, and says so.
+      const archived = (res.report || '').split('\n')
+        .filter(l => /^\s+\/[a-z0-9-]+\s*$/.test(l)).map(l => l.trim())
+      el.innerHTML =
+        `<span class="sb-text">Skills and hooks updated from <code>${esc(upd.repo)}</code>.` +
+        (archived.length
+          ? ` Your edited cop${archived.length === 1 ? 'y' : 'ies'} of <code>${archived.map(esc).join('</code>, <code>')}</code> ` +
+            `${archived.length === 1 ? 'was' : 'were'} kept in <code>~/.claude/skills/.archive/</code> — nothing to do.`
+          : '') +
+        ' Sessions you open from now on use the new versions; ones already running keep the old.</span>' +
+        '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
+      el.querySelector('.sb-dismiss').addEventListener('click', () => { el.hidden = true; el.innerHTML = '' })
+    } else {
+      update.disabled = false; update.textContent = 'Update'
+      if (window.confirmAction) window.confirmAction({ title: 'Update failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+    }
+  })
+  el.querySelector('.sb-dismiss').addEventListener('click', () => {
+    localStorage.setItem('csm.checkoutUpdateDismissed', stamp)
+    el.hidden = true; el.innerHTML = ''
+  })
+}
+window.addEventListener('focus', () => maybeOfferCheckoutUpdate(document.getElementById('skills-banner')))
 
 // Render the global usage status bar from ~/.claude/statusline-cache.json.
 // Updates the model name + progress bars (5h, 7d, ctx). Hides the bar if cache is absent.

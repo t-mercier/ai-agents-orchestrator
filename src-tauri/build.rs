@@ -3,14 +3,14 @@ use std::process::Command;
 fn main() {
   tauri_build::build();
 
-  // The date of the bundled skills, for skills::skills_status()'s "would this overwrite
-  // go backward?" check. Reads the last commit that actually touched skills/ (not HEAD)
+  // The date of the bundled skills and hooks, for skills::skills_status()'s "would this
+  // overwrite go backward?" check. Reads the last commit that touched skills/ or hooks/ (not HEAD)
   // so an unrelated later commit — a renderer change, a doc fix — doesn't make the app
   // think its bundle is newer than it really is. A missing `.git` (a tarball build) or a
   // failed lookup falls back to "0", which skills::bundle_epoch() reads as "unknown" and
   // the UI treats as neutral rather than as a false claim in either direction.
   let epoch = Command::new("git")
-    .args(["log", "-1", "--format=%ct", "--", "skills"])
+    .args(["log", "-1", "--format=%ct", "--", "skills", "hooks"])
     .current_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/.."))
     .output()
     .ok()
@@ -24,4 +24,5 @@ fn main() {
   // Re-run when skills/ changes so a local `tauri dev` picks up the new date, not just
   // whatever was true the first time cargo built this crate.
   println!("cargo:rerun-if-changed=../skills");
+  println!("cargo:rerun-if-changed=../hooks");
 }

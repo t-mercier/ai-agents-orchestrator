@@ -315,7 +315,7 @@ a standing preference still relies on the model's judgment, or on the distil ste
 `/save-session` and `/close-session`.
 
 > [!IMPORTANT]
-> **Working from a clone? `git pull` does not update your skills.** It updates the repo's `skills/`; the copies Claude Code actually loads live in `~/.claude/skills/`. And a plain install **keeps an existing skill untouched** — new skills arrive, but *changed* ones are skipped, so a shipped fix silently never reaches you. After any pull that touches skills:
+> **Working from a clone? `git pull` does not update your skills.** It updates the repo's `skills/`; the copies Claude Code actually loads live in `~/.claude/skills/`. And a plain install **keeps an existing skill untouched** — new skills arrive, but *changed* ones are skipped, so a shipped fix silently never reaches you. The app notices for you: `install.sh` records which checkout it ran from, and when that checkout's `skills/` or `hooks/` are newer than what is installed, a notice appears at launch and whenever the window regains focus, with an **Update** button that runs `install.sh --all` for you. By hand, after any pull that touches skills:
 >
 > ```bash
 > git pull && bash scripts/install.sh --all      # or --force, if you don't want the hooks

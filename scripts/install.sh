@@ -95,15 +95,32 @@ done
 
 # Stamp the same marker the app's own installer writes (src-tauri/src/skills.rs), so
 # whichever ran LAST — this script or the app's Settings button — leaves a record the
-# other side can compare against. Only when nothing above is stale: a STALE entry means
-# the tree does NOT fully match this checkout, and claiming this checkout's date here
-# would tell a later, older app build "you'd be going backward" when you wouldn't.
+# other side can compare against. The date is written only when nothing above is stale: a
+# STALE entry means the tree does NOT fully match this checkout, and claiming this
+# checkout's date here would tell a later, older app build "you'd be going backward" when
+# you wouldn't. The checkout PATH is recorded every time, stale or not — it is how the app
+# later notices that a `git pull` moved skills/ or hooks/ past what is installed, and
+# offers to re-run this script. Only this script can know that path; the app cannot.
+epoch=""
 if [ ${#STALE[@]} -eq 0 ]; then
-  epoch="$(git -C "$HERE" log -1 --format=%ct -- skills 2>/dev/null || true)"
-  if [ -n "$epoch" ]; then
-    printf '{"bundle_epoch": %s}' "$epoch" > "$SKILLS_DST/.ao-install-manifest.json"
-  fi
+  epoch="$(git -C "$HERE" log -1 --format=%ct -- skills hooks 2>/dev/null || true)"
 fi
+AO_MANIFEST="$SKILLS_DST/.ao-install-manifest.json" AO_REPO="$HERE" AO_EPOCH="$epoch" python3 - <<'PY' 2>/dev/null || true
+import json, os
+path = os.environ["AO_MANIFEST"]
+try:
+    with open(path) as f:
+        m = json.load(f)
+    if not isinstance(m, dict):
+        m = {}
+except Exception:
+    m = {}
+m["repo"] = os.environ["AO_REPO"]
+if os.environ["AO_EPOCH"]:
+    m["bundle_epoch"] = int(os.environ["AO_EPOCH"])
+with open(path, "w") as f:
+    json.dump(m, f)
+PY
 
 # 3. Seed the config if absent (the app's Settings edits the same file)
 mkdir -p "$CONFIG_DIR"
