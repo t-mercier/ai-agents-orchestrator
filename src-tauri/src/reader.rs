@@ -406,14 +406,6 @@ fn managed_session_ids() -> HashSet<String> {
 /// under CI's `-D warnings`) rightly objects to spelling it out.
 type UnmanagedRow = (u64, String, Option<String>, Option<String>, bool);
 
-/// Pure core of `discover_sessions`: drop managed and skip=true rows, sort newest-first
-/// by mtime, cap to the 30 newest.
-fn select_unmanaged(
-    rows: Vec<UnmanagedRow>,
-    managed: &std::collections::HashSet<String>,
-) -> Vec<Value> {
-    sorted_unmanaged(rows, managed).into_iter().take(30).collect()
-}
 
 /// Every surviving row, newest first — the shared core of the capped and paginated views.
 fn sorted_unmanaged(
@@ -462,12 +454,6 @@ fn select_unmanaged_page(
 /// The most-recent *unmanaged* Claude Code transcripts (`~/.claude/projects/**/<id>.jsonl`
 /// with no managing notes.md) — fuel for the "Import a session" picker. Capped to the
 /// 30 newest by mtime (the picker is for recent work; older ones aren't the use case).
-#[tauri::command(async)]
-pub fn discover_sessions() -> Vec<Value> {
-    let (rows, managed) = scan_unmanaged_rows();
-    select_unmanaged(rows, &managed)
-}
-
 /// One page of ALL unmanaged sessions (newest first) + the full count — what the import
 /// picker browses when 30 isn't enough. `limit` is clamped so a bad caller can't ask the
 /// renderer to paint tens of thousands of rows.
@@ -1678,36 +1664,6 @@ mod tests {
         // Last page is short, and an offset past the end yields an empty page, not an error.
         assert_eq!(super::select_unmanaged_page(rows.clone(), &managed, 20, 40)["sessions"].as_array().unwrap().len(), 10);
         assert_eq!(super::select_unmanaged_page(rows, &managed, 20, 999)["sessions"].as_array().unwrap().len(), 0);
-    }
-
-    #[test]
-    fn select_unmanaged_excludes_managed_skips_and_caps_at_30() {
-        use std::collections::HashSet;
-        let mut managed = HashSet::new();
-        managed.insert("managed-1".to_string());
-
-        // 32 candidate rows with ascending mtime; two are special-cased.
-        let mut rows: Vec<UnmanagedRow> = Vec::new();
-        for i in 0..32u64 {
-            rows.push((i, format!("sid-{i}"), Some(format!("title {i}")), Some("/tmp/x".into()), false));
-        }
-        rows.push((999, "managed-1".to_string(), Some("m".into()), Some("/tmp".into()), false)); // managed → dropped
-        rows.push((998, "skipme".to_string(), Some("s".into()), Some("/tmp".into()), true));      // skip=true → dropped
-
-        let out = super::select_unmanaged(rows, &managed);
-
-        // Managed + skipped are gone; result capped to 30.
-        assert_eq!(out.len(), 30);
-        let ids: Vec<&str> = out.iter().map(|v| v["sessionId"].as_str().unwrap()).collect();
-        assert!(!ids.contains(&"managed-1"));
-        assert!(!ids.contains(&"skipme"));
-        // Newest first: the highest surviving mtime (sid-31) leads.
-        assert_eq!(out[0]["sessionId"], "sid-31");
-        assert_eq!(out[0]["title"], "title 31");
-        assert_eq!(out[0]["mtime"], 31);
-        // Cap drops the 2 oldest survivors (sid-0, sid-1).
-        assert!(!ids.contains(&"sid-0"));
-        assert!(!ids.contains(&"sid-1"));
     }
 
     #[test]

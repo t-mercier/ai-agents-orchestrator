@@ -1609,7 +1609,6 @@ pub fn run() {
             reader::get_sessions,
             reader::get_historical_sessions,
             reader::get_historical_sessions_all,
-            reader::discover_sessions,
             reader::discover_sessions_page,
             reader::preview_session,
             open_external,

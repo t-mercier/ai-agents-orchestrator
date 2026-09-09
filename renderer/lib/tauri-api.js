@@ -20,8 +20,6 @@
     // All three lifecycle buckets ({stale, closed, archived}) from ONE backend scan —
     // for callers that need every bucket at once (badge seed, board index).
     getHistoricalAll: () => invoke('get_historical_sessions_all'),
-    // Untracked transcripts (no notes.md) — what first-run setup offers to import.
-    discoverSessions: () => invoke('discover_sessions'),
     // One page of ALL untracked sessions + the full count → { sessions, total }.
     // Errors are returned, not swallowed: a missing command (an app built before this
     // existed) would otherwise make "Load more" do nothing at all, silently.
