@@ -10,6 +10,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.2-alpha] - 2026-09-09
+
+### Fixed
+
+- **Board: the PR and ticket pickers on a card did nothing for a session the List was
+  not showing.** The card came from the board's own index, which spans every state, but
+  the click resolved the session against the List's current tab only — so a closed or
+  archived session (typically a `notes.md` that was never attached to a live session)
+  had a working icon in the List and a dead one on the board. The picker, its
+  "Add / edit" row and the drawer's detail actions now fall back to the board index
+  when the List tab does not know the key.
+
 ## [0.16.1-alpha] - 2026-09-09
 
 ### Changed

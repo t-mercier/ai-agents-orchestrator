@@ -45,6 +45,13 @@ function sessionKey(s) {
   return s.notesPath || s.sessionId || s.name || ''
 }
 
+// The List holds one tab's sessions; the Board holds every state at once. A button on a
+// board card (or in the drawer it opens) carries a key the current List tab may not know
+// — resolve against the board's index too, or the click silently does nothing.
+function sessionByKey(key) {
+  return (window._lastSessions || []).find(x => sessionKey(x) === key) || (window._boardIndex || {})[key] || null
+}
+
 
 // Manual order + groups + drag apply only on the Running tab AND when NOT searching.
 // Search is a find mode, not an organize mode: applying the model during a search would
@@ -853,7 +860,7 @@ function openInfoPopover(anchor) {
   // The ⓘ button lives in the header shown OVER the embedded terminal, where the
   // selection may have fallen back to the terminal session (selectedKey cleared).
   // Resolve by selectedKey first, then that fallback — else the button does nothing.
-  let sel = (window._lastSessions || []).find(x => sessionKey(x) === window._lastSelectedKey)
+  let sel = sessionByKey(window._lastSelectedKey)
   if (!sel && window._terminalSession) sel = window._terminalSession
   if (!sel) return
   const rows = buildMetaRows(sel, activeTab !== 'running')
@@ -965,7 +972,7 @@ let editRefsNotes = ''
 // Resolve the session being edited from its notes.md — the same path the button carries.
 function sessionForNotes(notesPath) {
   const pool = window._lastSessions || []
-  return pool.find(x => (x.notesPath || '') === notesPath) || null
+  return pool.find(x => (x.notesPath || '') === notesPath) || sessionByKey(notesPath)
 }
 
 function openEditRefs(notesPath) {
@@ -1061,7 +1068,7 @@ function openBoardMenu(anchor, key) {
     const next = item.dataset.remove ? CSMBoard.unplaceSession(s, key) : CSMBoard.placeSession(s, key, item.dataset.col)
     CSMBoard.save(next)
     closeBoardMenu()
-    const sel = (window._lastSessions || []).find(x => sessionKey(x) === window._lastSelectedKey)
+    const sel = sessionByKey(window._lastSelectedKey)
     if (sel && window.renderDetailPanel) renderDetailPanel(sel, activeTab)
     if (window.viewMode === 'board' && window.renderBoard) window.renderBoard()
   })
@@ -1403,7 +1410,7 @@ function installDelegatedHandlers() {
     if (linkMenuBtn) {
       e.stopPropagation()
       if (document.getElementById('link-menu')) { closeLinkMenu(); return }   // re-click toggles closed
-      const s = (window._lastSessions || []).find(x => sessionKey(x) === linkMenuBtn.dataset.linkmenuKey)
+      const s = sessionByKey(linkMenuBtn.dataset.linkmenuKey)
       const menu = linkMenuFor(s, linkMenuBtn.dataset.linkmenu)
       if (menu && menu.items.length) openLinkMenu(linkMenuBtn, menu)
       return
@@ -1424,7 +1431,7 @@ function installDelegatedHandlers() {
       // the +New modal's (they share the csm.openIn pref).
       document.querySelectorAll('.open-dest').forEach(b =>
         b.classList.toggle('active', b.dataset.openDest === destSeg.dataset.openDest))
-      const sel = (window._lastSessions || []).find(x => sessionKey(x) === window._lastSelectedKey)
+      const sel = sessionByKey(window._lastSelectedKey)
       if (sel && window.renderDetailPanel) renderDetailPanel(sel, activeTab)   // refresh active segment + routing
       return
     }
