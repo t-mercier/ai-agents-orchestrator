@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0-alpha] - 2026-09-09
+
 ### Changed
 - **The app's 14 skills are the app's — not customisable, by decision.** They write the
   `notes.md` the dashboard reads; a customised one breaks the app silently, and every release
