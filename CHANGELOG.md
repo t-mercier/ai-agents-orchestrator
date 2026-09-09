@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.1-alpha] - 2026-09-09
+
 ### Changed
 - **`/sync-refs` is a fixed sequence of five calls.** Transcripts showed one run making a
   single JQL query and the next a lookup per ticket, and `gh` loops without `< /dev/null`
