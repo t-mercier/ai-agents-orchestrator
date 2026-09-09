@@ -46,3 +46,6 @@ coverage/
 # so the real renderer stack can be driven in a browser. Generated, and NEVER committed —
 # `frontendDist` is ../renderer, so anything left here ships inside the .dmg.
 renderer/__smoke.html
+
+# Boundary-audit scan output (tauri-boundary-audit skill). Regenerated every run; never committed.
+.audit/
