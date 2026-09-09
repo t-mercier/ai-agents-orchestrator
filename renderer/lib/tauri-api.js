@@ -15,6 +15,8 @@
     pickDirectories: () => invoke('pick_directories').catch(() => []),
     exportSettings: (json) => invoke('export_settings', { json }).then((saved) => ({ ok: true, saved })).catch((e) => ({ ok: false, error: String(e) })),
     importSettings: () => invoke('import_settings').then((content) => ({ ok: true, content })).catch((e) => ({ ok: false, error: String(e) })),
+    // The poll's three reads propagate: app.js fetchAndRender wraps them in one try/catch
+    // and keeps the last good list on screen rather than blanking it.
     getSessions: () => invoke('get_sessions'),
     getHistoricalSessions: (status) => invoke('get_historical_sessions', { status }),
     // All three lifecycle buckets ({stale, closed, archived}) from ONE backend scan —
@@ -33,7 +35,11 @@
       invoke('open_external', { url })
         .then(() => ({ ok: true }))
         .catch((e) => ({ ok: false, error: String(e) })),
-    openPath: (p) => invoke('open_path', { path: p }),
+    // Same reason as openExternal: callers fire-and-forget on a click, so a rejection was
+    // an unhandled promise and the click on a folder looked like it did nothing.
+    openPath: (p) => invoke('open_path', { path: p }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    // Propagates: ui.js wraps it in warnAlreadyRunning / its own error toast, which needs the
+    // rejection to reach it.
     openInTerminal: (cwd, sessionId) => invoke('open_in_terminal', { cwd: cwd || '', sessionId }),
     // Reveal an already-open session window: canReveal gates whether we offer the button.
     canRevealTerminal: (pid) => invoke('can_reveal_terminal', { pid: pid || 0 }).catch(() => false),
@@ -43,6 +49,8 @@
     // ── Embedded terminal (src-tauri/src/pty.rs) ──
     // command (optional): a full shell command from start_session(embedded=true), run
     // verbatim to CREATE a new session in this pty; sessionId is then its notesPath.
+    // pty commands propagate: terminal.js owns the pane and reports a failed spawn/input in
+    // the terminal itself; a swallowed rejection here would leave a silent blank pane.
     ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command) =>
       invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '' }),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
@@ -121,11 +129,17 @@
     // Finished OR skipped — either way it does not open by itself again.
     finishOnboarding: () => invoke('finish_onboarding').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     // Which configured spaces point at a folder that is actually there.
+    // All-false on error: step 1 then blocks with "space not found" issues. Wrong when the
+    // spaces do exist, but the only alternative is letting the import write under paths we
+    // could not verify — blocking is the recoverable mistake.
     pathsExist: (paths) => invoke('paths_exist', { paths: paths || [] }).catch(() => (paths || []).map(() => false)),
 
     // ── Has the session's notes.md been freshly /close-session'd since `since` (ms)? ──
     // Polled by the embedded "Close session" button after it injects /close-session, to
     // know when the AI wrap-up has been written (then it kills the pty).
+    // false on error = "not yet": the caller (terminal.js endSession) polls this under a
+    // TIMEOUT and falls back to a direct close marker, so an erroring command degrades to
+    // the timeout path rather than to a lost session.
     notesClosedSince: (notesPath, since) =>
       invoke('notes_closed_since', { notesPath: notesPath || '', sinceMs: since || 0 }).catch(() => false),
     // Stamp a close marker directly into notes.md (guaranteed-close fallback when
@@ -164,7 +178,11 @@
     // ── Shipped Claude Code hooks (src-tauri/src/hooks.rs) ──
     // Copying a hook script is inert; WIRING it edits ~/.claude/settings.json, which is
     // never done without the user seeing the exact result first — hence preview + wire.
+    // [] on error: step 4 then lists no hook and offers no write — the safe direction,
+    // since the alternative is offering to edit settings.json on data we could not read.
     hooksStatus: () => invoke('hooks_status').catch(() => []),
+    // '' on error = "leave the key alone". merge_settings treats blank as no-op, never as
+    // clear, so a failed read can at worst leave advisorModel untouched.
     advisorModel: () => invoke('advisor_model').catch(() => ''),
     hooksWirePreview: (files, advisor) =>
       invoke('hooks_wire_preview', { files, advisor: advisor || null })
@@ -177,9 +195,10 @@
 
     // ── Session skills installer (src-tauri/src/skills.rs) ──
     // status: which bundled skills are already in ~/.claude/skills (drives the banner).
-    skillsStatus: () => invoke('skills_status').catch(() => ({
-      installed: true, present: [], missing: [], differs: [], bundle_epoch: 0, installed_epoch: null,
-    })),
+    // On error → null, and the banner's `if (!status) return` stands down. It used to fake
+    // `installed: true`, which read a FAILED status call as "skills present": the install
+    // offer then never appeared, and nothing said why. Unknown must not masquerade as fine.
+    skillsStatus: () => invoke('skills_status').catch(() => null),
     // Keep the app-owned skills at this build's versions. manual=false (launch):
     // direction-guarded — stands down if the tree already matches a bundle at least as
     // recent, so an older binary never reverts a fresher install.sh run. manual=true
@@ -194,6 +213,8 @@
     // The scan is read-only; the repair applies only the finding ids handed to it. Kept
     // as two calls on purpose — nothing the scan reports is acted on without a round
     // trip through the user.
+    // Propagates: doctor.js catches it and shows "Scan failed: …" — a fake empty scan would
+    // read as "nothing wrong", the opposite of what happened.
     doctorScan: () => invoke('doctor_scan'),
     doctorRepair: (ids) =>
       invoke('doctor_repair', { ids })
@@ -208,9 +229,13 @@
         .catch((e) => ({ ok: false, error: String(e) })),
 
     // ── Detach into its own window + pin (src-tauri/src/lib.rs) ──
+    // Propagates: a failed detach must surface, since app.js closes the drawer right after —
+    // swallowing it would make the session vanish from view with nothing popped out.
     detachSession: (key) => invoke('detach_session', { key }),
+    // Cosmetic: false on error just leaves the pin button unlit.
     setAlwaysOnTop: (flag) => invoke('set_always_on_top', { flag }).catch(() => false),
     // Match the native window background to the theme (avoids a white flash on resize).
+    // Cosmetic: a missed background sync costs one white flash on resize, nothing else.
     setWindowBg: (dark) => invoke('set_window_bg', { dark: !!dark }).catch(() => {}),
 
     // ── Usage status bar (Claude Code statusline cache) ──

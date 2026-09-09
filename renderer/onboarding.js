@@ -482,11 +482,13 @@
   // when something is genuinely missing.
   async function renderSkillsAndHooks() {
     const st = await window.api.skillsStatus()
-    const missing = (st.missing || []).length
-    $('onb-skills-state').textContent = missing
+    const missing = st ? (st.missing || []).length : 0
+    $('onb-skills-state').textContent = !st
+      ? 'Could not read the skills folder — open Settings → Session skills to check.'
+      : missing
       ? `${missing} of this app's skills are missing from ~/.claude/skills/.`
       : `${(st.present || []).length} session skills installed in ~/.claude/skills/.`
-    $('onb-skills-install').hidden = missing === 0
+    $('onb-skills-install').hidden = !st || missing === 0
 
     fillModelSelect($('onb-model'), (window.CSM_CONFIG || {}).claudeModel, 'Follow my Claude Code setting')
     fillModelSelect($('onb-advisor'), await window.api.advisorModel(), 'Leave it as it is')
