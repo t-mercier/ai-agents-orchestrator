@@ -11,6 +11,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Sync all** — one titlebar button runs the per-card Sync for every open session that has
+  a ticket or a pull request. Ten open sessions used to mean ten clicks and ten waits. The
+  order is what makes it one wait: every known PR state first, in one `gh` batch (the list is
+  fresher within seconds), then `/sync-refs` one session at a time — sequential on purpose,
+  one headless `claude` on the machine and on the rate limit — then a second `gh` batch for
+  the PRs the agents discovered. A notice shows which session is under way and ends on a
+  receipt that names any failure. A missing or logged-out `gh` stops the run before any agent
+  starts: it is one thing to fix, not N failures to read. Still silent on the network until
+  you press it. The decisions are a pure model (`lib/sync-all-model.js`), tested.
 - **After `git pull`, the app offers to update its skills and hooks.** A pull moves the repo's
   `skills/` and `hooks/`; the copies Claude Code loads in `~/.claude/skills/` stay where they
   were, and until now the only warning was a paragraph in the README. `install.sh` records the

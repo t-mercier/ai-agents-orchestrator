@@ -710,6 +710,87 @@ function syncPrField() {
   if (cat && field) field.hidden = cat.value !== 'REVIEW'
 }
 
+// Sync all — the per-card Sync for every open session that has a ticket or a PR. The
+// decisions live in lib/sync-all-model.js; this is the I/O in the order that model fixes:
+// one gh batch over every known PR (fresh states within seconds), then `/sync-refs` one
+// session at a time (a headless claude each — sequential, so one runs at a time on the
+// machine and on the rate limit), then one more gh batch for what the agents discovered.
+// Silent on the network until you press it, like the per-card button. No cancel: a
+// headless agent already started cannot be recalled, so a button that promised to would lie.
+let syncAllRunning = false
+async function runSyncAll() {
+  const M = window.CSMSyncAll
+  const btn = document.getElementById('sync-all-btn')
+  const el = document.getElementById('sync-banner')
+  if (!M || !btn || !el || !window.api || syncAllRunning) return
+  if (!window.api.syncRefs || !window.api.syncPrStatus) return
+  syncAllRunning = true
+  btn.disabled = true; btn.classList.add('busy')
+  const show = (state) => {
+    el.innerHTML = `<span class="sb-text">${M.line(state).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</span>` +
+      (state.phase === 'done' || state.phase === 'fatal'
+        ? '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>' : '')
+    el.hidden = false
+    const x = el.querySelector('.sb-dismiss')
+    if (x) x.addEventListener('click', () => { el.hidden = true; el.innerHTML = '' })
+  }
+  const finish = () => {
+    syncAllRunning = false
+    btn.disabled = false; btn.classList.remove('busy')
+    if (window.refreshSessions) window.refreshSessions()
+  }
+  try {
+    // Running = active ∪ stale, fetched here rather than read from the current tab's
+    // list — Sync all means the open sessions whichever tab is showing.
+    const [active, stale] = await Promise.all([
+      window.api.getSessions(),
+      window.api.getHistoricalSessions('stale'),
+    ])
+    const targets = M.plan([...(active || []), ...(stale || [])])
+    let state = M.start(targets)
+    if (!targets.length) {
+      el.innerHTML = '<span class="sb-text">Nothing to sync — no open session has a ticket or a pull request yet.</span>' +
+        '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
+      el.hidden = false
+      el.querySelector('.sb-dismiss').addEventListener('click', () => { el.hidden = true; el.innerHTML = '' })
+      finish(); return
+    }
+    show(state)
+    const known = M.knownPrs(targets)
+    if (known.length) {
+      const res = await window.api.syncPrStatus(known)
+      // gh missing or logged out fails the WHOLE call, by design: one thing to fix. Say it
+      // once and stop — running N agents to then fail N times on gh helps nobody.
+      if (!res || !res.ok) { state = M.reduce(state, { type: 'fatal', error: (res && res.error) || 'unknown error' }); show(state); finish(); return }
+      window._prStatus = res.status
+      if (window.refreshSessions) window.refreshSessions()
+    }
+    state = M.reduce(state, { type: 'states-done' })
+    for (const t of targets) {
+      state = M.reduce(state, { type: 'agent-start', name: t.name }); show(state)
+      const res = await window.api.syncRefs(t.notesPath, t.cwd)
+      state = (res && res.ok)
+        ? M.reduce(state, { type: 'agent-done', name: t.name, prs: res.prs || [] })
+        : M.reduce(state, { type: 'agent-failed', name: t.name, error: (res && res.error) || 'unknown error' })
+      show(state)
+    }
+    const fresh = M.newPrs(known, state.discovered)
+    if (fresh.length) {
+      const res = await window.api.syncPrStatus(fresh)
+      if (res && res.ok) window._prStatus = res.status
+    }
+    state = M.reduce(state, { type: 'restates-done' }); show(state)
+  } catch (e) {
+    // getSessions / getHistoricalSessions propagate by design (app.js:338 catches them the
+    // same way): a failed listing is a real error, shown as such, not an empty run.
+    show(M.reduce(M.start([]), { type: 'fatal', error: String(e && e.message || e) }))
+  } finally {
+    finish()
+  }
+}
+window.runSyncAll = runSyncAll
+document.getElementById('sync-all-btn').addEventListener('click', runSyncAll)
+
 document.getElementById('new-session-btn').addEventListener('click', () => {
   for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
     document.getElementById(id).value = ''

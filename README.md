@@ -58,7 +58,7 @@ Full tour: **[the guide](docs/GUIDE.md)**.
 > [!NOTE]
 > ## What's new
 >
-> - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. Nothing runs in the background.
+> - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. **Sync all**, in the titlebar, does it for every open session at once — one `gh` batch, then the agents one at a time. Nothing runs in the background.
 > - 🔀 **Pull requests carry their state** — open, merged, closed or draft, on the card and spelled out with each PR's title in the detail panel.
 > - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
 > - ✅ **Close finishes a stale session properly** — it resumes the session headless, writes the summary, attaches the PRs, and moves it to Closed. No terminal opens.
