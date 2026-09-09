@@ -451,9 +451,6 @@ fn select_unmanaged_page(
     })
 }
 
-/// The most-recent *unmanaged* Claude Code transcripts (`~/.claude/projects/**/<id>.jsonl`
-/// with no managing notes.md) — fuel for the "Import a session" picker. Capped to the
-/// 30 newest by mtime (the picker is for recent work; older ones aren't the use case).
 /// One page of ALL unmanaged sessions (newest first) + the full count — what the import
 /// picker browses when 30 isn't enough. `limit` is clamped so a bad caller can't ask the
 /// renderer to paint tens of thousands of rows.
