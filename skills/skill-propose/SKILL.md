@@ -119,14 +119,20 @@ skills:
 [ -d ~/.claude/skills/.ao-base/<target-slug> ] && echo "app-owned"
 ```
 
-An app-owned skill is a product primitive — the app's sync overwrites it at every
-update, the way any app refreshes File > Save (a copy of local changes goes to
-`.archive/`, but the live skill reverts). So a patch to one is really a statement that
-**the product's default is wrong or incomplete**, and it belongs upstream, not in a
-local fork that resets on every update. Still stage the patch — the local benefit is
-real until the next update — but say both things plainly in your report: that it will
-be overwritten by the next app sync, and that if it survives review it should be
-contributed to the app's own repo (or filed as an issue there) to become permanent.
+An app-owned skill is **not patched — ever.** The dashboard depends on what these
+skills write (`notes.md`, the registry), a patched one breaks it silently, the files are
+read-only, the `ao_skill_guard` hook refuses the edit and `patch_apply.py` refuses the
+target. So the proposal changes shape: it becomes a **new skill of the user's own**.
+
+- Name it `<target>-<short suffix>` (e.g. `save-session-mine`), or the name the user
+  gives. Seed it from the app's copy (`cp -R ~/.claude/skills/<target>
+  ~/.claude/skills/<new-name>`), set `name:` in its frontmatter to the new name, then
+  apply the change **to that copy** — which is theirs, so the ordinary rules below apply.
+- Say plainly in the report that `/<target>` stays exactly the app's version and that the
+  new skill is the one to invoke for the changed behaviour.
+- If the change reads like **the product's default is wrong or incomplete**, say that too:
+  it belongs upstream (the app's repo, or an issue there) — the personal skill covers the
+  user meanwhile.
 
 ### The name is a tell
 

@@ -110,12 +110,27 @@ def parse(text):
     return fm, changes
 
 
+def app_owned(target):
+    """The app keeps a pristine copy of every skill it ships under .ao-base/<name>; that
+    marker is how every side (the app's sync, the ao_skill_guard hook, this tool) agrees
+    on what is the app's."""
+    return os.path.isdir(os.path.join(claude_home(), "skills", ".ao-base", target))
+
+
 def target_path(fm):
     target = fm.get("target")
     if not target:
         raise PatchError("frontmatter has no `target:`")
     if "/" in target or target.startswith("."):
         raise PatchError(f"unsafe target {target!r}")
+    if app_owned(target):
+        # Not a safety check — a decision. These skills write the notes.md the dashboard
+        # reads; a patched one breaks it silently, and the next sync restores it anyway.
+        raise PatchError(
+            f"/{target} is one of AI Agents Orchestrator's own skills and is not patched. "
+            f"Make a skill of your own instead: copy ~/.claude/skills/{target}/ to "
+            f"~/.claude/skills/{target}-mine/, rename `name:` in its frontmatter, and target that."
+        )
     return os.path.join(claude_home(), "skills", target, "SKILL.md")
 
 

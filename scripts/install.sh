@@ -17,8 +17,9 @@ Install the bundled session skills + seed the shared config.
 
   bash scripts/install.sh                 install (keeps skills you already have)
   bash scripts/install.sh --force         replace THIS APP'S skills with this checkout's
-                                          (your own are never in scope; a copy of one of
-                                          the 14 that you had changed is archived first)
+                                          (your own are never in scope; one of the 14 you
+                                          had edited is restored and named — they are the
+                                          app's, not customisable)
   bash scripts/install.sh --with-hooks    print the settings.json lines that ENABLE the two
                                           hooks (never edits the file). The scripts are
                                           copied by every run, flag or not.
@@ -51,11 +52,13 @@ echo
 
 # 1. Shared helper (always refreshed — not user-customised)
 mkdir -p "$SKILLS_DST/lib"
+chmod u+w "$SKILLS_DST/lib/"*.py 2>/dev/null || true
 cp "$SKILLS_SRC/lib/"*.py "$SKILLS_DST/lib/"
+chmod 444 "$SKILLS_DST/lib/"*.py
 echo "installed: lib/ (config helper)"
 
 # 2. Skills (don't clobber a user's customised skill without --force)
-STALE=(); ARCHIVED=()
+STALE=(); RESTORED=()
 for d in "$SKILLS_SRC"/*/; do
   name="$(basename "$d")"
   [ "$name" = "lib" ] && continue
@@ -66,23 +69,22 @@ for d in "$SKILLS_SRC"/*/; do
     # user on an old version, which is how a shipped fix quietly fails to arrive.
     diff -rq "$d" "$dst" >/dev/null 2>&1 || STALE+=("$name")
   else
-    # Back up before overwriting, the way the app's sync does. "Hand-edited" is dst
-    # differing from the pristine .ao-base snapshot; with no snapshot to compare against
-    # (a pre-.ao-base install) fall back to "differs from what we are about to write",
-    # which over-archives at worst. An untouched copy is not archived — that would bury
-    # the real backups under one per run.
+    # These skills are the app's, by decision: an edited copy is RESTORED and named, not
+    # archived and merged — the dashboard depends on what they write, and every release
+    # would overwrite the edit anyway. Different behaviour belongs in a skill of your own
+    # under another name. "Hand-edited" is dst differing from the pristine .ao-base snapshot;
+    # with no snapshot (a pre-.ao-base install) fall back to "differs from what we write".
     if [ -e "$dst" ]; then
       base="$SKILLS_DST/.ao-base/$name"
       ref="$d"; [ -d "$base" ] && ref="$base"
       if ! diff -rq "$ref" "$dst" >/dev/null 2>&1; then
-        stamp="$(date +%s)"
-        mkdir -p "$SKILLS_DST/.archive"
-        cp -R "$dst" "$SKILLS_DST/.archive/$name.pre-sync-$stamp"
-        echo "  backed up your version → ~/.claude/skills/.archive/$name.pre-sync-$stamp"
-        ARCHIVED+=("$name")
+        RESTORED+=("$name")
       fi
     fi
     rm -rf "$dst"; cp -R "$d" "$dst"; echo "installed skill: /$name"
+    # Read-only, like the app leaves them: an editor says so; an agent is refused by the
+    # ao_skill_guard hook. Directories stay writable so the next install can replace them.
+    find "$dst" -type f -exec chmod 444 {} +
     # Mirror the pristine snapshot the app's installer keeps (src-tauri/src/skills.rs):
     # the app's launch sync compares each skill against .ao-base/<name> to tell "edited
     # by hand" (back it up first) from "just stale" (overwrite plainly). A skill this
@@ -164,11 +166,11 @@ done
 # ($HOOKS only decides whether the entries are printed; --with-hooks is kept as an alias
 # for that, since the README and muscle memory both still reach for it.)
 mkdir -p "$HOME/.claude/hooks"
-for h in ao_autosave ao_precompact ao_session_start pr_attach learn_nudge; do
+for h in ao_skill_guard ao_autosave ao_precompact ao_session_start pr_attach learn_nudge; do
   cp "$HERE/hooks/$h.py" "$HOME/.claude/hooks/$h.py"
 done
-echo "installed hooks: ~/.claude/hooks/{ao_autosave,ao_precompact,ao_session_start,pr_attach,learn_nudge}.py"
-echo "  Sessions started from the app run all five already (they ride in its --settings file)."
+echo "installed hooks: ~/.claude/hooks/{ao_skill_guard,ao_autosave,ao_precompact,ao_session_start,pr_attach,learn_nudge}.py"
+echo "  Sessions started from the app run all six already (they ride in its --settings file)."
 echo "  Enabling them in settings.json extends that to sessions you start from a terminal."
 if [ "$HOOKS" -eq 1 ]; then
   mkdir -p "$HOME/.claude/hooks"
@@ -188,6 +190,10 @@ if [ "$HOOKS" -eq 1 ]; then
   echo "  It nudges the model to check /learn or /skill-propose the moment a message reads"
   echo "  like a standing preference or correction (\"always\", \"from now on\", \"ne ... plus\"...)."
   echo
+  echo "installed hook script: ~/.claude/hooks/ao_skill_guard.py"
+  echo "  To enable it, add this PreToolUse group (it refuses an edit to one of this app's skills):"
+  echo '    { "matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_skill_guard.py\" 2>/dev/null; true" } ] }'
+  echo
   echo "installed hook scripts: ~/.claude/hooks/ao_autosave.py, ao_precompact.py, ao_session_start.py"
   echo "  To enable them, add to the Stop, PreCompact and SessionStart hooks respectively:"
   echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_autosave.py\" 2>/dev/null; true" } ] }'
@@ -199,10 +205,11 @@ if [ "$HOOKS" -eq 1 ]; then
 fi
 
 echo
-if [ ${#ARCHIVED[@]} -gt 0 ]; then
-  echo "↳ ${#ARCHIVED[@]} skill(s) you had changed were backed up before being replaced:"
-  printf '    /%s\n' "${ARCHIVED[@]}"
-  echo "  Copies are in ~/.claude/skills/.archive/ — nothing was lost."
+if [ ${#RESTORED[@]} -gt 0 ]; then
+  echo "↳ ${#RESTORED[@]} of this app's skill(s) had been edited and were restored to this checkout's version:"
+  printf '    /%s\n' "${RESTORED[@]}"
+  echo "  These skills are the app's — the dashboard depends on what they write. For different"
+  echo "  behaviour, copy one under another name and change that one; it is never touched."
   echo
 fi
 if [ ${#STALE[@]} -gt 0 ]; then

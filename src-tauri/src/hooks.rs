@@ -37,7 +37,13 @@ static HOOKS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../hooks");
 
 /// The hooks this app ships, in the order the UI lists them.
 /// (`file`, the settings.json event, the matcher it needs, one line of what it does)
-const SHIPPED: [(&str, &str, Option<&str>, &str); 5] = [
+const SHIPPED: [(&str, &str, Option<&str>, &str); 6] = [
+    (
+        "ao_skill_guard.py",
+        "PreToolUse",
+        Some("Edit|Write|MultiEdit|NotebookEdit"),
+        "Refuses an edit to one of this app's own skills and says to make a skill of your own instead — the dashboard depends on what these write.",
+    ),
     (
         "ao_autosave.py",
         "Stop",
@@ -393,7 +399,7 @@ mod tests {
         let post = hooks["PostToolUse"].as_array().unwrap();
         assert_eq!(post.len(), 1);
         assert_eq!(post[0]["matcher"], PR_ATTACH_MCP_ONLY, "MCP-only, never a second Bash group");
-        for file in ["ao_autosave.py", "ao_precompact.py", "ao_session_start.py", "learn_nudge.py"] {
+        for file in ["ao_skill_guard.py", "ao_autosave.py", "ao_precompact.py", "ao_session_start.py", "learn_nudge.py"] {
             assert!(text.contains(file), "{file} must ride in the launch settings");
         }
         assert!(hooks.get("Stop").is_some() && hooks.get("PreCompact").is_some() && hooks.get("SessionStart").is_some());
@@ -403,7 +409,9 @@ mod tests {
         assert!(launch_hooks(&wired).is_none());
         // No settings at all → all five.
         let none = launch_hooks(&json!({})).unwrap();
-        assert_eq!(none.as_object().unwrap().len(), 5, "five distinct events");
+        let events: std::collections::BTreeSet<&str> = SHIPPED.iter().map(|(_, e, _, _)| *e).collect();
+        assert_eq!(none.as_object().unwrap().len(), events.len(), "one group per distinct event");
+        assert_eq!(events.len(), 6, "PreToolUse, Stop, PreCompact, SessionStart, PostToolUse, UserPromptSubmit");
     }
 
     // The shape every install before 0.15 wrote, and hers: pr_attach under a plain Bash
