@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.3-alpha] - 2026-09-10
+
 ### Fixed
 
 - **A card's "where was I" cue pointed at work already finished.** The cue is the first line
