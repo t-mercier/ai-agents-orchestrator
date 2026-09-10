@@ -54,6 +54,8 @@
     ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command) =>
       invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '' }),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
+    listSkills: () => invoke('list_skills'),
+    runSkill: (skill, cwd, resume) => invoke('run_skill', { skill, cwd, resume }),
     ptyResize: (sessionId, cols, rows) => invoke('pty_resize', { sessionId, cols, rows }),
     ptyKill: (sessionId) => invoke('pty_kill', { sessionId }),
     onPtyData: (cb) => window.__TAURI__.event.listen('pty-data', (e) => cb(e.payload.sessionId, e.payload.data)),

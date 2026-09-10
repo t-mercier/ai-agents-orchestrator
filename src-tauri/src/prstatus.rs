@@ -88,7 +88,7 @@ fn run(inner: &str) -> Result<String, String> {
     run_within(inner, CALL_TIMEOUT)
 }
 
-fn run_within(inner: &str, limit: Duration) -> Result<String, String> {
+pub(crate) fn run_within(inner: &str, limit: Duration) -> Result<String, String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let mut child = std::process::Command::new(&shell)
         .args(["-ilc", inner])

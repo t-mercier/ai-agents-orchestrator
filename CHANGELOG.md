@@ -10,6 +10,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Pinned skills — three slots in the titlebar, three on a session.** Any skill under
+  `~/.claude/skills` can be put on a button. Where it runs is decided by the session's
+  state, not by you: an open, idle terminal gets the slash command typed in (you see it
+  land in your own scrollback); with no terminal it runs headless, resuming the session
+  when it has a usable id; a session that is **working or waiting is refused**, with the
+  reason said out loud — a pty write during a turn lands inside that turn. The global
+  slots have no session, so they always run headless from your home folder. Picks are
+  stored in `config.json` under `pinnedSkills`; the picker lists what is installed, the
+  app's own set flagged.
+
 ## [0.16.3-alpha] - 2026-09-10
 
 ### Fixed

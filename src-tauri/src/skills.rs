@@ -298,8 +298,9 @@ pub fn drifted_skills() -> Vec<String> {
     out
 }
 
-#[cfg(test)]
-fn skill_names() -> Vec<String> {
+/// The names this app owns — its bundled set. The picker flags them, so a user can see
+/// which of their skills are the app's (locked) and which are their own.
+pub fn skill_names() -> Vec<String> {
     let mut names: Vec<String> = SKILLS
         .dirs()
         .filter_map(|d| d.path().file_name().map(|n| n.to_string_lossy().into_owned()))

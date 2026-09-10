@@ -1210,7 +1210,10 @@ function renderDetailPanel(s, tab = 'running') {
   // those rows sit at the top of a pane you have usually scrolled past by the time you
   // reach this row, so dropping them from the toolbar simply lost the shortcut.
   const refs = [ticketPill(s), prPill(s), sync, notesPill(s.notesPath), boardPill(s), editBtn].filter(Boolean).join('')
-  const actions = launch + (launch && refs ? '<span class="act-sep"></span>' : '') + refs
+  // The pinned set closes the row: the user's own skills, after the app's fixed verbs.
+  const pins = pinSlotsHtml('session', pinCtxFor(s))
+  const actions = launch + (launch && refs ? '<span class="act-sep"></span>' : '') + refs +
+    (pins ? '<span class="act-sep"></span>' + pins : '')
 
   setHtml(infoEl, `
     ${metaRows ? `<div class="detail-meta">${metaRows}</div>` : ''}
@@ -1219,6 +1222,135 @@ function renderDetailPanel(s, tab = 'running') {
     ${nextStepsSection}
     ${actions ? detailSection('Actions', `<div class="acts">${actions}</div>`) : ''}
   `)
+}
+
+// ── Pinned skills ────────────────────────────────────────────────────────────────
+// Three slots in the titlebar (global, headless from home) and three in a session's
+// Actions row. Where a session one runs is decided by state, not by the user — see
+// lib/skill-launch-model.js for why typing into a busy session is the failure to avoid.
+const PIN_SLOTS = 3
+const ICON_PIN_PLUS = svgIcon('<path d="M12 5v14"/><path d="M5 12h14"/>')
+
+function pinnedSkills(scope) {
+  const p = (window.CSM_CONFIG && window.CSM_CONFIG.pinnedSkills) || {}
+  const list = Array.isArray(p[scope]) ? p[scope] : []
+  return Array.from({ length: PIN_SLOTS }, (_, i) => list[i] || '')
+}
+
+// One slot. An empty one is a `+` that opens the picker; a filled one runs its skill and
+// says, in its tooltip, where it will run before it runs.
+function pinSlotHtml(scope, index, name, ctx) {
+  const L = window.CSMSkillLaunch
+  const tip = L.tooltip(name, ctx)
+  const blocked = !!name && L.decide(name, ctx).mode === 'blocked'
+  const label = name ? escapeHtml(L.clean(name)) : ICON_PIN_PLUS
+  return `<button class="act pin-slot${name ? '' : ' empty'}${blocked ? ' blocked' : ''}"
+    data-pin-run="${scope}" data-pin-index="${index}" data-pin-skill="${escapeHtml(name || '')}"
+    ${blocked ? 'aria-disabled="true"' : ''} data-tip="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${label}</button>`
+}
+
+function pinSlotsHtml(scope, ctx) {
+  return pinnedSkills(scope).map((n, i) => pinSlotHtml(scope, i, n, ctx)).join('')
+}
+
+// The titlebar set: no session, so every run is headless from home.
+function renderGlobalPins() {
+  const host = document.getElementById('pin-global')
+  if (host) host.innerHTML = pinSlotsHtml('global', {})
+}
+
+// The context a session's slots are judged against: an open terminal plus its live status.
+function pinCtxFor(s) {
+  return {
+    hasTerminal: !!(window.hasLiveTerminal && window.hasLiveTerminal(s.sessionId)),
+    status: s.state === 'active' ? (s.status || 'idle') : '',
+    sessionId: s.sessionId || '',
+  }
+}
+
+// Run one slot: type it into the session's terminal, or run it headless and report.
+async function runPinnedSkill(btn) {
+  const L = window.CSMSkillLaunch
+  const scope = btn.dataset.pinRun
+  const name = btn.dataset.pinSkill
+  if (!name) return openSkillPicker(scope, Number(btn.dataset.pinIndex))
+  const s = scope === 'session' ? sessionByKey(window._lastSelectedKey) : null
+  const ctx = scope === 'session' ? (s ? pinCtxFor(s) : {}) : {}
+  const d = L.decide(name, ctx)
+  if (d.mode === 'blocked') { if (window.showBanner) window.showBanner(d.reason); return }
+  if (d.mode === 'terminal') {
+    // The pane may be backgrounded; the pty takes the line either way, so say where it went
+    // rather than yanking the view around behind the user.
+    window.api.ptyInput(s.sessionId, d.input)
+    if (window.showBanner) window.showBanner(`/${L.clean(name)} sent to ${s.name || 'the session'}'s terminal.`)
+    return
+  }
+  if (btn.classList.contains('busy')) return          // a second click must not fire it twice
+  btn.classList.add('busy')
+  const cwd = (s && s.cwd) || ''
+  try {
+    const res = await window.api.runSkill(L.clean(name), cwd, d.resume)
+    if (window.showBanner) window.showBanner(`/${L.clean(name)} — ${(res && res.summary) || 'done'}`)
+  } catch (err) {
+    if (window.showBanner) window.showBanner(`/${L.clean(name)} failed: ${err}`)
+  } finally {
+    btn.classList.remove('busy')
+  }
+}
+
+// ── The picker ──
+let pickScope = 'global', pickIndex = 0, pickAll = null
+
+async function openSkillPicker(scope, index) {
+  pickScope = scope; pickIndex = index
+  const dlg = document.getElementById('skill-pick-modal')
+  if (!dlg) return
+  const hint = document.getElementById('skill-pick-hint')
+  if (hint) {
+    hint.textContent = scope === 'global'
+      ? 'Runs headless from your home folder — for skills that are not about one session.'
+      : 'Runs in the selected session: typed into its terminal when that is open and idle, headless otherwise.'
+  }
+  const list = document.getElementById('skill-pick-list')
+  if (list) list.innerHTML = '<div class="skill-pick-empty">Reading ~/.claude/skills…</div>'
+  const search = document.getElementById('skill-pick-search')
+  if (search) search.value = ''
+  dlg.showModal()
+  try { pickAll = await window.api.listSkills() } catch (_) { pickAll = [] }
+  renderSkillPickList('')
+  if (search) search.focus()
+}
+
+function renderSkillPickList(q) {
+  const list = document.getElementById('skill-pick-list')
+  if (!list) return
+  const needle = (q || '').trim().toLowerCase()
+  const rows = (pickAll || []).filter(x =>
+    !needle || x.name.toLowerCase().includes(needle) || (x.description || '').toLowerCase().includes(needle))
+  if (!rows.length) {
+    list.innerHTML = `<div class="skill-pick-empty">${pickAll && pickAll.length ? 'No skill matches.' : 'No skills found under ~/.claude/skills.'}</div>`
+    return
+  }
+  list.innerHTML = rows.map(x => `
+    <button type="button" class="skill-pick-row" data-pin-choose="${escapeHtml(x.name)}">
+      <span class="skill-pick-name">/${escapeHtml(x.name)}${x.app ? '<span class="skill-pick-app">app</span>' : ''}</span>
+      <span class="skill-pick-desc">${escapeHtml(x.description || '')}</span>
+    </button>`).join('')
+}
+
+async function setPinnedSkill(name) {
+  const cfg = window.CSM_CONFIG || {}
+  const pinned = { global: [], session: [], ...(cfg.pinnedSkills || {}) }
+  const list = Array.from({ length: PIN_SLOTS }, (_, i) => (pinned[pickScope] || [])[i] || '')
+  list[pickIndex] = name || ''
+  pinned[pickScope] = list
+  const next = { ...cfg, pinnedSkills: pinned }
+  const res = await window.api.setConfig(next)
+  if (res && res.ok === false) { if (window.showBanner) window.showBanner(`Could not save: ${res.error}`); return }
+  window.CSM_CONFIG = next
+  renderGlobalPins()
+  const sel = sessionByKey(window._lastSelectedKey)
+  if (sel) renderDetailPanel(sel, activeTab)
 }
 
 // ── Main render ──
@@ -1409,6 +1541,18 @@ function installDelegatedHandlers() {
       const s = sessionByKey(linkMenuBtn.dataset.linkmenuKey)
       const menu = linkMenuFor(s, linkMenuBtn.dataset.linkmenu)
       if (menu && menu.items.length) openLinkMenu(linkMenuBtn, menu)
+      return
+    }
+
+    const pinBtn = e.target.closest('[data-pin-run]')
+    if (pinBtn) { e.stopPropagation(); runPinnedSkill(pinBtn); return }
+
+    const pinChoose = e.target.closest('[data-pin-choose]')
+    if (pinChoose) {
+      e.stopPropagation()
+      const dlg = document.getElementById('skill-pick-modal')
+      setPinnedSkill(pinChoose.dataset.pinChoose)
+      if (dlg && dlg.open) dlg.close()
       return
     }
 
@@ -1691,6 +1835,9 @@ function installDelegatedHandlers() {
   })
 }
 
+window.renderGlobalPins = renderGlobalPins
+window.renderSkillPickList = renderSkillPickList
+window.setPinnedSkill = setPinnedSkill
 window.renderAll = renderAll
 window.renderDetailPanel = renderDetailPanel
 window.installDelegatedHandlers = installDelegatedHandlers

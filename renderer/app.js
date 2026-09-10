@@ -715,6 +715,17 @@ function syncPrField() {
 // one gh batch over every known PR (fresh states within seconds), then `/sync-refs` one
 // session at a time (a headless claude each — sequential, so one runs at a time on the
 // machine and on the rate limit), then one more gh batch for what the agents discovered.
+// One-line notice in the shared banner strip. Used by the pinned-skill buttons, which have
+// no progress of their own to show: a headless run is invisible until it answers.
+window.showBanner = (text) => {
+  const el = document.getElementById('sync-banner')
+  if (!el) return
+  const safe = String(text).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  el.innerHTML = `<span class="sb-text">${safe}</span><button type="button" class="sb-dismiss" aria-label="Dismiss">\u00d7</button>`
+  el.hidden = false
+  el.querySelector('.sb-dismiss').addEventListener('click', () => { el.hidden = true; el.innerHTML = '' })
+}
+
 // Silent on the network until you press it, like the per-card button. No cancel: a
 // headless agent already started cannot be recalled, so a button that promised to would lie.
 let syncAllRunning = false
@@ -790,6 +801,17 @@ async function runSyncAll() {
 }
 window.runSyncAll = runSyncAll
 document.getElementById('sync-all-btn').addEventListener('click', runSyncAll)
+
+// Skill picker: filter as you type, clear a slot, dismiss.
+const skillSearch = document.getElementById('skill-pick-search')
+if (skillSearch) skillSearch.addEventListener('input', e => window.renderSkillPickList && window.renderSkillPickList(e.target.value))
+const skillCancel = document.getElementById('skill-pick-cancel')
+if (skillCancel) skillCancel.addEventListener('click', () => document.getElementById('skill-pick-modal').close())
+const skillClear = document.getElementById('skill-pick-clear')
+if (skillClear) skillClear.addEventListener('click', () => {
+  if (window.setPinnedSkill) window.setPinnedSkill('')
+  document.getElementById('skill-pick-modal').close()
+})
 
 document.getElementById('new-session-btn').addEventListener('click', () => {
   for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
@@ -1328,6 +1350,7 @@ async function boot() {
   if (window.api && window.api.setWindowBg && window.getTheme) window.api.setWindowBg(window.getTheme() === 'dark')
   try {
     window.CSM_CONFIG = await window.api.getConfig()
+  if (window.renderGlobalPins) window.renderGlobalPins()
     if (window.applyCategoryColors) window.applyCategoryColors(window.CSM_CONFIG.colorMap)
   } catch (err) {
     console.error('config load failed, using fallbacks:', err)

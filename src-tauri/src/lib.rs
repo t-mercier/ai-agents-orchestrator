@@ -7,6 +7,7 @@ mod skills;
 mod hooks;
 mod onboarding;
 mod statusline;
+mod pinned;
 mod prstatus;
 mod doctor;
 
@@ -1375,6 +1376,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            pinned::list_skills,
+            pinned::run_skill,
             config::get_config,
             config::set_config,
             reader::get_sessions,
