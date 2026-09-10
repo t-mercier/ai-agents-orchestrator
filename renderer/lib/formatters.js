@@ -114,5 +114,21 @@
     return `${diffD}d`
   }
 
-  return { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge, formatResetIn }
+  // The card's re-entry cue, taken from the notes' "Next steps" section: the next
+  // ACTION, never a finished one. A ticked item advertises work already done, and a
+  // section often opens with a parenthesised preamble that is not a step at all —
+  // both used to win simply by coming first (49 of 129 cards showed one).
+  function firstNextStep(nextSteps) {
+    if (!nextSteps) return ''
+    const lines = String(nextSteps).split('\n').map(l => l.trim()).filter(Boolean)
+    const bullet = l => /^[-*]\s/.test(l)
+    const done = l => /^[-*]\s*\[[xX]\]/.test(l) || /^[-*]\s*~~/.test(l)
+    const line =
+      lines.find(l => bullet(l) && !done(l)) ||               // the next open step
+      lines.find(l => !bullet(l) && !l.startsWith('(')) ||    // a section written as prose
+      ''
+    return line.replace(/^[-*\d.)\]\s]+/, '').replace(/^\[[ xX]\]\s*/, '').trim()
+  }
+
+  return { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge, formatResetIn, firstNextStep }
 })

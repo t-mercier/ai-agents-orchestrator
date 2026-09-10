@@ -27,7 +27,9 @@ let prevActivity = new Map()    // sessionId → epoch ms
 
 // Pure helpers live in renderer/lib/* (loaded as <script> before this file).
 // Destructure so existing call sites stay unchanged.
-const { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge } = window.CSMFormatters
+const { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatDateTime, formatAge, firstNextStep } = window.CSMFormatters
+// board.js reads it off window; a destructured const is not a global.
+window.firstNextStep = firstNextStep
 const { renderMarkdown } = window.CSMMarkdown
 
 function rebuildSortRank(sessions) {
@@ -285,12 +287,6 @@ function deleteBtn(s) {
            title="Delete — move to the Trash" aria-label="Delete this session (move to Trash)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>`
 }
 
-// First "Next steps" line — the re-entry cue ("where was I"). Strips list bullets.
-function firstNextStep(nextSteps) {
-  if (!nextSteps) return ''
-  const line = nextSteps.split('\n').map(l => l.trim()).find(Boolean) || ''
-  return line.replace(/^[-*\d.)\]\s]+/, '').trim()
-}
 
 // Compact icon row (Jira ticket / PR / notes) shown on the list cards. Reuses
 // the detail-panel pills, so a click opens the link/folder via the delegated handlers

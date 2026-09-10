@@ -73,3 +73,43 @@ describe('formatAge', () => {
   it('years', () => expect(F.formatAge(now - 400 * 86400000, now)).toBe('1y'))
   it('empty for falsy', () => expect(F.formatAge(0, now)).toBe(''))
 })
+
+describe('firstNextStep — the card cue is the next ACTION', () => {
+  const { firstNextStep } = require('../renderer/lib/formatters')
+
+  it('takes the first open item', () => {
+    expect(firstNextStep('- [ ] Rebase the branch on main\n- [ ] Re-push')).toBe('Rebase the branch on main')
+  })
+
+  it('skips items already done — they advertise finished work', () => {
+    const s = '- [x] PR #5080 merged (2026-07-10)\n- [x] CI green\n- [ ] Ask Ruben for a second review'
+    expect(firstNextStep(s)).toBe('Ask Ruben for a second review')
+  })
+
+  it('skips a parenthesised preamble, which is not a step', () => {
+    const s = '(Current list. 0.14.0-alpha tagged 2026-09-08.)\n\n- [ ] Verify the release after CI'
+    expect(firstNextStep(s)).toBe('Verify the release after CI')
+  })
+
+  it('treats a struck-through item as done', () => {
+    expect(firstNextStep('- ~~S0 native merged~~ — see below\n- [ ] Land S2')).toBe('Land S2')
+  })
+
+  it('still works on a section written as prose, without bullets', () => {
+    expect(firstNextStep('PR #35753 open; await CI + review.')).toBe('PR #35753 open; await CI + review.')
+  })
+
+  it('keeps plain bullets that carry no checkbox', () => {
+    expect(firstNextStep('- Check PR #4702 CI status')).toBe('Check PR #4702 CI status')
+  })
+
+  it('returns empty when every item is done, rather than showing one', () => {
+    expect(firstNextStep('- [x] All shipped\n- [x] Released')).toBe('')
+  })
+
+  it('is quiet on nothing at all', () => {
+    expect(firstNextStep('')).toBe('')
+    expect(firstNextStep(null)).toBe('')
+    expect(firstNextStep(undefined)).toBe('')
+  })
+})

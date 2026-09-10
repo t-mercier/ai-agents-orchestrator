@@ -10,6 +10,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A card's "where was I" cue pointed at work already finished.** The cue is the first line
+  of the notes' *Next steps* section, and that line was taken as-is — so a ticked item or a
+  parenthesised preamble won simply by coming first. Across 129 real sessions, 49 cards
+  showed one. `firstNextStep` now takes the first OPEN step, skips ticked and struck-through
+  items, ignores a preamble, and drops the checkbox marker it used to print; it moved into
+  `renderer/lib/formatters.js` so it is covered by tests (8 new).
+
 ## [0.16.2-alpha] - 2026-09-09
 
 ### Fixed
