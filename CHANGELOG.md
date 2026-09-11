@@ -10,6 +10,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session whose conversation moved on showed a green idle dot for ever.** When Claude
+  Code continues a conversation into another one, it parks the old process instead of
+  ending it — and stops updating that process's status file. The dashboard went on reading
+  it, so the session's dot froze at whatever it last was, however hard you worked in the
+  session that took over (seen on a real one: 14.7 hours frozen). The app now follows the
+  `continued-in` chain to the conversation that actually lives, and reads its status. Doctor
+  reports the same thing as a repairable finding — the repair repoints `session_id:` **and**
+  re-keys the registry entry, because doing only the first would leave the session
+  unmanaged.
+
 ### Added
 
 - **Pinned skills — three slots in the titlebar, three on a session.** Any skill under

@@ -67,6 +67,10 @@ struct Transcript {
     // reopened (resumed) and worked on after its last /close-session (transcript touched on a
     // later day) → reclassify closed → stale.
     mtime: Option<SystemTime>,
+    // Set when Claude Code moved this conversation into another one (its last line is
+    // `{"type":"continued-in","continuedInSessionId":…}`). This transcript is then finished
+    // and the process behind it is parked — everything live belongs to the session named here.
+    continued_in: Option<String>,
 }
 
 /// Parse ~/.claude/active-sessions.json (the skills' session registry). `{}` when
@@ -207,6 +211,12 @@ fn read_transcript(sid: &str) -> Transcript {
                 t.launch_cwd = Some(c.to_string()); // first = launch dir (resume key)
             }
             t.cwd = Some(c.to_string()); // last = current work dir (git info)
+        }
+        if ev.get("type").and_then(Value::as_str) == Some("continued-in") {
+            t.continued_in = ev
+                .get("continuedInSessionId")
+                .and_then(Value::as_str)
+                .map(str::to_string);
         }
         if ev.get("type").and_then(Value::as_str) == Some("assistant") {
             // Collect all text blocks from this assistant message
@@ -668,6 +678,35 @@ fn link_fields(values: Vec<String>) -> (Value, Value) {
     (first, Value::from(values))
 }
 
+/// The session that actually lives now, following `continued-in` hops.
+///
+/// When a conversation is continued into another one, the old process stays alive but
+/// PARKED: Claude Code stops updating its pidfile, so its `status` freezes at whatever it
+/// last was — a green/idle dot for ever, however hard the user works in the session that
+/// took over (seen on a real session whose pidfile had not moved in 14.7 hours). Bounded to
+/// a few hops, with a visited set: a chain longer than that is a defect, and a cycle would
+/// hang every poll.
+pub(crate) fn live_session_of(sid: &str) -> String {
+    follow_continued(sid, |s| read_transcript(s).continued_in)
+}
+
+/// The walk itself, with the lookup passed in so the part that can loop for ever is
+/// provable without a filesystem.
+fn follow_continued(sid: &str, next_of: impl Fn(&str) -> Option<String>) -> String {
+    let mut cur = sid.to_string();
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..4 {
+        if !seen.insert(cur.clone()) {
+            break;
+        }
+        match next_of(&cur) {
+            Some(next) if next != cur && !next.is_empty() => cur = next,
+            _ => break,
+        }
+    }
+    cur
+}
+
 #[tauri::command(async)]
 pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
     // Reap first: an embedded child that exited since the last poll is still a zombie
@@ -677,6 +716,22 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
     let claude = home().join(".claude");
     let cfg = crate::config::load();
     let active = load_active_sessions();
+
+    // sessionId -> the status its own pidfile reports. Built once, so a session whose
+    // conversation was continued elsewhere can read the status of the one that took over.
+    let live_status: std::collections::HashMap<String, String> =
+        fs::read_dir(claude.join("sessions"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| fs::read_to_string(e.path()).ok())
+            .filter_map(|t| serde_json::from_str::<Value>(&t).ok())
+            .filter_map(|d| {
+                let sid = d.get("sessionId").and_then(Value::as_str)?.to_string();
+                let st = d.get("status").and_then(Value::as_str).unwrap_or("idle").to_string();
+                Some((sid, st))
+            })
+            .collect();
 
     let mut out = Vec::new();
     let entries = match fs::read_dir(claude.join("sessions")) {
@@ -760,8 +815,17 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
         // stale `idle` with `busy`. Leave `waiting` (needs-you) and `shell` untouched —
         // those are meaningful signals, not lag.
         let status_raw = data.get("status").and_then(Value::as_str).unwrap_or("idle");
+        // If the conversation moved on, THIS pidfile is frozen — read the live one instead.
+        let live_sid = live_session_of(&sid);
+        let followed = live_sid != sid;
+        let status_raw = if followed {
+            live_status.get(&live_sid).map(String::as_str).unwrap_or(status_raw)
+        } else {
+            status_raw
+        };
+        let active_mtime = if followed { read_transcript(&live_sid).mtime } else { tr.mtime };
         let recently_active =
-            tr.mtime.and_then(|m| m.elapsed().ok()).is_some_and(|e| e.as_secs() < 10);
+            active_mtime.and_then(|m| m.elapsed().ok()).is_some_and(|e| e.as_secs() < 10);
         let status = if status_raw == "idle" && recently_active { "busy" } else { status_raw };
 
         out.push(json!({
@@ -780,6 +844,9 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
                 .unwrap_or_else(|| launch_cwd.to_string()),
             "pid": pid,
             "status": status,
+            // The session this conversation was continued into, when it was. The notes still
+            // name the old id, so Doctor offers to repoint them.
+            "continuedIn": tr.continued_in.clone().map(Value::String).unwrap_or(Value::Null),
             // "cli" (Claude Code terminal) or "claude-desktop" (the Claude Desktop app) —
             // lets an unmanaged claude-desktop session group as "Claude Desktop" in the
             // renderer instead of falling into the catch-all "OTHER".
@@ -1620,7 +1687,51 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    // A conversation continued elsewhere leaves its process parked and its pidfile frozen:
+    // the dot stayed green for ever on a real session whose status had not moved in 14.7 h.
+    #[test]
+    fn following_continued_in_lands_on_the_conversation_that_lives() {
+        let chain = |s: &str| match s {
+            "a" => Some("b".to_string()),
+            _ => None,
+        };
+        assert_eq!(follow_continued("a", chain), "b");
+        assert_eq!(follow_continued("b", chain), "b", "a live session follows nothing");
+    }
+
+    #[test]
+    fn a_chain_of_several_hops_is_followed_to_its_end() {
+        let chain = |s: &str| match s {
+            "a" => Some("b".to_string()),
+            "b" => Some("c".to_string()),
+            _ => None,
+        };
+        assert_eq!(follow_continued("a", chain), "c");
+    }
+
+    #[test]
+    fn a_cycle_stops_instead_of_hanging_every_poll() {
+        let cycle = |s: &str| Some(if s == "a" { "b" } else { "a" }.to_string());
+        let out = follow_continued("a", cycle);
+        assert!(out == "a" || out == "b", "bounded, whatever it settles on: {out}");
+    }
+
+    #[test]
+    fn a_self_reference_or_an_empty_id_is_not_followed() {
+        assert_eq!(follow_continued("a", |_| Some("a".to_string())), "a");
+        assert_eq!(follow_continued("a", |_| Some(String::new())), "a");
+    }
+
+    #[test]
+    fn a_chain_longer_than_the_bound_stops_rather_than_walking_for_ever() {
+        // every id points at the next number; without the bound this never returns
+        let endless = |s: &str| s.parse::<u32>().ok().map(|n| (n + 1).to_string());
+        assert_eq!(follow_continued("0", endless), "4", "four hops, then it stops");
+    }
+
     use super::{
+        follow_continued,
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, frontmatter_values,
         lead_date, is_resumable_sid, merge_links, notes_records_session, parse_frontmatter,
         preview_ends,

@@ -53,6 +53,10 @@ pub struct SessionFacts {
     pub status: String,
     /// Live pids registered to this notes.md.
     pub live_pids: Vec<i64>,
+    /// Set when the frontmatter's conversation was continued into another one. The old
+    /// process then stays alive but PARKED — Claude Code stops updating its pidfile, so the
+    /// dashboard watches a status that can never change again.
+    pub continued_in: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -74,6 +78,7 @@ pub struct Snapshot {
 pub const KIND_REGISTRY_ORPHAN: &str = "registry_orphan";
 pub const KIND_FRONTMATTER_SID: &str = "frontmatter_sid";
 pub const KIND_FINISHED_ALIVE: &str = "finished_alive";
+pub const KIND_CONTINUED: &str = "continued_elsewhere";
 pub const KIND_PIDFILE_STALE: &str = "pidfile_stale";
 pub const KIND_SKILL_DRIFT: &str = "skill_drift";
 pub const KIND_LIVE_UNREGISTERED: &str = "live_unregistered";
@@ -115,6 +120,27 @@ pub fn findings(snap: &Snapshot) -> Vec<Finding> {
                     ),
                     target: s.notes_path.clone(),
                     repair: Some("Point session_id at the surviving conversation".into()),
+                });
+            }
+        }
+
+        // The conversation moved into another one, and the notes never learned. Claude Code
+        // parks the old process instead of ending it, so the dashboard keeps reading a
+        // pidfile that will never be written again: the session shows its last status for
+        // ever — a green idle dot on work that is very much alive somewhere else. Repointing
+        // the frontmatter is the repair; both processes are left alone.
+        if let (Some(fm), Some(next)) = (&s.fm_sid, &s.continued_in) {
+            if fm != next {
+                out.push(Finding {
+                    id: format!("{KIND_CONTINUED}:{}", s.notes_path),
+                    kind: KIND_CONTINUED.into(),
+                    severity: "broken".into(),
+                    title: "The conversation continued in another session".into(),
+                    detail: format!(
+                        "session_id: {fm} was continued into {next}, so its own process is parked and its status frozen. The notes still name the old one."
+                    ),
+                    target: s.notes_path.clone(),
+                    repair: Some("Point session_id at the conversation that took over".into()),
                 });
             }
         }
@@ -221,6 +247,58 @@ mod tests {
             status: "stale".into(),
             ..Default::default()
         }
+    }
+
+        /// Seen on "Jarvis Project" (2026-09-11): its transcript ended with a `continued-in`
+    /// written the evening before, the old process stayed alive but parked, and its pidfile
+    /// had not been rewritten for 14.7 hours — so the dashboard showed a green idle dot that
+    /// could never change, whatever happened in the session that took over.
+    #[test]
+    fn a_conversation_continued_elsewhere_is_reported_with_its_repair() {
+        let snap = Snapshot {
+            sessions: vec![SessionFacts {
+                fm_sid: Some("c622c001-1111-2222-3333-444444444444".into()),
+                fm_sid_has_transcript: true,
+                continued_in: Some("3ec70d63-1111-2222-3333-444444444444".into()),
+                ..session("/n/notes.md")
+            }],
+            ..Default::default()
+        };
+        let f = findings(&snap);
+        let hit = f.iter().find(|f| f.kind == KIND_CONTINUED).expect("the continuation is reported");
+        assert_eq!(hit.severity, "broken");
+        assert!(hit.detail.contains("3ec70d63"), "it names where the work went: {}", hit.detail);
+        assert!(hit.repair.is_some(), "it is repairable, not just observed");
+    }
+
+    #[test]
+    fn a_session_that_went_nowhere_is_not_reported() {
+        let snap = Snapshot {
+            sessions: vec![SessionFacts {
+                fm_sid: Some("c622c001-1111-2222-3333-444444444444".into()),
+                fm_sid_has_transcript: true,
+                continued_in: None,
+                ..session("/n/notes.md")
+            }],
+            ..Default::default()
+        };
+        assert!(findings(&snap).iter().all(|f| f.kind != KIND_CONTINUED));
+    }
+
+    /// A notes.md already pointing at the live conversation is finished, not broken.
+    #[test]
+    fn a_frontmatter_already_pointing_at_the_continuation_is_quiet() {
+        let same = "3ec70d63-1111-2222-3333-444444444444";
+        let snap = Snapshot {
+            sessions: vec![SessionFacts {
+                fm_sid: Some(same.into()),
+                fm_sid_has_transcript: true,
+                continued_in: Some(same.into()),
+                ..session("/n/notes.md")
+            }],
+            ..Default::default()
+        };
+        assert!(findings(&snap).iter().all(|f| f.kind != KIND_CONTINUED));
     }
 
     #[test]
@@ -496,8 +574,15 @@ pub fn snapshot() -> Snapshot {
             .get("session_id")
             .filter(|s| crate::reader::is_resumable_sid(s))
             .cloned();
+        // Only ask where the conversation went when there is one to ask about; the walk
+        // reads transcripts, so it is not free on a scan over every managed session.
+        let continued_in = fm_sid
+            .as_deref()
+            .map(crate::reader::live_session_of)
+            .filter(|live| Some(live.as_str()) != fm_sid.as_deref());
         sessions.push(SessionFacts {
             fm_sid_has_transcript: fm_sid.as_deref().is_some_and(crate::reader::has_transcript),
+            continued_in,
             fm_sid,
             recoverable_sid: recoverable,
             status: if exists { crate::reader::session_history_info(&content).0 } else { String::new() },
@@ -599,6 +684,23 @@ pub fn doctor_repair(ids: Vec<String>) -> Value {
                 let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
                 let next = rewrite_session_id(&content, &sid).ok_or("no session_id in the frontmatter")?;
                 crate::atomic_write(&abs, &next)
+            }),
+            KIND_CONTINUED => crate::notes_md_under_root(target).and_then(|abs| {
+                let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
+                let fm = crate::reader::frontmatter_values(&content, "session_id", "session_ids")
+                    .into_iter()
+                    .next()
+                    .ok_or("no session_id in the frontmatter")?;
+                let live = crate::reader::live_session_of(&fm);
+                if live == fm {
+                    return Err("that conversation was not continued anywhere".into());
+                }
+                let next = rewrite_session_id(&content, &live).ok_or("no session_id in the frontmatter")?;
+                crate::atomic_write(&abs, &next)?;
+                // The registry is keyed by session id: without this the notes would name a
+                // conversation the app cannot match to any process, and the session would
+                // read as unmanaged.
+                crate::rekey_registry_entry(&fm, &live)
             }),
             KIND_FINISHED_ALIVE => crate::notes_md_under_root(target).and_then(|abs| {
                 let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;

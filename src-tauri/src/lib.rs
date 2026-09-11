@@ -875,6 +875,25 @@ fn remove_from_active_sessions(notes_path: &str, abs: &std::path::Path) -> Resul
     Ok(())
 }
 
+/// Move a registry entry from one session id to another, keeping everything it holds.
+///
+/// The registry is keyed by session id, so repointing only the notes.md frontmatter would
+/// orphan the session: the app matches a live process to its notes THROUGH this map, and a
+/// process whose id it does not know is an unmanaged one. Both writes belong to the same
+/// repair. Silent when there is nothing under `from` — the caller has already decided.
+pub(crate) fn rekey_registry_entry(from: &str, to: &str) -> Result<(), String> {
+    if from == to || to.is_empty() {
+        return Ok(());
+    }
+    let active = config::home().join(".claude").join("active-sessions.json");
+    let Ok(s) = std::fs::read_to_string(&active) else { return Ok(()) };
+    let Ok(serde_json::Value::Object(mut map)) = serde_json::from_str(&s) else { return Ok(()) };
+    let Some(entry) = map.remove(from) else { return Ok(()) };
+    map.insert(to.to_string(), entry);
+    let body = serde_json::to_string_pretty(&serde_json::Value::Object(map)).map_err(|e| e.to_string())?;
+    atomic_write(&active, &body)
+}
+
 /// Drop registry entries pointing at `notes_path`, matching the stored string only.
 ///
 /// `remove_from_active_sessions` canonicalizes first, which cannot work for the one case
@@ -1444,6 +1463,24 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+
+    // Repointing the notes without re-keying the registry would orphan the session: the app
+    // matches a live process to its notes THROUGH that map.
+    #[test]
+    fn rekeying_moves_the_entry_and_keeps_everything_it_held() {
+        let map = serde_json::json!({
+            "old-sid": { "notes_path": "/n/notes.md", "category": "PERSO", "name": "Jarvis", "ticket": "" },
+            "other":   { "notes_path": "/x/notes.md" }
+        });
+        let mut m = map.as_object().unwrap().clone();
+        let entry = m.remove("old-sid").unwrap();
+        m.insert("new-sid".into(), entry);
+        assert_eq!(m["new-sid"]["name"], "Jarvis", "the entry travels whole");
+        assert_eq!(m["new-sid"]["notes_path"], "/n/notes.md");
+        assert!(m.contains_key("other"), "other sessions are untouched");
+        assert!(!m.contains_key("old-sid"));
+    }
+
     use super::{
         atomic_write, branch_target_error, category_root_dir, is_git_repo, validate_launch_dir,
         is_deletable_session_dir, is_pr_url, is_safe_branch,
