@@ -1137,13 +1137,8 @@ async function syncSkillsOnLaunch(el) {
   if (!updated.length && !installed.length) return
   // One line. "Updated to this app version" read as an instruction — people looked for
   // what to run. It is a receipt: the skills that changed in this version, done.
-  const names = [...new Set([...installed, ...updated])].sort()
-  let note = `Skills updated for this version: ${names.join(', ')} — nothing to do.`
-  if (restored.length) {
-    // The app's skills are not the user's to edit. Name what was put back, so the
-    // person who forced the edit learns where the line is instead of wondering.
-    note += ` ${restored.join(', ')} had been edited and ${restored.length === 1 ? 'was' : 'were'} restored — for different behaviour, copy a skill under another name.`
-  }
+  const note = window.CSMSkillsUpdate.launchNoticeText({ installed, updated, restored })
+  if (!note) return
   el.innerHTML =
     `<span class="sb-text">${note}</span>` +
     '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'

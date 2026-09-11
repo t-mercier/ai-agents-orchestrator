@@ -1332,6 +1332,13 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   flex-direction: column;
   overflow: hidden;
   background: #1c1c1e;
+  /* Breathing room round the text: without it the prompt sits ON the window's bottom edge,
+     so the line being typed is the hardest one to read. The padding belongs HERE, on the
+     parent, never on the element FitAddon measures — it sizes from clientHeight, which
+     INCLUDES padding, so padding there makes it ask for a row that does not fit and the
+     last line is clipped (measured: 21 rows proposed for 20 rows of room). */
+  padding: 6px 10px 10px;
+  box-sizing: border-box;
 }
 
 .terminal-session-div {

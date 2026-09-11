@@ -34,5 +34,32 @@
     return bits.join(' ')
   }
 
-  return { syncResultText }
+  // The launch notice. A skill that was edited is ALSO in `updated` (the sync rewrote it),
+  // so naming both lists put the same names twice in one sentence and announced
+  // "nothing to do" immediately before saying something had been undone. The restore is
+  // the news; everything else is a receipt, and the two are separate sentences.
+  function launchNoticeText({ installed = [], updated = [], restored = [] } = {}) {
+    const back = [...new Set(restored)].sort()
+    const backSet = new Set(back)
+    const routine = [...new Set([...installed.filter(s => s !== 'lib'), ...updated])]
+      .filter(n => !backSet.has(n))
+      .sort()
+    const bits = []
+    if (back.length) {
+      const list = back.join(', ')
+      bits.push(
+        back.length === 1
+          ? `${list} had been edited outside the app and was put back to this version.`
+          : `${list} had been edited outside the app and were put back to this version.`)
+      bits.push("These are the app's own skills — for different behaviour, copy one under another name.")
+    }
+    if (routine.length) {
+      bits.push(back.length
+        ? `Also updated: ${routine.join(', ')} — nothing to do.`
+        : `Skills updated for this version: ${routine.join(', ')} — nothing to do.`)
+    }
+    return bits.join(' ')
+  }
+
+  return { syncResultText, launchNoticeText }
 })

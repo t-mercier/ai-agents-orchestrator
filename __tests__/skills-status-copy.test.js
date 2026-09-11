@@ -39,3 +39,45 @@ describe('syncResultText', () => {
     expect(S.syncResultText({})).toBe('Already up to date.')
   })
 })
+
+describe('launchNoticeText — the notice she actually reads at launch', () => {
+  const { launchNoticeText } = require('../renderer/lib/skills-status-copy')
+
+  // The 0.17.0 launch said: "Skills updated for this version: close-session, save-session,
+  // wrap-session — nothing to do. close-session, save-session, wrap-session had been edited
+  // and were restored…" — the same three names twice, and "nothing to do" announced right
+  // before saying something had been undone.
+  it('never names the same skill as both routine and restored', () => {
+    const out = launchNoticeText({
+      updated: ['close-session', 'save-session', 'wrap-session'],
+      restored: ['close-session', 'save-session', 'wrap-session'],
+    })
+    expect(out.match(/save-session/g)).toHaveLength(1)
+    expect(out).not.toMatch(/nothing to do/)
+    expect(out).toMatch(/put back to this version/)
+  })
+
+  it('leads with the restore, then lists the rest as a receipt', () => {
+    const out = launchNoticeText({ updated: ['sync-refs', 'save-session'], restored: ['save-session'] })
+    expect(out.indexOf('save-session')).toBeLessThan(out.indexOf('sync-refs'))
+    expect(out).toMatch(/Also updated: sync-refs — nothing to do\./)
+  })
+
+  it('is a plain receipt when nothing was touched by hand', () => {
+    expect(launchNoticeText({ updated: ['sync-refs'] }))
+      .toBe('Skills updated for this version: sync-refs — nothing to do.')
+  })
+
+  it('agrees in number for a single restored skill', () => {
+    expect(launchNoticeText({ restored: ['save-session'] })).toMatch(/save-session had been edited outside the app and was put back/)
+  })
+
+  it('drops the shared lib, which is not a skill anyone invokes', () => {
+    expect(launchNoticeText({ installed: ['lib', 'learn'] })).toBe('Skills updated for this version: learn — nothing to do.')
+  })
+
+  it('says nothing at all when there is nothing to say', () => {
+    expect(launchNoticeText({})).toBe('')
+    expect(launchNoticeText()).toBe('')
+  })
+})
