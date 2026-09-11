@@ -10,6 +10,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.1-alpha] - 2026-09-11
+
+### Fixed
+
+- **The launch notice contradicted itself.** A skill edited by hand is also in the updated
+  list, so the same names appeared twice and "nothing to do" was announced immediately
+  before saying something had been undone. The restore is now the news and the rest a
+  receipt, in separate sentences, with no name in both.
+- **The embedded terminal sat on the window's bottom edge**, so the line being typed was
+  the hardest to read. The pane gets breathing room — measured with the real xterm: the
+  rows still fit whole, nothing is clipped.
+- **Session skills carry the Next steps rule**: that section is a queue of what to do next,
+  a finished item is deleted rather than ticked, and its first line is the top priority —
+  which is what the dashboard shows on the card.
+
 ## [0.17.0-alpha] - 2026-09-11
 
 ### Fixed

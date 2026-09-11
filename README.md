@@ -466,7 +466,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (176, `cargo test`) + Jest (183, renderer logic) + the hooks' own unittest files (69, `python3 hooks/test_*.py`) — 428 total |
+| Tests | Rust unit tests (176, `cargo test`) + Jest (189, renderer logic) + the hooks' own unittest files (69, `python3 hooks/test_*.py`) — 434 total |
 
 ## Roadmap
 
