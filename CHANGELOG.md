@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.0-alpha] - 2026-09-11
+
 ### Fixed
 
 - **A session whose conversation moved on showed a green idle dot for ever.** When Claude
