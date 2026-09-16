@@ -11,6 +11,7 @@ mod pinned;
 mod prstatus;
 mod doctor;
 mod secaudit;
+mod ctxbudget;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;

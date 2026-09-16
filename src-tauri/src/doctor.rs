@@ -76,6 +76,8 @@ pub struct Snapshot {
     /// Hooks, MCP servers, permission rules and env values Claude Code runs with — the part
     /// of the setup that executes things, and that nothing else audits.
     pub security: crate::secaudit::SecurityFacts,
+    /// What every session pays before the first word: CLAUDE.md, skill descriptions, memory index.
+    pub context: crate::ctxbudget::ContextBudget,
 }
 
 pub const KIND_REGISTRY_ORPHAN: &str = "registry_orphan";
@@ -92,6 +94,8 @@ pub const KIND_HOOK_ELSEWHERE: &str = "hook_elsewhere";
 pub const KIND_ENV_SECRET: &str = "env_secret";
 pub const KIND_MCP_UNPINNED: &str = "mcp_unpinned";
 pub const KIND_NO_DENY: &str = "no_deny";
+pub const KIND_CONTEXT_BILL: &str = "context_bill";
+pub const KIND_DESC_HEAVY: &str = "skill_description_heavy";
 
 /// Classify a snapshot into findings, most serious first. Pure.
 pub fn findings(snap: &Snapshot) -> Vec<Finding> {
@@ -300,6 +304,46 @@ pub fn findings(snap: &Snapshot) -> Vec<Finding> {
         });
     }
 
+    // ── The context bill. Every session pays for the global CLAUDE.md, every installed
+    // skill's description and the memory index before the first word is typed. Doctor states
+    // the figure and names what weighs most; which skill to drop is not its decision. ──
+    let cb = &snap.context;
+    if cb.found {
+        let kb = cb.always_loaded_kb();
+        let tokens = crate::ctxbudget::estimate_tokens(kb);
+        // 60 KB (~15k tokens) is where a setup starts eating a visible share of a 200k
+        // window before any work happens — a heuristic, stated as one.
+        let heavy = kb > 60.0;
+        let top = cb.heaviest.iter().map(|(n, k)| format!("{n} {k:.1} KB")).collect::<Vec<_>>().join(", ");
+        out.push(Finding {
+            id: KIND_CONTEXT_BILL.into(),
+            kind: KIND_CONTEXT_BILL.into(),
+            severity: if heavy { "untidy" } else { "info" }.into(),
+            title: format!("Every session starts with ≈{}k tokens of setup", (tokens as f64 / 1000.0).round() as usize),
+            detail: format!(
+                "{kb:.1} KB always loaded: CLAUDE.md {:.1} KB, {} skill descriptions {:.1} KB, memory index {:.1} KB. Plus {} MCP server{} whose tool schemas are not counted here. Heaviest descriptions: {top}.{}",
+                cb.claude_md_kb, cb.skill_count, cb.skill_desc_kb, cb.memory_index_kb, cb.mcp_servers,
+                if cb.mcp_servers == 1 { "" } else { "s" },
+                if heavy { " Above ~60 KB the setup takes a visible share of the window before any work — trim descriptions, move detail into skill bodies (loaded only on invoke)." } else { "" }
+            ),
+            target: String::new(),
+            repair: None,
+        });
+        for (name, k) in &cb.heaviest {
+            if *k > 1.5 {
+                out.push(Finding {
+                    id: format!("{KIND_DESC_HEAVY}:{name}"),
+                    kind: KIND_DESC_HEAVY.into(),
+                    severity: "untidy".into(),
+                    title: format!("Skill '{name}' has a {k:.1} KB description"),
+                    detail: "A description is loaded into every session; the body only when the skill is invoked. Keep the trigger and the one-line purpose in the description, move the rest into the body.".into(),
+                    target: name.clone(),
+                    repair: None,
+                });
+            }
+        }
+    }
+
     if snap.aged_ids > 0 {
         out.push(Finding {
             id: KIND_AGED.into(),
@@ -434,6 +478,29 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].target, "github");
         assert_eq!(hits[0].severity, "untidy");
+    }
+
+        #[test]
+    fn the_context_bill_is_information_below_the_threshold_and_untidy_above() {
+        let light = Snapshot { context: crate::ctxbudget::ContextBudget { found: true, claude_md_kb: 11.0, skill_count: 45, skill_desc_kb: 21.0, memory_index_kb: 1.9, mcp_servers: 2, ..Default::default() }, ..Default::default() };
+        let f = findings(&light); let b = f.iter().find(|f| f.kind == KIND_CONTEXT_BILL).expect("stated");
+        assert_eq!(b.severity, "info"); assert!(b.title.contains("9k"), "{}", b.title);
+        let heavy = Snapshot { context: crate::ctxbudget::ContextBudget { found: true, claude_md_kb: 40.0, skill_desc_kb: 30.0, ..Default::default() }, ..Default::default() };
+        assert_eq!(findings(&heavy).iter().find(|f| f.kind == KIND_CONTEXT_BILL).unwrap().severity, "untidy");
+    }
+
+    #[test]
+    fn a_heavy_skill_description_is_named_and_a_normal_one_is_not() {
+        let snap = Snapshot { context: crate::ctxbudget::ContextBudget { found: true, heaviest: vec![("chatty".into(), 2.2), ("terse".into(), 0.9)], ..Default::default() }, ..Default::default() };
+        let f = findings(&snap);
+        let hits: Vec<_> = f.iter().filter(|f| f.kind == KIND_DESC_HEAVY).collect();
+        assert_eq!(hits.len(), 1); assert_eq!(hits[0].target, "chatty");
+    }
+
+    #[test]
+    fn no_setup_found_means_no_bill() {
+        let snap = Snapshot { context: crate::ctxbudget::ContextBudget { found: false, ..Default::default() }, ..Default::default() };
+        assert!(findings(&snap).iter().all(|f| f.kind != KIND_CONTEXT_BILL));
     }
 
     #[test]
@@ -580,6 +647,7 @@ mod tests {
             unregistered_live: Vec::new(),
             aged_ids: 3,
             security: Default::default(),
+            context: Default::default(),
         };
         let got = findings(&snap);
         let sev: Vec<&str> = got.iter().map(|f| f.severity.as_str()).collect();
@@ -735,6 +803,7 @@ pub fn snapshot() -> Snapshot {
         drifted_skills: crate::skills::drifted_skills(),
         aged_ids,
         security: crate::secaudit::gather(),
+        context: crate::ctxbudget::gather(),
     }
 }
 

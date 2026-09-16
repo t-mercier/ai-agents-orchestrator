@@ -10,6 +10,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Doctor states the context bill.** Every session pays for the global CLAUDE.md, every
+  installed skill's description and the memory index before the first word is typed. Doctor
+  now says how much — KB and an estimated token count — names the three heaviest
+  descriptions, and turns untidy above ~60 KB (a stated heuristic). A single description
+  over 1.5 KB gets its own line: the trigger belongs in the description, the detail in the
+  body, which is loaded only on invoke. MCP servers are counted, not measured — their tool
+  schemas live in the server.
+
 ## [0.18.0-alpha] - 2026-09-16
 
 ### Added
