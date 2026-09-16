@@ -10,6 +10,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Doctor audits the security surface.** Six new findings, none of them repairable on
+  purpose — a permission is a decision: an `allow` rule broad enough to run any shell
+  command, deletion, `sudo` or network fetch unasked; a hook that fetches from the network
+  or pipes text into a shell; a hook script living outside `~/.claude/hooks`; an `env`
+  value in settings.json shaped like a credential; an MCP server started with an unpinned
+  `npx` (`@latest` counts as unpinned); and a settings file with no `deny` rule at all.
+  Each quotes the exact line, so the review is a glance, not a hunt.
+
 ## [0.17.1-alpha] - 2026-09-11
 
 ### Fixed

@@ -10,6 +10,7 @@ mod statusline;
 mod pinned;
 mod prstatus;
 mod doctor;
+mod secaudit;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
