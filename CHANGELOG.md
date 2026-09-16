@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.0-alpha] - 2026-09-16
+
 ### Added
 
 - **Doctor audits the security surface.** Six new findings, none of them repairable on
