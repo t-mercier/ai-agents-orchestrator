@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn the_description_is_measured_inline_or_folded_and_nothing_else_counts() {
-        let inline = "---\nname: x\ndescription: One line here.\nallowed-tools: Bash\n---\n# body that is long".repeat(1);
+        let inline = "---\nname: x\ndescription: One line here.\nallowed-tools: Bash\n---\n# body that is long".to_string();
         assert_eq!(description_bytes(&inline), "One line here.".len());
         let folded = "---\nname: x\ndescription: >-\n  first part\n  second part\nallowed-tools: Bash\n---\n";
         let n = description_bytes(folded);
