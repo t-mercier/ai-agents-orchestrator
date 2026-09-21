@@ -49,3 +49,7 @@ renderer/__smoke.html
 
 # Boundary-audit scan output (tauri-boundary-audit skill). Regenerated every run; never committed.
 .audit/
+
+# Playwright smoke tests (scripts/smoke)
+test-results/
+playwright-report/

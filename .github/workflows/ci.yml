@@ -22,6 +22,13 @@ jobs:
         run: npm test
       - name: Vendored xterm bundle is current
         run: npm run check:bundle
+      - name: Browser for the UI smoke tests
+        run: npx playwright install chromium
+      - name: UI smoke tests (scripts/smoke)
+        # The renderer in a real browser, with the Rust side stubbed. Guards the defects
+        # that only a layout engine can see — an invisible menu row, a dialog that is
+        # always open, a panel outside its scroll container.
+        run: npm run test:ui
 
   rust:
     name: Rust backend (clippy + tests)

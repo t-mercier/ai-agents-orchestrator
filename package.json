@@ -1,7 +1,7 @@
 {
   "name": "ai-agents-orchestrator",
   "version": "0.19.0",
-  "description": "Live mission control for all your parallel Claude Code sessions — a native desktop dashboard for macOS & Linux.",
+  "description": "Live mission control for all your parallel Claude Code sessions \u2014 a native desktop dashboard for macOS & Linux.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/t-mercier/ai-agents-orchestrator",
   "repository": {
@@ -13,9 +13,11 @@
     "build:xterm": "esbuild build/xterm-entry.js --bundle --format=iife --global-name=XtermBundle --outfile=renderer/xterm-bundle.js",
     "test": "jest",
     "check:secrets": "bash scripts/check-no-secrets.sh",
-    "check:bundle": "bash scripts/check-bundle-current.sh"
+    "check:bundle": "bash scripts/check-bundle-current.sh",
+    "test:ui": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "esbuild": "^0.28.0",
     "jest": "^29.0.0"
   },
