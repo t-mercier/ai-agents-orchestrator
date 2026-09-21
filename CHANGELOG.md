@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.0-alpha] - 2026-09-21
+
 ### Added
 
 - **Doctor states the context bill.** Every session pays for the global CLAUDE.md, every
@@ -19,6 +21,58 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   over 1.5 KB gets its own line: the trigger belongs in the description, the detail in the
   body, which is loaded only on invoke. MCP servers are counted, not measured — their tool
   schemas live in the server.
+- **Right-click a session for everything you can do to it.** Resume or restart, pause, sync
+  its references, add it to the board, pin it, reveal either folder, close, archive, delete.
+  An action the session's state forbids is listed and greyed with the reason rather than
+  hidden, so "where did Close go?" has an answer on screen. Every row carries the same
+  attributes as the button it mirrors, so it runs the same code — confirmations included.
+- **Right-click a pinned skill to replace or unpin it.** Previously a filled slot could only
+  be run: once the slots were full there was no way to change them.
+- **Order and group the pinned sessions.** The pinned block keeps its place at the top of
+  the list, but its order is now yours and you can group inside it, the same drag as
+  anywhere else in the list.
+- **A colour per group.** A swatch in the group header opens the app's own accents, so
+  groups stop being uniformly tinted by their category. `Inherit the category` puts one
+  back.
+- **Install on macOS in one command.** `scripts/install-macos.sh` fetches the latest `.dmg`,
+  installs it and clears the quarantine flag Gatekeeper sets on anything downloaded. The
+  builds are still unsigned; the script says why it does that and the README keeps the
+  by-hand steps.
+- **A content security policy.** The renderer had none. Verified in a production build: an
+  external origin is refused and the IPC still works. Defence in depth — the escaping that
+  was already there is a discipline, a policy holds on its own.
+
+### Changed
+
+- **The README says what the code does.** "No shell-string execution" was refuted by five
+  `-ilc` sites: `claude` runs through a login shell because a Finder-launched app has no
+  `claude` on its PATH, and the protection is that every interpolated value is POSIX
+  single-quote escaped. The version badge now reads the latest release instead of a number
+  that went four releases stale, the test counts match what the suites print, and the link
+  to "the two hooks" pointed at a dead anchor for a section that documents six.
+
+### Fixed
+
+- **Search finds a session by its pull request.** Typing a PR number matched nothing. The
+  matcher read only the primary `ticket` field and no pull request at all, so a session's
+  second ticket was invisible too. Now it reads both lists, the PR URL, the bare number and
+  the `#63` form. The logic moved to a tested module (`renderer/lib/search-model.js`) that
+  also owns the accessors the renderer duplicated — that duplication is how the two drifted
+  apart.
+- **Settings shows its whole panel.** One stray `</div>` closed the scroll container after
+  the Appearance panel, leaving Categories and four others outside it: their content was
+  clipped in silence and the Save row pushed out of the dialog. The modal now fits its
+  panel, scrolls when it cannot, and shows a permanent scrollbar so "there is more below"
+  is visible without touching anything.
+- **Pinned skill slots are the size of their neighbours.** They inherited a 36x32 icon
+  square while the rest of the titlebar is 25px tall — and only one empty `+` shows now,
+  up to five pinned, instead of a fixed row of three.
+- **A preview never reads a whole transcript.** `preview_session` capped its tail at 64 KB
+  but not its head: a transcript whose first user turn is missing was read entirely into
+  memory. The largest on this machine is 165 MB.
+- **`run_skill` validates the session id it is handed**, as `wrap_session` already did.
+- **A green build.** A newer clippy made `repeat(1)` an error, and CI follows the stable
+  toolchain, so master went red without the code changing.
 
 ## [0.18.0-alpha] - 2026-09-16
 
