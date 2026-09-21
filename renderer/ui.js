@@ -262,8 +262,16 @@ function closeAttrs(s) {
     ` data-close-sid="${escapeHtml(canResume(s) ? (s.sessionId || '') : '')}" data-close-cwd="${escapeHtml(s.cwd || '')}"`
 }
 
+// ── When each action applies ──
+// Asked by BOTH the card's icon buttons and the right-click menu. Keeping the rule in
+// one place is the point: a menu that re-derived "can I close this?" would drift.
+const canClose = (s) => !!s.notesPath && s.state === 'stale'
+const canArchive = (s) => !!s.notesPath && s.historyStatus === 'closed'
+const canDelete = (s) => s.historyStatus === 'archived' && !!s.notesPath
+const canPause = (s) => !!(window.liveTerminalKeyFor && window.liveTerminalKeyFor(s.sessionId, s.notesPath))
+
 function closeBtn(s) {
-  if (!s.notesPath || s.state !== 'stale') return ''
+  if (!canClose(s)) return ''
   return `<button class="close-btn" ${closeAttrs(s)}
            title="Close this session (move to Closed)" aria-label="Close this session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg></button>`
 }
@@ -272,7 +280,7 @@ function closeBtn(s) {
 // sessions get the Close button instead (close them first). Click → confirm →
 // archive_session (moves it to Archived).
 function archiveBtn(s) {
-  if (!s.notesPath || s.historyStatus !== 'closed') return ''
+  if (!canArchive(s)) return ''
   return `<button class="archive-btn" data-archive-notes="${escapeHtml(s.notesPath)}" data-archive-name="${escapeHtml(s.name || '')}"
            title="Archive this session" aria-label="Archive this session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></button>`
 }
@@ -281,7 +289,7 @@ function archiveBtn(s) {
 // Trash (recoverable from Finder), to declutter the disk. ONLY archived: running/closed
 // work is never deletable from the app (see delete_session's archived guard in Rust).
 function deleteBtn(s) {
-  if (s.historyStatus !== 'archived' || !s.notesPath) return ''
+  if (!canDelete(s)) return ''
   const id = s.sessionId || slugOf(s) || ''
   return `<button class="delete-btn" data-delete-notes="${escapeHtml(s.notesPath)}" data-delete-name="${escapeHtml(s.name || '')}" data-delete-id="${escapeHtml(id)}"
            title="Delete — move to the Trash" aria-label="Delete this session (move to Trash)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>`
@@ -338,8 +346,7 @@ function ageBadge(s) {
 // exists for this session (nothing to pause for an external-terminal resume — the
 // dashboard doesn't own that process). Distinct from Close (done, → Closed tab).
 function pauseBtn(s) {
-  const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(s.sessionId, s.notesPath)
-  if (!liveKey) return ''
+  if (!canPause(s)) return ''
   return `<button class="pause-btn" data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"
            title="Pause — set aside without closing" aria-label="Pause this session">${svgIcon('<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>')}</button>`
 }
@@ -376,8 +383,11 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
   const gid = escapeHtml(g.id)
   // Colour the group by its category's colour (like the board colours its groups),
   // falling back to the app accent when the category has none.
+  // The group's own colour first, then its category's, then the app accent. Without the
+  // first, every group in the list came out the same colour — which is no signal at all.
   const cm = (window.CSM_CONFIG && window.CSM_CONFIG.colorMap) || {}
-  const col = /^#[0-9a-fA-F]{6}$/.test(cm[category] || '') ? cm[category] : ''
+  const own = /^#[0-9a-fA-F]{6}$/.test(g.color || '') ? g.color : ''
+  const col = own || (/^#[0-9a-fA-F]{6}$/.test(cm[category] || '') ? cm[category] : '')
   const accentStyle = col ? ` style="--accent:${col};--accent-rgb:${hexToRgbTriplet(col)}"` : ''
   const memberCards = g.members.map(k => {
     const s = byKey.get(k); if (!s) return ''
@@ -389,6 +399,8 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
         <span class="list-group-chev ${g.collapsed ? 'collapsed' : ''}" data-group-collapse>›</span>
         <span class="list-group-name" data-group-collapse data-nodrag title="Expand / collapse">${escapeHtml(g.name)}</span>
         <span class="list-group-count">${g.members.length}</span>
+        <button type="button" class="list-group-color" data-group-color title="Group colour" aria-label="Group colour"
+                style="--swatch:${col || 'var(--accent)'}"><span class="list-group-swatch"></span></button>
         <button type="button" class="list-group-edit" data-group-rename title="Rename group" aria-label="Rename group"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         <button type="button" class="list-group-x" data-group-delete title="Delete group (keep sessions)" aria-label="Delete group">✕</button>
       </div>
@@ -533,6 +545,34 @@ function updateTabBadges() {
   })
 }
 
+// The pinned block is cross-space and cross-category, so it has no real category to
+// key its manual order against. It gets a reserved one. The name starts with "__" so it
+// can never collide with a user category, and app.js must feed it to prune() — see the
+// PINNED_CAT branch there, without which the order is wiped on the next poll.
+const PINNED_CAT = '__pinned__'
+window.PINNED_CAT = PINNED_CAT
+
+// Same machinery as a category group (manual order, groups, drag), minus the header:
+// the filled bookmark is the marker, and a heading here would re-create the section
+// that floating the pins was meant to avoid.
+function renderPinnedBlock(pinned, selectedKey, changedKeys) {
+  if (!listReorgActive()) {
+    return `<div class="list-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
+  }
+  const st = window.CSMListOrg.load()
+  const byKey = new Map(pinned.map(s => [sessionKey(s), s]))
+  const liveKeys = pinned.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)
+  const body = window.CSMListOrg.orderedItems(st, PINNED_CAT, liveKeys).map(it => {
+    if (it.kind === 'session') {
+      const s = byKey.get(it.key); if (!s) return ''
+      return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(it.key)}">${renderListCard(s, selectedKey, changedKeys.has(it.key))}</div>`
+    }
+    if (it.kind === 'group') return groupBlock(PINNED_CAT, it, byKey, selectedKey, changedKeys)
+    return ''
+  }).join('')
+  return `<div class="list-pinned" data-drop-key="cat:${PINNED_CAT}" data-drop-accept="session">${body}</div>`
+}
+
 function renderPanelList(sessions, selectedKey, changedKeys) {
   if (!sessions.length) { setHtml(document.getElementById('panel-list'), emptyListMessage()); return }
 
@@ -543,7 +583,8 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
   //   2. PINNED — at the top of the whole column, not per space and not per category:
   //      pins are the "these are my current threads" shortlist, and scattering them
   //      under their own section defeated that. No header and no category/space label
-  //      on the cards — the filled bookmark is the marker.
+  //      on the cards — the filled bookmark is the marker. Order and groups inside the
+  //      block are yours (drag), kept under the reserved PINNED_CAT bucket.
   const multi = window.multiSpace && window.multiSpace()
   const waiting = sessions.filter(s => s.status === 'waiting')
   const notWaiting = sessions.filter(s => s.status !== 'waiting')
@@ -554,9 +595,7 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
     waiting.sort((a, b) => rankOf(a) - rankOf(b))
     html += renderCategoryGroup('⚡ Needs you', waiting, selectedKey, changedKeys)
   }
-  if (pinned.length) {
-    html += `<div class="list-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
-  }
+  if (pinned.length) html += renderPinnedBlock(pinned, selectedKey, changedKeys)
   if (multi) {
     html += groupBySpace(therest).map(([space, sess]) =>
       renderSpaceSection(space, sess, selectedKey, changedKeys)
@@ -591,6 +630,20 @@ const svgIcon = (inner) =>
 // overflow the bottom of the window; clamp into the viewport (with scroll via the
 // element's overflow) if it fits neither way. Used by all the action popovers so
 // none gets cropped near a window edge. `el` must already be in the DOM (measured).
+// A context menu belongs at the pointer, not under the element — that is what every
+// native menu on this machine does, and anchoring a full-width card put ours far from
+// where the click happened.
+function positionPopoverAtPoint(el, x, y, gap = 2) {
+  const vw = window.innerWidth, vh = window.innerHeight
+  el.style.maxHeight = `${vh - 16}px`
+  const ew = el.offsetWidth, eh = el.offsetHeight
+  const left = Math.max(8, Math.min(x + gap, vw - ew - 8))
+  // Flip above the pointer when there isn't room below, like a native menu.
+  const top = (y + gap + eh <= vh) ? y + gap : Math.max(8, Math.min(y - gap - eh, vh - eh - 8))
+  el.style.top = `${Math.round(top)}px`
+  el.style.left = `${Math.round(left)}px`
+}
+
 function positionPopover(el, anchor, gap = 6) {
   const r = anchor.getBoundingClientRect()
   const vw = window.innerWidth, vh = window.innerHeight
@@ -641,14 +694,9 @@ const ICON_GITHUB = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="t
 // an epic plus its sub-task. The backend sends the whole ordered list (prLinks /
 // tickets) plus the primary as prLink / ticket; these read the list and fall back to
 // the primary so an older payload still renders.
-function linksOf(s, listKey, primaryKey) {
-  const list = Array.isArray(s[listKey]) ? s[listKey].filter(Boolean) : []
-  if (list.length) return list
-  return s[primaryKey] ? [s[primaryKey]] : []
-}
-const prLinksOf = (s) => linksOf(s, 'prLinks', 'prLink')
-// Junk guard: a frontmatter `ticket: ""` that survived as quotes is not a ticket.
-const ticketsOf = (s) => linksOf(s, 'tickets', 'ticket').filter(t => /[a-z0-9]/i.test(t))
+// One definition, in the model the search box also reads — two copies is how the
+// matcher drifted out of step with the renderer in the first place.
+const { linksOf, prLinksOf, ticketsOf } = window.CSMSearch
 // Explicit exports — a top-level `const` in a classic script is NOT a window property,
 // and board.js renders the same link chips.
 window.prLinksOf = prLinksOf
@@ -1228,20 +1276,24 @@ function renderDetailPanel(s, tab = 'running') {
 // Three slots in the titlebar (global, headless from home) and three in a session's
 // Actions row. Where a session one runs is decided by state, not by the user — see
 // lib/skill-launch-model.js for why typing into a busy session is the failure to avoid.
-const PIN_SLOTS = 3
+const PIN_MAX = 5
 const ICON_PIN_PLUS = svgIcon('<path d="M12 5v14"/><path d="M5 12h14"/>')
 
 function pinnedSkills(scope) {
   const p = (window.CSM_CONFIG && window.CSM_CONFIG.pinnedSkills) || {}
   const list = Array.isArray(p[scope]) ? p[scope] : []
-  return Array.from({ length: PIN_SLOTS }, (_, i) => list[i] || '')
+  // Dense and capped. Dropping blanks also migrates a config written by the earlier
+  // fixed-slot version, which stored an unused slot as an empty string.
+  return list.filter(n => typeof n === 'string' && n).slice(0, PIN_MAX)
 }
 
 // One slot. An empty one is a `+` that opens the picker; a filled one runs its skill and
 // says, in its tooltip, where it will run before it runs.
 function pinSlotHtml(scope, index, name, ctx) {
   const L = window.CSMSkillLaunch
-  const tip = L.tooltip(name, ctx)
+  // The right-click menu is the only way to replace or unpin, so the tooltip has to
+  // carry it — an affordance nobody can see needs to be said somewhere.
+  const tip = name ? `${L.tooltip(name, ctx)} · right-click to replace or unpin` : L.tooltip(name, ctx)
   const blocked = !!name && L.decide(name, ctx).mode === 'blocked'
   const label = name ? escapeHtml(L.clean(name)) : ICON_PIN_PLUS
   return `<button class="act pin-slot${name ? '' : ' empty'}${blocked ? ' blocked' : ''}"
@@ -1249,8 +1301,14 @@ function pinSlotHtml(scope, index, name, ctx) {
     ${blocked ? 'aria-disabled="true"' : ''} data-tip="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${label}</button>`
 }
 
+// The pinned skills, then a single empty slot to add the next one — never a row of
+// identical "+" buttons. The invitation disappears once PIN_MAX are pinned; from there
+// the right-click menu is how a slot is replaced or freed.
 function pinSlotsHtml(scope, ctx) {
-  return pinnedSkills(scope).map((n, i) => pinSlotHtml(scope, i, n, ctx)).join('')
+  const list = pinnedSkills(scope)
+  const slots = list.map((n, i) => pinSlotHtml(scope, i, n, ctx))
+  if (list.length < PIN_MAX) slots.push(pinSlotHtml(scope, list.length, '', ctx))
+  return slots.join('')
 }
 
 // The titlebar set: no session, so every run is headless from home.
@@ -1298,6 +1356,197 @@ async function runPinnedSkill(btn) {
   }
 }
 
+// ── A group's colour ──
+// Offered from the group header, between the count and the rename pencil. The choices
+// are the app's own look accents (looks.js), so a group can never land on a colour that
+// clashes with the rest of the window.
+function closeGroupColorMenu() {
+  const m = document.getElementById('group-color-menu')
+  if (m) m.remove()
+  document.removeEventListener('click', groupColorOutside, true)
+  document.removeEventListener('keydown', groupColorEsc, true)
+}
+function groupColorOutside(e) { if (!e.target.closest('#group-color-menu')) closeGroupColorMenu() }
+function groupColorEsc(e) { if (e.key === 'Escape') closeGroupColorMenu() }
+
+function openGroupColorMenu(anchor, category, gid) {
+  closeGroupColorMenu()
+  const st = window.CSMListOrg.load()
+  const g = ((st.categories[category] || {}).groups || {})[gid]
+  if (!g) return
+  const looks = window.CSM_LOOKS || []
+  const swatch = (hex, label, on) =>
+    `<button class="board-menu-item" data-set-color="${escapeHtml(hex)}">` +
+    `<span class="board-menu-check">${on ? '✓' : ''}</span>` +
+    `<span class="group-color-dot" style="--swatch:${hex || 'transparent'}"></span>` +
+    `<span class="board-menu-name">${escapeHtml(label)}</span></button>`
+  const rows = [swatch('', 'Inherit the category', !g.color)]
+    .concat(looks.map(l => swatch(l.accent, l.name, (g.color || '').toLowerCase() === l.accent.toLowerCase())))
+  const menu = document.createElement('div')
+  menu.className = 'board-menu'
+  menu.id = 'group-color-menu'
+  menu.innerHTML = `<div class="board-menu-head">${escapeHtml(truncate(g.name, 24))}</div>${rows.join('')}`
+  document.body.appendChild(menu)
+  positionPopover(menu, anchor)
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-set-color]'); if (!item) return
+    window.CSMListOrg.save(window.CSMListOrg.setGroupColor(window.CSMListOrg.load(), category, gid, item.dataset.setColor))
+    closeGroupColorMenu()
+    if (window.fetchAndRender) window.fetchAndRender(false)
+  })
+  setTimeout(() => {
+    document.addEventListener('click', groupColorOutside, true)
+    document.addEventListener('keydown', groupColorEsc, true)
+  }, 0)
+}
+
+// ── A session's actions, on right-click ──
+// The same actions the card and the detail panel already offer, as a menu. Each row
+// carries the SAME class and data-* attributes as the button it mirrors, so the existing
+// delegated handlers run it — the menu adds a surface, never a second implementation of
+// close/archive/delete (which carry confirmations this must not bypass).
+function closeSessionMenu() {
+  const m = document.getElementById('session-menu')
+  if (m) m.remove()
+  document.removeEventListener('click', sessionMenuOutside, true)
+  document.removeEventListener('keydown', sessionMenuEsc, true)
+}
+function sessionMenuOutside(e) { if (!e.target.closest('#session-menu')) closeSessionMenu() }
+function sessionMenuEsc(e) { if (e.key === 'Escape') closeSessionMenu() }
+
+function sessionMenuRows(s) {
+  // `cls` is how the row reaches its handler: the delegated listeners key on these
+  // classes and data-* attributes, so a row IS the button, rendered differently. The
+  // borrowed appearance is reset in CSS (.board-menu .board-menu-item) — .pin-btn is
+  // opacity:0 until its card is hovered, which made this row invisible.
+  const row = (cls, attrs, label, why) =>
+    `<button class="board-menu-item ${cls}" ${attrs}${why ? ` disabled title="${escapeHtml(why)}"` : ''}>${label}</button>`
+  const sep = '<div class="board-menu-sep"></div>'
+  const rows = []
+
+  // Where the work happens
+  if (canResume(s)) {
+    rows.push(row('terminal-toggle-btn',
+      `data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}"`,
+      'Resume in terminal'))
+  } else {
+    const slug = slugOf(s)
+    rows.push(slug
+      ? row('terminal-toggle-btn',
+          `data-session="${escapeHtml(s.sessionId || slug)}" data-cwd="${escapeHtml(s.cwd || '')}" data-restart-slug="${escapeHtml(slug)}" data-notes="${escapeHtml(s.notesPath || '')}"`,
+          'Restart from notes')
+      : row('', '', 'Resume in terminal', 'No transcript and no notes folder to restart from'))
+  }
+  rows.push(s.cwd
+    ? row('pill', `data-cwd="${escapeHtml(s.cwd)}"`, 'Open in external terminal')
+    : row('', '', 'Open in external terminal', 'This session has no working directory'))
+  rows.push(canPause(s)
+    ? row('pause-btn', `data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"`, 'Pause')
+    : row('', '', 'Pause', 'Nothing to pause — no terminal is open for this session'))
+
+  // Its references and its place in the list
+  rows.push(sep)
+  const prs = prLinksOf(s)
+  rows.push((prs.length || ticketsOf(s).length)
+    ? row('', `data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}"`,
+        'Sync tickets and pull requests')
+    : row('', '', 'Sync tickets and pull requests', 'This session has no ticket and no pull request'))
+  rows.push(row('', `data-open-board="${escapeHtml(sessionKey(s))}"`, 'Add to board…'))
+  rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
+    isPinnedSession(s) ? 'Unpin from the top' : 'Pin to the top'))
+
+  // Where its files are
+  rows.push(sep)
+  if (s.cwd) rows.push(row('', `data-folder="${escapeHtml(s.cwd)}"`, 'Reveal the code folder'))
+  if (s.notesPath) {
+    rows.push(row('', `data-folder="${escapeHtml(s.notesPath.replace(/\/notes\.md$/, ''))}"`, 'Reveal the notes folder'))
+  }
+
+  // Lifecycle. Always listed, disabled with the reason when the state forbids it — an
+  // action you cannot find is worse than one you can see is not available yet.
+  rows.push(sep)
+  rows.push(canClose(s)
+    ? row('', closeAttrs(s), 'Close session')
+    : row('', '', 'Close session', s.state === 'active' ? 'Still running — pause or let it finish first' : 'Only a stale session can be closed'))
+  rows.push(canArchive(s)
+    ? row('archive-btn', `data-archive-notes="${escapeHtml(s.notesPath)}" data-archive-name="${escapeHtml(s.name || '')}"`, 'Archive')
+    : row('', '', 'Archive', 'Only a closed session can be archived'))
+  rows.push(canDelete(s)
+    ? row('delete-btn board-menu-remove',
+        `data-delete-notes="${escapeHtml(s.notesPath)}" data-delete-name="${escapeHtml(s.name || '')}" data-delete-id="${escapeHtml(s.sessionId || slugOf(s) || '')}"`,
+        'Delete — move to Trash')
+    : row('', '', 'Delete — move to Trash', 'Only an archived session can be deleted'))
+  return rows.join('')
+}
+
+function openSessionMenu(card, s, x, y) {
+  closeSessionMenu()
+  const rows = sessionMenuRows(s)
+  if (!rows) return
+  const menu = document.createElement('div')
+  menu.className = 'board-menu'
+  menu.id = 'session-menu'
+  menu.innerHTML = `<div class="board-menu-head">${escapeHtml(truncate(s.name || 'Session', 28))}</div>${rows}`
+  document.body.appendChild(menu)
+  positionPopoverAtPoint(menu, x, y)
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('.board-menu-item')
+    if (!item) return
+    // "Add to board" opens a second menu, so it cannot go through the delegated handler:
+    // that one anchors to the clicked element, which this menu is about to remove.
+    if (item.dataset.openBoard) {
+      e.stopPropagation()
+      closeSessionMenu()
+      openBoardMenu(card, item.dataset.openBoard)
+      return
+    }
+    // Everything else: dismiss AFTER the delegated handler has read the row's data-*.
+    setTimeout(closeSessionMenu, 0)
+  })
+  setTimeout(() => {
+    document.addEventListener('click', sessionMenuOutside, true)
+    document.addEventListener('keydown', sessionMenuEsc, true)
+  }, 0)
+}
+
+// ── Replace / unpin, on right-click ──
+// A left click on a filled slot RUNS the skill — that is the whole point of the button —
+// so changing one needs a second gesture. Right-click borrows the board menu's geometry
+// and dismissal so it looks like the rest of the app rather than a new kind of popup.
+function closePinMenu() {
+  const m = document.getElementById('pin-menu')
+  if (m) m.remove()
+  document.removeEventListener('click', pinMenuOutside, true)
+  document.removeEventListener('keydown', pinMenuEsc, true)
+}
+function pinMenuOutside(e) { if (!e.target.closest('#pin-menu')) closePinMenu() }
+function pinMenuEsc(e) { if (e.key === 'Escape') closePinMenu() }
+
+function openPinMenu(anchor, scope, index, name, x, y) {
+  closePinMenu()
+  const menu = document.createElement('div')
+  menu.className = 'board-menu'
+  menu.id = 'pin-menu'
+  menu.innerHTML =
+    `<div class="board-menu-head">${escapeHtml(window.CSMSkillLaunch.clean(name))}</div>` +
+    `<button class="board-menu-item" data-pin-replace="1">Replace…</button>` +
+    `<div class="board-menu-sep"></div>` +
+    `<button class="board-menu-item board-menu-remove" data-pin-unpin="1">Unpin</button>`
+  document.body.appendChild(menu)
+  if (typeof x === 'number') positionPopoverAtPoint(menu, x, y); else positionPopover(menu, anchor)
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('.board-menu-item'); if (!item) return
+    closePinMenu()
+    if (item.dataset.pinReplace) openSkillPicker(scope, index)
+    else unpinSkill(scope, index)
+  })
+  // Deferred, so the gesture that opened it does not immediately dismiss it.
+  setTimeout(() => {
+    document.addEventListener('click', pinMenuOutside, true)
+    document.addEventListener('keydown', pinMenuEsc, true)
+  }, 0)
+}
+
 // ── The picker ──
 let pickScope = 'global', pickIndex = 0, pickAll = null
 
@@ -1338,12 +1587,12 @@ function renderSkillPickList(q) {
     </button>`).join('')
 }
 
-async function setPinnedSkill(name) {
+// Persist one scope's list and repaint both surfaces. Shared by the picker and the
+// right-click menu so there is a single place where pinnedSkills is written.
+async function savePinnedList(scope, list) {
   const cfg = window.CSM_CONFIG || {}
   const pinned = { global: [], session: [], ...(cfg.pinnedSkills || {}) }
-  const list = Array.from({ length: PIN_SLOTS }, (_, i) => (pinned[pickScope] || [])[i] || '')
-  list[pickIndex] = name || ''
-  pinned[pickScope] = list
+  pinned[scope] = list
   const next = { ...cfg, pinnedSkills: pinned }
   const res = await window.api.setConfig(next)
   if (res && res.ok === false) { if (window.showBanner) window.showBanner(`Could not save: ${res.error}`); return }
@@ -1351,6 +1600,23 @@ async function setPinnedSkill(name) {
   renderGlobalPins()
   const sel = sessionByKey(window._lastSelectedKey)
   if (sel) renderDetailPanel(sel, activeTab)
+}
+
+async function setPinnedSkill(name) {
+  if (!name) return
+  const list = pinnedSkills(pickScope)
+  // pickIndex is a position in the dense list; the empty slot's index is its length.
+  if (pickIndex < list.length) list[pickIndex] = name
+  else if (list.length < PIN_MAX) list.push(name)
+  else return
+  await savePinnedList(pickScope, list)
+}
+
+async function unpinSkill(scope, index) {
+  const list = pinnedSkills(scope)
+  if (index < 0 || index >= list.length) return
+  list.splice(index, 1)          // splice, not blank: a hole would render as a gap
+  await savePinnedList(scope, list)
 }
 
 // ── Main render ──
@@ -1513,6 +1779,27 @@ window.destinationToggle = destinationToggle   // reused by the +New modal (app.
 function installDelegatedHandlers() {
   if (delegationInstalled) return
   delegationInstalled = true
+
+  // Right-click a FILLED pinned slot to replace or unpin it. Empty slots fall through to
+  // the OS menu: there is nothing to act on yet, and left-click already opens the picker.
+  document.body.addEventListener('contextmenu', e => {
+    const slot = e.target.closest('[data-pin-run]')
+    if (slot && slot.dataset.pinSkill) {
+      e.preventDefault()
+      openPinMenu(slot, slot.dataset.pinRun, Number(slot.dataset.pinIndex), slot.dataset.pinSkill, e.clientX, e.clientY)
+      return
+    }
+    // A list card: the actions that apply to THIS session, in one gesture, without
+    // selecting it first.
+    const card = e.target.closest('.list-card[data-key]')
+    if (card) {
+      const s = sessionByKey(card.dataset.key)
+      if (!s) return
+      e.preventDefault()
+      openSessionMenu(card, s, e.clientX, e.clientY)
+    }
+  })
+
   document.body.addEventListener('click', e => {
     // Anything carrying a data-url opens externally: the toolbar pills, the card's ticket
     // chip, and the reference links in the detail meta rows. Matching by class meant a new
@@ -1544,8 +1831,17 @@ function installDelegatedHandlers() {
       return
     }
 
+    const gColor = e.target.closest('[data-group-color]')
+    if (gColor) {
+      e.stopPropagation()
+      const head = gColor.closest('.list-group-head')
+      if (head) openGroupColorMenu(gColor, head.dataset.cat, head.dataset.group)
+      return
+    }
+
     const pinBtn = e.target.closest('[data-pin-run]')
     if (pinBtn) { e.stopPropagation(); runPinnedSkill(pinBtn); return }
+
 
     const pinChoose = e.target.closest('[data-pin-choose]')
     if (pinChoose) {

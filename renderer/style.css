@@ -241,7 +241,19 @@ html, body {
 .settings-tab.active { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); }
 /* The panels fill the (resizable) modal's height and scroll; the modal itself sets the
    height (drag-to-resize below). */
-.settings-panels { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.settings-panels { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-gutter: stable; }
+/* macOS hides overlay scrollbars until you scroll, so a clipped list reads as broken
+   rather than as scrollable. Show the thumb permanently here — this pane is exactly
+   where "there is more below" has to be visible without touching anything. */
+.settings-panels::-webkit-scrollbar { width: 10px; }
+.settings-panels::-webkit-scrollbar-track { background: transparent; }
+.settings-panels::-webkit-scrollbar-thumb {
+  background: rgba(var(--tint), 0.22);
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.settings-panels::-webkit-scrollbar-thumb:hover { background: rgba(var(--tint), 0.36); background-clip: content-box; }
 
 /* The Settings modal is mouse-resizable from its corner: up to +20% wider (600→720px)
    and taller until everything fits (~92vh). The form + tabs fill it so the panels grow. */
@@ -251,11 +263,27 @@ html, body {
   width: 600px;
   min-width: 600px;
   max-width: 720px;
-  height: 70vh;
-  min-height: 440px;
+  /* Fits its panel, capped by the window. A fixed 70vh left the short tabs half empty
+     and made the long ones look truncated, because until the markup fix below them the
+     panels were outside the scroll container and simply got clipped. `resize: both`
+     stays, but nobody should have to find the handle to read a list. */
+  height: fit-content;
+  min-height: 420px;
   max-height: 92vh;
+  /* The dialog is the flex root of the scroll chain. With `height: fit-content` alone,
+     the form saw an INDEFINITE height, so `flex: 1; min-height: 0` below resolved
+     against nothing: the panels grew past the dialog, `overflow: hidden` clipped them,
+     and the Save row ended up outside the box — which is what "it looks broken" was.
+     It has to be [open]-scoped: a <dialog> is hidden by the UA's `display: none`, so
+     setting `display` unconditionally here makes the modal visible at launch with no
+     way to close it (it was never opened, so there is nothing for Esc or Cancel to
+     close). Never give a dialog a bare `display`. */
 }
-#settings-modal .modal-form { height: 100%; box-sizing: border-box; }
+#settings-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+#settings-modal .modal-form { flex: 1 1 auto; min-height: 0; box-sizing: border-box; }
 #settings-modal .settings-tabs { flex: 1; min-height: 0; }
 .settings-panel { display: none; flex-direction: column; gap: 16px; }
 .settings-panel.active { display: flex; }
@@ -424,7 +452,7 @@ button.kb-chip { border: none; font-family: inherit; line-height: inherit; }
 .kb-card.kb-missing .kb-name { color: var(--text-tertiary); font-style: italic; font-weight: 500; }
 .kb-note { background: rgba(var(--tint), 0.04); border-style: dashed; }
 .kb-note .kb-name { color: var(--text-secondary); font-weight: 500; }
-.kb-note-tag { font-size: 9px; color: var(--text-tertiary); border: 0.5px solid var(--card-border); border-radius: 4px; padding: 0 4px; flex-shrink: 0; margin-top: 2px; }
+.kb-note-tag { font-size: 10px; font-weight: 600; color: var(--text-tertiary); border: 0.5px solid var(--card-border); border-radius: 4px; padding: 0 4px; flex-shrink: 0; margin-top: 2px; }
 /* Remove-from-board ✕ — faintly visible so it's discoverable, full on hover. */
 .kb-x { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-tertiary); cursor: pointer; opacity: 0.32; flex-shrink: 0; margin-top: 1px; padding: 0; transition: opacity 0.12s, color 0.12s; }
 .kb-x svg { width: 13px; height: 13px; }
@@ -546,6 +574,26 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
 .link-menu-edit { color: var(--text-secondary); font-weight: 500; }
 .link-menu-edit:hover { color: var(--accent); }
 .board-menu-item[disabled] { opacity: 0.45; cursor: default; }
+
+/* A menu row carries the CLASS of the button it mirrors, because that is what the
+   delegated handlers key on — .pin-btn, .terminal-toggle-btn, .pause-btn, .pill. Those
+   classes carry appearance as well as identity, and it bled through: .pin-btn is
+   opacity:0 until its card is hovered, so "Unpin" only appeared on hover, and
+   .terminal-toggle-btn's border made "Open in terminal" read as a text field. A row is a
+   menu row first — reset the borrowed look, whatever class it had to borrow. */
+.board-menu .board-menu-item {
+  opacity: 1;
+  width: 100%; height: auto; min-width: 0;
+  background: none; border: none; box-shadow: none;
+  padding: 5px 8px; border-radius: 6px;
+  font-family: var(--font); font-size: 12px; font-weight: 500; line-height: 1.35;
+  color: var(--text-primary);
+  justify-content: flex-start; text-align: left; white-space: nowrap;
+}
+.board-menu .board-menu-item:hover { background: rgba(var(--tint), 0.08); color: var(--text-primary); }
+.board-menu .board-menu-item[disabled] { opacity: 0.4; cursor: default; color: var(--text-tertiary); }
+.board-menu .board-menu-item[disabled]:hover { background: none; }
+.board-menu .board-menu-item.board-menu-remove:hover { color: var(--danger); }
 
 /* ===== View Modes ===== */
 /* Board mode: hide the tabbed list UI; show the full-width board. */
@@ -1962,6 +2010,23 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .list-group-edit:hover { color: rgba(var(--tint), 0.85); }
 .list-group-name-input { flex: 1; min-width: 0; box-sizing: border-box; font-family: var(--font); font-size: 12px; font-weight: 600; color: var(--text-primary); background: rgba(var(--tint), 0.1); border: 0.5px solid var(--accent); border-radius: 4px; padding: 1px 3px; outline: none; }
 .list-group-count { font-size: 10px; font-weight: 700; color: var(--text-tertiary); background: rgba(var(--tint), 0.08); border-radius: 10px; padding: 1px 6px; flex: none; }
+/* Group colour: a filled dot showing what the group is set to, sized like the pencil
+   beside it. It is the group's only colour control, so it stays visible rather than
+   appearing on hover — a colour you cannot see you can change is a colour nobody sets. */
+.list-group-color { display: inline-flex; align-items: center; background: none; border: none; cursor: pointer; padding: 0 2px; }
+.list-group-swatch {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--swatch);
+  border: 0.5px solid rgba(var(--tint), 0.30);
+  box-shadow: 0 0 0 2px rgba(var(--tint), 0.06);
+}
+.list-group-color:hover .list-group-swatch { box-shadow: 0 0 0 3px rgba(var(--tint), 0.14); }
+/* The same dot inside the picker rows. */
+.group-color-dot {
+  width: 11px; height: 11px; border-radius: 50%; flex: none;
+  background: var(--swatch);
+  border: 0.5px solid rgba(var(--tint), 0.30);
+}
 .list-group-x { background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; font-size: 12px; }
 .list-group-x:hover { color: rgba(var(--tint), 0.85); }
 .list-group-body.collapsed { display: none; }
@@ -2015,6 +2080,18 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .pin-slot.empty:hover { opacity: 0.8; }
 .pin-slot.blocked { opacity: 0.35; cursor: not-allowed; }
 .pin-slot.busy { animation: close-busy-pulse 1.1s ease-in-out infinite; }
+
+/* In the titlebar a slot sits next to .icon-btn, not next to .act. Inheriting .act's
+   36x32 square made the slots taller, wider and rounder than every other control up
+   there — the "+" read as an oversized button rather than a quiet invitation. These
+   match .icon-btn exactly: 25px tall, 7px radius, a 16px glyph. The detail panel's
+   slots are left alone; there the neighbours really are .act squares. */
+.titlebar .pin-slot {
+  height: 25px; line-height: 24px; min-width: 0;
+  padding: 0 9px; border-radius: 7px; font-size: 12px;
+}
+.titlebar .pin-slot.empty { width: auto; padding: 0 9px; }
+.titlebar .pin-slot svg { width: 16px; height: 16px; }
 
 /* Skill picker */
 .modal-input {

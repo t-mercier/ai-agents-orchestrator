@@ -194,17 +194,11 @@ window.setKeys = (map) => { try { localStorage.setItem('csm.keys', JSON.stringif
 window.resetKeys = () => { try { localStorage.removeItem('csm.keys') } catch { /* ignore */ } }
 
 // Does a session match a free-text query across its name/ticket/category/goal/path/branch?
+// Delegated to the tested model: this used to read `s.ticket` only — the primary — and
+// nothing about pull requests, so a session's PR was unsearchable and its second ticket
+// invisible. See renderer/lib/search-model.js.
 function matchesSearch(s, query) {
-  if (!query) return true
-  const q = query.toLowerCase()
-  return (
-    (s.name || '').toLowerCase().includes(q) ||
-    (s.ticket || '').toLowerCase().includes(q) ||
-    (s.category || '').toLowerCase().includes(q) ||
-    (s.goal || '').toLowerCase().includes(q) ||
-    (s.cwd || '').toLowerCase().includes(q) ||
-    (s.gitBranch || s.branch || '').toLowerCase().includes(q)
-  )
+  return window.CSMSearch.matchesSearch(s, query)
 }
 function filterSessions(list, query) {
   let out = list
@@ -365,7 +359,17 @@ async function fetchAndRender(resort = false) {
     // pruning on other tabs would drop running keys not present in those tabs' session sets.
     if (tab === 'running') {
       const liveByCat = {}
-      for (const s of sessions) { const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER'); (liveByCat[c] = liveByCat[c] || new Set()).add(s.notesPath || s.sessionId || s.name || '') }
+      // The pinned block keeps its manual order under a reserved bucket (ui.js
+      // PINNED_CAT). It is not a real category, so nothing would list its keys as live
+      // and prune would empty it on the very next poll — feed it explicitly.
+      const pinnedCat = window.PINNED_CAT || '__pinned__'
+      liveByCat[pinnedCat] = new Set()
+      for (const s of sessions) {
+        const key = s.notesPath || s.sessionId || s.name || ''
+        const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER')
+        ;(liveByCat[c] = liveByCat[c] || new Set()).add(key)
+        if (isPinned(key)) liveByCat[pinnedCat].add(key)
+      }
       window.CSMListOrg.save(window.CSMListOrg.prune(window.CSMListOrg.load(), liveByCat))
     }
     renderAll(filterSessions(sessions, searchQuery), selectedKey, tab, resort)

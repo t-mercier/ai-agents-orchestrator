@@ -8,7 +8,7 @@
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
-[![Version](https://img.shields.io/badge/version-0.14.1--alpha-9b8cff)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/release/t-mercier/ai-agents-orchestrator?include_prereleases&label=version&color=9b8cff)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/t-mercier/ai-agents-orchestrator/ci.yml?branch=master)](https://github.com/t-mercier/ai-agents-orchestrator/actions)
 [![License: Source Available](https://img.shields.io/badge/license-Source%20Available-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13+-000000?style=flat&logo=apple)](https://www.apple.com/macos/)
@@ -150,14 +150,27 @@ writes to `~/.claude`, so it has nothing to show without it. On first launch the
 session skills into `~/.claude/skills/` and keeps them current from then on; see
 [Session skills](#session-skills).
 
+**macOS, in one command** — fetches the latest `.dmg`, installs it, and clears the quarantine
+flag in one go:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/t-mercier/ai-agents-orchestrator/master/scripts/install-macos.sh | bash
+```
+
+Each step says what it does — [read it first](scripts/install-macos.sh) if
+piping a script into a shell makes you uneasy. That is a reasonable instinct, and the two-step
+version below does the same thing.
+
 > [!NOTE]
-> **macOS:** the builds are unsigned for now, so Gatekeeper calls the app "damaged" (it isn't). Move it to
-> `/Applications`, then strip the quarantine flag once — right-click → **Open** no longer clears this on
-> recent macOS:
+> **Why the quarantine step exists.** The alpha builds are not signed with an Apple Developer
+> ID, so Gatekeeper refuses them and reports the app as "damaged". It is not damaged — it is
+> unsigned. By hand: move the app to `/Applications`, then clear the flag once (right-click →
+> **Open** no longer does this on recent macOS):
 > ```bash
 > xattr -cr "/Applications/AI Agents Orchestrator.app"
 > ```
-> Signed and notarized releases come once it is out of alpha.
+> Signed and notarized releases come once it is out of alpha, and the installer script becomes
+> unnecessary then.
 
 ### Build from source
 
@@ -240,12 +253,12 @@ replaced is a skill of your own that happens to share one of those 14 names — 
 ```bash
 bash scripts/install.sh              # install; a skill you already have is KEPT
 bash scripts/install.sh --force      # replace this app's skills with this checkout's
-bash scripts/install.sh --with-hooks # also print the lines that ENABLE the two hooks
+bash scripts/install.sh --with-hooks # also print the lines that ENABLE the hooks
 bash scripts/install.sh --all        # everything: --force + --with-hooks
 ```
 
 The hook scripts themselves are copied by every run, flag or not — see
-[The two hooks](#the-two-hooks). `--with-hooks` only decides whether the installer prints
+[The hooks](#the-hooks). `--with-hooks` only decides whether the installer prints
 the `settings.json` lines that switch them on.
 
 `--force` overwrites **this app's own 14 skills**, never your personal ones. It is not the
@@ -451,12 +464,12 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 
 ## Security
 
-- **No shell-string execution** — `open`, `osascript`, `git`, `claude` are all spawned with separate args (no injection); AppleScript uses the `on run argv` pattern.
+- **Every shell interpolation is quoted** — `claude` runs through a login shell, because a Finder-launched app has no `claude` on its PATH; each value interpolated into that command line is POSIX single-quote escaped first. `open`, `osascript` and `git` are spawned with separate args, and AppleScript uses the `on run argv` pattern.
 - Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
 - The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.
 - **The session skills** are app-owned: the app copies its bundled versions into `~/.claude/skills/` **silently at each launch**, plus on the Settings button. The write is confined to the 14 names it ships plus `lib/` and `.ao-base/`, never touches session transcripts or a skill of yours, and an older build stands down rather than revert a newer install. The files are installed read-only and the `ao_skill_guard` hook refuses an agent's edit to one; a copy forced anyway is restored and named.
 - External links open in your **system browser**, never inside the app.
-- **The app itself makes no network calls**, and stores no secrets. Two buttons do reach out, through Claude Code rather than the app: **Sync** (tracker via MCP, `gh` for pull requests) and **Close** (`/wrap-session` runs `gh pr view` to attach the PR before filing the session). Both are things you press.
+- **The app itself makes no network calls**, and stores no secrets — none of its direct dependencies is an HTTP client, and the one `Cargo.lock` does carry comes from Tauri core and is unused here. Two buttons do reach out, through Claude Code rather than the app: **Sync** (tracker via MCP, `gh` for pull requests) and **Close** (`/wrap-session` runs `gh pr view` to attach the PR before filing the session). Both are things you press.
 
 ## Tech stack
 
@@ -466,7 +479,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (185, `cargo test`) + Jest (189, renderer logic) + the hooks' own unittest files (69, `python3 hooks/test_*.py`) — 443 total |
+| Tests | Rust unit tests (196, `cargo test`) + Jest (189, renderer logic) + the hooks' own unittest files (69, `python3 hooks/test_*.py`) — 454 total |
 
 ## Roadmap
 

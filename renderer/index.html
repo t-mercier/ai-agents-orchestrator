@@ -7,23 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="xterm.css">
   <!-- Apply saved theme + accent before first paint (no flash). Full logic in app.js. -->
-  <script>
-    try {
-      var t = localStorage.getItem('csm.theme'); if (t) document.documentElement.dataset.theme = t
-      var d = localStorage.getItem('csm.density'); if (d) document.documentElement.dataset.density = d
-      var lt = localStorage.getItem('csm.lookTint'); if (lt) document.documentElement.style.setProperty('--look-tint', lt)
-      var la = localStorage.getItem('csm.lookTintA'); if (la) document.documentElement.style.setProperty('--look-tint-a', la)
-      if (localStorage.getItem('csm.compactChrome') === '1') document.documentElement.classList.add('compact-chrome')
-      var a = localStorage.getItem('csm.accent')
-      if (a && /^#[0-9a-f]{6}$/i.test(a)) {
-        var n = parseInt(a.slice(1), 16)
-        document.documentElement.style.setProperty('--accent', a)
-        document.documentElement.style.setProperty('--accent-rgb', ((n>>16)&255) + ', ' + ((n>>8)&255) + ', ' + (n&255))
-        var lum = 0.299*((n>>16)&255) + 0.587*((n>>8)&255) + 0.114*(n&255)
-        document.documentElement.style.setProperty('--on-accent', lum > 150 ? '#16171b' : '#ffffff')
-      }
-    } catch (e) { /* ignore */ }
-  </script>
+  <script src="theme-boot.js"></script>
 </head>
 <body class="mode-list">
   <div class="titlebar" data-tauri-drag-region>
@@ -37,7 +21,8 @@
       <!-- Sync all: the per-card Sync for every open session with a ticket or a PR, in one
            click — one gh batch, then the agents one at a time (app.js runSyncAll). -->
       <button class="icon-btn" id="sync-all-btn" title="Sync tickets and pull requests of every open session" aria-label="Sync all open sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64L3 16"/><path d="M3 21v-5h5"/></svg><span class="btn-label">Sync all</span></button>
-      <!-- Pinned skills: three slots the user fills from their own ~/.claude/skills.
+      <!-- Pinned skills: up to five, filled from the user's own ~/.claude/skills. Only one
+           empty "+" shows at a time; right-click a filled one to replace or unpin it.
            Global ones run headless from home; the per-session set lives in the detail
            panel, where a session to run against actually exists. -->
       <div class="pin-slots" id="pin-global"></div>
@@ -406,7 +391,6 @@
                 <div class="density-slot" data-density-slot></div>
                 </div>
               </div>
-            </div>
           </section>
 
           <!-- Shortcuts: remap the single-key actions (localStorage, applies live). -->
@@ -679,6 +663,7 @@
   <script src="lib/skills-status-copy.js"></script>
   <script src="lib/sync-all-model.js"></script>
   <script src="lib/skill-launch-model.js"></script>
+  <script src="lib/search-model.js"></script>
   <script src="lib/onboarding-model.js"></script>
   <script src="looks.js"></script>
   <script src="prstate.js"></script>

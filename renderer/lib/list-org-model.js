@@ -27,6 +27,9 @@
         groups[gid] = {
           name: String(grp.name || 'Group'),
           collapsed: !!grp.collapsed,
+          // '' means "inherit" (the category's colour, then the app accent). Anything
+          // that is not a #rrggbb is dropped rather than carried into a style attribute.
+          color: /^#[0-9a-fA-F]{6}$/.test(grp.color || '') ? String(grp.color) : '',
           members: Array.isArray(grp.members) ? grp.members.filter(x => typeof x === 'string') : [],
         }
       }
@@ -62,7 +65,7 @@
       if (isGroupRef(id)) {
         const gid = id.slice(GROUP_PREFIX.length)
         const g = c.groups[gid]
-        return { kind: 'group', id: gid, name: g.name, collapsed: g.collapsed, members: g.members.filter(m => liveSet.has(m)) }
+        return { kind: 'group', id: gid, name: g.name, collapsed: g.collapsed, color: g.color || '', members: g.members.filter(m => liveSet.has(m)) }
       }
       return { kind: 'session', key: id }
     })
@@ -78,12 +81,19 @@
 
   function createGroup(state, catName, gid, name) {
     const s = clone(state); const c = cat(s, catName)
-    if (!c.groups[gid]) { c.groups[gid] = { name: String(name || 'Group'), collapsed: false, members: [] }; c.order.push(groupRef(gid)) }
+    if (!c.groups[gid]) { c.groups[gid] = { name: String(name || 'Group'), collapsed: false, color: '', members: [] }; c.order.push(groupRef(gid)) }
     return s
   }
   function renameGroup(state, catName, gid, name) {
     const s = clone(state); const g = (s.categories[catName] || {}).groups && s.categories[catName].groups[gid]
     const clean = String(name || '').trim(); if (g && clean) g.name = clean; return s
+  }
+  // A group's own colour. '' (or anything that is not a hex) clears it back to
+  // inheriting, which is how the picker offers "None".
+  function setGroupColor(state, catName, gid, color) {
+    const s = clone(state); const c = s.categories[catName]
+    if (c && c.groups[gid]) c.groups[gid].color = /^#[0-9a-fA-F]{6}$/.test(color || '') ? String(color) : ''
+    return s
   }
   function toggleGroupCollapsed(state, catName, gid) {
     const s = clone(state); const c = s.categories[catName]; if (c && c.groups[gid]) c.groups[gid].collapsed = !c.groups[gid].collapsed; return s
@@ -113,7 +123,7 @@
     // Remove from loose + other groups
     for (const key of keys) { removeFromTop(c, key); removeFromGroups(c, key) }
     // Create the group
-    c.groups[gid] = { name: 'Group', collapsed: false, members: [...keys] }
+    c.groups[gid] = { name: 'Group', collapsed: false, color: '', members: [...keys] }
     // Insert group ref at the specified index (or append)
     const ref = groupRef(gid)
     const idx = (atIndex == null || atIndex < 0 || atIndex > c.order.length) ? c.order.length : atIndex
@@ -175,7 +185,7 @@
     STORAGE_KEY, GROUP_PREFIX, groupRef, isGroupRef,
     emptyState, normalize, orderedItems,
     moveSession,
-    createGroup, createGroupWith, renameGroup, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
+    createGroup, createGroupWith, renameGroup, setGroupColor, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
     prune, load, save,
   }
 })

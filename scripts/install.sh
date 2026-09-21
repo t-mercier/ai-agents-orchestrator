@@ -20,7 +20,7 @@ Install the bundled session skills + seed the shared config.
                                           (your own are never in scope; one of the 14 you
                                           had edited is restored and named — they are the
                                           app's, not customisable)
-  bash scripts/install.sh --with-hooks    print the settings.json lines that ENABLE the two
+  bash scripts/install.sh --with-hooks    print the settings.json lines that ENABLE the
                                           hooks (never edits the file). The scripts are
                                           copied by every run, flag or not.
   bash scripts/install.sh --all           everything: --force + --with-hooks

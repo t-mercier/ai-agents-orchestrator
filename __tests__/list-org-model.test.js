@@ -105,3 +105,34 @@ describe('prune + load', () => {
     expect(M.normalize({ categories: 'nope' })).toEqual(M.emptyState())
   })
 })
+
+describe('group colour', () => {
+  const withGroup = () => M.createGroupWith(base(), 'FEAT', 'g1', ['a', 'b'], 0)
+
+  it('a group has no colour until one is set', () => {
+    expect(withGroup().categories.FEAT.groups.g1.color).toBe('')
+  })
+
+  it('setGroupColor stores a hex and clears back to inherit', () => {
+    let s = M.setGroupColor(withGroup(), 'FEAT', 'g1', '#A88FD0')
+    expect(s.categories.FEAT.groups.g1.color).toBe('#A88FD0')
+    s = M.setGroupColor(s, 'FEAT', 'g1', '')
+    expect(s.categories.FEAT.groups.g1.color).toBe('')
+  })
+
+  it('refuses anything that is not a hex, so it can never reach a style attribute', () => {
+    const s = M.setGroupColor(withGroup(), 'FEAT', 'g1', 'red; background:url(x)')
+    expect(s.categories.FEAT.groups.g1.color).toBe('')
+  })
+
+  it('orderedItems carries the colour — the renderer reads the item, not the state', () => {
+    const s = M.setGroupColor(withGroup(), 'FEAT', 'g1', '#8FC9B9')
+    const grp = M.orderedItems(s, 'FEAT', ['a', 'b']).find(i => i.kind === 'group')
+    expect(grp.color).toBe('#8FC9B9')
+  })
+
+  it('survives a normalize round trip — an unlisted key would be dropped on load', () => {
+    const s = M.setGroupColor(withGroup(), 'FEAT', 'g1', '#8FC9B9')
+    expect(M.normalize(JSON.parse(JSON.stringify(s))).categories.FEAT.groups.g1.color).toBe('#8FC9B9')
+  })
+})
