@@ -1019,10 +1019,31 @@ fn preview_ends(head: &[String], tail: &[String], cap: usize) -> (String, String
 /// `discover_meta` already does. The tail seeks to the last 64 KB rather than streaming —
 /// a long session's `.jsonl` runs to tens of megabytes, and a preview that costs a full
 /// read is a preview nobody opens twice.
+/// Lines from the start of a transcript, stopping at the first real user turn — and at
+/// `cap` bytes whatever happens.
+///
+/// The cap is the point. Without it, a transcript whose first user turn is missing (a
+/// truncated file, a format we don't recognise, a session that never received a message)
+/// reads entirely into memory: the largest `.jsonl` on this machine is 165 MB, and a
+/// preview is not worth an allocation that size.
+fn head_until_user_turn(r: impl std::io::Read, cap: u64) -> Vec<String> {
+    use std::io::{BufRead, BufReader};
+    let mut head = Vec::new();
+    for line in BufReader::new(r.take(cap)).lines().map_while(Result::ok) {
+        let done = user_text(&line).is_some();
+        head.push(line);
+        if done {
+            break;
+        }
+    }
+    head
+}
+
 #[tauri::command]
 pub fn preview_session(session_id: String) -> Value {
-    use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+    use std::io::{Read, Seek, SeekFrom};
     const TAIL: u64 = 64 * 1024;
+    const HEAD: u64 = 256 * 1024;
     const CAP: usize = 600;
 
     let Some(path) = transcript_path(&session_id) else {
@@ -1032,17 +1053,10 @@ pub fn preview_session(session_id: String) -> Value {
         return json!({ "found": false });
     };
 
-    // Head: stop as soon as a real user turn is found.
-    let mut head: Vec<String> = Vec::new();
-    if let Ok(f) = fs::File::open(&path) {
-        for line in BufReader::new(f).lines().map_while(Result::ok) {
-            let done = user_text(&line).is_some();
-            head.push(line);
-            if done {
-                break;
-            }
-        }
-    }
+    let head: Vec<String> = match fs::File::open(&path) {
+        Ok(f) => head_until_user_turn(f, HEAD),
+        Err(_) => Vec::new(),
+    };
 
     // Tail: the last TAIL bytes, first (probably partial) line dropped.
     let mut tail: Vec<String> = Vec::new();
@@ -1731,7 +1745,7 @@ mod tests {
     }
 
     use super::{
-        follow_continued,
+        follow_continued, head_until_user_turn,
         bucket_by_status, date_to_days, discover_meta_lines, extract_pr_urls, frontmatter_values,
         lead_date, is_resumable_sid, merge_links, notes_records_session, parse_frontmatter,
         preview_ends,
@@ -2398,5 +2412,30 @@ mod tests {
         let only = vec![u("just the one prompt")];
         let (first, last) = preview_ends(&only, &only, 600);
         assert_eq!(first, last);
+    }
+
+    #[test]
+    fn the_head_stops_at_the_first_user_turn() {
+        let jsonl = concat!(
+            r#"{"type":"summary","summary":"x"}"#, "\n",
+            r#"{"type":"assistant","message":{"content":"hi"}}"#, "\n",
+            r#"{"type":"user","message":{"content":"the first real prompt"}}"#, "\n",
+            r#"{"type":"assistant","message":{"content":"after"}}"#, "\n",
+        );
+        let head = head_until_user_turn(jsonl.as_bytes(), 256 * 1024);
+        assert_eq!(head.len(), 3, "reads up to and including the user turn, no further");
+        assert!(head[2].contains("the first real prompt"));
+    }
+
+    #[test]
+    fn a_transcript_with_no_user_turn_stops_at_the_cap_instead_of_reading_it_all() {
+        // The failure this guards: a 165 MB .jsonl whose first user turn never comes
+        // used to land in memory whole, because the loop's only exit was finding one.
+        let line = format!("{}\n", r#"{"type":"assistant","message":{"content":"noise"}}"#);
+        let big: String = line.repeat(20_000); // ~1 MB, no user turn anywhere
+        assert!(big.len() > 900_000, "fixture must exceed the cap");
+        let head = head_until_user_turn(big.as_bytes(), 64 * 1024);
+        let read: usize = head.iter().map(|l| l.len() + 1).sum();
+        assert!(read <= 64 * 1024 + line.len(), "read {read} bytes past a 64 KB cap");
     }
 }

@@ -84,7 +84,7 @@ pub(crate) fn launch_settings_arg() -> String {
         return String::new();
     }
 
-    format!(" --settings '{}'", settings_file.to_string_lossy())
+    format!(" --settings {}", pty::shell_quote(&settings_file.to_string_lossy()))
 }
 
 /// Open an http(s) URL in the system browser. The scheme check already prevents a

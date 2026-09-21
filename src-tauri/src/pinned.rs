@@ -112,8 +112,16 @@ pub fn run_skill(skill: String, cwd: String, resume: Option<String>) -> Result<V
     } else {
         crate::config::home().to_string_lossy().to_string()
     };
+    // Validated, not merely quoted — `wrap_session` holds the same line for the same
+    // `claude --resume` argument, and two commands building one command line should not
+    // disagree on what a session id is.
     let resume_arg = match resume.as_deref() {
-        Some(id) if !id.is_empty() => format!(" --resume {}", crate::pty::shell_quote(id)),
+        Some(id) if !id.is_empty() => {
+            if !crate::is_valid_session_id(id) {
+                return Err(format!("not a session id: {id}"));
+            }
+            format!(" --resume {}", crate::pty::shell_quote(id))
+        }
         _ => String::new(),
     };
     let inner = format!(
@@ -160,6 +168,18 @@ mod tests {
     fn a_file_without_frontmatter_has_no_description_rather_than_a_stray_line() {
         assert_eq!(description_of("# Just a title\ndescription: not frontmatter\n"), "");
         assert_eq!(description_of(""), "");
+    }
+
+    #[test]
+    fn run_skill_refuses_a_resume_that_is_not_a_session_id() {
+        // Rejected before anything is spawned, so this test starts no process.
+        let err = run_skill(
+            "save-session".into(),
+            "/".into(),
+            Some("../../.ssh/id_rsa".into()),
+        )
+        .unwrap_err();
+        assert!(err.contains("not a session id"), "{err}");
     }
 
     #[test]
