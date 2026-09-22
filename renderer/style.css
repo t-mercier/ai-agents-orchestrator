@@ -2030,8 +2030,23 @@ body.dl-drag-active .list-card { pointer-events: none; }
 
 .list-group { margin: 4px 6px; border: 1px solid rgba(var(--accent-rgb), 0.4); border-radius: 12px; background: rgba(var(--accent-rgb), 0.05); overflow: hidden; }
 .list-group-head { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: grab; }
-.list-group-chev { display: inline-block; color: var(--accent); cursor: pointer; transform: rotate(90deg); transition: transform 0.15s; line-height: 1; }
-.list-group-chev.collapsed { transform: rotate(0deg); }
+/* `line-height: 1` on a glyph this small gave the arrow a 13x5.7px hit area: clicking it
+   mostly landed on the header, which has no collapse handler, so folding felt broken
+   rather than missed. The box is now the height of the row and centres the glyph — same
+   arrow, a target you can actually hit. The rotation moves to the glyph so the box stays
+   put and keeps its own hit area square. */
+.list-group-chev {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: none;
+  color: var(--accent); cursor: pointer; line-height: 1;
+}
+.list-group-chev::before {
+  content: '›';
+  display: block;
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+}
+.list-group-chev.collapsed::before { transform: rotate(0deg); }
 .list-group-name { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: rgba(var(--tint), 0.85); cursor: pointer; padding: 1px 3px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-group-edit { display: inline-flex; align-items: center; background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; padding: 0 2px; }
 .list-group-edit svg { width: 13px; height: 13px; }

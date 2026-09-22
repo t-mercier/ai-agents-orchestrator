@@ -218,3 +218,52 @@ test('a card and a menu are controls, not documents — no text selection', asyn
   // The detail panel stays selectable — ids and paths there are worth copying.
   expect(sel.detail).not.toBe('none')
 })
+
+test('the group chevron folds and unfolds', async ({ page }) => {
+  // Shipped dead: drag-list calls preventDefault on mousedown for anything that is not a
+  // button/input/link/[data-nodrag], which suppresses the click that follows. The group
+  // NAME carried data-nodrag and worked; the chevron beside it did not and did nothing.
+  //
+  // Built in the pinned block rather than in a category: every category in the fixture
+  // holds exactly one non-waiting session, and a group needs two. groupBlock renders the
+  // same header either way.
+  const built = await page.evaluate(() => {
+    const key = (s) => s.notesPath || s.sessionId || s.name || ''
+    const ss = (window._lastSessions || []).filter((s) => s.status !== 'waiting')
+    if (ss.length < 2) return false
+    const a = key(ss[0]), b = key(ss[1])
+    if (!window.isPinned(a)) window.togglePin(a)
+    if (!window.isPinned(b)) window.togglePin(b)
+    window.CSMListOrg.save(window.CSMListOrg.createGroupWith(
+      window.CSMListOrg.load(), window.PINNED_CAT, 'lg-chev', [a, b], 0))
+    window.fetchAndRender(false)
+    return true
+  })
+  expect(built, 'the fixture must offer two non-waiting sessions to pin').toBe(true)
+
+  const chev = page.locator('.list-group-chev').first()
+  await expect(chev).toBeVisible()
+
+  // The defect was the hit area, not the wiring: `line-height: 1` on the glyph left a
+  // 13x5.7px target, so clicking "the arrow" mostly landed on the header — which has no
+  // collapse handler — and folding felt unresponsive rather than missed.
+  const box = await chev.boundingBox()
+  expect(box.height, `the arrow is ${box.height}px tall — too small to hit`).toBeGreaterThanOrEqual(16)
+  expect(box.width).toBeGreaterThanOrEqual(16)
+  const onTarget = await chev.evaluate((el) => {
+    const b = el.getBoundingClientRect()
+    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)
+    return hit === el || el.contains(hit)
+  })
+  expect(onTarget, 'the arrow must be what sits under its own centre').toBe(true)
+  const collapsed = () => page.evaluate(() => {
+    const c = window.CSMListOrg.load().categories[window.PINNED_CAT] || {}
+    return !!(c.groups || {})['lg-chev']?.collapsed
+  })
+
+  expect(await collapsed()).toBe(false)
+  await chev.click()
+  await expect.poll(collapsed, { message: 'clicking the chevron must fold the group' }).toBe(true)
+  await page.locator('.list-group-chev').first().click()
+  await expect.poll(collapsed, { message: 'and unfold it again' }).toBe(false)
+})
