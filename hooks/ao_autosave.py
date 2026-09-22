@@ -79,8 +79,12 @@ def decide(context, notes_mtime, transcript_mtime, state, now):
         if due:
             tiers.update(t for t in CONTEXT_TIERS if context >= t)
             if max(due) >= BLOCKING_TIER:
-                reason = ("Context is at {}% — run /save-session now to checkpoint notes.md, "
-                          "then stop.".format(context))
+                # "then stop" alone has been read as "wrap this up": a session was
+                # closed because its agent ran out of context, which took it out of the
+                # Running list without anyone asking. Say which of the two to run.
+                reason = ("Context is at {}% — run /save-session now to checkpoint "
+                          "notes.md, then stop. Do NOT close the session: running out of "
+                          "context is not the end of the work.".format(context))
                 return reason, True, {"tiers": sorted(tiers), "last": now}
             reason = ("Context is at {}%. A checkpoint is worth taking soon — run "
                       "/save-session when the current step is finished.".format(context))

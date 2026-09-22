@@ -4,8 +4,11 @@ description: >-
   Wrap up the active session: resolve its registered notes.md, summarise what
   this session did (Decisions, Files touched, Open questions, Next steps), update
   those sections, and append a Session history entry. If knowledge notes are enabled in
-  config, distils a short atomic note to the matching vault. Trigger on "/close-session",
-  "wrap up", "save session notes", "ferme la session".
+  config, distils a short atomic note to the matching vault.
+  Trigger ONLY on an explicit request to END the session: "/close-session",
+  "wrap up", "ferme la session". Never on an intent to merely persist notes —
+  "save session notes" belongs to /save-session, and closing a session the user
+  did not ask to close takes it out of their Running list.
 allowed-tools: Bash Read Edit Write
 argument-hint: ""
 ---

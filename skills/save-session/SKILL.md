@@ -5,7 +5,9 @@ description: >-
   summarise what this session did so far (Decisions, Files touched, Open questions,
   Next steps), update those sections, and append an "(in progress)" Session history
   entry. The session stays open. Useful mid-session, or right before context compaction.
-  Trigger on "/save-session", "save session", "checkpoint", "sauvegarde la session".
+  Trigger on "/save-session", "save session", "save session notes", "checkpoint",
+  "sauvegarde la session" — and whenever context is running out: running out is a
+  reason to checkpoint, never a reason to close.
 allowed-tools: Bash Read Edit Write
 argument-hint: ""
 ---

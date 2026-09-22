@@ -45,6 +45,8 @@ class TestDecide(unittest.TestCase):
         reason, blocking, state = A.decide(91, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW)
         self.assertIn("91%", reason)
         self.assertTrue(blocking, "a compaction is close; this one is worth the interruption")
+        self.assertIn("Do NOT close", reason,
+                      "a session was closed once because its agent ran out of context")
         self.assertEqual(state["tiers"], [75, 90])
 
     # A resume can land straight at 93 %: one reason, both tiers marked, no second nag.
