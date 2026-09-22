@@ -129,3 +129,53 @@ test('the titlebar shows one empty pinned slot, sized like its neighbours', asyn
   })
   expect(Math.abs(slot - neighbour), `slot ${slot}px vs neighbour ${neighbour}px`).toBeLessThanOrEqual(2)
 })
+
+test('an icon button holds one centred glyph, whatever its state', async ({ page }) => {
+  // Shipped: the ticket and pull-request buttons drew their state as a second glyph
+  // beside the icon, inside a button sized for one. The icon was pushed off centre and
+  // the row read as misaligned. The state is the icon's own colour now.
+  await page.locator('#panel-list .list-card[data-key]').first().click()
+
+  const pills = await page.locator('.act.pill').evaluateAll((els) =>
+    els.map((el) => {
+      const b = el.getBoundingClientRect()
+      const svgs = el.querySelectorAll('svg')
+      // The count badge is absolutely positioned, so it never shifts the glyph.
+      const g = svgs[0] ? svgs[0].getBoundingClientRect() : null
+      return {
+        label: el.getAttribute('aria-label') || '?',
+        svgCount: svgs.length,
+        offset: g ? Math.abs((g.left + g.width / 2) - (b.left + b.width / 2)) : -1,
+        colour: getComputedStyle(el).color,
+      }
+    }))
+
+  expect(pills.length, 'the fixture should render at least one ticket or PR button').toBeGreaterThan(0)
+  for (const p of pills) {
+    expect(p.svgCount, `"${p.label}" carries more than its own icon`).toBe(1)
+    expect(p.offset, `"${p.label}" is off centre by ${p.offset}px`).toBeLessThanOrEqual(1)
+  }
+})
+
+test('each pull-request state tints the icon differently', async ({ page }) => {
+  // This contract was silently broken: `.pr-open` and `.act` have the same specificity
+  // and `.act` comes later in the stylesheet, so the tint never applied to an icon-only
+  // button. Nobody noticed because a second glyph was carrying the state instead. Now
+  // the colour IS the signal, so it has to be checked.
+  const tints = await page.evaluate(() => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const out = {}
+    for (const c of ['pr-open', 'pr-draft', 'pr-merged', 'pr-closed', 'pr-unknown', '']) {
+      host.innerHTML = `<button class="act pill ${c}"><svg viewBox="0 0 24 24" stroke="currentColor"></svg></button>`
+      out[c || 'default'] = getComputedStyle(host.querySelector('svg')).stroke
+    }
+    host.remove()
+    return out
+  })
+  const seen = Object.values(tints)
+  expect(new Set(seen).size, `states share a colour: ${JSON.stringify(tints)}`).toBe(seen.length)
+  expect(tints['pr-open']).toBe('rgb(63, 185, 80)')
+  expect(tints['pr-closed']).toBe('rgb(248, 81, 73)')
+})
+

@@ -762,11 +762,13 @@ function ticketPill(s) {
   // No status known → the icon stays exactly as it was. Unlike a PR, where `unknown`
   // means "you have not synced", a ticket with no status simply predates the skills
   // writing one — greying every ticket icon to say that would be noise, not information.
+  // The state is carried by the ICON'S OWN COLOUR, not by a mark beside it. A second
+  // glyph in a button sized for one pushed the icon off centre, and a row of them read
+  // as misaligned — which is what it was. `currentColor` in the svg does the rest.
   const fam = ticketFamilyOfSession(s)
   const known = showsState(fam)
-  const glyph = known ? `<span class="pr-glyph">${svgIcon(PR_GLYPH[fam])}</span>` : ''
   const status = ticketStatusOf(s, tickets[0])
-  return `<button class="act pill${tickets.length > 1 ? ' multi' : ''}${known ? ` pr-${fam}` : ''}" ${linkMenuAttrs('ticket', s)} aria-label="${tickets.length} ticket${tickets.length > 1 ? 's' : ''}" data-tip="${tickets.length > 1 ? `${tickets.length} tickets · pick one` : `${escapeHtml(tickets[0])}${status ? ` · ${escapeHtml(status)}` : ''}`}">${ICON_TICKET}${glyph}${count}</button>`
+  return `<button class="act pill${tickets.length > 1 ? ' multi' : ''}${known ? ` pr-${fam}` : ''}" ${linkMenuAttrs('ticket', s)} aria-label="${tickets.length} ticket${tickets.length > 1 ? 's' : ''}" data-tip="${tickets.length > 1 ? `${tickets.length} tickets · pick one` : `${escapeHtml(tickets[0])}${status ? ` · ${escapeHtml(status)}` : ''}`}">${ICON_TICKET}${count}</button>`
 }
 
 // Ticket as a NUMBER label (e.g. FEAT-1842) for list + card views — the id reads at a
@@ -836,19 +838,21 @@ function prPill(s) {
   if (!prs.length) return ''
   const state = prStateOfSession(s)
   const speaks = showsState(state)
-  // `unknown` gets its dotted ring: a grey icon with no mark at all cannot say whether
-  // it has never been synced or whether the PRs merely disagree. `mixed` stays bare —
-  // there the picker is the honest answer.
-  const glyph = (speaks || state === 'unknown')
-    ? `<span class="pr-glyph">${svgIcon(PR_GLYPH[state])}</span>`
-    : ''
+  // The state is the icon's colour, not a mark beside it — see ticketPill above.
+  // `unknown` keeps a signal of its own by being dimmed rather than ringed: a plain
+  // icon cannot say whether it has never been synced or whether the PRs disagree.
+  // `mixed` stays at the default colour — there the picker is the honest answer.
+  const tone = speaks ? ` pr-${state}` : (state === 'unknown' ? ' pr-unknown' : '')
   const count = prs.length > 1 ? `<span class="multi-count">${prs.length}</span>` : ''
   // Always the picker, even for a single PR. It costs one click to reach the link, and
   // buys the row that opens the editor — which is what lets the toolbar drop its own
   // Edit button instead of carrying a second way to do the same thing.
   const what = prs.length > 1 ? `${prs.length} PRs` : escapeHtml(prNumber(prs[0]))
-  const tip = speaks ? `${what} · ${PR_WORD[state]}` : `${what} · pick one`
-  return `<button class="act pill${prs.length > 1 ? ' multi' : ''}${speaks ? ` pr-${state}` : ''}" ${linkMenuAttrs('pr', s)} aria-label="${prs.length} pull request${prs.length > 1 ? 's' : ''}${speaks ? `, ${PR_WORD[state]}` : ''}" data-tip="${tip}">${ICON_GITHUB}${glyph}${count}</button>`
+  // The dotted ring used to say "never synced"; with it gone the words have to.
+  const tip = speaks ? `${what} · ${PR_WORD[state]}`
+    : state === 'unknown' ? `${what} · not synced yet`
+    : `${what} · pick one`
+  return `<button class="act pill${prs.length > 1 ? ' multi' : ''}${tone}" ${linkMenuAttrs('pr', s)} aria-label="${prs.length} pull request${prs.length > 1 ? 's' : ''}${speaks ? `, ${PR_WORD[state]}` : ''}" data-tip="${tip}">${ICON_GITHUB}${count}</button>`
 }
 
 

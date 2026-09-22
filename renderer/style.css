@@ -1262,11 +1262,13 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
    glyph. Two reasons — colour-blind readers, and the fact that green/orange/red
    are already the SESSION status dot a few pixels away on the same card. The
    glyph is what tells them apart; the colour only speeds up the scan. */
-.pr-open   { color: #3fb950; }
-.pr-draft  { color: #8b949e; }
-.pr-merged { color: #a371f7; }
-.pr-closed { color: #f85149; }
-.pr-unknown { color: var(--text-tertiary); }
+/* The state tint, defined once as a custom property so the colour has a single home
+   and the icon-only buttons below can claim it without repeating a hex. */
+.pr-open   { --pr-tint: #3fb950;             color: var(--pr-tint); }
+.pr-draft  { --pr-tint: #8b949e;             color: var(--pr-tint); }
+.pr-merged { --pr-tint: #a371f7;             color: var(--pr-tint); }
+.pr-closed { --pr-tint: #f85149;             color: var(--pr-tint); }
+.pr-unknown { --pr-tint: var(--text-tertiary); color: var(--pr-tint); }
 /* Fixed box, centred: ● ✎ ✔ ✕ ◌ are not the same width, so letting the glyph size
    itself shifted everything after it — the PR numbers in a picker stopped lining up
    from one row to the next. */
@@ -1732,6 +1734,13 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .act:hover { color: var(--text-primary); border-color: rgba(var(--tint), 0.22); background: rgba(var(--tint), 0.09); }
+/* On an icon-only button the state IS the colour — there is no glyph beside the icon
+   to carry it any more. `.pr-open` and `.act` have the SAME specificity, and `.act`
+   comes later in this file, so the tint never won: every ticket and PR button drew in
+   the default grey whatever its state. These two rules settle it, and keep the tint
+   through hover — the colour says what the PR is, not what the mouse is doing. */
+.act.pill        { color: var(--pr-tint, var(--text-secondary)); }
+.act.pill:hover  { color: var(--pr-tint, var(--text-primary)); }
 .act svg { width: 18px; height: 18px; display: block; }
 .act img { width: 18px; height: 18px; display: block; }
 .act.act-primary { background: rgba(var(--accent-rgb), 0.18); border-color: rgba(var(--accent-rgb), 0.55); color: #fff; }
