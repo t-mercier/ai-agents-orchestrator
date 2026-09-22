@@ -1280,11 +1280,13 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
    `closed` drops the red entirely: "won't do" is a dead end, not an alarm, and a dark
    grey says that without spending the only loud colour in the palette on it. */
 .pr-open   { --pr-tint: #82c08e;             color: var(--pr-tint); }
-.pr-draft  { --pr-tint: #8b949e;             color: var(--pr-tint); }
+/* Ardoise, the look palette's own slate — "queued" is a real state and earns a colour;
+   it is `closed` that should recede into a neutral, not this. */
+.pr-draft  { --pr-tint: #7E93B8;             color: var(--pr-tint); }
 /* 276°, not GitHub's 262°: at 262° it landed 1° from the Lavande look's accent with
    double the saturation, which read as two purples that missed each other. */
 .pr-merged { --pr-tint: #bd9bd4;             color: var(--pr-tint); }
-.pr-closed { --pr-tint: #5c6169;             color: var(--pr-tint); }
+.pr-closed { --pr-tint: #4a4e55;             color: var(--pr-tint); }
 .pr-unknown { --pr-tint: var(--text-tertiary); color: var(--pr-tint); }
 /* Fixed box, centred: ● ✎ ✔ ✕ ◌ are not the same width, so letting the glyph size
    itself shifted everything after it — the PR numbers in a picker stopped lining up
