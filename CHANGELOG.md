@@ -10,6 +10,53 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.1-alpha] - 2026-09-22
+
+### Changed
+
+- **A ticket or pull-request state is the icon's colour now, not a dot beside it.** The
+  second glyph sat inside a button sized for one, pushing the icon off centre so a row of
+  them read as misaligned. Removing it exposed an older defect: the state tint had never
+  applied to these buttons at all — `.pr-open` and `.act` share a specificity and `.act`
+  comes later in the stylesheet, so every icon drew in the default grey whatever its
+  state, and the glyph was quietly carrying the whole signal.
+- **The state colours are tuned to this app.** They were GitHub's, built for a white
+  interface at 49–93 % saturation; the window is near-black and its look accents sit
+  between 22 % and 42 %. Same hues at our saturation — and `merged` moves from 262° to
+  276°, since at 262° it landed one degree from the Lavande accent with twice the
+  saturation, which read as two purples that missed each other. `closed` drops red
+  altogether for a dark neutral: "won't do" is a dead end, not an alarm. `draft` takes
+  the palette's own slate, because "queued" is a real state and earns a colour.
+- **The checkpoint hook interrupts far less.** Its tiers move from 60/80 % to 75/90 %, and
+  only the top one blocks. Blocking hijacks the turn — the model drops what it was about
+  to say and checkpoints instead, which is the wrong trade at 75 % and wrong every half
+  hour: a turn that ended on a question got a checkpoint in place of an answer. Below the
+  top tier it now emits a notice the model reads without being pulled off course.
+- **`Triaged` counts as not started.** It sat with the in-flight statuses while `Triage`
+  and `Untriaged` were already in draft — three words that read as one thing, one of them
+  alone drawn as active.
+
+### Fixed
+
+- **A row of the session menu no longer sits 6px right of the others.** A menu row carries
+  the class of the button it mirrors so the existing handler runs it; `.terminal-toggle-btn`
+  carries `margin-left: 6px`, and the reset that neutralises a borrowed class covered what
+  paints inside the box but not what moves it.
+- **Right-clicking a card no longer selects the word under the pointer.** A card and a menu
+  are controls; the detail panel stays selectable, since the ids and paths worth copying
+  live there.
+
+### Internal
+
+- **The renderer is tested in a real browser, in CI.** The unit tests cover the pure
+  models; the ~3,900 lines that build the DOM had none, and that is where six of the ten
+  interface defects found by hand came from. Playwright rather than jsdom, decided on
+  evidence: three of the four defects found in one day were CSS, and jsdom has no layout
+  engine. Nine assertions, each verified by reintroducing its defect and watching that one
+  test fail.
+- **Every open npm advisory cleared**, and the dependency tree checked against the 2026
+  supply-chain campaigns — no package here appears in any of them.
+
 ## [0.19.0-alpha] - 2026-09-21
 
 ### Added
