@@ -5,18 +5,26 @@
 line. It only ever ran when someone typed it, and the moment it matters most (context
 nearly full, a compaction about to erase the detail) is the moment nobody remembers to.
 
-This hook runs when the model finishes a turn. When one of two conditions holds it answers
-`{"decision": "block", "reason": …}`, which Claude Code feeds back to the model as the next
-thing to do — so the model runs /save-session itself, then stops. Verified: a blocked Stop
-makes the model act on the reason; on the second Stop `stop_hook_active` is set and this
-hook stays silent, so it cannot loop.
+This hook runs when the model finishes a turn. When one of two conditions holds it speaks —
+either `{"systemMessage": …}`, which the model reads and acts on when it suits, or
+`{"decision": "block", "reason": …}`, which Claude Code feeds back as the next thing to do,
+so the model runs /save-session itself and then stops. Verified: a blocked Stop makes the
+model act on the reason; on the second Stop `stop_hook_active` is set and this hook stays
+silent, so it cannot loop.
 
 The two conditions, both from real figures rather than guesses:
   1. context: the statusline cache the dashboard already maintains carries each session's
      real context percentage (`sessions.<id>.contextPct`) — not a transcript byte count,
-     which lies for every model that is not 1M. Once at 60 %, once again at 80 %.
+     which lies for every model that is not 1M. Once at 75 %, once again at 90 %.
   2. time: notes.md untouched for 30 minutes while the transcript kept moving. Never more
      than once per 30 minutes.
+
+Only the TOP tier blocks. Blocking hijacks the turn — the model drops what it was about
+to say and checkpoints instead, which is the wrong trade at 75 % and wrong every half
+hour: a turn that ended on a question to the user got a checkpoint in place of an answer.
+Below the top tier the hook emits a `systemMessage`, which the model sees without being
+forced off course. At 90 % it blocks, because a compaction is close enough that losing
+the detail costs more than the interruption.
 
 Only for sessions the dashboard knows (present in active-sessions.json with a notes path):
 an unmanaged session has nothing to checkpoint into. Silent and exit 0 on every other path.
@@ -31,7 +39,9 @@ ACTIVE_SESSIONS = "~/.claude/active-sessions.json"
 CACHE = "~/.claude/statusline-cache.json"
 STATE_DIR = "~/.claude/hooks-state/ao_autosave"
 
-CONTEXT_TIERS = (60, 80)
+CONTEXT_TIERS = (75, 90)
+# The only tier that hijacks the turn. Everything below it is advisory.
+BLOCKING_TIER = 90
 STALE_SECONDS = 30 * 60
 REPEAT_SECONDS = 30 * 60
 
@@ -54,7 +64,8 @@ def decide(context, notes_mtime, transcript_mtime, state, now):
     """Pure: (reason or None, new_state).
 
     `state` is {"tiers": [tiers already announced], "last": epoch of the last reason}.
-    Crossing 80 % straight from below 60 % marks both tiers — one reason, not two."""
+    Crossing 90 % straight from below 75 % marks both tiers — one reason, not two.
+    Returns (reason, blocking, state); `blocking` is true only at BLOCKING_TIER."""
     tiers = set(state.get("tiers") or [])
     last = float(state.get("last") or 0)
 
@@ -67,18 +78,22 @@ def decide(context, notes_mtime, transcript_mtime, state, now):
         due = [t for t in CONTEXT_TIERS if context >= t and t not in tiers]
         if due:
             tiers.update(t for t in CONTEXT_TIERS if context >= t)
-            reason = ("Context is at {}% — run /save-session now to checkpoint notes.md, then stop."
-                      .format(context))
-            return reason, {"tiers": sorted(tiers), "last": now}
+            if max(due) >= BLOCKING_TIER:
+                reason = ("Context is at {}% — run /save-session now to checkpoint notes.md, "
+                          "then stop.".format(context))
+                return reason, True, {"tiers": sorted(tiers), "last": now}
+            reason = ("Context is at {}%. A checkpoint is worth taking soon — run "
+                      "/save-session when the current step is finished.".format(context))
+            return reason, False, {"tiers": sorted(tiers), "last": now}
 
     if (notes_mtime and transcript_mtime and transcript_mtime > notes_mtime
             and now - notes_mtime >= STALE_SECONDS and now - last >= REPEAT_SECONDS):
         minutes = int((now - notes_mtime) // 60)
         reason = ("notes.md was last checkpointed {} min ago and the conversation has moved "
-                  "since — run /save-session now, then stop.".format(minutes))
-        return reason, {"tiers": sorted(tiers), "last": now}
+                  "since — run /save-session when the current step is finished.".format(minutes))
+        return reason, False, {"tiers": sorted(tiers), "last": now}
 
-    return None, state
+    return None, False, state
 
 
 def mtime(path):
@@ -116,7 +131,7 @@ def main():
     state = load_json(state_file, {})
     now = time.time()
     try:
-        reason, new_state = decide(
+        reason, blocking, new_state = decide(
             context_pct(load_json(CACHE, {}), session_id),
             mtime(notes),
             mtime(payload.get("transcript_path") or ""),
@@ -133,7 +148,12 @@ def main():
             json.dump(new_state, f)
     except Exception:
         return                                      # cannot remember we asked → do not ask
-    print(json.dumps({"decision": "block", "reason": reason}))
+    if blocking:
+        print(json.dumps({"decision": "block", "reason": reason}))
+    else:
+        # Seen, not obeyed: the model reads it and decides when to act, instead of being
+        # pulled out of whatever it was doing.
+        print(json.dumps({"systemMessage": reason}))
 
 
 if __name__ == "__main__":

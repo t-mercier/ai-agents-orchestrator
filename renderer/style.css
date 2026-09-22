@@ -1273,10 +1273,18 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
    glyph is what tells them apart; the colour only speeds up the scan. */
 /* The state tint, defined once as a custom property so the colour has a single home
    and the icon-only buttons below can claim it without repeating a hex. */
-.pr-open   { --pr-tint: #3fb950;             color: var(--pr-tint); }
+/* Tuned to this app's register, not GitHub's. Theirs runs at 49-93 % saturation, built
+   for a white interface; six of the seven look accents sit between 22 % and 42 % on
+   near-black (Pêche is the outlier at 78 %), and at icon size the vivid set shouted.
+   Same hues — they are learned — at our saturation: the loudest here is 40 %.
+   `closed` drops the red entirely: "won't do" is a dead end, not an alarm, and a dark
+   grey says that without spending the only loud colour in the palette on it. */
+.pr-open   { --pr-tint: #82c08e;             color: var(--pr-tint); }
 .pr-draft  { --pr-tint: #8b949e;             color: var(--pr-tint); }
-.pr-merged { --pr-tint: #a371f7;             color: var(--pr-tint); }
-.pr-closed { --pr-tint: #f85149;             color: var(--pr-tint); }
+/* 276°, not GitHub's 262°: at 262° it landed 1° from the Lavande look's accent with
+   double the saturation, which read as two purples that missed each other. */
+.pr-merged { --pr-tint: #bd9bd4;             color: var(--pr-tint); }
+.pr-closed { --pr-tint: #5c6169;             color: var(--pr-tint); }
 .pr-unknown { --pr-tint: var(--text-tertiary); color: var(--pr-tint); }
 /* Fixed box, centred: ● ✎ ✔ ✕ ◌ are not the same width, so letting the glyph size
    itself shifted everything after it — the PR numbers in a picker stopped lining up

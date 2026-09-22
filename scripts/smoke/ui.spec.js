@@ -186,8 +186,19 @@ test('each pull-request state tints the icon differently', async ({ page }) => {
   })
   const seen = Object.values(tints)
   expect(new Set(seen).size, `states share a colour: ${JSON.stringify(tints)}`).toBe(seen.length)
-  expect(tints['pr-open']).toBe('rgb(63, 185, 80)')
-  expect(tints['pr-closed']).toBe('rgb(248, 81, 73)')
+
+  // And they stay in this app's register. The ceiling is 45 % saturation: ours peaks at
+  // 40 % and GitHub's quietest offender — their green — is 49 %, so the rule separates
+  // the two sets. Asserted as a ceiling rather than as exact hexes, so it survives a
+  // tweak while a vivid colour dropped back in does not.
+  const sat = (css) => {
+    const [r, g, b] = css.match(/[\d.]+/g).slice(0, 3).map((n) => n / 255)
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2
+    return mx === mn ? 0 : (mx - mn) / (l > 0.5 ? 2 - mx - mn : mx + mn) * 100
+  }
+  for (const [state, css] of Object.entries(tints)) {
+    expect(sat(css), `${state} (${css}) is louder than anything else in the app`).toBeLessThanOrEqual(45)
+  }
 })
 
 test('a card and a menu are controls, not documents — no text selection', async ({ page }) => {

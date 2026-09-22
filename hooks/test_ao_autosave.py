@@ -29,66 +29,70 @@ class TestDecide(unittest.TestCase):
         return dict(notes_mtime=NOW - MIN, transcript_mtime=NOW, state={}, now=NOW)
 
     def test_quiet_when_context_low_and_notes_fresh(self):
-        reason, _ = A.decide(30, **self.fresh())
+        reason, _blocking, _ = A.decide(30, **self.fresh())
         self.assertIsNone(reason)
 
-    def test_asks_once_at_sixty(self):
-        reason, state = A.decide(61, **self.fresh())
-        self.assertIn("61%", reason)
-        self.assertEqual(state["tiers"], [60])
-        again, _ = A.decide(65, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW + 5 * MIN)
-        self.assertIsNone(again, "60 was announced; 65 is the same tier")
+    def test_asks_once_at_the_first_tier(self):
+        reason, blocking, state = A.decide(76, **self.fresh())
+        self.assertIn("76%", reason)
+        self.assertFalse(blocking, "the first tier advises, it does not hijack the turn")
+        self.assertEqual(state["tiers"], [75])
+        again, _b2, _ = A.decide(80, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW + 5 * MIN)
+        self.assertIsNone(again, "75 was announced; 80 is the same tier")
 
-    def test_asks_again_at_eighty(self):
-        state = {"tiers": [60], "last": NOW - 10 * MIN}
-        reason, state = A.decide(82, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW)
-        self.assertIn("82%", reason)
-        self.assertEqual(state["tiers"], [60, 80])
+    def test_the_top_tier_blocks(self):
+        state = {"tiers": [75], "last": NOW - 10 * MIN}
+        reason, blocking, state = A.decide(91, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW)
+        self.assertIn("91%", reason)
+        self.assertTrue(blocking, "a compaction is close; this one is worth the interruption")
+        self.assertEqual(state["tiers"], [75, 90])
 
-    # A resume can land straight at 85 %: one reason, both tiers marked, no second nag.
+    # A resume can land straight at 93 %: one reason, both tiers marked, no second nag.
     def test_jumping_past_both_tiers_is_one_reason(self):
-        reason, state = A.decide(85, **self.fresh())
+        reason, blocking, state = A.decide(93, **self.fresh())
         self.assertIsNotNone(reason)
-        self.assertEqual(state["tiers"], [60, 80])
+        self.assertTrue(blocking, "the highest tier reached decides, not the lowest")
+        self.assertEqual(state["tiers"], [75, 90])
 
-    # After a compaction the figure drops to ~25 %; the next climb to 60 % must ask again.
+    # After a compaction the figure drops to ~25 %; the next climb to 75 % must ask again.
     def test_tiers_re_arm_below_the_lowest_tier(self):
-        state = {"tiers": [60, 80], "last": NOW - 60 * MIN}
-        reason, state = A.decide(25, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW)
+        state = {"tiers": [75, 90], "last": NOW - 60 * MIN}
+        reason, _blocking, state = A.decide(25, notes_mtime=NOW - MIN, transcript_mtime=NOW, state=state, now=NOW)
         self.assertIsNone(reason)
-        self.assertEqual(state.get("tiers", []), [60, 80], "a quiet turn leaves the stored state alone")
-        reason, state = A.decide(25, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW, state=state, now=NOW)
+        self.assertEqual(state.get("tiers", []), [75, 90], "a quiet turn leaves the stored state alone")
+        reason, _blocking, state = A.decide(25, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW, state=state, now=NOW)
         self.assertIsNotNone(reason, "the time rule still applies")
         self.assertEqual(state["tiers"], [], "and the stored tiers are cleared with it")
-        reason, state = A.decide(61, notes_mtime=NOW - MIN, transcript_mtime=NOW, state={"tiers": [60, 80], "last": 0}, now=NOW)
-        self.assertIsNone(reason, "61 with tiers still marked and no dip recorded: hovering, not climbing")
-        reason, state = A.decide(61, notes_mtime=NOW - MIN, transcript_mtime=NOW, state={"tiers": [], "last": 0}, now=NOW)
-        self.assertIn("61%", reason)
+        reason, _b3, state = A.decide(76, notes_mtime=NOW - MIN, transcript_mtime=NOW, state={"tiers": [75, 90], "last": 0}, now=NOW)
+        self.assertIsNone(reason, "76 with tiers still marked and no dip recorded: hovering, not climbing")
+        reason, _b4, state = A.decide(76, notes_mtime=NOW - MIN, transcript_mtime=NOW, state={"tiers": [], "last": 0}, now=NOW)
+        self.assertIn("76%", reason)
 
     def test_stale_notes_with_a_moving_transcript(self):
-        reason, state = A.decide(20, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW - MIN, state={}, now=NOW)
+        reason, blocking, state = A.decide(20, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW - MIN, state={}, now=NOW)
         self.assertIn("45 min ago", reason)
+        self.assertFalse(blocking, "the half-hourly nudge must never hijack a turn")
         self.assertEqual(state["last"], NOW)
 
     def test_stale_notes_but_nothing_happened_since(self):
         # Transcript older than notes: the last thing that happened was the save itself.
-        reason, _ = A.decide(20, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW - 50 * MIN, state={}, now=NOW)
+        reason, _blocking, _ = A.decide(20, notes_mtime=NOW - 45 * MIN, transcript_mtime=NOW - 50 * MIN, state={}, now=NOW)
         self.assertIsNone(reason)
 
     def test_time_rule_repeats_no_more_than_every_thirty_minutes(self):
         state = {"tiers": [], "last": NOW - 10 * MIN}
-        reason, _ = A.decide(20, notes_mtime=NOW - 90 * MIN, transcript_mtime=NOW, state=state, now=NOW)
+        reason, _blocking, _ = A.decide(20, notes_mtime=NOW - 90 * MIN, transcript_mtime=NOW, state=state, now=NOW)
         self.assertIsNone(reason)
         state = {"tiers": [], "last": NOW - 31 * MIN}
-        reason, _ = A.decide(20, notes_mtime=NOW - 90 * MIN, transcript_mtime=NOW, state=state, now=NOW)
+        reason, _blocking, _ = A.decide(20, notes_mtime=NOW - 90 * MIN, transcript_mtime=NOW, state=state, now=NOW)
         self.assertIsNotNone(reason)
 
     def test_no_context_figure_still_allows_the_time_rule(self):
-        reason, _ = A.decide(None, notes_mtime=NOW - 40 * MIN, transcript_mtime=NOW, state={}, now=NOW)
+        reason, _blocking, _ = A.decide(None, notes_mtime=NOW - 40 * MIN, transcript_mtime=NOW, state={}, now=NOW)
         self.assertIsNotNone(reason)
 
     def test_missing_mtimes_never_crash_or_ask(self):
-        reason, _ = A.decide(None, notes_mtime=None, transcript_mtime=None, state={}, now=NOW)
+        reason, _blocking, _ = A.decide(None, notes_mtime=None, transcript_mtime=None, state={}, now=NOW)
         self.assertIsNone(reason)
 
 
