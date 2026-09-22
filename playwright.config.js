@@ -23,7 +23,10 @@ module.exports = defineConfig({
   webServer: {
     command: `python3 scripts/smoke/serve.py ${PORT}`,
     url: `http://127.0.0.1:${PORT}/index.html`,
-    reuseExistingServer: !process.env.CI,
+    // Always a fresh server, locally too. Reusing one that was mid-shutdown made a run
+    // report 8 of 9 tests with no failure — a suite that silently loses a test is worse
+    // than no suite. A cold start costs about a second.
+    reuseExistingServer: false,
     timeout: 20_000,
   },
 })

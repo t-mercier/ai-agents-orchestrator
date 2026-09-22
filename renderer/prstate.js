@@ -69,8 +69,11 @@
   const TICKET_FAMILIES = [
     ['closed', ["won't do", 'wont do', 'cancelled', 'canceled', 'rejected', 'duplicate', 'abandoned', 'invalid']],
     ['merged', ['done', 'resolved', 'closed', 'complete', 'completed', 'shipped', 'released', 'fixed', 'merged']],
-    ['open', ['in progress', 'in review', 'review', 'triaged', 'doing', 'started', 'implementing', 'testing', 'blocked']],
-    ['draft', ['to do', 'todo', 'open', 'new', 'backlog', 'selected for development', 'triage', 'untriaged']],
+    ['open', ['in progress', 'in review', 'review', 'doing', 'started', 'implementing', 'testing', 'blocked']],
+    // `triaged` sits here, not with the active states: a triaged ticket has been routed
+    // to the right team and nobody has started it. It was the odd one out — `triage` and
+    // `untriaged` were already in this family, and the three read as one thing.
+    ['draft', ['to do', 'todo', 'open', 'new', 'backlog', 'selected for development', 'triage', 'triaged', 'untriaged']],
   ]
 
   function ticketFamily(status) {

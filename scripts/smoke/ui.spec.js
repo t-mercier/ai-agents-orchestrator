@@ -83,14 +83,23 @@ test('every row of a session menu is legible', async ({ page }) => {
   const menu = page.locator('#session-menu')
   await expect(menu).toBeVisible()
 
-  const rows = await menu.locator('.board-menu-item').evaluateAll((els) =>
-    els.map((el) => ({
-      text: (el.textContent || '').trim().slice(0, 30),
-      opacity: parseFloat(getComputedStyle(el).opacity),
-      height: Math.round(el.getBoundingClientRect().height),
-      border: getComputedStyle(el).borderTopWidth,
-      disabled: el.hasAttribute('disabled'),
-    })))
+  const rows = await menu.locator('.board-menu-item').evaluateAll((els) => {
+    // Measured against the MENU, not against each row's own box. Measuring inside the
+    // button missed a row shifted by a borrowed `margin-left` — the text was centred in
+    // its button and the button was in the wrong place.
+    const menuLeft = els[0].closest('.board-menu').getBoundingClientRect().left
+    return els.map((el) => {
+      const range = document.createRange(); range.selectNodeContents(el)
+      return {
+        text: (el.textContent || '').trim().slice(0, 30),
+        opacity: parseFloat(getComputedStyle(el).opacity),
+        height: Math.round(el.getBoundingClientRect().height),
+        border: getComputedStyle(el).borderTopWidth,
+        disabled: el.hasAttribute('disabled'),
+        textLeft: Math.round(range.getBoundingClientRect().left - menuLeft),
+      }
+    })
+  })
 
   expect(rows.length, 'the menu should offer the session actions').toBeGreaterThan(5)
   for (const r of rows) {
@@ -99,6 +108,8 @@ test('every row of a session menu is legible', async ({ page }) => {
     expect(r.height, `"${r.text}" has collapsed`).toBeGreaterThanOrEqual(14)
     expect(r.border, `"${r.text}" kept a borrowed border`).toBe('0px')
   }
+  const lefts = [...new Set(rows.map((r) => r.textLeft))]
+  expect(lefts.length, `rows start at different x: ${JSON.stringify(rows.map((r) => [r.text, r.textLeft]))}`).toBe(1)
 })
 
 test('a context menu opens at the pointer', async ({ page }) => {
@@ -179,3 +190,20 @@ test('each pull-request state tints the icon differently', async ({ page }) => {
   expect(tints['pr-closed']).toBe('rgb(248, 81, 73)')
 })
 
+test('a card and a menu are controls, not documents — no text selection', async ({ page }) => {
+  // Right-clicking a card used to select the word under the pointer before the menu
+  // opened. Asserted as a CSS contract, not as behaviour: Playwright's synthetic
+  // right-click does not produce the native selection a real mouse does, so a
+  // behavioural check passed with the rule removed — it proved nothing.
+  await page.locator('#panel-list .list-card[data-key]').first().click({ button: 'right' })
+  await expect(page.locator('#session-menu')).toBeVisible()
+  const sel = await page.evaluate(() => ({
+    card: getComputedStyle(document.querySelector('#panel-list .list-card')).userSelect,
+    menu: getComputedStyle(document.getElementById('session-menu')).userSelect,
+    detail: getComputedStyle(document.getElementById('panel-detail')).userSelect,
+  }))
+  expect(sel.card, 'a card must not be selectable').toBe('none')
+  expect(sel.menu, 'a menu must not be selectable').toBe('none')
+  // The detail panel stays selectable — ids and paths there are worth copying.
+  expect(sel.detail).not.toBe('none')
+})

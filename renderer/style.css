@@ -543,7 +543,7 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
 .kb-note-input { flex: 1; font-family: var(--font); font-size: 12px; color: var(--text-primary); background: rgba(var(--tint), 0.1); border: 0.5px solid var(--accent); border-radius: 6px; padding: 4px 6px; outline: none; }
 
 /* Board-column picker popover (anchored under the board action button). */
-.board-menu { position: fixed; z-index: 1000; min-width: 184px; max-height: 60vh; overflow-y: auto; background: var(--surface-modal); border: 0.5px solid rgba(var(--tint), 0.14); border-radius: 10px; box-shadow: 0 16px 44px rgba(0,0,0,0.45); padding: 5px; }
+.board-menu { user-select: none; -webkit-user-select: none; position: fixed; z-index: 1000; min-width: 184px; max-height: 60vh; overflow-y: auto; background: var(--surface-modal); border: 0.5px solid rgba(var(--tint), 0.14); border-radius: 10px; box-shadow: 0 16px 44px rgba(0,0,0,0.45); padding: 5px; }
 .board-menu-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); padding: 5px 8px 6px; }
 .board-menu-search { width: 100%; box-sizing: border-box; margin: 0 0 5px; padding: 6px 8px; font-family: var(--font); font-size: 12px; color: var(--text-primary); background: rgba(var(--tint), 0.06); border: 0.5px solid rgba(var(--tint), 0.14); border-radius: 6px; outline: none; }
 .board-menu-search:focus { border-color: rgba(var(--accent-rgb), 0.5); }
@@ -583,7 +583,11 @@ body.kb-dragging { cursor: grabbing; user-select: none; -webkit-user-select: non
    menu row first — reset the borrowed look, whatever class it had to borrow. */
 .board-menu .board-menu-item {
   opacity: 1;
-  width: 100%; height: auto; min-width: 0;
+  /* `margin` belongs in this list: .terminal-toggle-btn carries margin-left: 6px, which
+     shifted that one row right while every other sat flush. The reset has to neutralise
+     everything a borrowed class can use to move the BOX, not only what paints inside it. */
+  margin: 0;
+  width: 100%; height: auto; min-width: 0; max-width: none;
   background: none; border: none; box-shadow: none;
   padding: 5px 8px; border-radius: 6px;
   font-family: var(--font); font-size: 12px; font-weight: 500; line-height: 1.35;
@@ -977,6 +981,11 @@ body.mode-board .drawer-ctl { display: inline-flex; }
 /* ===== List Cards ===== */
 /* Compact list card */
 .list-card {
+  /* A card is a control, not a document: right-clicking one to reach its menu used to
+     select the word under the pointer first. Nothing here is worth copying — the ids and
+     paths that are live in the detail panel, which stays selectable. */
+  user-select: none;
+  -webkit-user-select: none;
   padding: 10px 14px;
   cursor: pointer;
   border-left: 2.5px solid transparent;

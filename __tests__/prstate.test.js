@@ -77,11 +77,14 @@ describe('ticketFamily', () => {
       expect(P.ticketFamily(s)).toBe('merged')
   })
   it('folds in-flight statuses onto the open colour', () => {
-    for (const s of ['In Progress', 'In Review', 'Triaged', 'Blocked'])
+    // 'Triaged' was here and moved to draft: routed to a team is not started on.
+    for (const s of ['In Progress', 'In Review', 'Blocked'])
       expect(P.ticketFamily(s)).toBe('open')
   })
   it('folds not-started statuses onto draft', () => {
-    for (const s of ['To Do', 'Open', 'Backlog', 'New'])
+    // The three triage words read as one thing and now land in one family — 'Triaged'
+    // used to be the odd one out, drawn as active while 'Triage' and 'Untriaged' were not.
+    for (const s of ['To Do', 'Open', 'Backlog', 'New', 'Triage', 'Triaged', 'Untriaged'])
       expect(P.ticketFamily(s)).toBe('draft')
   })
   it('folds abandoned statuses onto closed', () => {
