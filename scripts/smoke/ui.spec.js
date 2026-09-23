@@ -306,3 +306,51 @@ test('the group chevron folds and unfolds', async ({ page }) => {
   await page.locator('.list-group-chev').first().click()
   await expect.poll(collapsed, { message: 'and unfold it again' }).toBe(false)
 })
+
+test.describe('Brutus', () => {
+  test.beforeEach(async ({ page }) => { await page.evaluate(() => { try { localStorage.removeItem('csm.brutusHome'); localStorage.removeItem('csm.brutusLog') } catch {} }); await page.reload() })
+
+  test('bubble by default, and no titlebar button in that mode', async ({ page }) => {
+    await expect(page.locator('.bru-fab')).toBeVisible()
+    await expect(page.locator('#brutus-btn')).toBeHidden()
+  })
+
+  test('right-click the bubble docks him in the side panel; the header icon brings him back', async ({ page }) => {
+    await page.locator('.bru-fab').click({ button: 'right' })
+    await expect(page.locator('.bru-menu button')).toHaveCount(2)
+    await page.locator('.bru-menu [data-a=side]').click()
+    await expect(page.locator('.bru-panel.docked')).toBeVisible()
+    await expect(page.locator('#brutus-btn')).toBeVisible()
+    await expect(page.locator('.bru-fab')).toHaveCount(0)
+    // The dock animates its margin; read it once the transition is over.
+    await expect.poll(() => page.locator('.layout').evaluate(el => getComputedStyle(el).marginRight)).toBe('400px')
+    await page.locator('[data-bru="to-bubble"]').click()
+    await expect(page.locator('.bru-fab')).toBeVisible()
+    await expect(page.locator('#brutus-btn')).toBeHidden()
+  })
+
+  test('⌘K opens the palette over either home; Esc closes it', async ({ page }) => {
+    await page.keyboard.press('Meta+k')
+    await expect(page.locator('.bru-panel.v-B')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.bru-panel.v-B')).toHaveCount(0)
+  })
+
+  test('an answer renders a chip for a known session and never executes markup', async ({ page }) => {
+    await page.locator('.bru-fab').click()
+    await page.locator('.bru-panel input').fill("What's waiting on me?")
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.bru-panel [data-brutus-session="checkout-redesign"]')).toBeVisible()
+    await expect(page.locator('.bru-panel .bru-steps').last()).toContainText('Read the dashboard')
+    expect(await page.evaluate(() => window.__XSS__)).toBeUndefined()
+    await expect(page.locator('.bru-panel input')).toBeEnabled()
+  })
+
+  test('a failed run shows one error line and gives the input back', async ({ page }) => {
+    await page.locator('.bru-fab').click()
+    await page.locator('.bru-panel input').fill('please fail')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.bru-panel .bru-err')).toContainText('logged in')
+    await expect(page.locator('.bru-panel input')).toBeEnabled()
+  })
+})

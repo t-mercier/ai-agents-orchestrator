@@ -1,4 +1,13 @@
 let sessions = []
+// Brutus resolves the names in his answers against what the dashboard shows: the live
+// list plus the stale and closed ones seeded at launch. Deduped by name, live first.
+window.CSMBrutusSessions = () => {
+  const seen = new Set()
+  return [...sessions, ...(window._historicalForBrutus || [])].filter(s => {
+    if (!s || !s.name || seen.has(s.name)) return false
+    seen.add(s.name); return true
+  })
+}
 let selectedKey = null   // unique session key (notesPath || sessionId || name), not raw sessionId
 let activeTab = 'running'
 
@@ -1069,6 +1078,8 @@ async function seedTabCounts() {
       archived: hist.archived.length,
     }
     window._waitingCount = active.filter(s => s.status === 'waiting').length
+    // Brutus resolves session names against these (brutus.js).
+    window._historicalForBrutus = [...hist.stale, ...hist.closed]
     if (window.updateTabBadges) window.updateTabBadges()
   } catch (e) { /* badges fall back to lazy per-visit fill */ }
 }

@@ -148,6 +148,9 @@ const RESULTS = {
   get_historical_sessions_all: HISTORICAL,
   get_usage: USAGE,
   skills_status: { installed: true, missing: [] },
+  brutus_status: { memoryCount: 3, running: false, hasConversation: false },
+  brutus_reset: null,
+  brutus_cancel: true,
   can_reveal_terminal: false,
   discover_sessions: [],
   notes_closed_since: false,
@@ -170,6 +173,18 @@ window.__TAURI__ = {
     invoke: (cmd, args) => {
       if (cmd === 'get_historical_sessions') return Promise.resolve(HISTORICAL[args.status] || [])
       if (cmd === 'pty_spawn') return Promise.resolve(null)
+      if (cmd === 'brutus_ask') {
+        // A scripted run: one step, one answer naming a real fixture session, then done —
+        // or an error when the message asks for one, so the failure path is testable.
+        const fire = (p) => (window.__PTY_HANDLERS__['brutus-event'] || []).forEach(cb => cb({ payload: p }))
+        setTimeout(() => {
+          if (/fail/.test(args.message)) { fire({ kind: 'error', message: 'claude exited with 1. Is Claude Code installed and logged in?' }); return }
+          fire({ kind: 'step', tool: 'Read', target: '/Users/dev/.config/ai-agents-orchestrator/brutus/dashboard.md' })
+          fire({ kind: 'text', text: 'Two need you: [[session:checkout-redesign]] <img src=x onerror="window.__XSS__=1">' })
+          fire({ kind: 'done', is_error: false, result: '' })
+        }, 30)
+        return Promise.resolve(null)
+      }
       // Kept so a test can read what Settings → Save would have written.
       if (cmd === 'set_config') { window.__LAST_SET_CONFIG__ = args.cfg; return Promise.resolve(null) }
       return Promise.resolve(cmd in RESULTS ? RESULTS[cmd] : null)
