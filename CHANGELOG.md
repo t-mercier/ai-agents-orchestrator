@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.3-alpha] - 2026-09-23
+
 ### Fixed
 
 - **The "your checkout has newer skills" notice now works without setting anything up.**
