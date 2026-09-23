@@ -92,24 +92,9 @@ sleep 1
 shoot() { # url out w h
   local url="$1" out="$2" w="$3" h="$4"
   rm -f "$out"
-  rm -rf "$WORK/profile"
-  # Chrome writes the PNG, then hangs on exit: this page keeps a live event loop, so its
-  # virtual-time budget never drains. Launch detached, wait for the file to settle, kill.
-  "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars \
-    --force-device-scale-factor=1 --window-size="$w,$h" \
-    --virtual-time-budget=9000 --user-data-dir="$WORK/profile" \
-    --screenshot="$out" "$url" >/dev/null 2>&1 &
-  local pid=$! prev=-1 size
-  for _ in $(seq 1 60); do
-    sleep 1
-    if [ -f "$out" ]; then
-      size=$(wc -c < "$out")
-      [ "$size" = "$prev" ] && [ "$size" -gt 1000 ] && break
-      prev=$size
-    fi
-  done
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
+  # Through Playwright rather than a raw Chrome invocation: see shoot.js. The previous
+  # `--virtual-time-budget` path silently produced correct screenshots of an empty list.
+  node "$HERE/shoot.js" "$url" "$out" "$w" "$h" || return 1
   [ -f "$out" ] || { echo "  !! nothing written for $url" >&2; return 1; }
 }
 
