@@ -222,3 +222,17 @@ test('setColorScheme stores a valid seed + scheme, survives clone, rejects junk'
   s = B.setColorScheme(s, 'not-a-hex', 'bogus')      // junk → seed cleared, scheme kept
   expect(s.colorSeed).toBe(''); expect(s.colorScheme).toBe('shades')
 })
+
+describe('swatches', () => {
+  it('offers twelve hues in two tones, every one a distinct hex', () => {
+    const w = B.swatches()
+    expect(w).toHaveLength(24)
+    w.forEach(h => expect(h).toMatch(/^#[0-9a-f]{6}$/))
+    expect(new Set(w).size).toBe(24)
+  })
+  it('puts the light row first, the deeper one after', () => {
+    const lum = (h) => { const n = parseInt(h.slice(1), 16); return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255) }
+    const w = B.swatches()
+    for (let i = 0; i < 12; i++) expect(lum(w[i])).toBeGreaterThan(lum(w[i + 12]))
+  })
+})

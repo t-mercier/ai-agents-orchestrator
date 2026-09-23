@@ -196,6 +196,12 @@
     const step = n <= 1 ? 0 : Math.min(scheme === 'analogous' ? 22 : 48, (scheme === 'analogous' ? 110 : 210) / (n - 1))
     return hslToHex(h + (i - (n - 1) / 2) * step, S, L)
   }
+  // A fixed palette to pick from by hand: twelve hues round the wheel, a light row then a
+  // deeper one, both inside the band paletteColor keeps to so a pick sits with the rest.
+  function swatches() {
+    const row = (S, L) => Array.from({ length: 12 }, (_, i) => hslToHex(i * 30 + 5, S, L))
+    return row(52, 70).concat(row(50, 52))
+  }
   // The effective colour (hex) for a column: its own .color wins, else the scheme-derived
   // colour for its index, or '' when there's no seed (manual mode).
   function colorForColumn(state, col, index, total) {
@@ -413,7 +419,7 @@
   return {
     STORAGE_KEY, DEFAULT_COLUMNS, emptyState, normalize,
     addColumn, renameColumn, removeColumn, moveColumn, setColumnHidden, setColumnColor,
-    setColorScheme, COLOR_SCHEMES, colorForColumn, paletteColor, clearColumnColors,
+    setColorScheme, COLOR_SCHEMES, colorForColumn, paletteColor, swatches, clearColumnColors,
     placeSession, unplaceSession, addNote, updateNote, removeNote, moveItem,
     toggleUrgent, isUrgent, itemsByColumn, orderedItems, orderedIds,
     createGroup, addToGroup, removeFromGroup, ungroup, renameGroup, setGroupCollapsed, groupMembers, findGroupOf, moveGroup,

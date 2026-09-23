@@ -322,6 +322,29 @@ test('the whole group title bar folds, at once, and its buttons do not', async (
   expect(await page.locator('.list-group-body').first().getAttribute('class')).toBe(before)
 })
 
+test('a group takes any colour from the palette, and keeps it', async ({ page }) => {
+  // Asked for: the seven look accents were the only choice, too few to tell groups apart.
+  await page.evaluate(() => {
+    const key = (s) => s.notesPath || s.sessionId || s.name || ''
+    const ss = (window._lastSessions || []).filter((s) => s.status !== 'waiting')
+    const a = key(ss[0]), b = key(ss[1])
+    if (!window.isPinned(a)) window.togglePin(a)
+    if (!window.isPinned(b)) window.togglePin(b)
+    window.CSMListOrg.save(window.CSMListOrg.createGroupWith(window.CSMListOrg.load(), window.PINNED_CAT, 'lg-pal', [a, b], 0))
+    window.fetchAndRender(false)
+  })
+  await page.locator('.list-group-color').first().click()
+  const swatches = page.locator('#group-color-menu .group-palette [data-set-color]')
+  await expect(swatches).toHaveCount(24)
+  const pick = await swatches.nth(15).getAttribute('data-set-color')
+  await swatches.nth(15).click()
+  await expect(page.locator('#group-color-menu')).toHaveCount(0)
+  await expect.poll(() => page.locator('.list-group').first().evaluate((el) => el.style.getPropertyValue('--accent'))).toBe(pick)
+  // Reopened, the picked swatch is the one marked.
+  await page.locator('.list-group-color').first().click()
+  await expect(page.locator('#group-color-menu .group-palette [data-set-color].on')).toHaveAttribute('data-set-color', pick)
+})
+
 test('the group chevron folds and unfolds', async ({ page }) => {
   // Shipped dead: drag-list calls preventDefault on mousedown for anything that is not a
   // button/input/link/[data-nodrag], which suppresses the click that follows. The group

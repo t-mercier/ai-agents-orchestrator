@@ -2067,6 +2067,14 @@ body.dl-drag-active .list-card { pointer-events: none; }
   background: var(--swatch);
   border: 0.5px solid rgba(var(--tint), 0.30);
 }
+/* The palette under the named colours: a grid of dots, the current one ringed. */
+.group-palette { display: grid; grid-template-columns: repeat(12, 14px); gap: 5px; padding: 4px 8px 6px; }
+.group-palette-swatch {
+  width: 14px; height: 14px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--swatch); border: 0.5px solid rgba(var(--tint), 0.30);
+}
+.group-palette-swatch:hover { box-shadow: 0 0 0 2px rgba(var(--tint), 0.25); }
+.group-palette-swatch.on { box-shadow: 0 0 0 2px var(--surface-modal), 0 0 0 3.5px var(--text-primary); }
 .list-group-x { background: none; border: none; color: rgba(var(--tint), 0.42); cursor: pointer; font-size: 12px; }
 .list-group-x:hover { color: rgba(var(--tint), 0.85); }
 .list-group-body.collapsed { display: none; }

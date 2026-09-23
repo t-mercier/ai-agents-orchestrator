@@ -1363,9 +1363,9 @@ async function runPinnedSkill(btn) {
 }
 
 // ── A group's colour ──
-// Offered from the group header, between the count and the rename pencil. The choices
-// are the app's own look accents (looks.js), so a group can never land on a colour that
-// clashes with the rest of the window.
+// Offered from the group header, between the count and the rename pencil. The app's look
+// accents come first (looks.js); the palette under them is there because seven accents
+// were too few to tell groups apart.
 function closeGroupColorMenu() {
   const m = document.getElementById('group-color-menu')
   if (m) m.remove()
@@ -1386,8 +1386,12 @@ function openGroupColorMenu(anchor, category, gid) {
     `<span class="board-menu-check">${on ? '✓' : ''}</span>` +
     `<span class="group-color-dot" style="--swatch:${hex || 'transparent'}"></span>` +
     `<span class="board-menu-name">${escapeHtml(label)}</span></button>`
+  const cur = (g.color || '').toLowerCase()
   const rows = [swatch('', 'Inherit the category', !g.color)]
-    .concat(looks.map(l => swatch(l.accent, l.name, (g.color || '').toLowerCase() === l.accent.toLowerCase())))
+    .concat(looks.map(l => swatch(l.accent, l.name, cur === l.accent.toLowerCase())))
+  const palette = (window.CSMBoard && window.CSMBoard.swatches ? window.CSMBoard.swatches() : [])
+    .map(hex => `<button class="group-palette-swatch ${cur === hex ? 'on' : ''}" data-set-color="${hex}" style="--swatch:${hex}" title="${hex}" aria-label="Colour ${hex}"></button>`)
+  if (palette.length) rows.push('<div class="board-menu-sep"></div>', `<div class="group-palette">${palette.join('')}</div>`)
   const menu = document.createElement('div')
   menu.className = 'board-menu'
   menu.id = 'group-color-menu'

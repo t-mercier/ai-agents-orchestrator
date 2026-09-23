@@ -23,17 +23,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   `scripts/probe-brutus-sandbox.sh` replays those guarantees against the installed Claude
   Code.
 
-### Fixed
-
-- **Pinned skills survive a restart and a Settings save.** They were lost twice over:
-  the config the app reads back never carried them, and Settings → Save rebuilt the file
-  without them.
+- **A group can take any colour from a palette.** Under the seven look accents, the
+  group colour menu now has a palette of 24 swatches — twelve hues, light and deeper —
+  since seven colours were too few to tell groups apart.
 
 ### Changed
 
 - **A session card no longer has a pause button.** It appeared on hover exactly where a
   click to reopen the session lands, so sessions got paused by accident. Pause stays in the
   terminal bar, next to Close session, and in the card's right-click menu.
+
+### Fixed
+
+- **Pinned skills survive a restart and a Settings save.** They were lost twice over:
+  the config the app reads back never carried them, and Settings → Save rebuilt the file
+  without them.
 
 ## [0.19.4-alpha] - 2026-09-23
 
