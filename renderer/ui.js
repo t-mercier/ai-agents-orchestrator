@@ -536,12 +536,26 @@ function updateTabBadges() {
   const waiting = window._waitingCount || 0
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
     const tab = btn.dataset.tab
+    // Built once, then updated in place. Rewriting the button's innerHTML whenever a count
+    // changed destroyed the node under the pointer; between mouse-down and mouse-up that
+    // made WebKit (the app's engine) drop the click, so switching tabs took two clicks.
+    if (!btn._badge) {
+      const label = document.createElement('span')
+      label.className = 'tab-label'
+      label.textContent = labels[tab] || tab
+      const count = document.createElement('span')
+      count.className = 'tab-count'
+      const dot = document.createElement('span')
+      dot.className = 'tab-wait-dot'
+      btn.replaceChildren(label, count, dot)
+      btn._badge = { count, dot }
+    }
     const n = counts[tab]
-    const badge = (n != null) ? `<span class="tab-count">${n}</span>` : ''
-    const dot = (tab === 'running' && waiting > 0)
-      ? `<span class="tab-wait-dot" title="${waiting} waiting for you"></span>` : ''
-    const html = `${labels[tab] || tab}${badge}${dot}`
-    if (btn._badgeHtml !== html) { btn.innerHTML = html; btn._badgeHtml = html }
+    btn._badge.count.hidden = n == null
+    if (n != null && btn._badge.count.textContent !== String(n)) btn._badge.count.textContent = String(n)
+    const showDot = tab === 'running' && waiting > 0
+    btn._badge.dot.hidden = !showDot
+    btn._badge.dot.title = showDot ? `${waiting} waiting for you` : ''
   })
 }
 

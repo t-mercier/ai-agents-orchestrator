@@ -258,6 +258,25 @@ test('a card and a menu are controls, not documents — no text selection', asyn
   expect(sel.detail).not.toBe('none')
 })
 
+test('a tab count updates in place, so a click in progress is not lost', async ({ page }) => {
+  // Shipped: switching tabs sometimes took two clicks. updateTabBadges rewrote the
+  // button's innerHTML whenever a count changed; when that landed between mouse-down and
+  // mouse-up, WebKit (the app's engine) dispatched no click at all — measured 0/5 in
+  // Playwright's WebKit, 5/5 in Chromium, which is why nothing caught it. The check here
+  // is the contract that fixes it, and holds in any engine: the nodes survive.
+  const nodes = await page.evaluate(() => {
+    const btn = document.querySelector('.tab-btn[data-tab="running"]')
+    const before = [...btn.childNodes]
+    window._tabCounts.running = (window._tabCounts.running || 0) + 7
+    window._waitingCount = (window._waitingCount || 0) + 1
+    window.updateTabBadges()
+    const after = [...btn.childNodes]
+    return { same: before.length > 0 && before.every((n) => after.includes(n)), text: btn.textContent }
+  })
+  expect(nodes.same, 'the button\'s own nodes must not be replaced').toBe(true)
+  expect(nodes.text).toMatch(/Running\s*\d+/)
+})
+
 test('the whole group title bar folds, at once, and its buttons do not', async ({ page }) => {
   // Shipped: only the arrow and the name folded; the count and the empty stretch of the
   // bar did nothing (and armed a drag), so "clicking the title bar" took two or three

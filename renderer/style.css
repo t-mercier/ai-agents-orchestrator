@@ -2293,3 +2293,6 @@ body.bru-docked .layout { margin-right:400px; transition: margin-right .18s ease
 .bru-tb[hidden] { display: none; }
 /* The chosen style in Settings → Assistant reads as chosen, not as hovered. */
 .bru-sugg button.on { color: var(--text-primary); border-color: rgba(var(--accent-rgb), 0.7); background: rgba(var(--accent-rgb), 0.18); }
+/* The tab badges toggle `hidden` in place (ui.js updateTabBadges); keep it effective
+   whatever display the badge rules set. */
+.tab-btn .tab-count[hidden], .tab-btn .tab-wait-dot[hidden] { display: none; }
