@@ -346,6 +346,18 @@ test.describe('Brutus', () => {
     await expect(page.locator('.bru-panel input')).toBeEnabled()
   })
 
+  test('Settings → Assistant saves the name and style, and his menu opens it', async ({ page }) => {
+    await page.locator('.bru-fab').click({ button: 'right' })
+    await page.locator('.bru-menu [data-a=set]').click()
+    await expect(page.locator('[data-settings-panel="assistant"]')).toBeVisible()
+    await page.locator('#set-assistant-name').fill('Jarvis')
+    await page.locator('#set-assistant-styles [data-style="nerdy"]').click()
+    await expect(page.locator('#set-assistant-sample .bru-av')).toHaveText('J')
+    await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
+    await expect.poll(() => page.evaluate(() => window.__LAST_SET_CONFIG__ && window.__LAST_SET_CONFIG__.assistant))
+      .toEqual({ name: 'Jarvis', style: 'nerdy' })
+  })
+
   test('a failed run shows one error line and gives the input back', async ({ page }) => {
     await page.locator('.bru-fab').click()
     await page.locator('.bru-panel input').fill('please fail')

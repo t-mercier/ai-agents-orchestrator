@@ -147,5 +147,10 @@
     return out
   }
   window.showSettingsError = showError
+  // Open the modal straight on one tab (Brutus's "settings…" menu item uses it).
+  window.openSettingsTab = function (tab) {
+    $('settings-btn').click()
+    showSettingsTab(tab)
+  }
   window.clearSettingsError = clearError
 })()

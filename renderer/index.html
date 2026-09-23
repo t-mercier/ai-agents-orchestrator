@@ -301,6 +301,7 @@
           <button type="button" class="settings-tab" data-settings-tab="board">Board</button>
           <button type="button" class="settings-tab" data-settings-tab="categories">Categories</button>
           <button type="button" class="settings-tab" data-settings-tab="integrations">Integrations</button>
+          <button type="button" class="settings-tab" data-settings-tab="assistant">Assistant</button>
         </nav>
 
         <div class="settings-panels">
@@ -506,6 +507,30 @@
           </section>
 
           <!-- Integrations: ticket tracker + knowledge notes -->
+          <section class="settings-panel" data-settings-panel="assistant">
+            <div class="settings-section">
+              <label class="modal-field">
+                <span>Name</span>
+                <input id="set-assistant-name" type="text" maxlength="24" placeholder="Brutus" autocomplete="off" spellcheck="false">
+                <small class="field-hint">What he is called in the app, and how he introduces himself.</small>
+              </label>
+            </div>
+            <div class="settings-section">
+              <span class="modal-label">Style</span>
+              <div class="bru-sugg" id="set-assistant-styles" role="radiogroup" aria-label="Style"></div>
+              <div class="bru-card" id="set-assistant-sample"></div>
+            </div>
+            <div class="settings-section">
+              <span class="modal-label">Appears as</span>
+              <label class="modal-field checkbox-field"><input type="radio" name="set-assistant-home" value="bubble"><span>Bubble</span><em class="modal-hint">Bottom-right. Right-click it to dock him in the side panel.</em></label>
+              <label class="modal-field checkbox-field"><input type="radio" name="set-assistant-home" value="side"><span>Side panel</span><em class="modal-hint">Docked on the right; the dashboard makes room.</em></label>
+              <p class="modal-hint">Ask quickly from anywhere in the app with <kbd>⌘K</kbd>.</p>
+            </div>
+            <div class="settings-section">
+              <button type="button" class="modal-btn" id="set-assistant-memory">Open his memory</button>
+              <p class="modal-hint">A plain Markdown file he writes to. Edit or empty it whenever you like.</p>
+            </div>
+          </section>
           <section class="settings-panel" data-settings-panel="integrations">
             <div class="settings-section">
               <label class="modal-field">
@@ -686,6 +711,7 @@
   <script src="settings/board.js"></script>
   <script src="settings/categories.js"></script>
   <script src="settings/integrations.js"></script>
+  <script src="settings/assistant.js"></script>
   <script src="lib/clean-model.js"></script>
   <script src="doctor.js"></script>
   <script src="clean.js"></script>
