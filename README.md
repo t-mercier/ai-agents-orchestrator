@@ -2,7 +2,7 @@
 
 # AI Agents Orchestrator
 
-**What you learned once, you keep — a tiny native dashboard for your Claude Code sessions, on macOS & Linux.**
+**Stop explaining your project to Claude every morning.** A tiny native dashboard that gives your Claude Code sessions a persistent memory, so your agent grows with you. macOS & Linux.
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
