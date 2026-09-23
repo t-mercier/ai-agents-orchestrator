@@ -308,7 +308,13 @@ test('the group chevron folds and unfolds', async ({ page }) => {
 })
 
 test.describe('Brutus', () => {
-  test.beforeEach(async ({ page }) => { await page.evaluate(() => { try { localStorage.removeItem('csm.brutusHome'); localStorage.removeItem('csm.brutusLog') } catch {} }); await page.reload() })
+  // The reload needs the same wait as the top-level beforeEach: without it a test ran while
+  // the fixture was still booting the app and freezing its timers, and lost clicks to it.
+  test.beforeEach(async ({ page }) => {
+    await page.evaluate(() => { try { localStorage.removeItem('csm.brutusHome'); localStorage.removeItem('csm.brutusLog') } catch {} })
+    await page.reload()
+    await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  })
 
   test('bubble by default, and no titlebar button in that mode', async ({ page }) => {
     await expect(page.locator('.bru-fab')).toBeVisible()
