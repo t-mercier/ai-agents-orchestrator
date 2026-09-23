@@ -155,14 +155,17 @@ the CLI's own description of `--restricted` and is to be confirmed when it is bu
   `Write(…)` for file checks), and an absolute path needs `//` plus the *resolved* path
   (`/tmp` is `/private/tmp` on macOS). A single `/` is relative to the settings file and
   matches nothing — every write is then denied, silently.
-- **`--restricted`, because nothing else confines reads.** Without it, the agent quoted a
-  file outside every `--add-dir` — with a bare `Read` rule, and again with `Read(//dir/**)`
-  rules scoped to his folders. Under `dontAsk`, a read is simply not something the permission
-  rules stop. `--restricted` confines the file tools to the working directory plus
-  `--add-dir`: the same read was then refused, while reading a space and writing `memory.md`
-  still worked, and writing into a space was still denied. So he reads exactly the spaces and
-  knowledge folders in your config. Raw transcripts under `~/.claude/projects` are out of V1:
-  large, slow, and the notes already hold the substance.
+- **`--restricted`, and no `Read` rule at all: two independent locks on reads.** The first
+  probe of the day leaked: with an `allow: ["Read"]` rule, the agent quoted a file outside
+  every `--add-dir`; with rules scoped to his folders it leaked too, which is not explained.
+  Measured afterwards with the tool result rather than the model's answer
+  (`scripts/probe-brutus-sandbox.sh`): with no `Read` rule, `dontAsk` alone denies a read
+  outside the working directories; `--restricted` alone confines the file tools to the working
+  directory plus `--add-dir`; and a bare `Read` rule without `--restricted` reads the file. So
+  production has no `Read` rule and passes `--restricted`, and the probe's falsifier is exactly
+  that bare-rule case. He reads the category and knowledge folders in your config and nothing
+  else. Raw transcripts under `~/.claude/projects` are out of V1: large, slow, and the notes
+  already hold the substance.
 - **Consequences of `--restricted` to design around:** your `~/.claude/settings.json` does not
   apply — no hooks fire for Brutus, which is wanted (he must not checkpoint himself as a
   session), and the model must be passed explicitly (above).
