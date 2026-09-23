@@ -424,7 +424,12 @@ fn sorted_unmanaged(
 ) -> Vec<Value> {
     let mut kept: Vec<(u64, Value)> = rows
         .into_iter()
-        .filter(|(_, sid, _, _, skip)| !skip && !managed.contains(sid))
+        .filter(|(_, sid, _, cwd, skip)| {
+            !skip
+                && !managed.contains(sid)
+                // His runs are Claude Code transcripts too; they are not sessions to import.
+                && !cwd.as_deref().is_some_and(crate::brutus_home::is_brutus_cwd)
+        })
         .map(|(mtime, sid, title, cwd, _)| {
             (mtime, json!({ "sessionId": sid, "title": title, "cwd": cwd, "mtime": mtime }))
         })
@@ -762,6 +767,11 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
         if !alive(pid) {
             continue;
         }
+        let launch_cwd = data.get("cwd").and_then(Value::as_str).unwrap_or("");
+        // Brutus's runs are live Claude Code processes too; they are not sessions.
+        if crate::brutus_home::is_brutus_cwd(launch_cwd) {
+            continue;
+        }
 
         let entry_meta = active.get(&sid).cloned().unwrap_or_else(|| json!({}));
         let notes_path = entry_meta.get("notes_path").and_then(Value::as_str).map(String::from);
@@ -772,7 +782,6 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
         let NotesMeta {
             goal, next_steps, pr_links: pr_links_fm, tickets: tickets_fm, ticket_states, last_summary
         } = notes_meta;
-        let launch_cwd = data.get("cwd").and_then(Value::as_str).unwrap_or("");
         // The transcript records where the session actually works (it cd's into a
         // repo/worktree); the launch cwd is just where `claude` started. Use the
         // transcript's latest cwd for the live git worktree + branch, and pull the
@@ -1842,6 +1851,18 @@ mod tests {
 
         // No frontmatter id at all (a stub with the key omitted) and nothing registered.
         assert_eq!(pick_resumable_sid(None, alive, || None), None);
+    }
+
+    #[test]
+    fn brutus_runs_are_not_offered_for_import() {
+        let mine = crate::brutus_home::dir().to_string_lossy().into_owned();
+        let rows = vec![
+            (2, "a".to_string(), Some("t".to_string()), Some(mine), false),
+            (1, "b".to_string(), Some("t".to_string()), Some("/w/x".to_string()), false),
+        ];
+        let kept = super::sorted_unmanaged(rows, &std::collections::HashSet::new());
+        let ids: Vec<_> = kept.iter().map(|v| v["sessionId"].as_str().unwrap().to_string()).collect();
+        assert_eq!(ids, vec!["b"]);
     }
 
     #[test]

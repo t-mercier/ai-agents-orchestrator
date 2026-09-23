@@ -1,8 +1,5 @@
 //! Brutus's folder and what the app writes into it before every run.
 
-// TEMPORARY until the runner (brutus.rs) and reader.rs consume these — remove with them.
-#![allow(dead_code)]
-
 use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
