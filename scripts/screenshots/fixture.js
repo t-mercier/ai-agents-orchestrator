@@ -170,6 +170,8 @@ window.__TAURI__ = {
     invoke: (cmd, args) => {
       if (cmd === 'get_historical_sessions') return Promise.resolve(HISTORICAL[args.status] || [])
       if (cmd === 'pty_spawn') return Promise.resolve(null)
+      // Kept so a test can read what Settings → Save would have written.
+      if (cmd === 'set_config') { window.__LAST_SET_CONFIG__ = args.cfg; return Promise.resolve(null) }
       return Promise.resolve(cmd in RESULTS ? RESULTS[cmd] : null)
     },
   },

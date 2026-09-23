@@ -105,8 +105,13 @@
     e.preventDefault()
     clearError()
 
-    // Seed the output and context object.
+    // Seed the output and context object. Keys no tab owns are carried over as they are:
+    // the output replaces config.json whole, so a key left out here is deleted — which is
+    // how every Save used to wipe the pinned skills (they are set from the titlebar, not
+    // from a tab).
+    const cfg = window.CSM_CONFIG || {}
     const out = { version: 2 }
+    if (cfg.pinnedSkills) out.pinnedSkills = cfg.pinnedSkills
     const ctx = {}
 
     // Collect from all tabs in order.

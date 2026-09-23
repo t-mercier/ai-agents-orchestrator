@@ -86,6 +86,53 @@ fn build_config(path: &Path) -> Value {
     derive(&user)
 }
 
+/// The assistant's four styles. A key, never free text: the backend turns it into prompt
+/// wording, so the renderer can choose a style without ever sending prompt text.
+pub(crate) const ASSISTANT_STYLES: [&str; 4] = ["concise", "friendly", "casual", "nerdy"];
+const ASSISTANT_NAME_MAX: usize = 24;
+
+/// A display name: control characters out, trimmed, at most 24 characters (not bytes —
+/// "Élodie" must not be cut mid-character).
+pub(crate) fn clean_assistant_name(raw: &str) -> String {
+    let no_ctrl: String = raw.chars().filter(|c| !c.is_control()).collect();
+    no_ctrl.trim().chars().take(ASSISTANT_NAME_MAX).collect()
+}
+
+fn assistant_of(user: &Value) -> Value {
+    let a = user.get("assistant");
+    let name = a
+        .and_then(|a| a.get("name"))
+        .and_then(Value::as_str)
+        .map(clean_assistant_name)
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "Brutus".to_string());
+    let style = a
+        .and_then(|a| a.get("style"))
+        .and_then(Value::as_str)
+        .filter(|s| ASSISTANT_STYLES.contains(s))
+        .unwrap_or("concise");
+    json!({ "name": name, "style": style })
+}
+
+/// The pinned skills per scope, strings only, blanks dropped. Carried through derive
+/// because derive's output is the only config the app reads: a key it leaves out is a
+/// key the app writes and then never sees again.
+fn pinned_skills_of(user: &Value) -> Value {
+    let list = |scope: &str| -> Vec<Value> {
+        user.get("pinnedSkills")
+            .and_then(|p| p.get(scope))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(|n| json!(n))
+            .collect()
+    };
+    json!({ "global": list("global"), "session": list("session") })
+}
+
 /// Pure config derivation (no I/O) — v2 only (migrate-on-launch handled separately).
 ///
 /// **v2** generalises the old two-root model: `roots` is a named list (`{name,path}`)
@@ -208,6 +255,9 @@ fn derive(user: &Value) -> Value {
         // pty::model_flag: the app used to force opus[1m] and silently override it.
         "claudeModel": user.get("claudeModel").and_then(Value::as_str).unwrap_or("").trim(),
         "terminalApp": terminal_app,
+        // Brutus: always present and already normalised, so no reader has to guess.
+        "assistant": assistant_of(user),
+        "pinnedSkills": pinned_skills_of(user),
         "scanDirs": scan_dirs,
         "order": order,
         "colorMap": Value::Object(color_map),
@@ -257,6 +307,11 @@ fn validate(c: &Value) -> Result<(), String> {
             }
             Some(_) => {}
             None => return Err(format!("category '{name}' must carry a 'root' field")),
+        }
+    }
+    if let Some(style) = c.get("assistant").and_then(|a| a.get("style")).and_then(Value::as_str) {
+        if !ASSISTANT_STYLES.contains(&style) {
+            return Err(format!("unknown assistant style: {style}"));
         }
     }
     Ok(())
@@ -500,7 +555,7 @@ pub fn set_config(cfg: Value) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_config, derive, migrate_v1_value, onboarding_needed, validate};
+    use super::{clean_assistant_name, default_config, derive, migrate_v1_value, onboarding_needed, validate};
     use serde_json::json;
 
     // The in-app skills installer seeds default_config() via save() → validate() on first
@@ -508,6 +563,46 @@ mod tests {
     // the invariant here (this path otherwise only runs on a real first launch).
     // The rule that keeps the wizard away from the people who least need it: her own
     // install has no marker (it predates the feature) and 113 managed sessions.
+    #[test]
+    fn assistant_defaults_to_brutus_concise_and_normalises_what_it_is_given() {
+        let d = derive(&default_config());
+        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise" }));
+
+        let mut c = default_config();
+        c["assistant"] = json!({ "name": "  Jarvis\u{7}  ", "style": "nerdy" });
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy" }));
+
+        c["assistant"] = json!({ "name": "", "style": "shouty" });
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise" }),
+            "an empty name and an unknown style fall back, never pass through");
+    }
+
+    #[test]
+    fn assistant_name_is_capped_at_24_characters_not_bytes() {
+        let long = "Ééééééééééééééééééééééééééé"; // 27 two-byte chars
+        assert_eq!(clean_assistant_name(long).chars().count(), 24);
+    }
+
+    #[test]
+    fn validate_rejects_an_unknown_assistant_style() {
+        let mut c = default_config();
+        c["assistant"] = json!({ "name": "B", "style": "shouty" });
+        assert!(validate(&c).is_err());
+        c["assistant"]["style"] = json!("casual");
+        assert!(validate(&c).is_ok());
+    }
+
+    // Shipped: the renderer wrote pinnedSkills into config.json, and derive() — whose output
+    // is the only config the app ever reads — did not carry the key, so every pinned skill
+    // vanished at the next read. They survive a read now, blanks dropped.
+    #[test]
+    fn pinned_skills_survive_a_read() {
+        let mut c = default_config();
+        c["pinnedSkills"] = json!({ "global": ["route", ""], "session": ["learn", 7] });
+        assert_eq!(derive(&c)["pinnedSkills"], json!({ "global": ["route"], "session": ["learn"] }));
+        assert_eq!(derive(&default_config())["pinnedSkills"], json!({ "global": [], "session": [] }));
+    }
+
     #[test]
     fn onboarding_opens_only_for_an_install_with_nothing_in_it() {
         assert!(onboarding_needed(false, 0), "fresh install → the wizard opens");

@@ -170,6 +170,16 @@ test('a pinned-skill slot shows its tooltip, in the titlebar and in the detail p
   }
 })
 
+test('saving Settings keeps the pinned skills', async ({ page }) => {
+  // Shipped: Save rebuilt the config from the tabs' collectors alone, and no tab owns the
+  // pinned skills — every Save wiped them from config.json.
+  await page.evaluate(() => { window.CSM_CONFIG.pinnedSkills = { global: ['route'], session: ['learn'] } })
+  await page.locator('#settings-btn').click()
+  await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
+  await expect.poll(() => page.evaluate(() => window.__LAST_SET_CONFIG__ && window.__LAST_SET_CONFIG__.pinnedSkills))
+    .toEqual({ global: ['route'], session: ['learn'] })
+})
+
 test('an icon button holds one centred glyph, whatever its state', async ({ page }) => {
   // Shipped: the ticket and pull-request buttons drew their state as a second glyph
   // beside the icon, inside a button sized for one. The icon was pushed off centre and
