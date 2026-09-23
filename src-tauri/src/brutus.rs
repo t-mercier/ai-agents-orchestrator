@@ -175,14 +175,9 @@ fn emit(app: &tauri::AppHandle, ev: &Value) {
     let _ = app.emit("brutus-event", ev);
 }
 
-#[tauri::command(async)]
-pub fn brutus_ask(
-    app: tauri::AppHandle,
-    pty_state: tauri::State<pty::PtyManager>,
-    message: String,
-) -> Result<(), String> {
-    let message = check_message(&message)?;
-    let _busy = Busy::acquire()?;
+/// Refresh his folder (settings.json, dashboard.md) and build the run. `live` is the
+/// dashboard's live list; `with_history` adds the stale and recently closed sessions.
+pub(crate) fn prepare(live: Vec<Value>, with_history: bool) -> Result<Plan, String> {
     let dir = brutus_home::ensure()?;
     let cfg = config::load();
 
@@ -198,8 +193,7 @@ pub fn brutus_ask(
         .cloned()
         .collect();
     let (today, time) = crate::local_date_time().unwrap_or_default();
-    let live = crate::reader::get_sessions(pty_state);
-    let hist = crate::reader::get_historical_sessions_all();
+    let hist = if with_history { crate::reader::get_historical_sessions_all() } else { json!({}) };
     let md = brutus_home::dashboard_md(&live, &hist, &crate::prstatus::get_pr_status(),
         &knowledge, &cutoff_date(), &format!("{today} {time}"));
     std::fs::write(dir.join("dashboard.md"), md).map_err(|e| e.to_string())?;
@@ -207,17 +201,21 @@ pub fn brutus_ask(
     let a = cfg.get("assistant").cloned().unwrap_or(Value::Null);
     let name = a.get("name").and_then(Value::as_str).unwrap_or("Brutus");
     let style = a.get("style").and_then(Value::as_str).unwrap_or("concise");
-    let plan = Plan {
+    Ok(Plan {
         dir: dir.to_string_lossy().into_owned(),
         agents: brutus_agent::agents_json(name, style),
         read_dirs,
         resume: read_conversation(),
         model: resolve_model(&cfg),
-    };
+    })
+}
 
+/// One run: the message on stdin, each stream event handed to `on_event` as it arrives,
+/// and an `error` event when the stream ends without a result.
+pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -> Result<(), String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let mut child = Command::new(&shell)
-        .args(["-ilc", &shell_line(&plan)])
+        .args(["-ilc", &shell_line(plan)])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -255,7 +253,7 @@ pub fn brutus_ask(
             if matches!(ev, Event::Done { .. }) {
                 done = true;
             }
-            emit(&app, &serde_json::to_value(&ev).unwrap_or(Value::Null));
+            on_event(serde_json::to_value(&ev).unwrap_or(Value::Null));
         }
     }
     let status = CHILD.lock().unwrap().take().and_then(|mut c| c.wait().ok());
@@ -269,9 +267,21 @@ pub fn brutus_ask(
                 None => "Stopped.".to_string(),
             }
         };
-        emit(&app, &json!({ "kind": "error", "message": why }));
+        on_event(json!({ "kind": "error", "message": why }));
     }
     Ok(())
+}
+
+#[tauri::command(async)]
+pub fn brutus_ask(
+    app: tauri::AppHandle,
+    pty_state: tauri::State<pty::PtyManager>,
+    message: String,
+) -> Result<(), String> {
+    let message = check_message(&message)?;
+    let _busy = Busy::acquire()?;
+    let plan = prepare(crate::reader::get_sessions(pty_state), true)?;
+    run(&plan, &message, |ev| emit(&app, &ev))
 }
 
 #[tauri::command]
@@ -390,6 +400,27 @@ mod tests {
         assert!(Busy::acquire().is_err(), "second acquire must fail");
         drop(first);
         assert!(Busy::acquire().is_ok(), "released on drop");
+    }
+
+    /// The one end-to-end check: a real run of the installed claude, with this machine's
+    /// config, through exactly the path brutus_ask takes. Ignored by default — it needs a
+    /// logged-in claude and costs one run. `cargo test --lib -- --ignored real_run`
+    #[test]
+    #[ignore = "runs the real claude"]
+    fn real_run_answers_from_the_dashboard() {
+        let live = vec![serde_json::json!({ "name": "probe-waiting-session", "category": "BUG", "root": "Work",
+            "status": "waiting", "notesPath": "/nowhere/notes.md" })];
+        let plan = prepare(live, false).expect("prepare");
+        let mut events: Vec<serde_json::Value> = Vec::new();
+        run(&plan, "Which session is waiting on me? Answer with its name only, written as [[session:name]].",
+            |e| events.push(e)).expect("run");
+        let kinds: Vec<&str> = events.iter().filter_map(|e| e["kind"].as_str()).collect();
+        eprintln!("events: {kinds:?}");
+        assert!(events.iter().any(|e| e["kind"] == "step" && e["target"].as_str().unwrap_or("").ends_with("dashboard.md")),
+            "he read the dashboard: {events:?}");
+        let text: String = events.iter().filter(|e| e["kind"] == "text").filter_map(|e| e["text"].as_str()).collect();
+        assert!(text.contains("[[session:probe-waiting-session]]"), "answer: {text}");
+        assert!(events.iter().any(|e| e["kind"] == "done" && e["is_error"] == false));
     }
 
     #[test]
