@@ -65,5 +65,10 @@ if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 4173
     os.chdir(RENDERER)
     socketserver.TCPServer.allow_reuse_address = True
+    # The listen backlog defaults to 5. A page of this app requests ~30 scripts at once, so
+    # connections past the fifth were refused, a random script never loaded, and whatever
+    # needed it failed: a list that never rendered, an undefined window.CSMBrutus. The
+    # smoke tests flaked on it, on master too.
+    socketserver.TCPServer.request_queue_size = 128
     with socketserver.TCPServer(("127.0.0.1", port), Handler) as srv:
         srv.serve_forever()
