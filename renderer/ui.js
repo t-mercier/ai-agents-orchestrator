@@ -1299,7 +1299,7 @@ function pinSlotHtml(scope, index, name, ctx) {
   // carry it — an affordance nobody can see needs to be said somewhere.
   const tip = name ? `${L.tooltip(name, ctx)} · right-click to replace or unpin` : L.tooltip(name, ctx)
   const blocked = !!name && L.decide(name, ctx).mode === 'blocked'
-  const label = name ? escapeHtml(L.clean(name)) : ICON_PIN_PLUS
+  const label = name ? `<span class="pin-label">${escapeHtml(L.clean(name))}</span>` : ICON_PIN_PLUS
   return `<button class="act pin-slot${name ? '' : ' empty'}${blocked ? ' blocked' : ''}"
     data-pin-run="${scope}" data-pin-index="${index}" data-pin-skill="${escapeHtml(name || '')}"
     ${blocked ? 'aria-disabled="true"' : ''} data-tip="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">${label}</button>`

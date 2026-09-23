@@ -141,6 +141,35 @@ test('the titlebar shows one empty pinned slot, sized like its neighbours', asyn
   expect(Math.abs(slot - neighbour), `slot ${slot}px vs neighbour ${neighbour}px`).toBeLessThanOrEqual(2)
 })
 
+test('a pinned-skill slot shows its tooltip, in the titlebar and in the detail panel', async ({ page }) => {
+  // Shipped: every slot had its text in data-tip and aria-label, and no tooltip ever
+  // appeared. The tooltip is the button's own ::after, outside its box, and the slot's
+  // `overflow: hidden` (there for the label's ellipsis) clipped it. Its opacity dimmed
+  // it too, and in the titlebar it opened upward, out of the window.
+  // Keyboard selection, not a click: the card's centre can land on one of its own buttons.
+  await page.locator('body').press('j')
+  await expect(page.locator('#detail-info-pane .acts')).toBeVisible()
+  for (const sel of ['#pin-global .pin-slot.empty', '#detail-info-pane .pin-slot.empty']) {
+    const slot = page.locator(sel).first()
+    await expect(slot, `${sel} is not rendered`).toBeVisible()
+    await slot.hover()
+    const t = await slot.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      const tip = getComputedStyle(el, '::after')
+      return {
+        text: el.dataset.tip, content: tip.content, overflow: cs.overflow,
+        opacity: cs.opacity, opensDown: parseFloat(tip.top) >= el.getBoundingClientRect().height,
+        inTitlebar: !!el.closest('.titlebar'),
+      }
+    })
+    expect(t.text, `${sel} has no description`).toBeTruthy()
+    expect(t.content, `${sel}: the tooltip is not rendered`).toBe(JSON.stringify(t.text))
+    expect(t.overflow, `${sel}: overflow clips the tooltip`).toBe('visible')
+    expect(t.opacity, `${sel}: dimming the button fades its tooltip`).toBe('1')
+    if (t.inTitlebar) expect(t.opensDown, 'a titlebar tooltip must open downward, inside the window').toBe(true)
+  }
+})
+
 test('an icon button holds one centred glyph, whatever its state', async ({ page }) => {
   // Shipped: the ticket and pull-request buttons drew their state as a second glyph
   // beside the icon, inside a button sized for one. The icon was pushed off centre and
