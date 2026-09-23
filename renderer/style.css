@@ -1234,8 +1234,7 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .pin-btn.pinned svg { fill: currentColor; }
 /* Archive button — hover-revealed like the pin, on closed-session cards. */
 .archive-btn,
-.close-btn,
-.pause-btn {
+.close-btn {
   display: inline-flex;
   align-items: center;
   background: none;
@@ -1248,12 +1247,10 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   -webkit-app-region: no-drag;
   transition: opacity 0.1s, color 0.1s;
 }
-.archive-btn svg, .close-btn svg, .pause-btn svg { width: 15px; height: 15px; display: block; }
+.archive-btn svg, .close-btn svg { width: 15px; height: 15px; display: block; }
 .list-card:hover .archive-btn,
-.list-card:hover .close-btn,
-.list-card:hover .pause-btn { opacity: 0.5; }
+.list-card:hover .close-btn { opacity: 0.5; }
 .archive-btn:hover { opacity: 1 !important; color: var(--text-primary); }
-.pause-btn:hover { opacity: 1 !important; color: var(--text-primary); }
 .close-btn:hover { opacity: 1 !important; color: var(--status-busy, var(--accent)); }
 /* A close that wraps up first takes up to a minute. The button is hover-revealed, so
    without this the only feedback vanishes the moment the pointer moves away. */

@@ -340,17 +340,6 @@ function ageBadge(s) {
   return `<span class="age-pill" title="Last activity: ${escapeHtml(abs)}">${svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')}${escapeHtml(age)}</span>`
 }
 
-// Pause — set the session aside WITHOUT closing it: kills the embedded terminal's process
-// (no /close-session wrap-up), the session goes idle (grey dot + age) but STAYS in
-// Running, ready to Resume later. Only shown when a live embedded terminal actually
-// exists for this session (nothing to pause for an external-terminal resume — the
-// dashboard doesn't own that process). Distinct from Close (done, → Closed tab).
-function pauseBtn(s) {
-  if (!canPause(s)) return ''
-  return `<button class="pause-btn" data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"
-           title="Pause — set aside without closing" aria-label="Pause this session">${svgIcon('<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>')}</button>`
-}
-
 function renderListCard(s, selectedKey, changed) {
   // Session summary (from /save-session or /close-session), hidden when there's none.
   // Full text — CSS (ellipsis) clips to the panel width, so widening the panel reveals more.
@@ -365,7 +354,6 @@ function renderListCard(s, selectedKey, changed) {
       <div class="list-card-header">
         <span class="status-dot ${dotClass}"></span>
         <span class="list-card-name" title="${escapeHtml(s.name)}">${escapeHtml(displayName(s))}</span>
-        ${pauseBtn(s)}
         ${closeBtn(s)}
         ${archiveBtn(s)}
         ${deleteBtn(s)}

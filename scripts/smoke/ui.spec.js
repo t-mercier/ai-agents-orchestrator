@@ -112,6 +112,19 @@ test('every row of a session menu is legible', async ({ page }) => {
   expect(lefts.length, `rows start at different x: ${JSON.stringify(rows.map((r) => [r.text, r.textLeft]))}`).toBe(1)
 })
 
+test('a card has no pause button; its menu and the terminal bar keep one', async ({ page }) => {
+  // Removed on request: the card's hover-revealed pause sat where a click to reopen the
+  // session lands, so it paused sessions by accident. The terminal bar and the card's
+  // menu both keep it.
+  await page.evaluate(() => { window.liveTerminalKeyFor = () => 'live' })
+  await page.locator('.tab-btn[data-tab="running"]').click()
+  const card = page.locator('#panel-list .list-card[data-key]').first()
+  await expect(card).toBeVisible()
+  expect(await page.locator('#panel-list .list-card .pause-btn').count()).toBe(0)
+  await card.click({ button: 'right' })
+  await expect(page.locator('#session-menu .board-menu-item.pause-btn:not([disabled])')).toBeVisible()
+})
+
 test('a context menu opens at the pointer', async ({ page }) => {
   const card = page.locator('#panel-list .list-card[data-key]').first()
   const box = await card.boundingBox()

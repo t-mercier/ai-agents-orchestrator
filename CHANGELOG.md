@@ -29,6 +29,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   the config the app reads back never carried them, and Settings → Save rebuilt the file
   without them.
 
+### Changed
+
+- **A session card no longer has a pause button.** It appeared on hover exactly where a
+  click to reopen the session lands, so sessions got paused by accident. Pause stays in the
+  terminal bar, next to Close session, and in the card's right-click menu.
+
 ## [0.19.4-alpha] - 2026-09-23
 
 ### Fixed
