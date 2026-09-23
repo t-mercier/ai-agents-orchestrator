@@ -395,7 +395,7 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
   }).join('')
   return `
     <div class="list-group" data-drag-kind="group" data-drag-id="${gid}"${accentStyle}>
-      <div class="list-group-head" data-group="${gid}" data-cat="${escapeHtml(category)}">
+      <div class="list-group-head" data-group="${gid}" data-cat="${escapeHtml(category)}" data-group-collapse title="Expand / collapse">
         <span class="list-group-chev ${g.collapsed ? 'collapsed' : ''}" data-group-collapse data-nodrag title="Expand / collapse"></span>
         <span class="list-group-name" data-group-collapse data-nodrag title="Expand / collapse">${escapeHtml(g.name)}</span>
         <span class="list-group-count">${g.members.length}</span>

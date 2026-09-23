@@ -258,6 +258,38 @@ test('a card and a menu are controls, not documents — no text selection', asyn
   expect(sel.detail).not.toBe('none')
 })
 
+test('the whole group title bar folds, at once, and its buttons do not', async ({ page }) => {
+  // Shipped: only the arrow and the name folded; the count and the empty stretch of the
+  // bar did nothing (and armed a drag), so "clicking the title bar" took two or three
+  // tries. And the fold only painted after a full backend re-read, so a slow read looked
+  // like a missed click, and the second click undid the first.
+  await page.evaluate(() => {
+    const key = (s) => s.notesPath || s.sessionId || s.name || ''
+    const ss = (window._lastSessions || []).filter((s) => s.status !== 'waiting')
+    const a = key(ss[0]), b = key(ss[1])
+    if (!window.isPinned(a)) window.togglePin(a)
+    if (!window.isPinned(b)) window.togglePin(b)
+    window.CSMListOrg.save(window.CSMListOrg.createGroupWith(window.CSMListOrg.load(), window.PINNED_CAT, 'lg-bar', [a, b], 0))
+    window.fetchAndRender(false)
+  })
+  const body = page.locator('.list-group-body').first()
+  await expect(body).not.toHaveClass(/collapsed/)
+  // Make every re-read slow: the fold must not wait for it.
+  await page.evaluate(() => {
+    const slow = (f) => (...a) => new Promise((r) => setTimeout(() => r(f(...a)), 1500))
+    window.api.getSessions = slow(window.api.getSessions)
+    window.api.getHistoricalSessions = slow(window.api.getHistoricalSessions)
+  })
+  await page.locator('.list-group-count').first().click()
+  await expect(body, 'a click on the count folds, before the re-read returns').toHaveClass(/collapsed/, { timeout: 400 })
+  // The buttons on the bar keep their own job.
+  await page.waitForTimeout(1700)
+  const before = await page.locator('.list-group-body').first().getAttribute('class')
+  await page.locator('.list-group-color').first().click()
+  await page.keyboard.press('Escape')
+  expect(await page.locator('.list-group-body').first().getAttribute('class')).toBe(before)
+})
+
 test('the group chevron folds and unfolds', async ({ page }) => {
   // Shipped dead: drag-list calls preventDefault on mousedown for anything that is not a
   // button/input/link/[data-nodrag], which suppresses the click that follows. The group

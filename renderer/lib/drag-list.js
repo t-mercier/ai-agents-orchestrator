@@ -94,6 +94,9 @@
       if (d.el) d.el.classList.remove('dl-dragging')
       document.body.classList.remove('dl-drag-active'); clearIns(); clearMerge()
       window._listDragging = false
+      // The release of a real drag also fires a click on whatever is under the pointer;
+      // a header that toggles on click reads this to tell the two apart.
+      if (d.active) window._listDragEndedAt = Date.now()
       if (d.active && d.merge) {
         onReorder({ kind: d.kind, id: d.id, action: 'merge', targetId: d.merge.targetId, containerKey: 'cat:' + d.merge.category })
       } else if (d.active && d.drop) {

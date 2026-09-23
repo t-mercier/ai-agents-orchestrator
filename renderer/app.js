@@ -554,9 +554,20 @@ document.body.addEventListener('click', (e) => {
 })
 
 document.body.addEventListener('click', (e) => {
+  // The whole title bar folds — not just the arrow and the name — except its own buttons.
+  // The fold paints at once and the re-read follows: waiting for the re-read made a slow
+  // one look like a missed click, and the second click undid the first.
   const chev = e.target.closest('[data-group-collapse]')
-  if (chev) {
+  if (chev && !e.target.closest('button')) {
+    if (Date.now() - (window._listDragEndedAt || 0) < 300) return   // a drag's release, not a click
     const head = chev.closest('.list-group-head')
+    const body = head && head.parentElement && head.parentElement.querySelector('.list-group-body')
+    if (body) {
+      const collapsed = !body.classList.contains('collapsed')
+      body.classList.toggle('collapsed', collapsed)
+      const arrow = head.querySelector('.list-group-chev')
+      if (arrow) arrow.classList.toggle('collapsed', collapsed)
+    }
     window.CSMListOrg.save(window.CSMListOrg.toggleGroupCollapsed(window.CSMListOrg.load(), head.dataset.cat, head.dataset.group))
     fetchAndRender(false)
     return
