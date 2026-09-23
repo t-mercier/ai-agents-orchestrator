@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
@@ -60,7 +60,7 @@ pub(crate) fn claude_args(p: &Plan) -> Vec<String> {
 /// it goes on stdin.
 pub(crate) fn shell_line(p: &Plan) -> String {
     let args: Vec<String> = claude_args(p).iter().map(|a| pty::shell_quote(a)).collect();
-    format!("cd {} && AO_HEADLESS=1 claude {}", pty::shell_quote(&p.dir), args.join(" "))
+    format!("cd {} && exec env AO_HEADLESS=1 claude {}", pty::shell_quote(&p.dir), args.join(" "))
 }
 
 #[derive(Serialize, Debug, PartialEq, Clone)]
@@ -118,7 +118,40 @@ pub(crate) fn check_message(m: &str) -> Result<String, String> {
 }
 
 static BUSY: AtomicBool = AtomicBool::new(false);
-static CHILD: Mutex<Option<Child>> = Mutex::new(None);
+/// The running child, tagged with its run number: a watcher or a Stop acts on a run only
+/// if the slot still holds that run.
+static CHILD: Mutex<Option<(u64, Child)>> = Mutex::new(None);
+static RUN: AtomicU64 = AtomicU64::new(0);
+/// Set by brutus_cancel, so the end of a stopped run says "Stopped." — not a SIGKILL
+/// reported as a broken install.
+static CANCELLED: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum Watch { Wait, Kill, Exit }
+
+/// What the ceiling watcher of run `mine` does, given the run now in the slot.
+pub(crate) fn watch(mine: u64, current: Option<u64>, elapsed: Duration, ceiling: Duration) -> Watch {
+    match current {
+        Some(c) if c == mine && elapsed > ceiling => Watch::Kill,
+        Some(c) if c == mine => Watch::Wait,
+        _ => Watch::Exit,
+    }
+}
+
+/// The line shown when a run ended without a result.
+pub(crate) fn end_message(cancelled: bool, timed_out: bool, status: Option<std::process::ExitStatus>) -> String {
+    if cancelled {
+        return "Stopped.".to_string();
+    }
+    if timed_out {
+        return "Brutus took longer than 3 minutes and was stopped.".to_string();
+    }
+    match status {
+        Some(s) if s.success() => "Brutus stopped without answering.".to_string(),
+        Some(s) => format!("claude exited with {s}. Is Claude Code installed and logged in?"),
+        None => "Stopped.".to_string(),
+    }
+}
 
 /// One run at a time. Held for the length of a run; released on drop, panics included.
 pub(crate) struct Busy;
@@ -225,20 +258,24 @@ pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -
         let _ = stdin.write_all(message.as_bytes());
     }
     let stdout = child.stdout.take().ok_or("no stdout")?;
-    *CHILD.lock().unwrap() = Some(child);
+    let run_id = RUN.fetch_add(1, Ordering::SeqCst) + 1;
+    CANCELLED.store(false, Ordering::SeqCst);
+    *CHILD.lock().unwrap() = Some((run_id, child));
 
-    // The ceiling: a watcher kills a run that outlives it.
+    // The ceiling: this run's watcher kills this run if it outlives it, and nothing else.
     let started = Instant::now();
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(500));
         let mut guard = CHILD.lock().unwrap();
-        match guard.as_mut() {
-            None => return,
-            Some(c) if started.elapsed() > TIMEOUT => {
-                let _ = c.kill();
+        match watch(run_id, guard.as_ref().map(|(id, _)| *id), started.elapsed(), TIMEOUT) {
+            Watch::Wait => {}
+            Watch::Exit => return,
+            Watch::Kill => {
+                if let Some((_, c)) = guard.as_mut() {
+                    let _ = c.kill();
+                }
                 return;
             }
-            Some(_) => {}
         }
     });
 
@@ -256,17 +293,17 @@ pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -
             on_event(serde_json::to_value(&ev).unwrap_or(Value::Null));
         }
     }
-    let status = CHILD.lock().unwrap().take().and_then(|mut c| c.wait().ok());
+    // Out of the slot first, then wait — waiting under the lock would block a Stop.
+    let taken = {
+        let mut guard = CHILD.lock().unwrap();
+        match guard.as_ref() {
+            Some((id, _)) if *id == run_id => guard.take().map(|(_, c)| c),
+            _ => None,
+        }
+    };
+    let status = taken.and_then(|mut c| c.wait().ok());
     if !done {
-        let why = if started.elapsed() > TIMEOUT {
-            "Brutus took longer than 3 minutes and was stopped.".to_string()
-        } else {
-            match status {
-                Some(s) if s.success() => "Brutus stopped without answering.".to_string(),
-                Some(s) => format!("claude exited with {s}. Is Claude Code installed and logged in?"),
-                None => "Stopped.".to_string(),
-            }
-        };
+        let why = end_message(CANCELLED.load(Ordering::SeqCst), started.elapsed() > TIMEOUT, status);
         on_event(json!({ "kind": "error", "message": why }));
     }
     Ok(())
@@ -286,7 +323,14 @@ pub fn brutus_ask(
 
 #[tauri::command]
 pub fn brutus_cancel() -> bool {
-    CHILD.lock().unwrap().as_mut().map(|c| c.kill().is_ok()).unwrap_or(false)
+    let mut guard = CHILD.lock().unwrap();
+    match guard.as_mut() {
+        Some((_, c)) => {
+            CANCELLED.store(true, Ordering::SeqCst);
+            c.kill().is_ok()
+        }
+        None => false,
+    }
 }
 
 /// A new conversation. His memory is untouched.
@@ -359,7 +403,10 @@ mod tests {
     #[test]
     fn the_shell_line_quotes_every_argument_and_never_holds_the_message() {
         let line = shell_line(&plan());
-        assert!(line.starts_with("cd '/cfg/brutus' && AO_HEADLESS=1 claude '--restricted'"), "{line}");
+        // exec: the process that Stop and the ceiling kill must be claude itself. zsh execs
+        // the last command on its own; bash keeps itself as the parent, so killing the shell
+        // left claude running, its pipe open, and the spinner turning.
+        assert!(line.starts_with("cd '/cfg/brutus' && exec env AO_HEADLESS=1 claude '--restricted'"), "{line}");
         assert!(line.contains("'claude-opus-5-5[1m]'"), "brackets are a glob to the shell");
     }
 
@@ -421,6 +468,31 @@ mod tests {
         let text: String = events.iter().filter(|e| e["kind"] == "text").filter_map(|e| e["text"].as_str()).collect();
         assert!(text.contains("[[session:probe-waiting-session]]"), "answer: {text}");
         assert!(events.iter().any(|e| e["kind"] == "done" && e["is_error"] == false));
+    }
+
+    // Shipped: Stop killed claude with SIGKILL, which fell into the "exited with a status"
+    // arm and blamed the install: "Is Claude Code installed and logged in?".
+    #[test]
+    fn the_end_message_names_the_real_reason() {
+        use std::os::unix::process::ExitStatusExt;
+        let killed = std::process::ExitStatus::from_raw(9);
+        let failed = std::process::ExitStatus::from_raw(1 << 8);
+        let ok = std::process::ExitStatus::from_raw(0);
+        assert_eq!(end_message(true, false, Some(killed)), "Stopped.");
+        assert!(end_message(false, true, Some(killed)).contains("3 minutes"));
+        assert!(end_message(false, false, Some(failed)).contains("logged in"));
+        assert!(end_message(false, false, Some(ok)).contains("without answering"));
+    }
+
+    // Shipped: a watcher left from run N could see run N+1's child in the shared slot and
+    // kill it on N's clock. A watcher now acts only on the run it was started for.
+    #[test]
+    fn a_watcher_acts_only_on_its_own_run() {
+        let t = Duration::from_secs(180);
+        assert_eq!(watch(7, Some(8), Duration::from_secs(500), t), Watch::Exit, "another run's child: leave it");
+        assert_eq!(watch(7, None, Duration::from_secs(500), t), Watch::Exit, "run over");
+        assert_eq!(watch(7, Some(7), Duration::from_secs(10), t), Watch::Wait);
+        assert_eq!(watch(7, Some(7), Duration::from_secs(181), t), Watch::Kill);
     }
 
     #[test]
