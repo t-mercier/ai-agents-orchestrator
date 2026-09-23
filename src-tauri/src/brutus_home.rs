@@ -27,8 +27,28 @@ pub(crate) fn ensure() -> Result<PathBuf, String> {
 /// to this settings file and silently deny everything.
 pub(crate) fn settings_json(resolved_dir: &Path) -> Value {
     let mem = resolved_dir.join("memory.md");
-    json!({ "permissions": { "allow": [format!("Edit(/{})", mem.to_string_lossy())] } })
+    json!({ "permissions": {
+        "allow": [format!("Edit(/{})", mem.to_string_lossy())],
+        "deny": SECRET_READS,
+    } })
 }
+
+/// Files he must not read even inside a folder he may: a category folder can hold whole
+/// repos, `.env` files included. Absolute (`//`) on purpose — measured: `Read(**/.env)` is
+/// relative to this settings file and blocked nothing, `Read(//**/.env)` blocked the read.
+/// Read rules cover Grep and Glob too.
+const SECRET_READS: [&str; 10] = [
+    "Read(//**/.env)",
+    "Read(//**/.env.*)",
+    "Read(//**/.ssh/**)",
+    "Read(//**/*.pem)",
+    "Read(//**/*.key)",
+    "Read(//**/id_rsa*)",
+    "Read(//**/id_ed25519*)",
+    "Read(//**/*secret*.json)",
+    "Read(//**/.netrc)",
+    "Read(//**/.npmrc)",
+];
 
 /// What he may read: the category folders (where notes.md live) and the knowledge
 /// folders — never a space root, which can be a whole repo tree or `~` itself. Existing
@@ -181,7 +201,20 @@ mod tests {
     #[test]
     fn settings_allow_exactly_one_edit_on_memory_with_a_double_slash_path() {
         let s = settings_json(Path::new("/private/tmp/x/brutus"));
-        assert_eq!(s, json!({ "permissions": { "allow": ["Edit(//private/tmp/x/brutus/memory.md)"] } }));
+        assert_eq!(s["permissions"]["allow"], json!(["Edit(//private/tmp/x/brutus/memory.md)"]));
+    }
+
+    // A category folder can hold whole repos, .env files included — the review found
+    // three on this machine. Measured: Read(**/.env) blocked nothing (relative to the
+    // settings file), Read(//**/.env) blocked the read. Every deny rule is absolute.
+    #[test]
+    fn secrets_are_denied_by_absolute_patterns_even_inside_a_readable_folder() {
+        let deny = settings_json(Path::new("/x"))["permissions"]["deny"].clone();
+        let deny: Vec<String> = serde_json::from_value(deny).unwrap();
+        for must in ["Read(//**/.env)", "Read(//**/.env.*)", "Read(//**/.ssh/**)", "Read(//**/*.pem)", "Read(//**/*secret*.json)"] {
+            assert!(deny.iter().any(|d| d == must), "missing {must}: {deny:?}");
+        }
+        assert!(deny.iter().all(|d| d.starts_with("Read(//")), "a pattern without // matches nothing: {deny:?}");
     }
 
     #[test]
