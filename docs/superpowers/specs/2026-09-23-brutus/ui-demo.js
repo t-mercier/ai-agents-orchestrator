@@ -121,7 +121,7 @@
     color:var(--text-primary); display:flex; gap:10px; align-items:center; animation:bru-drop .14s ease-out; }
   .bru-toast a { color:var(--accent); cursor:pointer; font-weight:600; }
   .bru-cont { font:600 11px var(--font); color:var(--accent); cursor:pointer; text-align:right; margin-top:-4px; }
-  .bru-set { position:fixed; z-index:1004; left:50%; top:18vh; transform:translateX(-50%); width:420px; background:var(--surface-modal);
+  .bru-set { position:fixed; z-index:1004; left:50%; top:9vh; max-height:84vh; overflow:auto; transform:translateX(-50%); width:420px; background:var(--surface-modal);
     border:.5px solid rgba(var(--tint),.14); border-radius:12px; box-shadow:var(--shadow-lg); padding:16px 18px; font:500 12.5px var(--font); color:var(--text-primary); }
   .bru-set h5 { font:700 13px var(--font); margin:0 0 4px; } .bru-set p { color:var(--text-secondary); font-size:11.5px; margin:0 0 12px; }
   .bru-set label { display:flex; gap:9px; align-items:flex-start; padding:8px 10px; border:.5px solid rgba(var(--tint),.12); border-radius:8px; margin-bottom:6px; cursor:pointer; }
@@ -158,12 +158,12 @@
   const turnHTML = (t) => t.u ? `<div class="bru-u">${t.u}</div>`
     : t.think ? `<div class="bru-b"><span class="bru-av lg">B</span><div class="bru-bt">${steps(t.think + '…')}<div class="bru-think"><i></i><i></i><i></i></div><div class="bru-skel" style="width:88%"></div><div class="bru-skel" style="width:64%"></div></div></div>`
     : `<div class="bru-b"><span class="bru-av lg">B</span><div class="bru-bt">${t.b}</div></div>`
-  const emptyHTML = () => `<div class="bru-empty"><span class="bru-av xl">B</span><h4>Hi, I'm Brutus.</h4>
+  const emptyHTML = () => `<div class="bru-empty"><span class="bru-av xl">B</span><h4>Hi, I'm ${nameOf()}.</h4>
     <p>I keep an eye on every session and remember what you tell me. Ask me anything about your work.</p>
     <div class="bru-sugg"><button>What's waiting on me?</button><button>What did I do yesterday?</button><button>Brief me on FEAT-1842</button><button>Which sessions went stale?</button></div></div>`
 
   const head = (compact) => `<div class="bru-head"><span class="bru-av lg">B</span>
-    <div><div class="bru-title">Brutus</div>${compact ? '' : (state.empty ? '<div class="bru-sub">Nothing remembered yet</div>' : '<div class="bru-sub">Remembers <a>14 things</a> about your work</div>')}</div>
+    <div><div class="bru-title">${nameOf()}</div>${compact ? '' : (state.empty ? '<div class="bru-sub">Nothing remembered yet</div>' : '<div class="bru-sub">Remembers <a>14 things</a> about your work</div>')}</div>
     <span class="bru-sp"></span>
     ${state.home === 'side' ? `<button class="bru-ib bru-tobubble" title="Back to the bubble">${I.bubble}</button>` : ''}
     <button class="bru-ib" title="New conversation (keeps his memory)">${I.plus}</button>
@@ -184,7 +184,15 @@
 
 
   // home: where Brutus lives (a Settings choice). palette: the ⌘K overlay, on top of either.
-  const state = { home: 'bubble', homeOpen: true, palette: false, empty: false, extra: [], settings: false }
+  const state = { home: 'bubble', homeOpen: true, palette: false, empty: false, extra: [], settings: false, name: 'Brutus', style: 'concise' }
+  const STYLES = {
+    concise:  { label: 'Concise',  sample: '2 need you: [[checkout-redesign]] (retry strategy) and [[search-suggest]] (API contract).' },
+    friendly: { label: 'Friendly', sample: 'Morning! Two sessions are waiting for you — [[checkout-redesign]] wants your call on the retry strategy, and [[search-suggest]] is stuck on the API contract.' },
+    casual:   { label: 'Casual',   sample: 'Yo, two of them are poking you: [[checkout-redesign]] and [[search-suggest]]. Retry strategy and API contract, your call.' },
+    nerdy:    { label: 'Nerdy',    sample: '2 processes blocked on user input 🤓 [[checkout-redesign]]: exponential vs. jittered backoff? [[search-suggest]]: awaiting the API contract since yesterday.' },
+  }
+  const initial = () => (state.name.trim()[0] || 'B').toUpperCase()
+  const nameOf = () => state.name.trim() || 'Brutus'
   const NOTES = {
     bubble: 'Home = bubble (default). Click the bubble to open; right-click it to move Brutus to the side panel. ⌘K opens the palette from anywhere in the app.',
     side: 'Home = side panel: docked on the right, the dashboard shrinks to make room. The titlebar button toggles it. ⌘K still opens the palette.',
@@ -220,6 +228,8 @@
       p.querySelector('.bru-cont').onclick = () => { state.palette = false; state.homeOpen = true; render() }
       p.querySelector('input').focus()
     }
+    document.querySelectorAll('.bru-av').forEach(e => e.textContent = initial())
+    const tbl = document.querySelector('.bru-tb'); if (tbl) tbl.innerHTML = `<span class="bru-av">${initial()}</span>${nameOf()}<span class="bru-kbd">⌘K</span>`
     bar()
   }
 
@@ -233,7 +243,7 @@
   function menu(x, y) {
     document.querySelector('.bru-menu')?.remove()
     const m = document.createElement('div'); m.className = 'bru-menu'
-    m.innerHTML = `<button data-a="side">Move Brutus to the side panel</button><div class="sep"></div><button data-a="set">Brutus settings…</button>`
+    m.innerHTML = `<button data-a="side">Move ${nameOf()} to the side panel</button><div class="sep"></div><button data-a="set">${nameOf()} settings…</button>`
     document.body.appendChild(m)
     const r = m.getBoundingClientRect()
     m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px'
@@ -258,7 +268,13 @@
     document.querySelector('.bru-set')?.remove()
     const s = document.createElement('div'); s.className = 'bru-set'
     const opt = (k, t, sub) => `<label class="${state.home === k ? 'on' : ''}" data-k="${k}"><input type="radio" name="bh" ${state.home === k ? 'checked' : ''}/><span>${t}<small>${sub}</small></span></label>`
-    s.innerHTML = `<h5>Brutus</h5><p>Settings → Brutus (mock of the section)</p>` +
+    const sample = STYLES[state.style].sample.replace(/\[\[([a-z-]+)\]\]/g, (_, n) => chip(n, 'waiting'))
+    s.innerHTML = `<h5>${nameOf()}</h5><p>Settings → Assistant (mock of the section)</p>` +
+      `<div class="row" style="margin:0 0 10px"><span>Name</span><input class="bru-name" value="${nameOf().replace(/"/g, '&quot;')}" maxlength="24" style="width:170px;background:rgba(var(--tint),.05);border:.5px solid rgba(var(--tint),.16);border-radius:6px;padding:4px 8px;color:var(--text-primary);font:500 12px var(--font)"/></div>` +
+      `<div style="font:600 11px var(--font);color:var(--text-secondary);margin:4px 0 6px">Style</div>` +
+      `<div class="bru-sugg" style="margin-bottom:8px">${Object.entries(STYLES).map(([k, v]) => `<button data-st="${k}" style="${state.style === k ? 'color:var(--text-primary);border-color:rgba(var(--accent-rgb),.7);background:rgba(var(--accent-rgb),.16)' : ''}">${v.label}</button>`).join('')}</div>` +
+      `<div class="bru-card" style="margin:0 0 12px"><div class="bru-b"><span class="bru-av lg">${initial()}</span><div class="bru-bt">${sample}</div></div></div>` +
+      `<div style="font:600 11px var(--font);color:var(--text-secondary);margin:4px 0 6px">Appears as</div>` +
       opt('bubble', 'Bubble', 'A button in the bottom-right corner. Right-click it to dock him.') +
       opt('side', 'Side panel', 'Docked on the right; the dashboard makes room.') +
       `<div class="row"><span>Quick ask shortcut</span><span class="bru-kbd">⌘K</span></div>` +
@@ -266,6 +282,10 @@
       `<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="bru-btn pri" data-a="close">Done</button></div>`
     document.body.appendChild(s)
     s.querySelectorAll('label').forEach(l => l.onclick = () => { state.home = l.dataset.k; state.homeOpen = true; render(); settings() })
+    s.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { state.style = b.dataset.st; settings() })
+    const ni = s.querySelector('.bru-name')
+    ni.oninput = () => { state.name = ni.value; render(); const h = s.querySelector('h5'); h.textContent = nameOf(); s.querySelectorAll('.bru-av').forEach(e => e.textContent = initial()) }
+    ni.onblur = () => settings()
     s.querySelector('[data-a=close]').onclick = () => s.remove()
   }
 

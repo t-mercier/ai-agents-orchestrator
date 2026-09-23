@@ -21,7 +21,7 @@ scope*).
 ## The UI
 
 Agreed on a live demo over the real renderer (`2026-09-23-brutus/ui-demo.js`, screenshots in
-the same folder). Three surfaces, one conversation.
+the same folder, `settings.png` for this section). Three surfaces, one conversation.
 
 - **Bubble — the default home.** A round avatar bottom-right; click opens a 380 × 560 panel
   anchored above it. Right-click opens a menu at the pointer (like every context menu in the
@@ -36,9 +36,24 @@ the same folder). Three surfaces, one conversation.
   view on the same conversation.
 - **Titlebar button** "Brutus ⌘K" only in side-panel mode; in bubble mode the bubble is the
   entry point and the button would be redundant.
-- **Settings → Brutus:** home (Bubble / Side panel), the shortcut shown read-only, and a link
-  that opens `memory.md`. The home choice is a UI preference, so it lives in `localStorage`
-  (`csm.brutusHome`), per the README's two-stores rule.
+- **Settings → Assistant:**
+  - **Name** — "Brutus" by default, up to 24 characters. It changes what is displayed (header,
+    avatar initial, menu labels, "Hi, I'm …") and how he introduces himself. It never changes
+    the internal id: his folder, the agent id `brutus`, the commands. Naming your own assistant
+    is how Brutus got his name in the first place.
+  - **Style** — Concise (default) · Friendly · Casual · Nerdy, with a live sample of the same
+    answer in each, so you pick by reading rather than by label.
+  - **Appears as** — Bubble / Side panel.
+  - The ⌘K shortcut, shown read-only, and a link that opens `memory.md`.
+
+  Where each lives, by the README's two-stores rule: the home choice is how the app looks, so
+  `localStorage` (`csm.brutusHome`). Name and style change what the backend sends Claude Code,
+  so `config.json` (`assistant.name`, `assistant.style`): the runner composes the prompt from
+  them, and the renderer never sends prompt text. The style is a key checked against the four
+  presets; the name is plain text, trimmed, length-capped and escaped wherever it is rendered.
+
+  Neither can weaken the sandbox: both only reach the prompt, and every restriction below is a
+  command-line flag. A free-text custom style is out of V1.
 
 Inside the conversation:
 
