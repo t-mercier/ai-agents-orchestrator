@@ -8,6 +8,7 @@ mod hooks;
 mod onboarding;
 mod statusline;
 mod pinned;
+mod brutus_agent;
 mod prstatus;
 mod doctor;
 mod secaudit;

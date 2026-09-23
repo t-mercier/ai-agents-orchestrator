@@ -39,4 +39,5 @@ fn main() {
   // whatever was true the first time cargo built this crate.
   println!("cargo:rerun-if-changed=../skills");
   println!("cargo:rerun-if-changed=../hooks");
+  println!("cargo:rerun-if-changed=../agents");
 }

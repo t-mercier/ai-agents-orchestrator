@@ -63,5 +63,18 @@ class TestGuard(unittest.TestCase):
         self.assertIsNone(G.decide({"tool_name": "Edit", "tool_input": {}}, self.root, owned))
 
 
+
+class AgentFileTest(unittest.TestCase):
+    """Brutus's installed agent file is the app's, like its skills."""
+
+    def test_an_edit_to_the_installed_brutus_agent_is_refused(self):
+        for tool in ("Edit", "Write"):
+            reason = G.decide(edit(os.path.expanduser("~/.claude/agents/brutus.md"), tool), "~/.claude/skills", owned)
+            self.assertIsNotNone(reason, tool)
+            self.assertIn("brutus", reason)
+
+    def test_another_agent_file_is_not_in_scope(self):
+        self.assertIsNone(G.decide(edit(os.path.expanduser("~/.claude/agents/mine.md"), "Write"), "~/.claude/skills", owned))
+
 if __name__ == "__main__":
     unittest.main()

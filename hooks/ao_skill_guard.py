@@ -26,6 +26,9 @@ BASE_DIR = ".ao-base"
 SHARED_LIB = "lib"
 MANIFEST = ".ao-install-manifest.json"
 TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+# Brutus, the app's assistant: installed read-only for `claude --agent brutus`, restored
+# at every launch. The app passes its own copy to every run, so an edit would change nothing.
+AGENT_FILE = "~/.claude/agents/brutus.md"
 
 
 def target_path(payload):
@@ -67,6 +70,10 @@ def reason_for(name):
 
 def decide(payload, skills_dir, app_owned):
     """Pure: the denial reason, or None to let the call through."""
+    path = target_path(payload)
+    if path and os.path.realpath(os.path.expanduser(path)) == os.path.realpath(os.path.expanduser(AGENT_FILE)):
+        return ("~/.claude/agents/brutus.md is AI Agents Orchestrator's assistant and is restored at "
+                "every launch. Do not edit it; the app passes its own copy to every run anyway.")
     name = owned_skill(target_path(payload), skills_dir, app_owned)
     return reason_for(name) if name else None
 
