@@ -46,8 +46,10 @@ fn bundle_epoch() -> i64 {
 
 /// The manifest as a whole. Two keys matter: `bundle_epoch`, the stamp both installers
 /// write, and `repo`, which only `scripts/install.sh` can write — the checkout it ran
-/// from. The app has no other way to learn that path: a `.dmg` build never sees the
-/// clone, and a `git pull` moves the checkout without touching `~/.claude/skills`.
+/// from. A `git pull` moves that checkout without touching `~/.claude/skills`, so the
+/// path is what lets the app notice. It is no longer the only source: `build.rs` bakes in
+/// the tree the binary was built from (`build_checkout`), which covers the case where
+/// nobody ever ran the script. `repo` still wins when it is there and still resolves.
 fn read_manifest(dst: &Path) -> Option<serde_json::Map<String, serde_json::Value>> {
     let raw = fs::read_to_string(dst.join(MANIFEST_FILE)).ok()?;
     match serde_json::from_str(&raw).ok()? {
@@ -74,14 +76,33 @@ fn write_installed_epoch(dst: &Path, epoch: i64) {
     let _ = fs::write(dst.join(MANIFEST_FILE), serde_json::Value::Object(map).to_string());
 }
 
-/// The checkout `install.sh` last ran from, when the manifest records one and it still
-/// looks like this repo. Canonicalized, and required to hold `scripts/install.sh`: this
-/// is the path the app will later EXECUTE, so a moved or deleted clone must read as
-/// "none", not as a command that fails later in a less legible way.
-fn installed_from_checkout(dst: &Path) -> Option<PathBuf> {
-    let repo = read_manifest(dst)?.get("repo")?.as_str()?.to_string();
-    let repo = PathBuf::from(repo).canonicalize().ok()?;
-    repo.join("scripts").join("install.sh").is_file().then_some(repo)
+/// The checkout this app can compare itself against, or `None`. Two sources, in this
+/// order: the `repo` the manifest records, then `baked` — the tree this binary was built
+/// from, which `build.rs` bakes in. The manifest wins because running `install.sh`
+/// somewhere is an explicit statement about which clone is meant; the baked path is what
+/// makes the check work for a build from a clone where that script never ran, which is
+/// the normal case and used to leave the update notice silent forever.
+///
+/// Both go through the same two gates. Canonicalized, and required to hold
+/// `scripts/install.sh`: this is the path the app will later EXECUTE, so a moved clone, a
+/// deleted one, or a release `.dmg` carrying its CI build path must read as "none" — not
+/// as a command that fails later in a less legible way. A dead `repo` entry therefore
+/// falls through to the baked path rather than suppressing it.
+fn installed_from_checkout(dst: &Path, baked: Option<&str>) -> Option<PathBuf> {
+    fn usable(repo: &str) -> Option<PathBuf> {
+        let repo = PathBuf::from(repo).canonicalize().ok()?;
+        repo.join("scripts").join("install.sh").is_file().then_some(repo)
+    }
+    let recorded = read_manifest(dst)
+        .and_then(|m| m.get("repo").and_then(|v| v.as_str()).map(str::to_string));
+    recorded.as_deref().and_then(usable).or_else(|| baked.and_then(usable))
+}
+
+/// The checkout `build.rs` recorded at compile time. `None` for a build with no `.git`
+/// and for any older binary; see `installed_from_checkout` for what happens to a path
+/// that no longer exists.
+fn build_checkout() -> Option<&'static str> {
+    option_env!("AO_SKILLS_CHECKOUT")
 }
 
 /// Unix seconds of the last commit in `repo` that touched `skills/` or `hooks/` — the
@@ -117,13 +138,14 @@ pub struct CheckoutUpdate {
 
 /// After `git pull` in a clone, the repo's `skills/` and `hooks/` move and
 /// `~/.claude/skills` does not — and nothing said so. This asks git whether the checkout
-/// `install.sh` recorded is now ahead of what it installed. `None` in every quiet case:
-/// no checkout recorded (a `.dmg`-only install), the clone gone, not a git tree, or
-/// simply up to date. Cheap enough for launch and window focus; not for the 5 s poll.
+/// behind this install (see `installed_from_checkout`) is now ahead of what was installed
+/// from it. `None` in every quiet case: no checkout at all (a release `.dmg`), the clone
+/// gone, not a git tree, or simply up to date. Cheap enough for launch and window focus;
+/// not for the 5 s poll.
 #[tauri::command]
 pub fn checkout_update() -> Option<CheckoutUpdate> {
     let dst = config::home().join(".claude").join("skills");
-    let repo = installed_from_checkout(&dst)?;
+    let repo = installed_from_checkout(&dst, build_checkout())?;
     let checkout = checkout_epoch(&repo)?;
     let installed = read_installed_epoch(&dst);
     if !checkout_is_ahead(checkout, installed) {
@@ -139,14 +161,14 @@ pub fn checkout_update() -> Option<CheckoutUpdate> {
 /// Run the recorded checkout's `scripts/install.sh --all` — the one command that closes
 /// the gap `checkout_update` reports, with the same guarantees as the launch sync (a
 /// changed copy of an app skill is archived first, skills of your own are never in
-/// scope). The path comes from the manifest, never from the renderer: the UI may ask for
-/// the update, it does not get to choose what is executed. Returns the script's own
-/// report, which names what it replaced and archived.
+/// scope). The path comes from the manifest or from the build, never from the renderer:
+/// the UI may ask for the update, it does not get to choose what is executed. Returns the
+/// script's own report, which names what it replaced and archived.
 #[tauri::command(async)]
 pub fn update_from_checkout() -> Result<String, String> {
     let dst = config::home().join(".claude").join("skills");
-    let repo = installed_from_checkout(&dst)
-        .ok_or_else(|| "no checkout is recorded in the skills manifest".to_string())?;
+    let repo = installed_from_checkout(&dst, build_checkout())
+        .ok_or_else(|| "no checkout of this repo could be found to update from".to_string())?;
     let script = repo.join("scripts").join("install.sh");
     let out = Command::new("bash")
         .arg(&script)
@@ -888,16 +910,76 @@ mod tests {
             format!(r#"{{"bundle_epoch": 1, "repo": "{}"}}"#, clone.display()),
         )
         .unwrap();
-        assert!(installed_from_checkout(&dst).is_none(), "no scripts/install.sh yet");
+        assert!(installed_from_checkout(&dst, None).is_none(), "no scripts/install.sh yet");
         fs::write(clone.join("scripts").join("install.sh"), "#!/bin/bash\n").unwrap();
-        assert_eq!(installed_from_checkout(&dst), Some(clone.canonicalize().unwrap()));
+        assert_eq!(installed_from_checkout(&dst, None), Some(clone.canonicalize().unwrap()));
         // No manifest at all → no checkout, no panic.
         let empty = tmp("manifest-none");
         fs::create_dir_all(&empty).unwrap();
-        assert!(installed_from_checkout(&empty).is_none());
+        assert!(installed_from_checkout(&empty, None).is_none());
         let _ = fs::remove_dir_all(&dst);
         let _ = fs::remove_dir_all(&clone);
         let _ = fs::remove_dir_all(&empty);
+    }
+
+    /// The case the manifest could never cover: a build from a clone where `install.sh`
+    /// never ran, so nothing wrote `repo`. Before the baked path, the update notice was
+    /// silent for good — it had no checkout to ask git about.
+    #[test]
+    fn the_build_time_checkout_stands_in_when_the_manifest_records_none() {
+        let dst = tmp("baked-no-manifest");
+        let clone = tmp("baked-clone");
+        fs::create_dir_all(&dst).unwrap();
+        fs::create_dir_all(clone.join("scripts")).unwrap();
+        fs::write(clone.join("scripts").join("install.sh"), "#!/bin/bash\n").unwrap();
+        let baked = clone.to_string_lossy().into_owned();
+
+        assert_eq!(
+            installed_from_checkout(&dst, Some(&baked)),
+            Some(clone.canonicalize().unwrap()),
+            "no manifest at all, but the binary knows where it was built from"
+        );
+
+        // A release .dmg bakes the CI machine's path, which exists on nobody's disk.
+        // It has to read as "no checkout", not as a command that fails at click time.
+        assert!(
+            installed_from_checkout(&dst, Some("/Users/runner/work/ao/ao")).is_none(),
+            "a baked path that is not there is no checkout"
+        );
+        // A directory that exists but is not this repo is not one either.
+        let bare = tmp("baked-not-a-clone");
+        fs::create_dir_all(&bare).unwrap();
+        assert!(
+            installed_from_checkout(&dst, Some(&bare.to_string_lossy())).is_none(),
+            "no scripts/install.sh, no checkout"
+        );
+
+        // An explicit install.sh run names the clone that is meant, and outranks the
+        // build default — but only while it still resolves; a dead entry falls through.
+        let recorded = tmp("baked-recorded");
+        fs::create_dir_all(recorded.join("scripts")).unwrap();
+        fs::write(recorded.join("scripts").join("install.sh"), "#!/bin/bash\n").unwrap();
+        fs::write(
+            dst.join(MANIFEST_FILE),
+            format!(r#"{{"repo": "{}"}}"#, recorded.display()),
+        )
+        .unwrap();
+        assert_eq!(
+            installed_from_checkout(&dst, Some(&baked)),
+            Some(recorded.canonicalize().unwrap()),
+            "the recorded checkout wins over the baked one"
+        );
+        fs::write(dst.join(MANIFEST_FILE), r#"{"repo": "/nope/gone"}"#).unwrap();
+        assert_eq!(
+            installed_from_checkout(&dst, Some(&baked)),
+            Some(clone.canonicalize().unwrap()),
+            "a recorded checkout that no longer exists must not suppress the baked one"
+        );
+
+        let _ = fs::remove_dir_all(&dst);
+        let _ = fs::remove_dir_all(&clone);
+        let _ = fs::remove_dir_all(&bare);
+        let _ = fs::remove_dir_all(&recorded);
     }
 
     #[test]

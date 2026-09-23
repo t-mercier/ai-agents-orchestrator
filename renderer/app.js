@@ -1154,9 +1154,9 @@ async function syncSkillsOnLaunch(el) {
 
 // After `git pull` in a clone, the repo's skills/ and hooks/ move and ~/.claude/skills does
 // not — and nothing said so; the README could only ask people to remember `install.sh`.
-// The manifest install.sh writes records the checkout, so the app can ask git whether that
-// checkout is now ahead of what is installed and offer the one command that closes the
-// gap. Checked at launch and whenever the window regains focus — a pull happens in a
+// A build from a clone records that clone (build.rs bakes it in; an install.sh run
+// overrides it), so the app can ask git whether the checkout is now ahead of what is
+// installed and offer the one command that closes the gap. Checked at launch and whenever the window regains focus — a pull happens in a
 // terminal, and coming back to the app is the moment to say it — never on the 5 s poll: a
 // `git log` every five seconds for an event that happens once a week is the wrong trade.
 // Dismiss is per checkout date, so the notice comes back for the NEXT pull, not this one.

@@ -10,6 +10,30 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The "your checkout has newer skills" notice now works without setting anything up.**
+  It never appeared for anyone who had not run `scripts/install.sh` at least once, which
+  is most people building from a clone: the notice needs to know which checkout to watch,
+  and the manifest in `~/.claude/skills/` only learns that path when the script writes it
+  there. `build.rs` now bakes in the tree the binary was built from, and the check falls
+  back to it. An explicit `install.sh` run still wins — it names the clone that is meant —
+  and a release `.dmg` carries its CI build path, which exists on nobody's machine and so
+  reads as "no checkout": the app stays quiet rather than offering an update it cannot
+  perform.
+
+### Changed
+
+- **`scripts/install.sh` is out of the README and the landing page.** It was a numbered
+  step in the quickstart, a block of flags, and a reminder to re-run it after every pull —
+  for work the app has been doing at launch for a while: copying the skills and the hook
+  scripts, seeding the config, creating the category folders. Following it printed a list
+  of skills it had skipped, for work that was already done. The script is still
+  there, and still the right tool for a contributor who edits `skills/` and wants that
+  working tree in place without a rebuild; it is documented in
+  [ADR-016](docs/adr/ADR-016-skills-reach-claude-skills-by-launch-sync-install-sh-is-the-fallback.md)
+  with the flags, the manifest and the update mechanism.
+
 ## [0.19.2-alpha] - 2026-09-23
 
 ### Fixed

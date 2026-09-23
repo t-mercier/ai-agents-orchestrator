@@ -191,15 +191,13 @@ Only needed to contribute, or to run an unreleased branch.
 git clone https://github.com/t-mercier/ai-agents-orchestrator.git
 cd ai-agents-orchestrator
 
-# 1. Install the session skills + seed your config
-bash scripts/install.sh
-#    (later, after a `git pull`, re-run it with --force — see "Session skills")
-
-# 2. Run the app (system WebView — no Chromium bundled)
+# Run the app (system WebView — no Chromium bundled)
 cargo tauri dev
 ```
 
-The dashboard auto-discovers your sessions from `~/.claude`.
+The dashboard auto-discovers your sessions from `~/.claude`. First launch installs the
+session skills and hook scripts, writes a default config if you have none, and creates
+the category folders — there is no install step to run.
 
 **Build an installable bundle:**
 
@@ -247,26 +245,16 @@ They are ordinary Claude Code skills in your ordinary skills folder:
 `notes.md` the dashboard reads, so they are not customisable: the files are installed
 read-only, the `ao_skill_guard` hook refuses an agent's edit to one, and a copy that was
 forced anyway is restored at the next sync and named on screen. For different behaviour,
-copy a skill under another name and change that one. Both installers — this script and the
-app's launch sync — iterate over the 14 names this app ships; anything else in that folder
+copy a skill under another name and change that one. Both installers — the launch sync and
+the contributor script — iterate over the 14 names this app ships; anything else in that folder
 is invisible to them: not scanned, not compared, not touched. The single case that *is*
 replaced is a skill of your own that happens to share one of those 14 names — pick another.
 
-```bash
-bash scripts/install.sh              # install; a skill you already have is KEPT
-bash scripts/install.sh --force      # replace this app's skills with this checkout's
-bash scripts/install.sh --with-hooks # also print the lines that ENABLE the hooks
-bash scripts/install.sh --all        # everything: --force + --with-hooks
-```
-
-The hook scripts themselves are copied by every run, flag or not — see
-[The hooks](#the-hooks). `--with-hooks` only decides whether the installer prints
-the `settings.json` lines that switch them on.
-
-`--force` overwrites **this app's own 14 skills**, never your personal ones. It is not the
-default because one of those 14 may be a copy you tuned, and replacing that silently is the
-thing this whole design refuses to do.
-
+**They install themselves.** Every launch copies the 14 skills and the hook scripts into
+`~/.claude/skills/`, so they arrive with the app and move forward with it — nothing to run.
+Contributors editing `skills/` have a script for getting a working tree in place without a
+rebuild; it is documented in
+[ADR-016](docs/adr/ADR-016-skills-reach-claude-skills-by-launch-sync-install-sh-is-the-fallback.md).
 
 | Skill | What it does |
 |---|---|
@@ -295,7 +283,7 @@ with the context nearly full, a compaction, a PR opened in passing. A hook is a 
 disk and decides where it is declared.
 
 All six ship inside the app and are **copied automatically** — with the skills, on every
-launch, and by `scripts/install.sh` with no flag needed. **Every session started from the
+launch. **Every session started from the
 dashboard runs all six** without touching your settings: the app passes Claude Code a
 `--settings` file of its own, and Claude Code merges that file's hooks with your global
 ones (only `statusLine` is replace-not-merge, which is why the app wraps yours rather than
@@ -314,15 +302,12 @@ setting its own). A hook you have already enabled globally is not injected a sec
 runs on your machine — extends all of this to sessions you start from a plain terminal.
 Nothing does that behind your back.
 
-**Three ways to enable them**, all equivalent:
+**Two ways to enable them**, both equivalent:
 
 - **From the app** — first-run setup's last step, or **Settings → first-run setup** later.
   It shows the exact `settings.json` it would write, copies your current one to a
   timestamped backup, then writes atomically. It also tells you which are already enabled,
   and offers nothing when all six are.
-- **From the installer** — `bash scripts/install.sh --with-hooks` (or `--all`) prints the
-  exact lines to paste. The flag only decides whether they are *printed*; the scripts are
-  copied either way.
 - **By hand** — they are ordinary Claude Code hook entries.
 
 Two things worth knowing about how they behave. `pr_attach` is the only one that **writes**:
@@ -342,13 +327,7 @@ a standing preference still relies on the model's judgment, or on the distil ste
 `/save-session` and `/close-session`.
 
 > [!IMPORTANT]
-> **Working from a clone? `git pull` does not update your skills.** It updates the repo's `skills/`; the copies Claude Code actually loads live in `~/.claude/skills/`. And a plain install **keeps an existing skill untouched** — new skills arrive, but *changed* ones are skipped, so a shipped fix silently never reaches you. The app notices for you: `install.sh` records which checkout it ran from, and when that checkout's `skills/` or `hooks/` are newer than what is installed, a notice appears at launch and whenever the window regains focus, with an **Update** button that runs `install.sh --all` for you. By hand, after any pull that touches skills:
->
-> ```bash
-> git pull && bash scripts/install.sh --all      # or --force, if you don't want the hooks
-> ```
->
-> `--force` is not the default because a plain run names the skills whose updates it withheld, and you decide. Either way only **this app's** 14 skills are in scope; skills of your own are never touched. One of the 14 you had edited is restored to the checkout's version and named — these skills are the app's, not customisable (see "Where they live"). Note `npm run install:skills` does **not** force. The app itself needs no button for this: it syncs its own skills silently at launch — an app built before your last `install.sh --force` run stands down rather than revert it. **Settings → Session skills → Sync skills to this version** forces this build's versions on demand.
+> **Working from a clone? `git pull` alone does not update your skills.** It moves the repo's `skills/`; the copies Claude Code loads live in `~/.claude/skills/`, and a rebuild is what carries them across. **The app tells you when that has not happened** — a notice at launch and whenever the window regains focus, with an **Update** button that closes the gap. It needs no setup: a build from a clone watches that clone. Only this app's 14 skills are ever in scope, and one you had edited is restored and named — they are the app's, not customisable (see "Where they live"). A release `.dmg` has no clone to watch and stays quiet; its skills advance with the app. Details in [ADR-016](docs/adr/ADR-016-skills-reach-claude-skills-by-launch-sync-install-sh-is-the-fallback.md).
 >
 > **Updating from an earlier version?** Your config **auto-migrates to v2** on first launch — named spaces + per-space knowledge-notes folders, with a `.v1-backup` kept (see [ADR-015](docs/adr/ADR-015-config-v1-to-v2-migration-flag-gated-self-cleaning.md)). Nothing to do by hand.
 

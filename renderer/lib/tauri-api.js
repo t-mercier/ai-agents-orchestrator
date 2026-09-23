@@ -211,12 +211,12 @@
       invoke('sync_skills', { manual: !!manual })
         .then((r) => ({ ok: true, ...(r || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
-    // After `git pull` in a clone: is the checkout install.sh recorded now ahead of what it
+    // After `git pull` in a clone: is the checkout behind this install now ahead of what it
     // installed? → { repo, checkout_epoch, installed_epoch }, or null when there is nothing
     // to offer. On error → null too: this is a courtesy notice, and a failed check must
     // read as "nothing to say", never as a banner about an update that may not exist.
     checkoutUpdate: () => invoke('checkout_update').catch(() => null),
-    // Runs that checkout's `install.sh --all` (the path is the manifest's, never ours).
+    // Runs that checkout's `install.sh --all` (the path is the backend's, never ours).
     // { ok, report } — the script's own output, which names what it replaced and archived.
     updateFromCheckout: () =>
       invoke('update_from_checkout')

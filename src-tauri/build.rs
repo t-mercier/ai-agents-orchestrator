@@ -21,6 +21,20 @@ fn main() {
     .unwrap_or_else(|| "0".to_string());
   println!("cargo:rustc-env=AO_SKILLS_BUNDLE_EPOCH={epoch}");
 
+  // The checkout this binary was built from, so a build from a clone can notice later
+  // that `git pull` moved skills/ or hooks/ past what is installed — WITHOUT anyone having
+  // run scripts/install.sh first. That script records the same path in the skills manifest
+  // and still wins when it has run; this is the value for everyone who never ran it.
+  //
+  // A release .dmg carries its CI path (/Users/runner/work/...), which does not exist on
+  // anybody's machine: skills::installed_from_checkout canonicalizes and requires
+  // scripts/install.sh to be there, so the baked path reads as "no checkout" and the app
+  // stays quiet. Same outcome once a clone is moved or deleted.
+  let checkout = std::fs::canonicalize(concat!(env!("CARGO_MANIFEST_DIR"), "/.."))
+    .map(|p| p.to_string_lossy().into_owned())
+    .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/..").to_string());
+  println!("cargo:rustc-env=AO_SKILLS_CHECKOUT={checkout}");
+
   // Re-run when skills/ changes so a local `tauri dev` picks up the new date, not just
   // whatever was true the first time cargo built this crate.
   println!("cargo:rerun-if-changed=../skills");

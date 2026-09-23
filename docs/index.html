@@ -531,22 +531,19 @@
     <div class="section-head reveal">
       <p class="eyebrow">Session skills</p>
       <h2>The dashboard is only half of it</h2>
-      <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes, and the app keeps them current itself — it syncs them into <code>~/.claude/skills</code> at launch, and copies aside anything you had edited before it overwrites. The script below is for installing them <em>without</em> the app.</p>
+      <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes, and the app keeps them current itself — it syncs them into <code>~/.claude/skills</code> at launch, and copies aside anything you had edited before it overwrites. Nothing to install, and they work from any terminal, not just the app.</p>
     </div>
     <div class="terminal terminal-wide reveal">
       <div class="bar"><i></i><i></i><i></i></div>
-<pre><span class="m"># only if you want the skills without the app</span>
-<span class="c">$</span> git clone https://github.com/t-mercier/ai-agents-orchestrator
-<span class="c">$</span> cd ai-agents-orchestrator
-<span class="c">$</span> bash scripts/install.sh
-<span class="m">  ✓ skills → ~/.claude/skills</span>
-<span class="m">  ✓ config seeded</span>
-
-<span class="m"># start a tracked session, from anywhere</span>
+<pre><span class="m"># start a tracked session, from anywhere</span>
 <span class="c">$</span> claude
 <span class="k">&gt;</span> /start-session FEAT 1842 checkout-redesign
 <span class="m">  ✓ session folder + notes.md created</span>
-<span class="m">  ✓ now live in the dashboard</span></pre>
+<span class="m">  ✓ now live in the dashboard</span>
+
+<span class="m"># days later, pick it up with everything it knew</span>
+<span class="k">&gt;</span> /restart-session 1842-checkout-redesign
+<span class="m">  ✓ notes.md + session id reloaded</span></pre>
     </div>
 
     <!-- Grouped by WHO runs them and WHAT FOR, not alphabetically: a flat list of fourteen
