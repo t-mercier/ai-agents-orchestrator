@@ -76,6 +76,20 @@ Four things you shouldn't have to do twice — each one something you already wo
 - **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client). The **List** organises into collapsible **space sections** → category groups; the **Board** gets its own space filter next to its search. Pinned and ⚡ waiting cards float above every space section — they're your shortlist, so they stay at the top of the column. A single space configured ⇒ no space chrome at all.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
+### Brutus, the one you ask
+
+Ask **Brutus** anything about your sessions — *what's waiting on me?*, *brief me on
+FEAT-1842*, *what did I decide last week?* — from the bubble in the corner, a panel docked on
+the right, or **⌘K** from anywhere in the app. He reads the dashboard and the sessions' notes,
+answers with the sessions as clickable chips, and keeps a memory of what you tell him, so he
+gets better the more you use him. Rename him and pick his style — concise, friendly, casual,
+nerdy or sarcastic — in **Settings → Assistant**.
+
+He can read and remember, nothing else: every answer is a Claude Code run started with
+`--restricted`, no MCP servers and five file tools, reading only your category and knowledge
+folders and writing only his own `memory.md`. Actions — archiving the stale ones he points
+out — come next, and will always ask you first.
+
 ### Two ways to look at your work
 
 The **List** — sessions grouped by space → category, with the selected one's notes,
@@ -410,6 +424,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 
 ## Security
 
+- **Brutus is sandboxed by flags, not by his prompt** — `--restricted` confines his reads to your category and knowledge folders (never a space root, never your home folder), `--strict-mcp-config` removes every MCP server, and his only allowed write is his own `memory.md`. `scripts/probe-brutus-sandbox.sh` checks all of it against your installed Claude Code, judging each check on the tool's result, not the model's answer.
 - **Every shell interpolation is quoted** — `claude` runs through a login shell, because a Finder-launched app has no `claude` on its PATH; each value interpolated into that command line is POSIX single-quote escaped first. `open`, `osascript` and `git` are spawned with separate args, and AppleScript uses the `on run argv` pattern.
 - Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
 - The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.
@@ -425,7 +440,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 | UI | Vanilla JS — no framework (fast, simple, hackable) |
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
-| Tests | Rust unit tests (196, `cargo test`) + Jest (209, renderer logic) + Playwright smoke tests (11, the renderer in a real browser) + the hooks' own unittest files (69, `python3 hooks/test_*.py`) — 485 total |
+| Tests | Rust unit tests (219, `cargo test`) + Jest (216, renderer logic) + Playwright smoke tests (18, the renderer in a real browser) + the hooks' own unittest files (71, `python3 hooks/test_*.py`) — 524 total |
 
 > [!NOTE]
 > ## What's new

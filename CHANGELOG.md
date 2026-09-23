@@ -10,6 +10,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Brutus, the assistant you ask about all your sessions.** A bubble in the corner (or a
+  panel docked on the right, or ⌘K from anywhere in the app) where you ask what is waiting
+  on you, get briefed on a session, or recall what was decided. He reads the dashboard and
+  the sessions' notes, answers with the sessions as chips that jump to their card, and
+  keeps a memory file of what you tell him. Name and style — concise, friendly, casual,
+  nerdy or sarcastic — in Settings → Assistant. V1 is read-only: each answer is a headless
+  Claude Code run with `--restricted`, no MCP servers and five file tools, reading only the
+  category and knowledge folders and writing only his own `memory.md`.
+  `scripts/probe-brutus-sandbox.sh` replays those guarantees against the installed Claude
+  Code.
+
+### Fixed
+
+- **Pinned skills survive a restart and a Settings save.** They were lost twice over:
+  the config the app reads back never carried them, and Settings → Save rebuilt the file
+  without them.
+
 ## [0.19.4-alpha] - 2026-09-23
 
 ### Fixed
