@@ -10,6 +10,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.2-alpha] - 2026-09-23
+
+### Fixed
+
+- **A session no longer closes itself because it ran out of context.** One did: the agent
+  decided to wrap up when it ran low, and the notes it wrote carried the close format, so
+  the dashboard moved a session nobody had asked to close out of Running. Two things
+  pointed that way and both are corrected. `/close-session` advertised itself for "save
+  session notes" — the longer phrasing of an intent that belongs to `/save-session` — so a
+  model wanting to persist its notes found the skill that ends the session; it now
+  triggers only on an explicit request to end one. And the autosave hook's message said
+  "run /save-session now … then stop", which reads as "wrap this up"; it now names which
+  of the two to run and says that running out of context is not the end of the work.
+- **The arrow that folds a group is clickable.** Folding felt unresponsive — not because
+  of the wiring, which was correct, but because `line-height: 1` on a bare glyph left the
+  arrow a 13 x 5.7px target. Clicking it mostly landed on the header, which has no
+  collapse handler. It is a 20x20 box now, with the same arrow on screen.
+
 ## [0.19.1-alpha] - 2026-09-22
 
 ### Changed
