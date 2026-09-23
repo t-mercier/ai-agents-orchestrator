@@ -8,6 +8,7 @@ mod hooks;
 mod onboarding;
 mod statusline;
 mod pinned;
+mod brutus;
 mod brutus_agent;
 mod brutus_home;
 mod prstatus;
@@ -688,7 +689,7 @@ pub(crate) fn atomic_write(path: &std::path::Path, body: &str) -> Result<(), Str
 /// identically in reader.rs. None when the spawn fails or prints an unexpected shape.
 /// The one definition — archive_session / close_session / notes_closed_since all
 /// stamped via their own inline `date` spawn before.
-fn local_date_time() -> Option<(String, String)> {
+pub(crate) fn local_date_time() -> Option<(String, String)> {
     let out = std::process::Command::new("date").arg("+%Y-%m-%d %H:%M").output().ok()?;
     let s = String::from_utf8(out.stdout).ok()?;
     let (d, t) = s.trim().split_once(' ')?;
@@ -1449,6 +1450,11 @@ pub fn run() {
             skills::sync_skills,
             skills::checkout_update,
             skills::update_from_checkout,
+            brutus::brutus_ask,
+            brutus::brutus_cancel,
+            brutus::brutus_reset,
+            brutus::brutus_status,
+            brutus::brutus_open_memory,
             pty::pty_spawn,
             pty::pty_input,
             pty::pty_resize,

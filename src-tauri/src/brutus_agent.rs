@@ -4,9 +4,6 @@
 //! `--agents`. A read-only copy is also installed in `~/.claude/agents/` so
 //! `claude --agent brutus` works from a terminal — as an ordinary session, not sandboxed.
 
-// TEMPORARY until the runner (brutus.rs) consumes agents_json — remove with it.
-#![allow(dead_code)]
-
 use include_dir::{include_dir, Dir};
 use std::fs;
 use std::path::Path;

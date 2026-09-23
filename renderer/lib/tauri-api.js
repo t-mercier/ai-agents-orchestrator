@@ -63,6 +63,14 @@
     // Generic listener for the rare non-terminal event. app.js:1281 has subscribed to
     // `config_migrated_v2` through this since the v2 migration shipped — behind a guard that
     // silently skipped, because this method did not exist. The migration toast never showed.
+    // Brutus. Ask resolves when the run ends; its content arrives as 'brutus-event's
+    // (init · step · text · done · error). Refusals (busy, empty) reject: the caller shows them.
+    brutusAsk: (message) => invoke('brutus_ask', { message }),
+    brutusCancel: () => invoke('brutus_cancel').catch(() => false),
+    brutusReset: () => invoke('brutus_reset').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    // A status read that fails reads as "nothing known", never as an error banner.
+    brutusStatus: () => invoke('brutus_status').catch(() => ({ memoryCount: 0, running: false, hasConversation: false })),
+    brutusOpenMemory: () => invoke('brutus_open_memory').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     onEvent: (name, cb) => window.__TAURI__.event.listen(name, (e) => cb(e.payload)),
 
     // ── New-session launcher (src-tauri/src/lib.rs) ──
