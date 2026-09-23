@@ -10,6 +10,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.4-alpha] - 2026-09-23
+
+### Fixed
+
+- **Pinned-skill slots show their tooltip.** Every slot had its description, and hovering
+  one showed nothing — the "+" included, and every pinned skill with it, so the only place
+  that says a slot is replaced or unpinned with a right-click was never seen. The button
+  clipped its own tooltip: `overflow: hidden`, there for the ellipsis on a long skill name,
+  cut away the tooltip drawn outside its box. The ellipsis is on the label now. Two defects
+  in the same place went with it: dimming the "+" would have faded its tooltip too, so only
+  the icon is dimmed, and in the titlebar the tooltip opened upward, out of the window; it
+  opens below.
+
 ## [0.19.3-alpha] - 2026-09-23
 
 ### Fixed
