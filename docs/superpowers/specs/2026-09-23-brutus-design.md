@@ -87,10 +87,11 @@ failed with "not found". So each run converts the embedded file into the inline 
 `--agents '{"brutus": {"description", "tools", "prompt"}}'`, which the probes showed is
 applied under `--restricted` (persona answered correctly, twice out of two).
 
-The launch sync also installs it to `~/.claude/agents/brutus.md`, read-only, with the same
-`.ao-base` rules as the 14 skills, and `ao_skill_guard.py` extends its refusal to that file.
-That copy is only for `claude --agent brutus` from a terminal — an ordinary session with your
-own permissions, **not** the sandbox. The app never runs it.
+It is **not** installed in `~/.claude/agents/`. That was the first design, for
+`claude --agent brutus` from a terminal, and the review caught what it would have done: every
+Claude Code session lists that folder's agents as subagents it may delegate to on its own,
+with the session's full permissions and none of this sandbox — and his prompt would have
+written `memory.md` into whatever repo that session was in.
 
 The prompt calibrates him as a second brain and a dispatcher: outcome first, sessions named
 with `[[session:…]]`, the ones waiting on you before anything else, and never a claim to have

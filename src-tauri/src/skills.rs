@@ -439,7 +439,6 @@ pub fn install_skills(force: bool) -> Result<InstallReport, String> {
     // explicit act. Errors are swallowed: a hook that cannot be copied must not fail a
     // skills install.
     let _ = crate::hooks::install_scripts();
-    let _ = crate::brutus_agent::install_agent_file();
     let config_seeded = config::seed_default_if_absent()?;
     let mut dirs_created = Vec::new();
     for base in config::category_base_dirs() {
@@ -596,7 +595,6 @@ pub fn sync_skills(manual: bool) -> Result<SyncReport, String> {
         sync_into(&dst, manual, bundle_epoch()).map_err(|e| e.to_string())?;
     // Same as install_skills: the scripts travel with the skills, on every launch.
     let _ = crate::hooks::install_scripts();
-    let _ = crate::brutus_agent::install_agent_file();
     let config_seeded = config::seed_default_if_absent()?;
     let mut dirs_created = Vec::new();
     for base in config::category_base_dirs() {
