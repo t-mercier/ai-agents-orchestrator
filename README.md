@@ -467,6 +467,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 - [x] Export / import settings
 - [x] Tracker-agnostic ticket links (Jira, Linear, GitHub Issues, Azure DevOps)
 - [ ] **Beyond Claude Code** — GitHub Copilot, and other agent CLIs next (today it reads Claude Code's session state)
+- [ ] **Custom agents, not only skills** — when a task keeps coming back, your agent weighs whether it calls for a skill or a dedicated custom agent, and offers to write the one that fits
 - [ ] Standalone terminal tab — use the in-app terminal for ad-hoc commands, not just resuming a session
 - [ ] Signed + notarized `.dmg` releases
 - [ ] Homebrew cask · auto-update
