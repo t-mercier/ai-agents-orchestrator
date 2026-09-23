@@ -41,7 +41,8 @@ the same folder, `settings.png` for this section). Three surfaces, one conversat
     avatar initial, menu labels, "Hi, I'm …") and how he introduces himself. It never changes
     the internal id: his folder, the agent id `brutus`, the commands. Naming your own assistant
     is how Brutus got his name in the first place.
-  - **Style** — Concise (default) · Friendly · Casual · Nerdy, with a live sample of the same
+  - **Style** — Concise (default) · Friendly · Casual · Nerdy · Sarcastic (asked for on
+    2026-09-23, after OpenAI withdrew the "Monday" persona she liked), with a live sample of the same
     answer in each, so you pick by reading rather than by label.
   - **Appears as** — Bubble / Side panel.
   - The ⌘K shortcut, shown read-only, and a link that opens `memory.md`.
@@ -49,7 +50,7 @@ the same folder, `settings.png` for this section). Three surfaces, one conversat
   Where each lives, by the README's two-stores rule: the home choice is how the app looks, so
   `localStorage` (`csm.brutusHome`). Name and style change what the backend sends Claude Code,
   so `config.json` (`assistant.name`, `assistant.style`): the runner composes the prompt from
-  them, and the renderer never sends prompt text. The style is a key checked against the four
+  them, and the renderer never sends prompt text. The style is a key checked against the five
   presets; the name is plain text, trimmed, length-capped and escaped wherever it is rendered.
 
   Neither can weaken the sandbox: both only reach the prompt, and every restriction below is a

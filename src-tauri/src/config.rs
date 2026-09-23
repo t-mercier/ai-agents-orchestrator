@@ -88,7 +88,7 @@ fn build_config(path: &Path) -> Value {
 
 /// The assistant's four styles. A key, never free text: the backend turns it into prompt
 /// wording, so the renderer can choose a style without ever sending prompt text.
-pub(crate) const ASSISTANT_STYLES: [&str; 4] = ["concise", "friendly", "casual", "nerdy"];
+pub(crate) const ASSISTANT_STYLES: [&str; 5] = ["concise", "friendly", "casual", "nerdy", "sarcastic"];
 const ASSISTANT_NAME_MAX: usize = 24;
 
 /// A display name: control characters out, trimmed, at most 24 characters (not bytes —
@@ -590,6 +590,9 @@ mod tests {
         assert!(validate(&c).is_err());
         c["assistant"]["style"] = json!("casual");
         assert!(validate(&c).is_ok());
+        c["assistant"]["style"] = json!("sarcastic");
+        assert!(validate(&c).is_ok(), "the fifth style, asked for on 2026-09-23");
+        assert_eq!(derive(&c)["assistant"]["style"], "sarcastic");
     }
 
     // Shipped: the renderer wrote pinnedSkills into config.json, and derive() — whose output

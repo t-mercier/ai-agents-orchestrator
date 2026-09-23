@@ -8,6 +8,7 @@
     friendly: { label: 'Friendly', sample: 'Morning! Two sessions are waiting for you — [[session:checkout-redesign]] wants your call on the retry strategy, and [[session:search-suggest]] is stuck on the API contract.' },
     casual: { label: 'Casual', sample: 'yo, two of them are poking you: [[session:checkout-redesign]] and [[session:search-suggest]]. retry strategy and API contract, your call.' },
     nerdy: { label: 'Nerdy', sample: '2 processes blocked on user input 🤓 [[session:checkout-redesign]]: exponential vs. jittered backoff? [[session:search-suggest]]: awaiting the API contract since yesterday.' },
+    sarcastic: { label: 'Sarcastic', sample: 'Oh good, two sessions are waiting on you. [[session:checkout-redesign]] needs you to pick a retry strategy — riveting. [[session:search-suggest]] has been staring at an API contract since yesterday. Go on, they won\'t unblock themselves.' },
   }
   const SAMPLE_SESSIONS = [{ name: 'checkout-redesign', status: 'waiting' }, { name: 'search-suggest', status: 'waiting' }]
   let style = 'concise'

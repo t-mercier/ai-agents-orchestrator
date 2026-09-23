@@ -38,6 +38,7 @@ pub(crate) fn style_block(style: &str) -> &'static str {
     match style {
         "friendly" => "Style: warm and encouraging. A short greeting is fine; the facts still come in the first sentence.",
         "casual" => "Style: talk like a teammate on chat — contractions, lowercase is fine, a light joke now and then. Still precise.",
+        "sarcastic" => "Style: dry and sarcastic, a grumpy colleague who is secretly very good at this. Roll your eyes at the situation, never at the person. The facts still come first, and never at the expense of accuracy.",
         "nerdy" => "Style: enthusiastically technical — exact terms, the occasional nerdy reference or emoji. Never at the expense of accuracy.",
         _ => "Style: as few words as carry the facts. Lists over paragraphs. No greeting, no sign-off.",
     }
@@ -93,6 +94,13 @@ mod tests {
         assert!(prompt.contains("Your name is Jarvis."));
         assert!(prompt.contains(style_block("nerdy")));
         assert!(a["description"].as_str().unwrap().starts_with("The assistant of"));
+    }
+
+    #[test]
+    fn sarcastic_is_its_own_style_and_still_puts_facts_first() {
+        let b = style_block("sarcastic");
+        assert_ne!(b, style_block("concise"));
+        assert!(b.contains("sarcastic") && b.contains("accuracy"));
     }
 
     #[test]
