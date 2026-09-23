@@ -106,6 +106,17 @@ pub(crate) fn parse_line(line: &str) -> Vec<Event> {
     }
 }
 
+/// The result claude prints when `--resume` names a conversation it no longer has — it
+/// prunes old transcripts, so a conversation left untouched for weeks ends up there.
+/// Nothing else ends a run this way: no init, no turn, just this line.
+pub(crate) fn missing_conversation(line: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<Value>(line) else { return false };
+    v.get("type").and_then(Value::as_str) == Some("result")
+        && v.get("errors").and_then(Value::as_array).is_some_and(|e| {
+            e.iter().filter_map(Value::as_str).any(|m| m.starts_with("No conversation found"))
+        })
+}
+
 pub(crate) fn check_message(m: &str) -> Result<String, String> {
     let t = m.trim();
     if t.is_empty() {
@@ -244,8 +255,9 @@ pub(crate) fn prepare(live: Vec<Value>, with_history: bool) -> Result<Plan, Stri
 }
 
 /// One run: the message on stdin, each stream event handed to `on_event` as it arrives,
-/// and an `error` event when the stream ends without a result.
-pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -> Result<(), String> {
+/// and an `error` event when the stream ends without a result. Returns true, having
+/// emitted nothing for it, when the conversation it resumed no longer exists.
+pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -> Result<bool, String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let mut child = Command::new(&shell)
         .args(["-ilc", &shell_line(plan)])
@@ -279,8 +291,12 @@ pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -
         }
     });
 
-    let mut done = false;
+    let (mut done, mut missing) = (false, false);
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if missing_conversation(&line) {
+            missing = true;
+            continue;
+        }
         for ev in parse_line(&line) {
             if let Event::Init { session_id } = &ev {
                 if crate::is_valid_session_id(session_id) {
@@ -302,9 +318,28 @@ pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -
         }
     };
     let status = taken.and_then(|mut c| c.wait().ok());
+    if missing {
+        return Ok(true);
+    }
     if !done {
         let why = end_message(CANCELLED.load(Ordering::SeqCst), started.elapsed() > TIMEOUT, status);
         on_event(json!({ "kind": "error", "message": why }));
+    }
+    Ok(false)
+}
+
+/// Asks, and when the resumed conversation is gone, forgets it and asks once more in a
+/// new one. Without this, every question after the pruning failed the same way until
+/// the conversation was reset by hand.
+pub(crate) fn ask(
+    mut plan: Plan,
+    mut run_once: impl FnMut(&Plan) -> Result<bool, String>,
+    forget: impl FnOnce(),
+) -> Result<(), String> {
+    if run_once(&plan)? && plan.resume.is_some() {
+        forget();
+        plan.resume = None;
+        run_once(&plan)?;
     }
     Ok(())
 }
@@ -318,7 +353,9 @@ pub fn brutus_ask(
     let message = check_message(&message)?;
     let _busy = Busy::acquire()?;
     let plan = prepare(crate::reader::get_sessions(pty_state), true)?;
-    run(&plan, &message, |ev| emit(&app, &ev))
+    ask(plan, |p| run(p, &message, |ev| emit(&app, &ev)), || {
+        let _ = std::fs::remove_file(conversation_path());
+    })
 }
 
 #[tauri::command]
@@ -470,6 +507,21 @@ mod tests {
         assert!(events.iter().any(|e| e["kind"] == "done" && e["is_error"] == false));
     }
 
+    /// The same path with a conversation claude no longer has: the question still gets an
+    /// answer, from a new conversation. `cargo test --lib -- --ignored real_run`
+    #[test]
+    #[ignore = "runs the real claude"]
+    fn real_run_recovers_from_a_lost_conversation() {
+        let mut plan = prepare(Vec::new(), false).expect("prepare");
+        plan.resume = Some("1b0c8e0e-2f4a-4c55-9a1e-3d2f5e6a7b8c".into());
+        let mut events: Vec<serde_json::Value> = Vec::new();
+        let mut forgot = false;
+        ask(plan, |p| run(p, "Reply with the single word: pong", |e| events.push(e)), || forgot = true).expect("ask");
+        assert!(forgot, "the lost conversation is forgotten");
+        assert!(!events.iter().any(|e| e["kind"] == "error"), "no error reaches the panel: {events:?}");
+        assert!(events.iter().any(|e| e["kind"] == "done" && e["is_error"] == false), "{events:?}");
+    }
+
     // Shipped: Stop killed claude with SIGKILL, which fell into the "exited with a status"
     // arm and blamed the install: "Is Claude Code installed and logged in?".
     #[test]
@@ -499,5 +551,29 @@ mod tests {
     fn events_serialise_with_a_kind_tag() {
         let v = serde_json::to_value(Event::Step { tool: "Read".into(), target: "/n".into() }).unwrap();
         assert_eq!(v, serde_json::json!({ "kind": "step", "tool": "Read", "target": "/n" }));
+    }
+
+    #[test]
+    fn a_resume_of_a_conversation_claude_no_longer_has_is_recognised() {
+        // Captured from claude 2026-09-23 with a random id: no init, exit 1, this line.
+        let gone = r#"{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":0,"session_id":"1b0c8e0e-2f4a-4c55-9a1e-3d2f5e6a7b8c","errors":["No conversation found with session ID: 1b0c8e0e-2f4a-4c55-9a1e-3d2f5e6a7b8c"]}"#;
+        assert!(missing_conversation(gone));
+        assert!(!missing_conversation(r#"{"type":"result","is_error":true,"result":"Not logged in"}"#));
+        assert!(!missing_conversation(r#"{"type":"system","subtype":"init","session_id":"a"}"#));
+    }
+
+    #[test]
+    fn a_lost_conversation_is_forgotten_and_the_question_asked_once_afresh() {
+        let mut seen: Vec<Option<String>> = Vec::new();
+        let mut forgot = 0;
+        ask(plan(), |p| { seen.push(p.resume.clone()); Ok(p.resume.is_some()) }, || forgot += 1).unwrap();
+        assert_eq!(seen, vec![Some("6c985ef4-74a7-4bc7-bd29-c402e13526cb".into()), None]);
+        assert_eq!(forgot, 1);
+
+        // A fresh run is never retried, whatever it reports.
+        let (mut runs, mut p) = (0, plan());
+        p.resume = None;
+        ask(p, |_| { runs += 1; Ok(true) }, || panic!("nothing to forget")).unwrap();
+        assert_eq!(runs, 1);
     }
 }
