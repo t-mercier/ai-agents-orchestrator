@@ -9,6 +9,7 @@ mod onboarding;
 mod statusline;
 mod pinned;
 mod brutus_agent;
+mod brutus_home;
 mod prstatus;
 mod doctor;
 mod secaudit;
