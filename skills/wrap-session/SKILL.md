@@ -77,8 +77,9 @@ Collect every PR URL this session is about:
 - The PRs created or handled in THIS conversation (scan it) — `gh` only ever reports the
   current branch's, so this is how a session's *other* PR is found.
 
-Add any URL not already present, keeping the existing primary as the primary. Same for
-tickets matching `^[A-Za-z][A-Za-z0-9]*-[0-9]+$`, uppercased.
+Add any URL not already present, keeping the existing primary as the primary.
+
+Tickets are stricter than PRs. A session carries the ticket it is dedicated to (`ticket:`) and the tickets this session created in the tracker — a NEW issue filed in THIS conversation. Creating a link, a comment or a transition creates no ticket: `create_issue_link` between two existing issues is exactly the call that makes a related ticket look like this session's. Never add a ticket that was only read, linked, mentioned or found: the issues Jira links to this one, a parent, a duplicate, a ticket named in a note are not this session's, and attaching them makes the card say the session is about work it is not about. Add those, matching `^[A-Za-z][A-Za-z0-9]*-[0-9]+$`, uppercased.
 
 Record each ticket's status too, when this session actually saw one — a tracker lookup, a
 status you were told, a transition you performed. Never invent one, and never leave an

@@ -108,7 +108,7 @@ Skip noise (don't list every read/grep). **Re-validate Goal** if it's drifted (r
 ## Step 5 — Frontmatter refresh (auto-attach PR / ticket)
 
 A session can reference SEVERAL PRs and tickets — one task split across two PRs, or an
-epic plus its sub-task. The frontmatter holds them as a primary value plus a list of
+sub-task this session filed. The frontmatter holds them as a primary value plus a list of
 extras, and this step **APPENDS** to that list; it never replaces what's already there:
 
 ```yaml
@@ -129,7 +129,7 @@ the existing primary as the primary (a session's first PR stays its headline). W
 as `pr_links:` list items. NEVER remove a link and NEVER overwrite a value with empty — the
 dashboard's PR editor is where links get pruned, deliberately.
 
-Same for tickets matching `^[A-Za-z][A-Za-z0-9]*-[0-9]+$` created/identified in the session:
+Tickets are stricter than PRs. A session carries the ticket it is dedicated to (`ticket:`) and the tickets this session created in the tracker — a NEW issue filed in THIS conversation. Creating a link, a comment or a transition creates no ticket: `create_issue_link` between two existing issues is exactly the call that makes a related ticket look like this session's. Never add a ticket that was only read, linked, mentioned or found: the issues Jira links to this one, a parent, a duplicate, a ticket named in a note are not this session's, and attaching them makes the card say the session is about work it is not about. For tickets this session created, matching `^[A-Za-z][A-Za-z0-9]*-[0-9]+$`:
 1. Uppercase them.
 2. Add any that aren't already in `ticket:` / `tickets:` (primary first, extras as list items).
 3. If `ticket:` was empty and you just filled it, patch `active-sessions.json` by reading the current entry for `SESSION_ID` and MERGING: set only `ticket`, preserve `notes_path`, `category`, `name`, `started_at` (do NOT replace the whole entry). The registry mirrors the PRIMARY ticket only — extras live in notes.md alone.

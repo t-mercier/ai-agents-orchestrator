@@ -192,8 +192,14 @@ started_at: <NOW>
 
 A new session starts with at most one PR and one ticket, so the template writes the plain
 `pr_link:` / `ticket:` keys. Should the work later span several (a task split across two
-PRs, an epic plus its sub-task), `/save-session` and `/close-session` add the extras as
+PRs, a sub-task this session filed), `/save-session` and `/close-session` add the extras as
 `pr_links:` / `tickets:` lists alongside these primaries — do not pre-write empty list keys here.
+
+Write only the ticket passed as an argument. No `tickets:` list and no `ticket_states:` for
+any other ticket, even one you know is linked to it, related, or its parent — a session
+started for one ticket is about that ticket. Shipped: a session started from inside another
+one wrote the three tickets Jira links to its ticket into the new notes.md, and the card
+listed work the session had nothing to do with.
 
 ## Step 6.5 — Write real Goal and initial Next-steps plan
 
