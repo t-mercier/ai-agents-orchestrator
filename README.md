@@ -2,7 +2,7 @@
 
 # AI Agents Orchestrator
 
-**What you learned once, you keep — a tiny native dashboard for macOS & Linux.**
+**What you learned once, you keep — a tiny native dashboard for your Claude Code sessions, on macOS & Linux.**
 
 [![Live site](https://img.shields.io/badge/%F0%9F%8C%90%20Live%20site-visit-9b8cff?style=for-the-badge)](https://t-mercier.github.io/ai-agents-orchestrator/)
 
@@ -16,7 +16,7 @@
 </div>
 
 
-> A long session gets **compacted** — the decisions you made on day one are squeezed out, and the next conversation starts from nothing. Run several in parallel and you also lose track of which one is waiting on you.
+> A long Claude Code session gets **compacted** — the decisions you made on day one are squeezed out, and the next conversation starts from nothing. Run several in parallel and you also lose track of which one is waiting on you.
 >
 > **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure. Nothing becomes active until you have seen the exact wording and said yes. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync** or **Close**.
 
@@ -50,34 +50,20 @@ Full tour: **[the guide](docs/GUIDE.md)**.
 
 ## Contents
 
-[TL;DR](#tldr--how-youre-meant-to-use-it) · [What's new](#whats-new) · [The problem](#the-problem) · [Features](#features) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Session skills](#session-skills) · [Customization](#customization) · [FAQ](#faq) · [Security](#security) · [Tech stack](#tech-stack) · [Roadmap](#roadmap) · [Changelog](#changelog) · [Contributing](#contributing) · [License](#license)
-
-
-> [!NOTE]
-> ## What's new
->
-> - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. **Sync all**, in the titlebar, does it for every open session at once — one `gh` batch, then the agents one at a time. Nothing runs in the background.
-> - 🔀 **Pull requests carry their state** — open, merged, closed or draft, on the card and spelled out with each PR's title in the detail panel.
-> - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
-> - ✅ **Close finishes a stale session properly** — it resumes the session headless, writes the summary, attaches the PRs, and moves it to Closed. No terminal opens.
-> - 🧠 **Knowledge notes build themselves** — `/learn` writes the moment something durable comes up, extending the note that already owns the subject; an opt-in hook now catches it the instant your own wording states a preference or correction, not only when you ask.
-> - 📂 **A session can start in any folder** — the ＋New form's **Start in** takes any directory, not only a git checkout: a notes tree, a scratch folder, wherever the work is. Only **Branch** still needs a checkout. It is also the way to keep git out of it entirely — a folder outside any repo means session start never fetches or rebases.
-> - 🌱 **Git is optional, and no worktree is ever created** — said outright now, because a tester gave up believing otherwise. What decides whether git runs is whether the session opens inside a repo; the ＋New form carries that warning where the decision is made.
-> - 📥 **First-run setup brings your existing sessions in** — three steps: spaces and categories, then the Claude Code sessions already on this machine, then one import pass. Each session goes to the space and category you pick, and **▸ Preview** shows what it opened with and what it left off at before you decide. The first step also sets each space's knowledge-notes folder, your ticket tracker URL and the card density — the last with a live sample card, so you pick by looking. It is the only place the app adopts a session started outside it: `＋ Import` and *Recent · unmanaged* are gone, because once a session is tracked you are not meant to start the next one outside the dashboard.
-> - 🩺 **Doctor finds what is genuinely broken** — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists, a pidfile for a process that has exited. It reports; you tick what it repairs. A pruned transcript is ordinary ageing, and it says so rather than counting it as damage.
-> - 🧹 **Clean audits the rest by age** — it proposes what to archive and what to delete, using the same last-touched date the list already shows. Nothing is pre-ticked, and a deletion goes to the Trash.
-> - 🛡 **The app's skills keep themselves current, and stay the app's** — the 14 lifecycle skills are synced silently at launch like any app resource, installed read-only, and an agent's edit to one is refused by a hook. An older build never reverts a newer install. Want different behaviour? Copy a skill under another name and change that one — it is never touched.
->
-> Earlier releases: the [changelog](CHANGELOG.md) has the full history.
+[TL;DR](#tldr--how-youre-meant-to-use-it) · [The problem](#the-problem) · [Features](#features) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Session skills](#session-skills) · [Customization](#customization) · [FAQ](#faq) · [Security](#security) · [Tech stack](#tech-stack) · [What's new](#whats-new) · [Roadmap](#roadmap) · [Changelog](#changelog) · [Contributing](#contributing) · [License](#license)
 
 ## The problem
 
-Today each session is a buried terminal tab. Which are running? Which are **waiting for you**? Which finished an hour ago? Where did you leave each one?
+Four things you shouldn't have to do twice — each one something you already worked out, gone by the time you need it again:
 
-Terminal tabs don't scale. You need mission control.
+- **Day one is gone by day two.** A long session gets compacted, and the next conversation starts from nothing. → A `notes.md` per session keeps the goal, the decisions, the next steps and the session id, so a fresh conversation picks the thread back up.
+- **Every session starts knowing nothing about your project.** → A folder of knowledge notes per space: `/learn` writes into it as the agent learns, `/route` reads it back before you open the code.
+- **You correct the same mistake forever.** → When a session teaches it a procedure, it proposes a skill and shows you the exact wording. Nothing runs until you say yes.
+- **You are the bottleneck, not the agents.** Which session needs an answer? Which finished an hour ago? → All of them in one window, as a list or a kanban, one click back in.
 
 ## Features
 
+- **Knowledge that outlives a session** — closing a session distils its high-signal decisions into a folder of **knowledge notes** (per space), so what cost you an afternoon is still there months later — and `/route <ticket>` reads it back, with your past sessions and your tracker, *before* you open the code. A folder you choose; **Obsidian is one way to browse it, not a requirement**.
 - **Live dashboard** — polled every 5s. Every session's status at a glance: **busy** · **idle** · **waiting** (pulsing) · **stale** (terminal gone, work not wrapped up) · **background shell**.
 - **Two views** — a grouped **List** and a **Board** (kanban).
 - **Kanban board** — drag to reorder (insertion line), **drop a card onto another to group** them (named, collapsible), **attach notes** to a card or group, flag **urgent**, and add sessions from the board itself. Generative **column colours** (pick one seed → a harmonious set across however many columns you have), with each column tinting its own accent.
@@ -88,7 +74,6 @@ Terminal tabs don't scale. You need mission control.
 - **Looks & density** — curated colour "looks" (accent + a subtle surface ambiance), a custom accent, and Detailed / Compact / Minimal card density. Dark & light themes.
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and a **⚲ Filter** popover (category checkboxes, one control across every view).
 - **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client). The **List** organises into collapsible **space sections** → category groups; the **Board** gets its own space filter next to its search. Pinned and ⚡ waiting cards float above every space section — they're your shortlist, so they stay at the top of the column. A single space configured ⇒ no space chrome at all.
-- **Knowledge that outlives a session** — closing a session distils its high-signal decisions into a folder of **knowledge notes** (per space), so what cost you an afternoon is still there months later — and `/route <ticket>` reads it back, with your past sessions and your tracker, *before* you open the code. A folder you choose; **Obsidian is one way to browse it, not a requirement**.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
 ### Two ways to look at your work
@@ -137,7 +122,7 @@ folder, not only a checkout. When the folder *is* inside a repo, session start f
 fires even with **Branch** left blank. Point **Start in** outside any repo, or leave it
 blank, and your checkout is never touched.
 
-It is **read-only on your session data by design**: every write is an action you trigger, and there are five of them — **archiving** a session, **saving its PR links / tickets**, the repairs you tick in **Doctor**, what you tick in **Clean** (archive, or delete to the OS Trash), and the rollback of a first-run import that died half-done. All written atomically and confined under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which copies anything you had edited into `.archive/` first and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
+It is **read-only on your session data by design**: every write is an action you trigger, and there are five of them — **archiving** a session, **saving its PR links / tickets**, the repairs you tick in **Doctor**, what you tick in **Clean** (archive, or delete to the OS Trash), and the rollback of a first-run import that died half-done. All written atomically and confined under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which puts back a copy edited by hand (and names it on screen) and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
 
@@ -218,8 +203,8 @@ cargo tauri build      # macOS: .app/.dmg · Linux: .deb/.AppImage — in src-ta
 and Archive are launchers: each one opens Claude Code on one of the skills below, and the
 skill is what creates the folder, writes the `notes.md`, registers the session or files it
 away. That is deliberate (see [ADR-012](docs/adr)) — the app stays a *view* of what Claude
-Code writes, instead of becoming a second writer that drifts from it. **Without these skills
-installed, the buttons open a session that does nothing.**
+Code writes, instead of becoming a second writer that drifts from it. The app installs them
+itself at every launch — without them, the buttons would open a session that does nothing.
 
 ### Where they live, and what an install touches
 
@@ -292,7 +277,7 @@ setting its own). A hook you have already enabled globally is not injected a sec
 | Hook | Event | What it closes |
 |---|---|---|
 | `ao_skill_guard.py` | `PreToolUse` (`Edit`, `Write`…) | The 14 skills are the app's; an edit to one is refused with the reason and the alternative — a skill of your own under another name. |
-| `ao_autosave.py` | `Stop` | The checkpoint only happened when someone typed `/save-session`. This has the model run it itself — at 60 % and again at 80 % of context, and after 30 minutes without a checkpoint while the conversation moved. The figure is the session's real context percentage from the statusline cache, not a transcript byte count. |
+| `ao_autosave.py` | `Stop` | The checkpoint only happened when someone typed `/save-session`. This has the model run it itself — at 75 % and again at 90 % of context, and after 30 minutes without a checkpoint while the conversation moved. The figure is the session's real context percentage from the statusline cache, not a transcript byte count. |
 | `ao_precompact.py` | `PreCompact` | Compaction is when a session forgets. This appends an `(in progress)` line to the session history with the transcript path and the moment — the summary stays the model's to write, and the next hook says so once tools are back. |
 | `ao_session_start.py` | `SessionStart` | The `/learn` habit — write a durable fact the moment it emerges — depended on whose `CLAUDE.md` the session loaded. This states it at every tracked session's start; after a compaction with stale notes, it asks for `/save-session` first. |
 | `pr_attach.py` | `PostToolUse` (`Bash`, or the GitHub MCP create tool) | A session's PRs are read from its `notes.md`, which only the skills write — so a PR opened mid-session is invisible until your next `/save-session`, exactly when the link matters most. This attaches the URL the moment `gh pr create` (or `edit`, `reopen`) prints it, or the GitHub MCP server's `create_pull_request` returns it. The URL is always taken from the tool's result, never from its input. |
@@ -337,7 +322,7 @@ Long sessions force the assistant to **compact** its own history — silently dr
 
 **And a second tier, across sessions.** A `notes.md` remembers *one* session; the decision that cost you an afternoon deserves to outlive it. Give a space a knowledge-notes folder and two things fill it: `/close-session` distils the session's high-signal decisions on the way out, and **`/learn` writes a note the moment something durable comes up** — which matters, because a session you never close teaches the next one nothing. `/learn` extends an existing note rather than adding a near-duplicate, and announces every write in one line; there is deliberately no approval prompt, since a prompt at every insight would defeat writing in flight.
 
-The skill ships, but the *trigger* has to be in front of the assistant at all times to fire on its own — so add this to your `~/.claude/CLAUDE.md`:
+The skill ships, but the *trigger* has to be in front of the assistant at all times to fire on its own. Sessions started from the app get it from a hook ([The hooks](#the-hooks)); for a session started elsewhere with the hooks not enabled, add this to your `~/.claude/CLAUDE.md`:
 
 > When something durable emerges mid-session — a preference or correction I stated, a stable fact about the environment, a gotcha with its workaround — invoke `/learn` then, not at the end. The test is: does writing this stop me repeating myself?
 
@@ -355,26 +340,6 @@ flowchart LR
 
 Everything stays linked — **notes → session id → transcript** — so nothing important lives only in a context window.
 
-<details>
-<summary><strong>Optional: get nudged to <code>/save-session</code> before compaction</strong></summary>
-
-A checkpoint only helps if you remember to run it. This **opt-in** Claude Code hook watches
-the transcript size and reminds you to `/save-session` as context fills (≈50% / 75% / 90%).
-It's not installed for you — the app never edits your global `~/.claude/settings.json`.
-Add it there yourself under `hooks`:
-
-```json
-{
-  "hooks": {
-    "Stop": [{ "hooks": [{ "type": "command", "command": "SESSION_ID=$(jq -r '.session_id // empty' 2>/dev/null); [ -z \"$SESSION_ID\" ] && exit 0; T=$(find \"$HOME/.claude/projects\" -maxdepth 2 -name \"${SESSION_ID}.jsonl\" 2>/dev/null | head -1); [ -f \"$T\" ] || exit 0; S=$(wc -c < \"$T\"); if [ \"$S\" -gt 10000000 ] && [ ! -f \"/tmp/cc-90-$SESSION_ID\" ]; then touch /tmp/cc-50-$SESSION_ID /tmp/cc-75-$SESSION_ID /tmp/cc-90-$SESSION_ID; echo '{\"systemMessage\":\"Context ~90% - compact imminent. Run /save-session now.\"}'; elif [ \"$S\" -gt 6000000 ] && [ ! -f \"/tmp/cc-75-$SESSION_ID\" ]; then touch /tmp/cc-50-$SESSION_ID /tmp/cc-75-$SESSION_ID; echo '{\"systemMessage\":\"Context ~75% used. Run /save-session.\"}'; elif [ \"$S\" -gt 3000000 ] && [ ! -f \"/tmp/cc-50-$SESSION_ID\" ]; then touch /tmp/cc-50-$SESSION_ID; echo '{\"systemMessage\":\"Context ~50% used - consider /save-session.\"}'; fi" }] }]
-  }
-}
-```
-
-The `/tmp` flags make each threshold fire once per session. Pair it with a `PreCompact`
-hook if you want a last-ditch save right before Claude Code compacts.
-
-</details>
 
 <details>
 <summary><strong>Usage bar (model · 5h / weekly limits · context) — automatic</strong></summary>
@@ -461,6 +426,23 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 | Terminal | xterm.js + portable-pty |
 | Backend | Rust (`config` · `reader` · `pty` · commands) |
 | Tests | Rust unit tests (196, `cargo test`) + Jest (209, renderer logic) + Playwright smoke tests (10, the renderer in a real browser) + the hooks' own unittest files (69, `python3 hooks/test_*.py`) — 484 total |
+
+> [!NOTE]
+> ## What's new
+>
+> - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. **Sync all**, in the titlebar, does it for every open session at once — one `gh` batch, then the agents one at a time. Nothing runs in the background.
+> - 🔀 **Pull requests carry their state** — open, merged, closed or draft, on the card and spelled out with each PR's title in the detail panel.
+> - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
+> - ✅ **Close finishes a stale session properly** — it resumes the session headless, writes the summary, attaches the PRs, and moves it to Closed. No terminal opens.
+> - 🧠 **Knowledge notes build themselves** — `/learn` writes the moment something durable comes up, extending the note that already owns the subject; an opt-in hook now catches it the instant your own wording states a preference or correction, not only when you ask.
+> - 📂 **A session can start in any folder** — the ＋New form's **Start in** takes any directory, not only a git checkout: a notes tree, a scratch folder, wherever the work is. Only **Branch** still needs a checkout. It is also the way to keep git out of it entirely — a folder outside any repo means session start never fetches or rebases.
+> - 🌱 **Git is optional, and no worktree is ever created** — what decides whether git runs is whether the session opens inside a repo; the ＋New form carries that warning where the decision is made.
+> - 📥 **First-run setup brings your existing sessions in** — three steps: spaces and categories, then the Claude Code sessions already on this machine, then one import pass. Each session goes to the space and category you pick, and **▸ Preview** shows what it opened with and what it left off at before you decide. The first step also sets each space's knowledge-notes folder, your ticket tracker URL and the card density — the last with a live sample card, so you pick by looking.
+> - 🩺 **Doctor finds what is genuinely broken** — a session filed as closed while its process is still running, a frontmatter pointing at a conversation that no longer exists, a pidfile for a process that has exited. It reports; you tick what it repairs. A pruned transcript is ordinary ageing, and it says so rather than counting it as damage.
+> - 🧹 **Clean audits the rest by age** — it proposes what to archive and what to delete, using the same last-touched date the list already shows. Nothing is pre-ticked, and a deletion goes to the Trash.
+> - 🛡 **The app's skills keep themselves current, and stay the app's** — the 14 lifecycle skills are synced silently at launch like any app resource, installed read-only, and an agent's edit to one is refused by a hook. An older build never reverts a newer install. Want different behaviour? Copy a skill under another name and change that one — it is never touched.
+>
+> Earlier releases: the [changelog](CHANGELOG.md) has the full history.
 
 ## Roadmap
 

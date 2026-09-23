@@ -292,9 +292,9 @@
 
 <header>
   <div class="wrap">
-    <span class="pill"><span class="dot"></span> Local-first · macOS & Linux · source-available</span>
+    <span class="pill"><span class="dot"></span> For Claude Code · macOS & Linux · source&#8209;available</span>
     <h1>What you learned once, <span class="grad">you keep.</span></h1>
-    <p class="vs">A long session gets <strong>compacted</strong> — the decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p>
+    <p class="vs">A long Claude Code session gets <strong>compacted</strong> — the decisions you made on day one are squeezed out, and the next conversation starts from nothing.</p>
     <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure — nothing becomes active until you have seen the exact wording and said yes.</p>
     <p class="sub">Local-first, read-only on your sessions, silent on the network until you press Sync or Close. macOS &amp; Linux; the macOS download is 7 MB.</p>
 
@@ -531,7 +531,7 @@
     <div class="section-head reveal">
       <p class="eyebrow">Session skills</p>
       <h2>The dashboard is only half of it</h2>
-      <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes, and the app keeps them current itself — it syncs them into <code>~/.claude/skills</code> at launch, and copies aside anything you had edited before it overwrites. Nothing to install, and they work from any terminal, not just the app.</p>
+      <p class="lead">A small set of Claude Code skills drive the lifecycle the dashboard visualizes, and the app keeps them current itself — it syncs them into <code>~/.claude/skills</code> at every launch, and a copy that was edited by hand is put back and named on screen. Nothing to install, and they work from any terminal, not just the app.</p>
     </div>
     <div class="terminal terminal-wide reveal">
       <div class="bar"><i></i><i></i><i></i></div>
@@ -541,7 +541,7 @@
 <span class="m">  ✓ session folder + notes.md created</span>
 <span class="m">  ✓ now live in the dashboard</span>
 
-<span class="m"># days later, pick it up with everything it knew</span>
+<span class="m"># days later, with everything it knew</span>
 <span class="k">&gt;</span> /restart-session 1842-checkout-redesign
 <span class="m">  ✓ notes.md + session id reloaded</span></pre>
     </div>
@@ -553,7 +553,7 @@
       <div class="skill-group reveal">
         <h4>The session lifecycle</h4>
         <p class="sg-lead">The five you type yourself. Each one moves a session between the states the dashboard shows.</p>
-        <div class="skill"><code>/start-session</code><span>Create the session's folder + <code>notes.md</code>, register it, and — only if you gave a branch — fetch and rebase it in your repo.</span></div>
+        <div class="skill"><code>/start-session</code><span>Create the session's folder + <code>notes.md</code>, register it, and — only when that folder is inside a git repo — fetch and rebase its branch onto <code>origin</code>.</span></div>
         <div class="skill"><code>/save-session</code><span>Checkpoint mid-flight — the same summary as close, marked <code>(in progress)</code>, <strong>without</strong> closing. Handy right before a context compaction.</span></div>
         <div class="skill"><code>/close-session</code><span>Wrap up — summarise into <code>notes.md</code> and append a history entry.</span></div>
         <div class="skill"><code>/restart-session</code><span>Reload a session's context from its notes into a fresh session.</span></div>
@@ -598,7 +598,7 @@
       <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It is silent on the network until you press <strong>Sync</strong> or <strong>Close</strong> — Sync reads your tracker and your pull requests, Close runs <code>gh pr view</code> to attach the PR while it files the session. Nothing else reaches out, and nothing runs in the background. It is read-only on your session data otherwise: it writes when you archive a session, save a PR link or ticket, tick a repair in Doctor, tick an archive-or-delete in Clean, or let it bring its own skills up to this version.</p>
     </div>
     <div class="secgrid">
-      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg> No shell strings</h4><p>Every command spawns with separate args — no string interpolation, no injection surface.</p></div>
+      <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg> Quoted, never raw</h4><p>The one command that needs a shell quotes every value it passes; everything else spawns with separate args.</p></div>
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Allowlisted inputs</h4><p>Paths, branches and PR URLs are validated against strict patterns before use.</p></div>
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Sandboxed writes</h4><p>Every write is one you triggered — archive, PR link or ticket, a Doctor repair, a Clean archive-or-delete — atomic and confined under your configured roots.</p></div>
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg> Offline until you ask</h4><p>No timer, no telemetry, no background fetch. Nothing leaves the machine until you press Sync or Close.</p></div>
