@@ -1,7 +1,5 @@
 <div align="center">
 
-<a href="https://t-mercier.github.io/ai-agents-orchestrator/"><img src="docs/media/hero.png" alt="The dashboard: sessions grouped by category on the left, the selected session's notes, tickets and PRs on the right" width="820"></a>
-
 # AI Agents Orchestrator
 
 **What you learned once, you keep — a tiny native dashboard for macOS & Linux.**
@@ -95,8 +93,12 @@ Terminal tabs don't scale. You need mission control.
 
 ### Two ways to look at your work
 
-The shot at the top of this page is the **List** view — grouped by space → category, with
-the detail inline beside it. The other way in is a **Board**:
+The **List** — sessions grouped by space → category, with the selected one's notes,
+tickets and pull requests inline beside it:
+
+![List view: sessions grouped by category on the left, the selected session's notes, tickets and PRs on the right](docs/media/hero.png)
+
+The other way in is a **Board**:
 
 ![Kanban board with groups, attached notes and urgent flags](docs/media/board.png)
 
