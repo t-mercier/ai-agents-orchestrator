@@ -152,7 +152,7 @@ function ensureTerminal(sessionId, restartSlug = '', command = '') {
   term.loadAddon(fitAddon)
   term.loadAddon(webLinksAddon)
   // Make absolute file paths ⌘-clickable too (the WebLinksAddon only does web URLs).
-  // ⌘+click opens the path in its default app (a folder opens in Finder) via open_path.
+  // ⌘+click opens a folder, and reveals a file or an app bundle in its folder, via open_path.
   // NB: manual "is this part of a URL / mid-word?" check instead of a regex lookbehind —
   // older WKWebView builds don't support lookbehind, and a regex syntax error there would
   // break the whole renderer.
@@ -339,16 +339,16 @@ function killTerminal(sid) {
 // Guarantee the session lands in Closed: if /close-session didn't write a fresh wrap-up
 // (nothing new to summarise, or plan mode), stamp a close marker directly, then kill the
 // pty. So End ALWAYS → Closed, never stale.
-async function endNow(sid, notesPath, msg) {
+async function endNow(sid, notesPath, msg, since) {
   const entry = terminals.get(sid)
   if (entry && msg) { try { entry.term.write(`\r\n\x1b[2m${msg}\x1b[0m\r\n`) } catch (_) {} }
   if (notesPath && window.api.closeSession) {
-    try { await window.api.closeSession(notesPath) } catch (_) { /* fall through to kill */ }
+    try { await window.api.closeSession(notesPath, since) } catch (_) { /* fall through to kill */ }
   }
   killTerminal(sid)
 }
 
-const ending = new Set()
+const ending = new Map()   // sid → when its Close began (ms)
 function closeTerminalPane() {
   const sid = activeTerminalSession
   if (!sid) { hideTerminalPane(); return }
@@ -358,12 +358,12 @@ function closeTerminalPane() {
   const shownEntry = terminals.get(sid)
   if (shownEntry && shownEntry.dead) return endNow(sid, notesPath, '[session already ended — closed from the dashboard]')
   // Second click while a wrap-up is in flight = end now (stamp a close, no AI summary).
-  if (ending.has(sid)) { ending.delete(sid); endNow(sid, notesPath, '[ending now — closing without a summary]'); return }
+  if (ending.has(sid)) { const began = ending.get(sid); ending.delete(sid); endNow(sid, notesPath, '[ending now — closing without a summary]', began); return }
   // Unmanaged session (no notes.md): nothing to wrap up — just kill.
   if (!notesPath || !window.api.notesClosedSince) { killTerminal(sid); return }
 
-  ending.add(sid)
   const since = Date.now()
+  ending.set(sid, since)
   const entry = terminals.get(sid)
   if (entry) entry.term.write('\r\n\x1b[2m[ending — writing wrap-up via /close-session… closes once it is saved]\x1b[0m\r\n')
   // Submit with a carriage return (\r = Enter). A \n is a line feed → claude's TUI inserts
@@ -383,7 +383,7 @@ function closeTerminalPane() {
     } else if (waited >= TIMEOUT) {
       // No fresh wrap-up (nothing new / plan mode): stamp a direct close → still Closed.
       clearInterval(iv); ending.delete(sid)
-      endNow(sid, notesPath, '[no new work to summarise — closed from the dashboard]')
+      endNow(sid, notesPath, '[no new work to summarise — closed from the dashboard]', since)
     }
   }, POLL)
 }

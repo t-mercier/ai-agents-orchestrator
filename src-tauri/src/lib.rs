@@ -1164,35 +1164,41 @@ fn local_stamp_at(secs: i64) -> Option<String> {
     (out.status.success() && s.len() == 16).then_some(s)
 }
 
-/// Is the newest Session history entry a close stamped on `today` (`YYYY-MM-DD`)? A prefix
-/// match, because the skills stamp `YYYY-MM-DD HH:MM` and the dashboard marker the bare
-/// date. Shared by close_session's "already closed" guard and wrap_session's success check.
-pub(crate) fn closed_on(content: &str, today: &str) -> bool {
-    let (status, date) = reader::session_history_info(content);
-    status == "closed" && date.is_some_and(|d| d.starts_with(today))
-}
-
 /// Stamp a close marker directly into the session's notes.md history — the guaranteed
 /// fallback for the "End session" button when `/close-session` produced no fresh wrap-up
 /// (nothing new to summarise, or it was in plan mode). Ensures the session lands in
-/// **Closed**, not stale, even without an AI summary. Idempotent for today: if it's
-/// already wrapped up with TODAY's date, do nothing (avoids a duplicate when
-/// /close-session did write). Mirrors archive_session's confined atomic write.
+/// **Closed**, not stale, even without an AI summary.
+///
+/// `since_ms` is when this Close began. A close stamped at or after it (the one
+/// /close-session or /wrap-session just wrote) is not doubled; an earlier close, even from
+/// this morning, does not count, or a session reopened and closed again the same day would
+/// land Stale. Without it, the Close is taken to begin now. Mirrors archive_session's
+/// confined atomic write.
 #[tauri::command]
-fn close_session(notes_path: String) -> Result<(), String> {
+fn close_session(notes_path: String, since_ms: Option<f64>) -> Result<(), String> {
     let abs = notes_md_under_root(&notes_path)?;
     let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
     let (date, time) =
         local_date_time().ok_or("could not determine the current date")?;
-    let (date, time) = (date.as_str(), time.as_str());
-    // Already closed today (e.g. /close-session just wrote a fresh wrap-up) → no double-stamp.
-    if closed_on(&content, date) {
-        return Ok(());
+    let since = since_ms
+        .and_then(|ms| local_stamp_at((ms / 1000.0) as i64))
+        .unwrap_or_else(|| format!("{date} {time}"));
+    match close_marker(&content, &since, &date, &time) {
+        Some(next) => atomic_write(&abs, &next),
+        None => Ok(()),
+    }
+}
+
+/// The notes with a dashboard close marker appended, or None when a close stamped at or
+/// after `since_stamp` is already the newest entry.
+fn close_marker(content: &str, since_stamp: &str, date: &str, time: &str) -> Option<String> {
+    if closed_since(content, since_stamp) {
+        return None;
     }
     // `?? → HH:MM` is the legacy close shape is_wrapped_up recognises (no session id needed).
     let line =
         format!("- {date} ?? → {time} | closed from the dashboard (ended without a /close-session summary)");
-    atomic_write(&abs, &stamp_archived(&content, &line))
+    Some(stamp_archived(content, &line))
 }
 
 /// How long a headless wrap may take before we give up on it and stamp the plain marker.
@@ -1220,7 +1226,13 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
     if !std::path::Path::new(&cwd).is_dir() {
         return Err(format!("no such working directory: {cwd}"));
     }
-    let fallback = || close_session(notes_path.clone()).map(|_| {
+    // The minute this Close began: the wrap counts only if it stamps a close at or after it.
+    let started = local_date_time().map(|(d, t)| format!("{d} {t}"));
+    let started_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .ok();
+    let fallback = || close_session(notes_path.clone(), started_ms).map(|_| {
         "Closed. The summary step did not complete, so a plain close marker was written."
             .to_string()
     });
@@ -1269,11 +1281,11 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
 
     // Trust the file, not the exit code: the skill may report success having skipped the
     // history line, and that line is the only thing that actually means "Closed".
-    let closed_today = std::fs::read_to_string(&abs)
+    let closed_now = std::fs::read_to_string(&abs)
         .ok()
-        .zip(local_date_time())
-        .is_some_and(|(c, (today, _))| closed_on(&c, &today));
-    if !closed_today {
+        .zip(started)
+        .is_some_and(|(c, since)| closed_since(&c, &since));
+    if !closed_now {
         return fallback();
     }
     // The skill's confirmation is one line by contract; keep the last one in case the
@@ -1580,7 +1592,7 @@ mod tests {
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_frontmatter_links, slugify, stamp_archived, strip_archived, usage_view,
-        validate_root_override, root_flag, closed_on, closed_since, local_date_time, local_stamp_at, url_opener_args, path_opener_args,
+        validate_root_override, root_flag, close_marker, closed_since, local_date_time, local_stamp_at, url_opener_args, path_opener_args,
     };
     use crate::reader;
     use serde_json::{json, Value};
@@ -2056,15 +2068,17 @@ mod tests {
         assert_eq!(v(path_opener_args(false, file, false)), ["/w/notes"]);
     }
 
-    // The skills stamp `YYYY-MM-DD HH:MM`; today is `YYYY-MM-DD`. An exact compare never
-    // matched, so every dashboard Close appended a marker that hid the real summary.
+    // Closed in the morning, reopened, then Closed again with nothing new to summarise:
+    // the morning close must not stand in for this one, or the session lands Stale.
     #[test]
-    fn closed_on_matches_a_timed_close_line_from_today() {
-        let notes = |line: &str| format!("## Session history\n{line}\n");
-        assert!(closed_on(&notes("- 2026-09-24 14:43 | session=abc | Shipped the fix"), "2026-09-24"));
-        assert!(closed_on(&notes("- 2026-09-24 ?? → 14:43 | closed from the dashboard"), "2026-09-24"));
-        assert!(!closed_on(&notes("- 2026-09-23 14:43 | session=abc | Shipped the fix"), "2026-09-24"));
-        assert!(!closed_on(&notes("- 2026-09-24 14:43 (in progress) | session=abc | wip"), "2026-09-24"));
+    fn a_second_close_the_same_day_still_writes_its_own_marker() {
+        let morning = "## Session history\n- 2026-09-24 10:00 | session=abc | Morning close\n- 2026-09-24 14:00 (in progress) | session=abc | reopened\n";
+        let out = close_marker(morning, "2026-09-24 15:30", "2026-09-24", "15:31").expect("a marker is written");
+        assert!(out.contains("2026-09-24 ?? → 15:31 | closed from the dashboard"));
+        assert_eq!(reader::session_history_info(&out).0, "closed");
+        // A close written since this Close began (by /close-session) is not doubled.
+        let fresh = "## Session history\n- 2026-09-24 15:30 | session=abc | Fresh summary\n";
+        assert!(close_marker(fresh, "2026-09-24 15:30", "2026-09-24", "15:31").is_none());
     }
 
     // A session closed in the morning and Ended again in the afternoon: the morning line

@@ -2064,7 +2064,7 @@ function installDelegatedHandlers() {
             }
           }
           if (canWrap) window.api.wrapSession(notes, sid, cwd).then(done)
-          else window.api.closeSession(notes).then(done)
+          else window.api.closeSession(notes, Date.now()).then(done)
         })
       }
       return

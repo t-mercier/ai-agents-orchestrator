@@ -154,8 +154,10 @@
       invoke('notes_closed_since', { notesPath: notesPath || '', sinceMs: since || 0 }).catch(() => false),
     // Stamp a close marker directly into notes.md (guaranteed-close fallback when
     // /close-session produced no fresh wrap-up). Moves the session to Closed.
-    closeSession: (notesPath) =>
-      invoke('close_session', { notesPath: notesPath || '' }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    // sinceMs = when this Close began: a close written since then is not doubled, an older
+    // one (this morning's) does not count. Omitted = now.
+    closeSession: (notesPath, sinceMs) =>
+      invoke('close_session', { notesPath: notesPath || '', sinceMs: typeof sinceMs === 'number' ? sinceMs : null }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     // Wrap up a session for real, without opening a terminal: resumes it headless and
     // lets /wrap-session write the summary. Slow by nature (it re-reads the whole
     // conversation) and always ends Closed — it falls back to the plain marker itself.
