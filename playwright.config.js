@@ -7,7 +7,7 @@
 // computed styles are partial: it would have caught none of those three.
 const { defineConfig, devices } = require('@playwright/test')
 
-const PORT = 4173
+const PORT = Number(process.env.AO_SMOKE_PORT) || 4173   // overridable so two suites can run side by side
 
 module.exports = defineConfig({
   testDir: './scripts/smoke',
