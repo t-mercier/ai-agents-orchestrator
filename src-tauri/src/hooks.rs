@@ -48,7 +48,7 @@ const SHIPPED: [(&str, &str, Option<&str>, &str); 6] = [
         "ao_autosave.py",
         "Stop",
         None,
-        "Has the model run /save-session itself at 60% and 80% of context, and after 30 minutes without a checkpoint — from the real context figure, not a byte count.",
+        "Has the model run /save-session itself: suggested at 75% of context, required at 90%, and suggested after 30 minutes without a checkpoint — from the real context figure, not a byte count.",
     ),
     (
         "ao_precompact.py",
@@ -579,6 +579,16 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         assert!(out.is_ok(), "{out:?}");
         assert!(written.unwrap().contains("pr_attach"));
+    }
+
+    // The Skills & hooks step shows this line; it must name the tiers ao_autosave.py
+    // actually uses (CONTEXT_TIERS = (75, 90)), not an older pair.
+    #[test]
+    fn the_autosave_description_names_the_real_context_tiers() {
+        let (_, _, _, describes) =
+            SHIPPED.iter().find(|(f, ..)| *f == "ao_autosave.py").expect("autosave is shipped");
+        assert!(describes.contains("75%") && describes.contains("90%"), "{describes}");
+        assert!(!describes.contains("60%") && !describes.contains("80%"), "{describes}");
     }
 
     #[test]
