@@ -178,6 +178,14 @@ window.__TAURI__ = {
         // or an error when the message asks for one, so the failure path is testable.
         const fire = (p) => (window.__PTY_HANDLERS__['brutus-event'] || []).forEach(cb => cb({ payload: p }))
         setTimeout(() => {
+          // A scene can script its own answer; the smoke tests keep the default one below.
+          const script = window.__BRUTUS_SCRIPT__
+          if (script) {
+            for (const target of script.reads) fire({ kind: 'step', tool: 'Read', target })
+            fire({ kind: 'text', text: script.text })
+            fire({ kind: 'done', is_error: false, result: '' })
+            return
+          }
           if (/fail/.test(args.message)) { fire({ kind: 'error', message: 'claude exited with 1. Is Claude Code installed and logged in?' }); return }
           fire({ kind: 'step', tool: 'Read', target: '/Users/dev/.config/ai-agents-orchestrator/brutus/dashboard.md' })
           fire({ kind: 'text', text: 'Two need you: [[session:checkout-redesign]] <img src=x onerror="window.__XSS__=1">' })
@@ -255,6 +263,29 @@ const SCENES = {
     await waitFor(() => document.querySelector('.settings-tab'))
     click('.settings-tab[data-settings-tab="appearance"]')
     await sleep(400)
+  },
+  // brutus.png — the List, Brutus's bubble in the corner and the ⌘K palette over it,
+  // answering the question people ask him most.
+  async brutus() {
+    await SCENES.list()
+    window.__BRUTUS_SCRIPT__ = {
+      reads: ['/Users/dev/.config/ai-agents-orchestrator/brutus/dashboard.md',
+        '/Users/dev/work/FEAT/checkout-redesign/notes.md'],
+      text: [
+        'Two sessions are waiting on you:',
+        '- [[session:checkout-redesign]] wants to know whether the express-pay buttons go left or right of the order summary.',
+        '- [[session:search-suggest]] asks if suggestions should include recent searches.',
+        '',
+        '[[session:legacy-export]] has been stale for 3 days. Close it, or pick it back up?',
+      ].join('\n'),
+    }
+    window.CSMBrutusUI.palette()
+    await waitFor(() => document.querySelector('.bru-panel.v-B input'))
+    const input = document.querySelector('.bru-panel.v-B input')
+    input.value = "What's waiting on me?"
+    document.querySelector('.bru-panel.v-B [data-bru="send"]').click()
+    await waitFor(() => document.querySelector('.bru-panel.v-B .bru-bt ul'))
+    await sleep(300)
   },
   // terminal.png — the embedded xterm pane, fed through the real pty-data path.
   async terminal() {

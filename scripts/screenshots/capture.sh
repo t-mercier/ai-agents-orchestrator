@@ -26,6 +26,7 @@ SHOTS=(
   "board:board.png:1440:900"
   "settings:settings.png:1440:900"
   "terminal:terminal.png:1440:900"
+  "brutus:brutus.png:1440:900"
 )
 
 find_chrome() {
