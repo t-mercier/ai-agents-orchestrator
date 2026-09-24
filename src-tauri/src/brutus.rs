@@ -15,7 +15,7 @@ use crate::{brutus_agent, brutus_home, config, pty};
 
 const MAX_MESSAGE: usize = 8000;
 const TIMEOUT: Duration = Duration::from_secs(180);
-const RECENT_CLOSED_DAYS: &str = "14";
+const RECENT_CLOSED_DAYS: i64 = 14;
 
 pub(crate) struct Plan {
     pub dir: String,
@@ -207,17 +207,49 @@ fn resolve_model(cfg: &Value) -> Option<String> {
     v.get("model").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty()).map(str::to_string)
 }
 
-fn cutoff_date() -> String {
-    for args in [vec!["-v", &format!("-{RECENT_CLOSED_DAYS}d"), "+%Y-%m-%d"],
-                 vec!["-d", &format!("-{RECENT_CLOSED_DAYS} days"), "+%Y-%m-%d"]] {
-        if let Ok(o) = Command::new("date").args(&args).output() {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if o.status.success() && s.len() == 10 {
-                return s;
-            }
-        }
+/// Days since 1970-01-01 of a civil date, and back (Howard Hinnant's algorithms).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468
+}
+fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+
+/// `YYYY-MM-DD` minus `n` days.
+pub(crate) fn days_before(ymd: &str, n: i64) -> Option<String> {
+    let mut it = ymd.splitn(3, '-').map(|p| p.parse::<i64>().ok());
+    let (y, m, d) = (it.next()??, it.next()??, it.next()??);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
     }
-    "0000-00-00".into()
+    let (y, m, d) = civil_from_days(days_from_civil(y, m, d) - n);
+    Some(format!("{y:04}-{m:02}-{d:02}"))
+}
+
+/// The oldest close date the dashboard lists: from the local date when there is one,
+/// else from the system clock in UTC. Never a date that lets every closed session in.
+fn cutoff_date(today: Option<&str>) -> String {
+    if let Some(c) = today.and_then(|t| days_before(t, RECENT_CLOSED_DAYS)) {
+        return c;
+    }
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let (y, m, d) = civil_from_days(secs.div_euclid(86_400) - RECENT_CLOSED_DAYS);
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 fn emit(app: &tauri::AppHandle, ev: &Value) {
@@ -244,7 +276,7 @@ pub(crate) fn prepare(live: Vec<Value>, with_history: bool) -> Result<Plan, Stri
     let (today, time) = crate::local_date_time().unwrap_or_default();
     let hist = if with_history { crate::reader::get_historical_sessions_all() } else { json!({}) };
     let md = brutus_home::dashboard_md(&live, &hist, &crate::prstatus::get_pr_status(),
-        &knowledge, &cutoff_date(), &format!("{today} {time}"));
+        &knowledge, &cutoff_date(Some(today.as_str()).filter(|t| !t.is_empty())), &format!("{today} {time}"));
     std::fs::write(dir.join("dashboard.md"), md).map_err(|e| e.to_string())?;
 
     let a = cfg.get("assistant").cloned().unwrap_or(Value::Null);
@@ -558,6 +590,19 @@ mod tests {
         assert_eq!(watch(7, None, Duration::from_secs(500), t), Watch::Exit, "run over");
         assert_eq!(watch(7, Some(7), Duration::from_secs(10), t), Watch::Wait);
         assert_eq!(watch(7, Some(7), Duration::from_secs(181), t), Watch::Kill);
+    }
+
+    // Shipped: when neither date form worked, the cutoff fell back to "0000-00-00" and the
+    // dashboard listed every closed session ever.
+    #[test]
+    fn the_cutoff_is_computed_in_rust_across_months_years_and_leap_days() {
+        assert_eq!(days_before("2026-09-24", 14).as_deref(), Some("2026-09-10"));
+        assert_eq!(days_before("2024-03-01", 14).as_deref(), Some("2024-02-16"));
+        assert_eq!(days_before("2024-03-01", 1).as_deref(), Some("2024-02-29"));
+        assert_eq!(days_before("2026-01-05", 14).as_deref(), Some("2025-12-22"));
+        assert_eq!(days_before("not a date", 14), None);
+        let c = cutoff_date(None);
+        assert!(c.len() == 10 && c.as_str() > "2020-01-01", "from the clock: {c}");
     }
 
     #[test]
