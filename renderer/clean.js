@@ -141,12 +141,17 @@
     // Archive first: a session that gets archived here is not eligible for deletion in
     // the same pass (its age has not changed, but the user only ticked one action for
     // it), so the order costs nothing and keeps the two lists independent.
-    for (const p of archives) {
-      try { await window.api.archiveSession(p); done++ } catch (e) { failed.push(`${p}: ${e}`) }
+    // Both calls resolve {ok:false, error} on failure rather than rejecting, so the
+    // result is what says whether it happened. The catch stays for a wrapper that throws.
+    const apply = async (call, p) => {
+      try {
+        const r = await call(p)
+        if (r && r.ok) done++
+        else failed.push(`${p}: ${(r && r.error) || 'unknown error'}`)
+      } catch (e) { failed.push(`${p}: ${e}`) }
     }
-    for (const p of deletes) {
-      try { await window.api.deleteSession(p); done++ } catch (e) { failed.push(`${p}: ${e}`) }
-    }
+    for (const p of archives) await apply(window.api.archiveSession, p)
+    for (const p of deletes) await apply(window.api.deleteSession, p)
     await audit()
     $('clean-summary').textContent = `Applied ${done} of ${targets.length}. ${$('clean-summary').textContent}`
     // Every failure, named. A count alone ("1 failed") on the one action that moves

@@ -48,3 +48,34 @@ test('the detached window finds a stale session', async ({ page }) => {
   await expect(page.locator('#detail-info-pane')).not.toContainText('Loading…')
   expect(errors).toEqual([])
 })
+
+// ── The main window ──
+
+async function boot(page) {
+  const errors = []
+  page.on('pageerror', (e) => errors.push(String(e)))
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  return errors
+}
+
+test('clean-up counts a failed archive as failed, and names it', async ({ page }) => {
+  // archiveSession resolves {ok:false} instead of rejecting, so a try/catch counted
+  // every failure as done: "Applied 1 of 1" and no failure list.
+  await boot(page)
+  await page.evaluate(() => {
+    const old = new Date(Date.now() - 100 * 86400e3).toISOString()
+    const s = { name: 'ancient', notesPath: '/Users/dev/work/CHORE/ancient/notes.md', state: 'closed',
+      historyStatus: 'closed', updatedAt: old, lastActivityAt: old }
+    window.api.getHistoricalAll = async () => ({ stale: [], closed: [s], archived: [] })
+    window.api.archiveSession = async () => ({ ok: false, error: 'boom' })
+    window.confirmAction = async () => 'confirm'
+  })
+  await page.evaluate(() => window.openClean())
+  const box = page.locator('#clean-list input[type=checkbox]').first()
+  await box.check()
+  await page.locator('#clean-apply').click()
+  await expect(page.locator('#clean-summary')).toContainText('Applied 0 of 1')
+  await expect(page.locator('#clean-list')).toContainText('1 could not be applied')
+  await expect(page.locator('#clean-list')).toContainText('boom')
+})
