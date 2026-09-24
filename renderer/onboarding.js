@@ -32,6 +32,13 @@
   let advisorSet = ''
   let hooksAllWired = false
   let catOwner = []           // category index -> index of its space row (step 1)
+  let attempted = new Set()   // session ids an import run already took, ok or failed
+
+  // The picked sessions no run has taken yet. Going Back and ticking more must import
+  // those, not skip past them because an earlier run exists.
+  function pendingJobs() {
+    return O.importJobs(rows, [...picked]).filter((j) => !attempted.has(j.sessionId))
+  }
 
   // ── Step 1: what is on the machine ───────────────────────────────────────────────
 
@@ -429,10 +436,12 @@
   /// The last step's line: how many, and where they are going. Names the destinations
   /// rather than a count, since the whole point of the previous step is that they differ.
   function summariseTargets() {
-    const jobs = O.importJobs(rows, [...picked])
+    const jobs = pendingJobs()
     const n = jobs.length
     if (!n) {
-      $('onb-target-hint').textContent = 'Nothing selected — that is fine, you can start fresh sessions from the dashboard.'
+      $('onb-target-hint').textContent = attempted.size
+        ? 'Every selected session has been through an import.'
+        : 'Nothing selected — that is fine, you can start fresh sessions from the dashboard.'
       $('onb-next').textContent = 'Next'
       return
     }
@@ -478,7 +487,8 @@
   }
 
   async function startImport() {
-    run = { jobs: O.importJobs(rows, [...picked]), current: -1, done: false }
+    run = { jobs: pendingJobs(), current: -1, done: false }
+    for (const j of run.jobs) attempted.add(j.sessionId)
     running = true
     $('onb-next').disabled = true
     $('onb-back').disabled = true
@@ -660,9 +670,8 @@
       return
     }
     if (step === 3) {
-      // First press imports; the second moves on. Nothing was selected → straight through.
-      const nothing = O.importJobs(rows, [...picked]).length === 0
-      if (!run && !nothing) { await startImport(); return }
+      // A press with sessions no run has taken imports them; otherwise it moves on.
+      if (pendingJobs().length) { await startImport(); return }
       step = 4
       renderSteps()
       await renderSkillsAndHooks()
@@ -745,6 +754,7 @@
     total = 0
     counts = {}
     run = null
+    attempted = new Set()
     running = false
     expanded.clear()
     previews.clear()
