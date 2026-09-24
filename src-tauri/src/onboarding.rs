@@ -92,6 +92,24 @@ pub(crate) fn import_notes_path(
     Some(format!("{base}/{category}/{folder}/notes.md"))
 }
 
+/// The configured spelling of `category`, matched case-insensitively. Settings stores a
+/// category under its folder's name as-is (`bugs`), so the stored name is what the skill
+/// and the notes path must receive, never an uppercased copy of the request.
+fn resolve_category(cfg: &serde_json::Value, category: &str) -> Result<String, String> {
+    let category = category.trim();
+    if !is_safe_category(category) {
+        return Err("invalid category".into());
+    }
+    cfg.get("categories")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c.get("name").and_then(serde_json::Value::as_str))
+        .find(|n| n.eq_ignore_ascii_case(category))
+        .map(String::from)
+        .ok_or_else(|| format!("unknown category: {category}"))
+}
+
 /// Adopt one existing session WITHOUT opening a terminal — the headless twin of
 /// `import_session`, and the only import path the app still offers.
 ///
@@ -113,17 +131,8 @@ pub fn import_session_headless(
     if !is_valid_session_id(&session_id) {
         return Err("invalid sessionId".into());
     }
-    let category = category.trim().to_uppercase();
-    if !is_safe_category(&category) {
-        return Err("invalid category".into());
-    }
     let cfg = config::load();
-    let known = cfg.get("categories").and_then(serde_json::Value::as_array).is_some_and(|arr| {
-        arr.iter().any(|c| c.get("name").and_then(serde_json::Value::as_str) == Some(&category))
-    });
-    if !known {
-        return Err(format!("unknown category: {category}"));
-    }
+    let category = resolve_category(&cfg, &category)?;
     let want_root = root.trim();
     validate_root_override(&cfg, want_root)?;
     let safe_name = sanitize_session_name(&name);
@@ -215,7 +224,7 @@ pub(crate) fn discard_partial_import(cfg: &serde_json::Value, notes: &std::path:
 
 #[cfg(test)]
 mod tests {
-    use super::{discard_partial_import, import_notes_path};
+    use super::{discard_partial_import, import_notes_path, resolve_category};
     use serde_json::json;
 
     /// Must predict the SAME path the skill computes, or the rollback would delete the
@@ -289,5 +298,15 @@ mod tests {
         assert!(cat_notes.exists(), "never delete inside a category dir");
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_category_is_matched_case_insensitively_and_keeps_its_configured_spelling() {
+        let cfg = json!({ "categories": [ { "name": "bugs" }, { "name": "FEAT" } ] });
+        assert_eq!(resolve_category(&cfg, "bugs").as_deref(), Ok("bugs"));
+        assert_eq!(resolve_category(&cfg, " BUGS ").as_deref(), Ok("bugs"));
+        assert_eq!(resolve_category(&cfg, "feat").as_deref(), Ok("FEAT"));
+        assert!(resolve_category(&cfg, "chore").unwrap_err().contains("unknown category"));
+        assert_eq!(resolve_category(&cfg, "a b").unwrap_err(), "invalid category");
     }
 }
