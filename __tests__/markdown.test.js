@@ -30,6 +30,21 @@ describe('doneInner — detects completed steps', () => {
   })
 })
 
+describe('doneInner — strips only the done marker, never a word containing "done"', () => {
+  it('keeps "Abandoned" intact', () => {
+    const r = M.doneInner('Abandoned approach — done')
+    expect(r).toContain('<s>Abandoned approach</s>')
+  })
+  it('keeps an inner "done" after a DONE: prefix', () => {
+    const r = M.doneInner('DONE: Get it done by Friday')
+    expect(r).toContain('<s>Get it done by Friday</s>')
+  })
+  it('strips a bare **done** marker', () => {
+    const r = M.doneInner('Ship the release **done**')
+    expect(r).toContain('<s>Ship the release</s>')
+  })
+})
+
 describe('doneInner — leaves real TODOs alone', () => {
   it('a normal todo returns null', () => {
     expect(M.doneInner('Create dedicated bug ticket, set Implements: to it.')).toBeNull()

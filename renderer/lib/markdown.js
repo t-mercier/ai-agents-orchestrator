@@ -36,7 +36,9 @@
     const date = dateM ? dateM[0].trim() : null
     if (dateM) rest = rest.replace(dateM[0], '')
     rest = rest
-      .replace(/[—–-]?\s*\*{0,2}done\*{0,2}/i, '')
+      // The marker only: a dash-led `— done` / `— **done**`, or a bare `**done**`.
+      // Unanchored, this ate the first "done" anywhere ("Abandoned" → "Aband").
+      .replace(/\s*[—–-]\s*\*{0,2}done\b\*{0,2}|\*\*done\*\*/i, '')
       .replace(/~~/g, '')
       .replace(/\s{2,}/g, ' ')
       .replace(/\s+([.,;])/g, '$1')
