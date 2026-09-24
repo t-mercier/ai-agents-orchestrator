@@ -461,6 +461,14 @@
       }
       return { type: 'insert', container, key: groupBody ? groupBody.dataset.groupDrop : colBody.dataset.colDrop, isGroup: !!groupBody, index, items }
     }
+    // t.index counts the RENDERED items, and a search or filter hides some of them. The
+    // mutators splice into the container's full order, so name the rendered neighbours
+    // and let the model find them there.
+    function refOf(el) { return el ? (el.classList.contains('kb-group') ? 'g:' + el.dataset.group : el.dataset.id) : null }
+    function fullIndex(state, t, movingRef) {
+      const key = t.isGroup ? 'g:' + t.key : t.key
+      return CSMBoard.dropIndex(state, key, movingRef, refOf(t.items[t.index]), refOf(t.items[t.index - 1]))
+    }
     function showIns(t) {
       if (!insEl) { insEl = document.createElement('div'); insEl.className = 'kb-ins'; document.body.appendChild(insEl) }
       const br = t.container.getBoundingClientRect()
@@ -540,7 +548,7 @@
       if (!t) return
       const load = CSMBoard.load()
       if (d.isGroup) {
-        if (t.type === 'insert' && !t.isGroup) applyBoard(CSMBoard.moveGroup(load, d.gid, t.key, t.index))
+        if (t.type === 'insert' && !t.isGroup) applyBoard(CSMBoard.moveGroup(load, d.gid, t.key, fullIndex(load, t, 'g:' + d.gid)))
         return
       }
       if (t.type === 'merge') {
@@ -550,14 +558,14 @@
         if (gid) { applyBoard(CSMBoard.addToGroup(load, gid, d.id)); return }   // add to target's group
         const colBody = t.card.closest('[data-col-drop]')
         if (!colBody) return
-        const tops = [...colBody.querySelectorAll(':scope > .kb-card, :scope > .kb-group')]
-        const at = tops.indexOf(t.card)
-        applyBoard(CSMBoard.createGroup(load, colBody.dataset.colDrop, [targetId, d.id], 'Group', at < 0 ? undefined : at))
+        // The new group takes the target's place in the column's full order.
+        const at = CSMBoard.dropIndex(load, colBody.dataset.colDrop, d.id, targetId, null)
+        applyBoard(CSMBoard.createGroup(load, colBody.dataset.colDrop, [targetId, d.id], 'Group', at))
         return
       }
       // insert at a position in a group body or a column body
-      if (t.isGroup) applyBoard(CSMBoard.addToGroup(load, t.key, d.id, t.index))
-      else applyBoard(CSMBoard.moveItem(load, d.kind, d.id, t.key, t.index))
+      if (t.isGroup) applyBoard(CSMBoard.addToGroup(load, t.key, d.id, fullIndex(load, t, d.id)))
+      else applyBoard(CSMBoard.moveItem(load, d.kind, d.id, t.key, fullIndex(load, t, d.id)))
     })
   }
 

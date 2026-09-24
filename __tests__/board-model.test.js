@@ -236,3 +236,36 @@ describe('swatches', () => {
     for (let i = 0; i < 12; i++) expect(lum(w[i])).toBeGreaterThan(lum(w[i + 12]))
   })
 })
+
+describe('dropIndex maps a drop between rendered cards to the full column order', () => {
+  // A search or filter hides cards, so the index over the RENDERED cards is not an
+  // index into the column's order. Order [h1,h2,a,b,x], h1 and h2 filtered out.
+  const board = () => {
+    let s = B.emptyState(); const col = s.columns[0].id
+    for (const k of ['h1', 'h2', 'a', 'b', 'x']) s = B.placeSession(s, k, col)
+    s = B.moveItem(s, 'session', 'x', col, 4)
+    return { s, col }
+  }
+  it('x dropped before b lands between a and b', () => {
+    const { s, col } = board()
+    const at = B.dropIndex(s, col, 'x', 'b', 'a')
+    expect(B.orderedIds(B.moveItem(s, 'session', 'x', col, at), col)).toEqual(['h1', 'h2', 'a', 'x', 'b'])
+  })
+  it('a drop after the last rendered card lands right after it', () => {
+    let { s, col } = board()
+    s = B.moveItem(s, 'session', 'a', col, 0)                  // a, h1, h2, b, x ; b hidden
+    const at = B.dropIndex(s, col, 'x', null, 'a')
+    expect(B.orderedIds(B.moveItem(s, 'session', 'x', col, at), col)).toEqual(['a', 'x', 'h1', 'h2', 'b'])
+  })
+  it('an empty rendered column appends', () => {
+    const { s, col } = board()
+    expect(B.dropIndex(s, col, 'x', null, null)).toBe(4)
+  })
+  it('a group body maps against the group\'s own order', () => {
+    let { s, col } = board()
+    s = B.createGroup(s, col, ['h1', 'a', 'b'], 'G')
+    const gid = s.groups[0].id
+    const at = B.dropIndex(s, 'g:' + gid, 'x', 'b', 'a')        // h1 hidden
+    expect(B.groupMembers(B.addToGroup(s, gid, 'x', at), gid)).toEqual(['h1', 'a', 'x', 'b'])
+  })
+})

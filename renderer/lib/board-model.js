@@ -320,6 +320,19 @@
     const tail = [...sessions, ...noteIds, ...groupRefs].filter(id => !seen.has(id))
     return [...ord, ...tail]
   }
+  // The index to pass to moveItem / moveGroup / addToGroup / createGroup for a drop that
+  // the board resolved between two RENDERED items: `beforeRef` is the card it lands above,
+  // `afterRef` the one it lands below (null at either end). A search or filter hides
+  // cards, so the rendered position is not a position in the container's order; this
+  // counts it against the order those mutators splice into, `movingRef` left out.
+  function dropIndex(state, key, movingRef, beforeRef, afterRef) {
+    const full = (isGroupRef(key) ? ((state.order && state.order[key]) || []) : orderedIds(state, key))
+      .filter(x => x !== movingRef)
+    const b = beforeRef ? full.indexOf(beforeRef) : -1
+    if (b >= 0) return b
+    const a = afterRef ? full.indexOf(afterRef) : -1
+    return a >= 0 ? a + 1 : full.length
+  }
   // Same, as {kind, id} for rendering: 'group' | 'session' | 'note'.
   function orderedItems(state, key) {
     const sessionSet = new Set(Object.keys(state.placements))
@@ -421,7 +434,7 @@
     addColumn, renameColumn, removeColumn, moveColumn, setColumnHidden, setColumnColor,
     setColorScheme, COLOR_SCHEMES, colorForColumn, paletteColor, swatches, clearColumnColors,
     placeSession, unplaceSession, addNote, updateNote, removeNote, moveItem,
-    toggleUrgent, isUrgent, itemsByColumn, orderedItems, orderedIds,
+    toggleUrgent, isUrgent, itemsByColumn, orderedItems, orderedIds, dropIndex,
     createGroup, addToGroup, removeFromGroup, ungroup, renameGroup, setGroupCollapsed, groupMembers, findGroupOf, moveGroup,
     notesFor,
     load, save,
