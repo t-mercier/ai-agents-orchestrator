@@ -32,6 +32,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   several spaces a category name used in two of them is organised separately in each; the
   groups you already had are carried over.
 
+- **Sort the List inside each category.** A Sort button next to Filter orders the
+  sessions of every category by last update, or by their primary ticket's number, up or
+  down; sessions without a ticket come last. Manual, the order you drag, stays the
+  default, and the choice is remembered.
+
 ### Changed
 
 - **A session card no longer has a pause button.** It appeared on hover exactly where a

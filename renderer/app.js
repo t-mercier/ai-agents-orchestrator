@@ -226,13 +226,53 @@ window.queryMatches = (text) => matchesSearch({ name: text || '' }, searchQuery)
 // Filter — a single "⚲ Filter" button per view bar that opens a checkbox popover
 // (Spaces + Categories). Replaces the old chip row + the board space selector.
 // activeCatFilters / activeSpaceFilters are the source of truth (filterSessions + board).
+// How sessions are ordered inside each category of the List: 'manual' (the order you
+// drag, the default) or one of CSMSort's modes. Kept per viewer in localStorage.
+let listSort = (() => { try { return window.CSMSort.normalizeMode(localStorage.getItem('csm.listSort')) } catch { return 'manual' } })()
+window.getListSort = () => listSort
+function setListSort(mode) {
+  listSort = window.CSMSort.normalizeMode(mode)
+  try { localStorage.setItem('csm.listSort', listSort) } catch { /* per-viewer convenience only */ }
+  renderCategoryFilters()
+  renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
+}
+
 function renderCategoryFilters() {
   const n = activeCatFilters.size + activeSpaceFilters.size
   const btn = `<button class="filter-btn ${n ? 'active' : ''}" data-filter-open aria-label="Filter" title="Filter by space or category">⚲ <span class="btn-label">Filter</span>${n ? ` <span class="filter-count">${n}</span>` : ''}</button>`
+  const mode = (window.CSMSort.MODES.find(m => m.id === listSort) || {}).label || 'Manual'
+  const sortBtn = `<button class="filter-btn ${listSort !== 'manual' ? 'active' : ''}" data-sort-open aria-label="Sort" title="Order inside each category">⇅ <span class="btn-label">${listSort === 'manual' ? 'Sort' : escapeAttr(mode)}</span></button>`
   const listEl = document.getElementById('cat-filter-list')
-  if (listEl) listEl.innerHTML = btn
+  if (listEl) listEl.innerHTML = btn + sortBtn
   const boardEl = document.getElementById('cat-filter-board')
   if (boardEl) boardEl.innerHTML = btn
+}
+
+function closeSortMenu() {
+  const m = document.getElementById('sort-menu')
+  if (m) m.remove()
+  document.removeEventListener('mousedown', onSortOutside, true)
+  document.removeEventListener('keydown', onSortEsc, true)
+}
+function onSortOutside(e) { if (!e.target.closest('#sort-menu') && !e.target.closest('[data-sort-open]')) closeSortMenu() }
+function onSortEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeSortMenu() } }
+function openSortMenu(anchor) {
+  if (document.getElementById('sort-menu')) { closeSortMenu(); return }
+  const rows = window.CSMSort.MODES.map(m =>
+    `<button class="filter-opt ${m.id === listSort ? 'on' : ''}" data-sort="${m.id}"><span class="filter-box"></span><span class="filter-opt-name">${m.label}</span></button>`).join('')
+  const menu = document.createElement('div')
+  menu.id = 'sort-menu'
+  menu.className = 'filter-menu'
+  menu.innerHTML = `<div class="filter-menu-head">Order inside each category</div><div class="filter-menu-list">${rows}</div>` +
+    `<div class="filter-menu-hint">Manual is the order you drag. Sorted, the List does not take drops.</div>`
+  document.body.appendChild(menu)
+  const r = anchor.getBoundingClientRect()
+  menu.style.top = `${Math.round(r.bottom + 4)}px`
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`
+  setTimeout(() => {
+    document.addEventListener('mousedown', onSortOutside, true)
+    document.addEventListener('keydown', onSortEsc, true)
+  }, 0)
 }
 
 function closeFilterMenu() {
@@ -938,6 +978,10 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
 document.addEventListener('click', e => {
   const open = e.target.closest('[data-filter-open]')
   if (open) { e.stopPropagation(); openFilterMenu(open); return }
+  const sortOpen = e.target.closest('[data-sort-open]')
+  if (sortOpen) { e.stopPropagation(); openSortMenu(sortOpen); return }
+  const sortOpt = e.target.closest('#sort-menu [data-sort]')
+  if (sortOpt) { closeSortMenu(); setListSort(sortOpt.dataset.sort); return }
   const sp = e.target.closest('[data-filter-space]')
   if (sp) { toggleSpaceFilter(sp.dataset.filterSpace); sp.classList.toggle('on'); return }
   const opt = e.target.closest('[data-filter-cat]')

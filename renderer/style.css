@@ -873,6 +873,7 @@ body.mode-board .drawer-ctl { display: inline-flex; }
   border-radius: 10px; box-shadow: 0 16px 44px rgba(0,0,0,0.45); padding: 6px;
 }
 .filter-menu-head { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); padding: 4px 8px 6px; }
+.filter-menu-hint { max-width: 210px; padding: 6px 8px 3px; font-size: 10.5px; line-height: 1.4; color: var(--text-tertiary); }
 .filter-opt { display: flex; align-items: center; gap: 8px; width: 100%; font-family: var(--font); font-size: 12px; color: var(--text-primary); background: transparent; border: none; border-radius: 6px; padding: 5px 8px; cursor: pointer; text-align: left; }
 .filter-opt:hover { background: rgba(var(--tint), 0.08); }
 .filter-box { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--text-tertiary); flex: none; }

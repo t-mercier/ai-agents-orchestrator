@@ -431,7 +431,9 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys, space
     const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
     // The drop handler folds this exact order into the model, so a drop lands where it shows.
     ;(window._listLiveKeys = window._listLiveKeys || {})[bucket] = liveKeys
-    const items = window.CSMListOrg.orderedItems(st, bucket, liveKeys)
+    const sort = window.getListSort ? window.getListSort() : 'manual'
+    const timeOf = window.CSMFormatters.sessionTime
+    const items = window.CSMSort.sortItems(window.CSMListOrg.orderedItems(st, bucket, liveKeys), byKey, sort, timeOf)
     body = items.map(it => {
       if (it.kind === 'session') {
         const s = byKey.get(it.key); if (!s) return ''
@@ -441,9 +443,12 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys, space
       return ''
     }).join('')
     dragAttrs = ` data-drag-kind="category" data-drag-id="${escapeHtml(category)}"`
-    dropAttrs = ` data-drop-key="cat:${escapeHtml(bucket)}" data-drop-accept="session"`
+    // Sorted, the order is not yours to drop into: a drop would be undone on the next render.
+    if (sort === 'manual') dropAttrs = ` data-drop-key="cat:${escapeHtml(bucket)}" data-drop-accept="session"`
   } else {
-    body = sessions.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')
+    const sort = window.getListSort ? window.getListSort() : 'manual'
+    body = window.CSMSort.sortSessions(sessions, sort, window.CSMFormatters.sessionTime)
+      .map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')
   }
   return `
     <div class="category-group"${dragAttrs}>
