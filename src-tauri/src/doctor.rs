@@ -94,6 +94,7 @@ pub const KIND_HOOK_ELSEWHERE: &str = "hook_elsewhere";
 pub const KIND_ENV_SECRET: &str = "env_secret";
 pub const KIND_MCP_UNPINNED: &str = "mcp_unpinned";
 pub const KIND_NO_DENY: &str = "no_deny";
+pub const KIND_SETTINGS_UNPARSEABLE: &str = "settings_unparseable";
 pub const KIND_CONTEXT_BILL: &str = "context_bill";
 pub const KIND_DESC_HEAVY: &str = "skill_description_heavy";
 
@@ -268,24 +269,44 @@ pub fn findings(snap: &Snapshot) -> Vec<Finding> {
             });
         }
     }
-    for key in &sec.env_secretish {
+    for (path, why) in &sec.unparseable {
         out.push(Finding {
-            id: format!("{KIND_ENV_SECRET}:{key}"),
+            id: format!("{KIND_SETTINGS_UNPARSEABLE}:{path}"),
+            kind: KIND_SETTINGS_UNPARSEABLE.into(),
+            severity: "broken".into(),
+            title: format!("{path} is not valid JSON"),
+            detail: format!("{why}. Claude Code cannot apply a file it cannot read, so the hooks, rules and servers in it are not in force, and Doctor cannot audit them either."),
+            target: path.clone(),
+            repair: None,
+        });
+    }
+    for e in &sec.env_secretish {
+        let (key, file) = (&e.key, &e.file);
+        out.push(Finding {
+            id: format!("{KIND_ENV_SECRET}:{file}:{key}"),
             kind: KIND_ENV_SECRET.into(),
             severity: "broken".into(),
-            title: format!("`env.{key}` in settings.json looks like a credential"),
-            detail: "settings.json is read by every session and copied by every backup this app takes. A token belongs in the keychain or a `.env` the deny rules already protect.".into(),
+            title: format!("`env.{key}` in {file} looks like a credential"),
+            detail: format!("{file} is read by every session and copied by every backup this app takes. A token belongs in the keychain or a `.env` the deny rules already protect."),
             target: key.clone(),
             repair: None,
         });
     }
     for m in &sec.mcp {
         if crate::secaudit::unpinned_npx(&m.spec) {
+            let (id, title) = if m.project.is_empty() {
+                (format!("{KIND_MCP_UNPINNED}:{}", m.name), format!("MCP server '{}' is fetched unpinned", m.name))
+            } else {
+                (
+                    format!("{KIND_MCP_UNPINNED}:{}:{}", m.project, m.name),
+                    format!("MCP server '{}' in project {} is fetched unpinned", m.name, m.project),
+                )
+            };
             out.push(Finding {
-                id: format!("{KIND_MCP_UNPINNED}:{}", m.name),
+                id,
                 kind: KIND_MCP_UNPINNED.into(),
                 severity: "untidy".into(),
-                title: format!("MCP server '{}' is fetched unpinned", m.name),
+                title,
                 detail: format!("`{}` — `npx` without a version pulls whatever the registry serves at every start. Pin it (`pkg@x.y.z`) so an upstream change cannot become your tool overnight.", m.spec),
                 target: m.name.clone(),
                 repair: None,
@@ -466,12 +487,39 @@ mod tests {
     }
 
     #[test]
+    fn an_unparseable_settings_file_is_a_broken_finding_that_names_it() {
+        let snap = Snapshot { security: crate::secaudit::SecurityFacts {
+            unparseable: vec![("/h/.claude/settings.json".into(), "expected value at line 4 column 1".into())],
+            ..Default::default() }, ..Default::default() };
+        let f = findings(&snap);
+        let hits: Vec<_> = f.iter().filter(|f| f.kind == KIND_SETTINGS_UNPARSEABLE).collect();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].severity, "broken");
+        assert_eq!(hits[0].target, "/h/.claude/settings.json");
+        assert!(hits[0].detail.contains("line 4"), "the parser's reason is quoted");
+    }
+
+    #[test]
+    fn the_same_unpinned_server_name_in_two_projects_gives_two_distinct_findings() {
+        let spec = "npx server-github".to_string();
+        let snap = Snapshot { security: crate::secaudit::SecurityFacts {
+            deny: vec!["x".into()],
+            mcp: vec![
+                crate::secaudit::McpFact { name: "gh".into(), spec: spec.clone(), project: "/a".into() },
+                crate::secaudit::McpFact { name: "gh".into(), spec, project: "/b".into() },
+            ], ..Default::default() }, ..Default::default() };
+        let ids: Vec<_> = findings(&snap).into_iter().filter(|f| f.kind == KIND_MCP_UNPINNED).map(|f| f.id).collect();
+        assert_eq!(ids.len(), 2);
+        assert_ne!(ids[0], ids[1]);
+    }
+
+    #[test]
     fn an_unpinned_mcp_server_is_untidy_and_a_pinned_one_is_quiet() {
         let snap = Snapshot { security: crate::secaudit::SecurityFacts {
             settings_found: true, deny: vec!["x".into()],
             mcp: vec![
-                crate::secaudit::McpFact { name: "github".into(), spec: "npx @modelcontextprotocol/server-github".into() },
-                crate::secaudit::McpFact { name: "pinned".into(), spec: "npx pkg@1.0.0".into() },
+                crate::secaudit::McpFact { name: "github".into(), spec: "npx @modelcontextprotocol/server-github".into(), ..Default::default() },
+                crate::secaudit::McpFact { name: "pinned".into(), spec: "npx pkg@1.0.0".into(), ..Default::default() },
             ], ..Default::default() }, ..Default::default() };
         let f = findings(&snap);
         let hits: Vec<_> = f.iter().filter(|f| f.kind == KIND_MCP_UNPINNED).collect();
