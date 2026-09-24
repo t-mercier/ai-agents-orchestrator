@@ -57,3 +57,12 @@ test('the secaudit test fixtures are excluded, and only them', () => {
   const r2 = run(scratchRepo({ ...clean, 'src-tauri/src/other.rs': `// ${FAKE_GH}\n` }))
   expect(r2.status).toBe(1)
 })
+
+test('outside a git repo the scan fails instead of passing', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-secrets-nogit-'))
+  fs.mkdirSync(path.join(dir, 'scripts'))
+  fs.copyFileSync(SCRIPT, path.join(dir, 'scripts', 'check-no-secrets.sh'))
+  const r = run(dir)
+  expect(r.status).not.toBe(0)
+  expect(r.stdout).not.toMatch(/No committed secrets/)
+})

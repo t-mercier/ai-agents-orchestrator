@@ -4,6 +4,8 @@
 # Exit 1 if anything suspicious is found.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Abort outside a repo: the scan below ignores exit codes, so a git failure would pass.
+git rev-parse --is-inside-work-tree >/dev/null
 
 # Patterns for real secret material (not config keys, not placeholders).
 # Each pattern targets a token *value* shape, so referencing an env var name
