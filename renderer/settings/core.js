@@ -46,7 +46,13 @@
       board: window.CSMBoard ? clone(window.CSMBoard.load()) : null,
       // The active look (accent + surface tint) applies live, so capture it to revert.
       look: window.getLook ? window.getLook() : null,
+      // Brutus moves as soon as the Assistant tab's collect runs, which is before a Save
+      // can still be refused, so his home reverts with the rest.
+      brutusHome: brutusHome(),
     }
+  }
+  function brutusHome() {
+    try { return localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch { return 'bubble' }
   }
   function restoreLivePrefs(s) {
     if (!s) return
@@ -58,6 +64,7 @@
     if (s.keys && window.setKeys) window.setKeys(s.keys)
     if (s.terminal && window.setTerminalPrefs) window.setTerminalPrefs(s.terminal)
     if (s.board && window.CSMBoard) { window.CSMBoard.save(s.board); refreshBoardIfOpen() }
+    if (s.brutusHome && s.brutusHome !== brutusHome() && window.CSMBrutusUI) window.CSMBrutusUI.setHome(s.brutusHome)
   }
 
   // Registry: each tab registers populate/collect/validate hooks.
