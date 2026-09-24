@@ -22,8 +22,10 @@
     }
   }
 
-  function populateTerminalPrefs() {
+  function populateTerminalPrefs(cfg) {
     populateModel()
+    // Without this the select sat on its first option, and every Save reset the app.
+    if ($('set-terminal')) $('set-terminal').value = ((cfg || window.CSM_CONFIG || {}).terminalApp) || ''
     if (!window.getTerminalPrefs) return
     const p = window.getTerminalPrefs()
     if ($('set-term-font')) $('set-term-font').value = p.font
