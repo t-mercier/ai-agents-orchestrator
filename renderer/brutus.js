@@ -20,6 +20,8 @@
   const sessions = () => (window.CSMBrutusSessions ? window.CSMBrutusSessions() : [])
   const esc = window.CSMFormatters.escapeHtml
   const saveLog = () => store.set(LOG_KEY, JSON.stringify(state.log.slice(-60)))
+  // The palette shortcut as this platform writes it: the handler takes Cmd or Ctrl.
+  const KBD = /mac/i.test(navigator.platform || navigator.userAgent || '') ? '⌘K' : 'Ctrl+K'
   const say = (text) => { state.log.push({ role: 'error', text }); saveLog(); render() }
 
   const I = {
@@ -66,12 +68,14 @@
       tb.classList.toggle('on', state.homeOpen)
       tb.querySelector('.bru-av').textContent = M.initialOf(name())
       tb.querySelector('.bru-tb-name').textContent = name()
+      const kbd = tb.querySelector('.bru-kbd'); if (kbd) kbd.textContent = KBD
+      tb.title = `${name()} (${KBD} to ask quickly)`
     }
     document.body.classList.toggle('bru-docked', state.home === 'side' && state.homeOpen)
     if (state.home === 'bubble') {
       const fab = document.createElement('button')
       fab.className = 'bru-fab'; fab.type = 'button'
-      fab.title = `${name()} (⌘K to ask quickly) — right-click for options`
+      fab.title = `${name()} (${KBD} to ask quickly) — right-click for options`
       fab.setAttribute('aria-label', name())
       fab.innerHTML = av('xl')
       fab.onclick = () => { state.homeOpen = !state.homeOpen; render() }
