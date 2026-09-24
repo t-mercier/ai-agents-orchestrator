@@ -60,12 +60,16 @@ try:
     reg = json.load(open(os.path.expanduser('~/.claude/active-sessions.json')))
 except Exception:
     reg = {}
-print(((reg.get(sid) or {}).get('category') or '').strip())
+e = reg.get(sid) or {}
+print(f"{(e.get('category') or '').strip()}|{e.get('notes_path') or ''}")
 PY
 )
+NOTES_PATH="${CATEGORY#*|}"; CATEGORY="${CATEGORY%%|*}"
+# A category name can exist in several spaces: the session's own space decides the vault.
+ROOT=$([ -n "$NOTES_PATH" ] && python3 "$LIB" rootof "$NOTES_PATH")
 
 if [ -n "$CATEGORY" ]; then
-  VAULTS=$(python3 "$LIB" vault "$CATEGORY")      # this space's notes
+  VAULTS=$(python3 "$LIB" vault "$CATEGORY" ${ROOT:+"$ROOT"})      # this space's notes
 else
   VAULTS=$(python3 "$LIB" vaults)                 # unmanaged terminal → read them all
 fi

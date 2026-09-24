@@ -6,7 +6,7 @@ const read = (s) => fs.readFileSync(path.join(__dirname, '..', 'skills', s, 'SKI
 
 // A category name can exist under several spaces. Looking the vault up by name alone
 // resolves the first space listed, so a personal note could land in the company vault.
-describe.each(['learn', 'save-session', 'close-session'])('%s vault lookup', (skill) => {
+describe.each(['learn', 'save-session', 'close-session', 'route'])('%s vault lookup', (skill) => {
   test('passes the session root to aoconfig vault', () => {
     const t = read(skill)
     expect(t).toMatch(/(aoconfig\.py|"\$LIB") rootof "\$NOTES_PATH"/)
