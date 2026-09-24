@@ -21,8 +21,10 @@ static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
 
 use crate::{is_safe_slug, is_valid_session_id};
 
-/// Mirror of isProcessAlive: alive if kill(pid,0) succeeds, or EPERM (exists but
-/// we can't signal it).
+/// Whether `pid` is a running Claude Code process. A pidfile left by a crash names a pid
+/// the kernel reuses after a reboot, and a reused pid owned by root answers EPERM, so an
+/// answer to kill(pid, 0) alone made dead sessions read as Running and their pidfiles
+/// impossible to clean. The process must also be named `claude` or `node` by `ps`.
 pub(crate) fn alive(pid: i64) -> bool {
     // The pid comes from a sessions/*.json written by another process — clamp it to
     // pid_t's range before the cast. An oversized value would wrap negative, and
@@ -31,14 +33,39 @@ pub(crate) fn alive(pid: i64) -> bool {
     if pid <= 0 || pid > libc::pid_t::MAX as i64 {
         return false;
     }
-    unsafe {
-        if libc::kill(pid as libc::pid_t, 0) == 0 {
-            return true;
-        }
-        std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    // kill(pid, 0) is the cheap negative: a pid nobody holds costs no `ps` spawn, which
+    // matters because the board polls every pidfile every few seconds.
+    let exists = unsafe {
+        libc::kill(pid as libc::pid_t, 0) == 0
+            || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    };
+    if !exists {
+        return false;
+    }
+    match std::process::Command::new("ps")
+        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .stderr(std::process::Stdio::null())
+        .output()
+    {
+        // `ps` exits non-zero with no output when the pid vanished in between.
+        Ok(out) => is_session_comm(String::from_utf8_lossy(&out.stdout).trim()),
+        // No `ps` to ask: nothing better than the signal check is available.
+        Err(_) => true,
     }
 }
 
+/// Whether a `ps -o comm=` value names Claude Code. macOS reports the launch path or a
+/// retitled name (`claude`, `…/bin/claude`, `claude bg-pty-host`), and the native
+/// installer's binary is named for its version (`…/claude/versions/2.1.278`). An npm
+/// install runs as `node`.
+pub(crate) fn is_session_comm(comm: &str) -> bool {
+    let comm = comm.trim();
+    if comm.contains("/claude/versions/") {
+        return true;
+    }
+    let head = comm.split_whitespace().next().unwrap_or("");
+    matches!(head.rsplit('/').next(), Some("claude" | "node"))
+}
 
 /// Fields pulled from a session's transcript (jsonl). The transcript is the
 /// source of truth for where a session actually works + its branch + last reply.
@@ -1710,6 +1737,37 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    // A pidfile left by a crash names a pid the kernel hands out again after a reboot. The
+    // process now behind it answers kill(pid, 0) but is not Claude Code, so it is not alive.
+    #[test]
+    fn a_live_process_that_is_not_claude_code_is_not_a_live_session() {
+        let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        let verdict = super::alive(child.id() as i64);
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(!verdict, "a `sleep` that reused the pid must not read as a running session");
+    }
+
+    #[test]
+    fn claude_code_is_recognised_from_every_comm_ps_reports_for_it() {
+        use super::is_session_comm;
+        // As observed on macOS for real sessions, plus Linux's 15-char comm for an npm install.
+        for comm in [
+            "claude",
+            "/Users/me/.local/bin/claude",
+            "/Users/me/.local/share/claude/ClaudeCode.app/Contents/MacOS/claude",
+            "/Users/me/.local/share/claude/versions/2.1.278",
+            "claude bg-pty-host",
+            "node",
+            "/usr/local/bin/node",
+        ] {
+            assert!(is_session_comm(comm), "{comm} is Claude Code");
+        }
+        for comm in ["", "sleep", "/bin/bash", "2.1.278", "claudette", "/opt/claude-tools/python3", "launchd"] {
+            assert!(!is_session_comm(comm), "{comm} is not Claude Code");
+        }
+    }
 
     // A conversation continued elsewhere leaves its process parked and its pidfile frozen:
     // the dot stayed green for ever on a real session whose status had not moved in 14.7 h.

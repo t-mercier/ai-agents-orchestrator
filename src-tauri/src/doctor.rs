@@ -696,6 +696,7 @@ type PidfileScan = (
 fn scan_pidfiles(
     dir: &Path,
     active: &Value,
+    alive: impl Fn(i64) -> bool,
 ) -> PidfileScan {
     let mut live: std::collections::HashMap<String, Vec<i64>> = std::collections::HashMap::new();
     let mut stale = Vec::new();
@@ -710,7 +711,7 @@ fn scan_pidfiles(
             continue;
         }
         let Ok(pid) = stem.parse::<i64>() else { continue };
-        if !crate::reader::alive(pid) {
+        if !alive(pid) {
             stale.push(path.to_string_lossy().into_owned());
             continue;
         }
@@ -743,7 +744,7 @@ fn scan_pidfiles(
 /// Read the store and turn it into the facts [`findings`] classifies.
 pub fn snapshot() -> Snapshot {
     let active = crate::reader::load_active_sessions();
-    let (live_pids, stale_pidfiles, unregistered_live) = scan_pidfiles(&sessions_dir(), &active);
+    let (live_pids, stale_pidfiles, unregistered_live) = scan_pidfiles(&sessions_dir(), &active, crate::reader::alive);
 
     // One SessionFacts per notes.md, not per registry entry: several ids sharing a
     // notes.md is the Resume fallback, so the file — not the id — is the unit of repair.
@@ -1038,9 +1039,13 @@ mod pidfile_tests {
         std::fs::write(dir.join(format!("{pid}.json")), body.to_string()).unwrap();
     }
 
-    /// The only pid guaranteed alive during the test is the test process itself, and the
-    /// only one guaranteed dead is one that cannot be allocated — so those are what the
-    /// fixture uses rather than numbers that happen to be free today.
+    /// The scan's own liveness check also asks whether the process is Claude Code, which
+    /// the test binary is not. The fixtures therefore treat the test process as the one
+    /// live session and every other pid as gone, instead of numbers free today.
+    fn test_alive(pid: i64) -> bool {
+        pid == std::process::id() as i64
+    }
+
     #[test]
     fn a_live_pidfile_is_attributed_to_its_registered_notes() {
         let dir = tmp("registered");
@@ -1048,7 +1053,7 @@ mod pidfile_tests {
         write(&dir, me, json!({ "sessionId": "sid-a", "cwd": "/w" }));
         let active = json!({ "sid-a": { "notes_path": "/n/notes.md" } });
 
-        let (live, stale, orphaned) = scan_pidfiles(&dir, &active);
+        let (live, stale, orphaned) = scan_pidfiles(&dir, &active, test_alive);
         assert_eq!(live.get("/n/notes.md"), Some(&vec![me as i64]));
         assert!(stale.is_empty() && orphaned.is_empty());
     }
@@ -1059,7 +1064,7 @@ mod pidfile_tests {
         let me = std::process::id();
         write(&dir, me, json!({ "sessionId": "sid-gone", "cwd": "/some/repo" }));
 
-        let (live, _, orphaned) = scan_pidfiles(&dir, &json!({}));
+        let (live, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
         assert!(live.is_empty());
         assert_eq!(orphaned, vec![(me as i64, "/some/repo".to_string())]);
     }
@@ -1070,7 +1075,7 @@ mod pidfile_tests {
     fn a_background_helper_is_not_reported() {
         let dir = tmp("background");
         write(&dir, std::process::id(), json!({ "sessionId": "x", "background": true, "cwd": "/w" }));
-        let (_, _, orphaned) = scan_pidfiles(&dir, &json!({}));
+        let (_, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
         assert!(orphaned.is_empty());
     }
 
@@ -1079,7 +1084,7 @@ mod pidfile_tests {
         let dir = tmp("stale");
         // Above the pid_max any macOS or Linux kernel will hand out, so it cannot be live.
         write(&dir, 4_294_000_000, json!({ "sessionId": "sid-old", "cwd": "/w" }));
-        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}));
+        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
         assert_eq!(stale.len(), 1);
         assert!(stale[0].ends_with("4294000000.json"));
         assert!(live.is_empty() && orphaned.is_empty());
@@ -1090,13 +1095,13 @@ mod pidfile_tests {
         let dir = tmp("junk");
         std::fs::write(dir.join("notes.txt"), "x").unwrap();
         std::fs::write(dir.join("not-a-pid.json"), "{}").unwrap();
-        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}));
+        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
         assert!(live.is_empty() && stale.is_empty() && orphaned.is_empty());
     }
 
     #[test]
     fn a_missing_sessions_dir_is_not_an_error() {
-        let (live, stale, orphaned) = scan_pidfiles(Path::new("/no/such/dir"), &json!({}));
+        let (live, stale, orphaned) = scan_pidfiles(Path::new("/no/such/dir"), &json!({}), test_alive);
         assert!(live.is_empty() && stale.is_empty() && orphaned.is_empty());
     }
 }
