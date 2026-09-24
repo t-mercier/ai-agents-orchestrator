@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -55,12 +55,17 @@ pub(crate) fn claude_args(p: &Plan) -> Vec<String> {
     a
 }
 
+/// The file the message is written to before each run, in his folder.
+const MESSAGE_FILE: &str = "message.txt";
+
 /// Through a login shell, as every headless run in this app: launched from Finder, the
-/// app's PATH has no `claude`. Every argument is quoted; the message is not here at all —
-/// it goes on stdin.
+/// app's PATH has no `claude`. Every argument is quoted. The message is not on this line,
+/// and not on the shell's stdin either: an rc file that reads stdin would swallow it. It
+/// is redirected from a file into claude alone.
 pub(crate) fn shell_line(p: &Plan) -> String {
     let args: Vec<String> = claude_args(p).iter().map(|a| pty::shell_quote(a)).collect();
-    format!("cd {} && exec env AO_HEADLESS=1 claude {}", pty::shell_quote(&p.dir), args.join(" "))
+    let msg = format!("{}/{MESSAGE_FILE}", p.dir);
+    format!("cd {} && exec env AO_HEADLESS=1 claude {} < {}", pty::shell_quote(&p.dir), args.join(" "), pty::shell_quote(&msg))
 }
 
 #[derive(Serialize, Debug, PartialEq, Clone)]
@@ -291,21 +296,24 @@ pub(crate) fn prepare(live: Vec<Value>, with_history: bool) -> Result<Plan, Stri
     })
 }
 
-/// One run: the message on stdin, each stream event handed to `on_event` as it arrives,
+/// One run: the message fed to claude from a file, each stream event handed to `on_event` as it arrives,
 /// and an `error` event when the stream ends without a result. Returns true, having
 /// emitted nothing for it, when the conversation it resumed no longer exists.
-pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -> Result<bool, String> {
+pub(crate) fn run(plan: &Plan, message: &str, on_event: impl FnMut(Value)) -> Result<bool, String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let mut child = Command::new(&shell)
+    run_in(&shell, plan, message, on_event)
+}
+
+fn run_in(shell: &str, plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -> Result<bool, String> {
+    let msg_path = std::path::Path::new(&plan.dir).join(MESSAGE_FILE);
+    std::fs::write(&msg_path, message).map_err(|e| format!("could not write the message: {e}"))?;
+    let mut child = Command::new(shell)
         .args(["-ilc", &shell_line(plan)])
-        .stdin(Stdio::piped())
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("could not start claude: {e}"))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(message.as_bytes());
-    }
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let run_id = RUN.fetch_add(1, Ordering::SeqCst) + 1;
     CANCELLED.store(false, Ordering::SeqCst);
@@ -359,6 +367,7 @@ pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -
         }
     };
     let status = taken.and_then(|mut c| c.wait().ok());
+    let _ = std::fs::remove_file(&msg_path);
     if missing {
         return Ok(true);
     }
@@ -494,6 +503,7 @@ mod tests {
         // left claude running, its pipe open, and the spinner turning.
         assert!(line.starts_with("cd '/cfg/brutus' && exec env AO_HEADLESS=1 claude '--restricted'"), "{line}");
         assert!(line.contains("'claude-opus-5-5[1m]'"), "brackets are a glob to the shell");
+        assert!(line.ends_with(" < '/cfg/brutus/message.txt'"), "the message comes from a file, to claude only: {line}");
     }
 
     #[test]
@@ -630,6 +640,34 @@ mod tests {
     #[test]
     fn a_failed_conversation_write_is_reported() {
         assert!(write_conversation_at(std::path::Path::new("/nonexistent-ao-dir/conversation.json"), "abc").is_err());
+    }
+
+    // Shipped: the message went on the stdin of `$SHELL -ilc`, so an rc file that reads
+    // stdin swallowed it and claude got an empty question. The rc here does exactly that,
+    // and a stand-in claude answers with whatever it received on stdin.
+    #[test]
+    fn a_shell_rc_that_reads_stdin_cannot_swallow_the_message() {
+        use std::os::unix::fs::PermissionsExt;
+        let Some(zsh) = ["/bin/zsh", "/usr/bin/zsh"].into_iter().find(|z| std::path::Path::new(z).exists()) else { return };
+        let t = std::env::temp_dir().join(format!("ao-brutus-rc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&t);
+        for d in ["bin", "zd", "brutus"] {
+            std::fs::create_dir_all(t.join(d)).unwrap();
+        }
+        let t = std::fs::canonicalize(&t).unwrap();
+        let script = |path: std::path::PathBuf, body: String| {
+            std::fs::write(&path, body).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        script(t.join("bin/claude"), "#!/bin/sh\nmsg=$(cat)\nprintf '{\"type\":\"result\",\"is_error\":false,\"result\":\"%s\"}\\n' \"$msg\"\n".into());
+        std::fs::write(t.join("zd/.zshrc"), format!("path=({}/bin $path)\nread -t 1 _swallow\n", t.display())).unwrap();
+        script(t.join("shell"), format!("#!/bin/sh\nZDOTDIR={}/zd exec {zsh} \"$@\"\n", t.display()));
+        let mut p = plan();
+        p.dir = t.join("brutus").to_string_lossy().into_owned();
+        let mut events: Vec<Value> = Vec::new();
+        run_in(&t.join("shell").to_string_lossy(), &p, "hello brutus", |e| events.push(e)).expect("run");
+        let _ = std::fs::remove_dir_all(&t);
+        assert!(events.iter().any(|e| e["kind"] == "done" && e["result"] == "hello brutus"), "{events:?}");
     }
 
     #[test]
