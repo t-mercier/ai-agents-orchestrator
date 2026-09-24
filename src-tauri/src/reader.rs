@@ -39,9 +39,30 @@ pub(crate) fn alive(pid: i64) -> bool {
         libc::kill(pid as libc::pid_t, 0) == 0
             || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
     };
+    let mut seen = IDENTITY.lock().unwrap_or_else(|e| e.into_inner());
+    remember_identity(&mut seen, pid, exists, || identify(pid))
+}
+
+/// A pid's identity, asked once while it lives. The poll runs every few seconds over
+/// every pidfile, and a `ps` spawn per live session per poll adds up; a process does not
+/// change what it is while it runs. A pid that is gone is dropped, so the kernel handing
+/// the number to someone else later gets asked afresh.
+static IDENTITY: LazyLock<Mutex<HashMap<i64, bool>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub(crate) fn remember_identity(
+    seen: &mut HashMap<i64, bool>,
+    pid: i64,
+    exists: bool,
+    identify: impl FnOnce() -> bool,
+) -> bool {
     if !exists {
+        seen.remove(&pid);
         return false;
     }
+    *seen.entry(pid).or_insert_with(identify)
+}
+
+fn identify(pid: i64) -> bool {
     let ps = |field: &str| {
         std::process::Command::new("ps")
             .args(["-o", field, "-p", &pid.to_string()])
@@ -1754,6 +1775,21 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use super::remember_identity;
+    use std::collections::HashMap;
+    #[test]
+    fn a_pid_is_identified_once_while_it_lives_and_forgotten_when_it_dies() {
+        let mut seen: HashMap<i64, bool> = HashMap::new();
+        let mut asked = 0;
+        assert!(remember_identity(&mut seen, 41, true, || { asked += 1; true }));
+        assert!(remember_identity(&mut seen, 41, true, || { asked += 1; true }));
+        assert_eq!(asked, 1, "a live pid already identified is not asked again");
+        assert!(!remember_identity(&mut seen, 41, false, || { asked += 1; true }));
+        assert!(!seen.contains_key(&41), "a dead pid is forgotten, so a reused one is asked afresh");
+        assert!(!remember_identity(&mut seen, 41, true, || { asked += 1; false }));
+        assert_eq!(asked, 2);
+    }
+
 
     // A pidfile left by a crash names a pid the kernel hands out again after a reboot. The
     // process now behind it answers kill(pid, 0) but is not Claude Code, so it is not alive.
