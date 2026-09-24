@@ -24,7 +24,7 @@ fn import_invocation(session_id: &str, category: &str, safe_name: &str, want_roo
         format!("/import-session {category} {safe_name}")
     };
     if !want_root.is_empty() {
-        prompt.push_str(&format!(" --root {want_root}"));
+        prompt.push_str(&crate::root_flag(want_root));
     }
     (dir, prompt)
 }
@@ -224,8 +224,16 @@ pub(crate) fn discard_partial_import(cfg: &serde_json::Value, notes: &std::path:
 
 #[cfg(test)]
 mod tests {
-    use super::{discard_partial_import, import_notes_path, resolve_category};
+    use super::{discard_partial_import, import_invocation, import_notes_path, resolve_category};
     use serde_json::json;
+
+    // A space name with a space reached the skill unquoted, so `--root My Work` read as
+    // the space "My" and a session named "Work …".
+    #[test]
+    fn the_import_prompt_quotes_the_space_name() {
+        let (_, prompt) = import_invocation("abc123", "BUG", "fix it", "My Work");
+        assert!(prompt.ends_with(" --root \"My Work\""), "{prompt}");
+    }
 
     /// Must predict the SAME path the skill computes, or the rollback would delete the
     /// wrong file — or, worse, nothing, leaving the orphan that blocks every retry.
