@@ -91,7 +91,7 @@ pub(crate) fn launch_settings_arg() -> String {
 }
 
 /// Open an http(s) URL in the system browser. The scheme check already prevents a
-/// leading `-`; `--` terminates `open`'s option parsing (defense-in-depth).
+/// leading `-`; on macOS `--` also terminates `open`'s option parsing (defense-in-depth).
 #[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
     // http(s) only. The URI comes from terminal output — untrusted text — and reaches the
@@ -102,23 +102,56 @@ fn open_external(url: String) -> Result<(), String> {
         return Err(format!("unsupported URL scheme: {url}"));
     }
     std::process::Command::new(OPEN_CMD)
-        .arg("--")
-        .arg(&url)
+        .args(url_opener_args(cfg!(target_os = "macos"), &url))
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
 /// The OS "open this URL/path in the default handler" command: `open` on macOS,
-/// `xdg-open` elsewhere. Both accept `--` to terminate option parsing.
+/// `xdg-open` elsewhere. Only `open` accepts `--`; the argument builders below handle it.
 #[cfg(target_os = "macos")]
 const OPEN_CMD: &str = "open";
 #[cfg(not(target_os = "macos"))]
 const OPEN_CMD: &str = "xdg-open";
 
-/// Reveal a path (e.g. a session folder) in Finder. Reject leading-dash paths
-/// (argv flag smuggling), canonicalize to an absolute path, and pass `--` so a
-/// crafted path can never be parsed as an `open` flag.
+/// Arguments for `OPEN_CMD` to open an http(s) URL. `--` goes to macOS `open` only:
+/// xdg-open rejects it ("unexpected option '--'") and would fail every link on Linux.
+/// The caller's http(s) check already rules out a leading `-`.
+fn url_opener_args(macos: bool, url: &str) -> Vec<std::ffi::OsString> {
+    if macos {
+        vec!["--".into(), url.into()]
+    } else {
+        vec![url.into()]
+    }
+}
+
+/// Directory extensions macOS treats as a single launchable item: opening one runs it.
+const BUNDLE_EXTS: [&str; 7] = ["app", "bundle", "framework", "plugin", "prefpane", "kext", "xpc"];
+
+/// Arguments for `OPEN_CMD` to show a local path. Only a plain folder is opened. Anything
+/// else is revealed, never opened, because the path may come from terminal output and
+/// opening a `.app`, `.command` or `.terminal` executes it: macOS reveals it in Finder
+/// (`open -R`), Linux opens its parent folder. A bundle counts as "anything else" even
+/// though it is a directory. No `--` for xdg-open (see url_opener_args); the caller has
+/// already refused a leading `-` and made the path absolute.
+fn path_opener_args(macos: bool, abs: &std::path::Path, is_dir: bool) -> Vec<std::ffi::OsString> {
+    let is_bundle = abs
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| BUNDLE_EXTS.contains(&e.to_ascii_lowercase().as_str()));
+    let reveal = !is_dir || is_bundle;
+    match (macos, reveal) {
+        (true, false) => vec!["--".into(), abs.as_os_str().to_owned()],
+        (true, true) => vec!["-R".into(), "--".into(), abs.as_os_str().to_owned()],
+        (false, false) => vec![abs.as_os_str().to_owned()],
+        (false, true) => vec![abs.parent().unwrap_or(abs).as_os_str().to_owned()],
+    }
+}
+
+/// Open a folder (e.g. a session folder), or reveal any other path, in the file manager.
+/// Reject leading-dash paths (argv flag smuggling) and canonicalize to an absolute path;
+/// path_opener_args decides between opening and revealing.
 #[tauri::command]
 fn open_path(path: String) -> Result<(), String> {
     if path.starts_with('-') {
@@ -128,8 +161,7 @@ fn open_path(path: String) -> Result<(), String> {
         .canonicalize()
         .map_err(|e| e.to_string())?;
     std::process::Command::new(OPEN_CMD)
-        .arg("--")
-        .arg(&abs)
+        .args(path_opener_args(cfg!(target_os = "macos"), &abs, abs.is_dir()))
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -1497,7 +1529,7 @@ mod tests {
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_frontmatter_links, slugify, stamp_archived, strip_archived, usage_view,
-        validate_root_override,
+        validate_root_override, url_opener_args, path_opener_args,
     };
     use crate::reader;
     use serde_json::{json, Value};
@@ -1925,5 +1957,29 @@ mod tests {
     fn usage_view_non_object_is_null() {
         assert!(usage_view(&serde_json::Value::Null, None).is_null());
         assert!(usage_view(&serde_json::json!("x"), Some("s")).is_null());
+    }
+
+    // xdg-open rejects `--` ("unexpected option '--'"), so on Linux every link failed.
+    #[test]
+    fn url_opener_args_pass_double_dash_to_open_only() {
+        let v = |a: Vec<std::ffi::OsString>| a.into_iter().map(|x| x.into_string().unwrap()).collect::<Vec<_>>();
+        assert_eq!(v(url_opener_args(true, "https://x.io")), ["--", "https://x.io"]);
+        assert_eq!(v(url_opener_args(false, "https://x.io")), ["https://x.io"]);
+    }
+
+    // A path printed in the terminal must never be executed: a file, or a bundle such as
+    // `.app` (a directory on macOS), is revealed; only a plain folder is opened.
+    #[test]
+    fn path_opener_args_reveal_files_and_bundles_open_plain_folders() {
+        let v = |a: Vec<std::ffi::OsString>| a.into_iter().map(|x| x.into_string().unwrap()).collect::<Vec<_>>();
+        let dir = std::path::Path::new("/w/notes");
+        let file = std::path::Path::new("/w/notes/run.command");
+        let app = std::path::Path::new("/w/Evil.app");
+        assert_eq!(v(path_opener_args(true, dir, true)), ["--", "/w/notes"]);
+        assert_eq!(v(path_opener_args(true, file, false)), ["-R", "--", "/w/notes/run.command"]);
+        assert_eq!(v(path_opener_args(true, app, true)), ["-R", "--", "/w/Evil.app"]);
+        // Linux: no `--` (xdg-open rejects it); a non-folder opens its parent folder.
+        assert_eq!(v(path_opener_args(false, dir, true)), ["/w/notes"]);
+        assert_eq!(v(path_opener_args(false, file, false)), ["/w/notes"]);
     }
 }
