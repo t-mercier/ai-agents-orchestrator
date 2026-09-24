@@ -4,7 +4,7 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 
 /// The ` --model <x>` fragment to splice into a `claude` command line, or an empty
@@ -37,7 +37,7 @@ fn model_flag_from(cfg: &serde_json::Value) -> String {
 
 struct Session {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    writer: SharedWriter,
     child: Box<dyn Child + Send + Sync>,
 }
 
@@ -261,16 +261,39 @@ pub fn pty_spawn(
         let _ = app2.emit("pty-exit", serde_json::json!({ "sessionId": sid }));
     });
 
-    sessions.insert(session_id, Session { master: pair.master, writer, child });
+    sessions.insert(session_id, Session { master: pair.master, writer: Arc::new(Mutex::new(writer)), child });
     Ok(())
 }
 
-#[tauri::command]
-pub fn pty_input(state: tauri::State<PtyManager>, session_id: String, data: String) {
-    if let Some(s) = state.sessions.lock().unwrap().get_mut(&session_id) {
-        let _ = s.writer.write_all(data.as_bytes());
-        let _ = s.writer.flush();
-    }
+/// A session's input end, shared so a write can run outside the sessions lock.
+type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
+
+/// Write `data` to the writer `pick` selects from the entry `id` of `map`.
+///
+/// The write blocks for as long as the child does not read its input: during shell rc
+/// startup, while node is busy, or forever for a stopped process. The writer is
+/// therefore cloned out of the map first and the sessions lock is released before the
+/// write, so other terminals keep taking input and `pty_kill` can still end this one.
+/// Killing the child closes the pty, which makes the stuck write fail and return.
+fn send_input<V>(
+    map: &Mutex<HashMap<String, V>>,
+    id: &str,
+    data: &[u8],
+    pick: impl FnOnce(&V) -> &SharedWriter,
+) {
+    let Some(writer) = map.lock().unwrap().get(id).map(|v| Arc::clone(pick(v))) else {
+        return;
+    };
+    let mut w = writer.lock().unwrap();
+    let _ = w.write_all(data);
+    let _ = w.flush();
+}
+
+/// Async so a write that blocks on a child not reading its input stalls a worker
+/// thread, not the main thread that runs the whole window.
+#[tauri::command(async)]
+pub fn pty_input(state: tauri::State<'_, PtyManager>, session_id: String, data: String) {
+    send_input(&state.sessions, &session_id, data.as_bytes(), |s| &s.writer);
 }
 
 #[tauri::command]
@@ -397,5 +420,47 @@ mod tests {
         assert!(carry.is_empty());
         assert!(out.starts_with('a') && out.ends_with('b'));
         assert!(out.contains('\u{FFFD}'));
+    }
+
+    use super::{send_input, SharedWriter};
+    use std::collections::HashMap;
+    use std::io::Write;
+    use std::sync::{mpsc, Arc, Mutex};
+
+    /// A pty whose child is not reading: write() blocks until `release` fires.
+    struct StalledPty {
+        entered: mpsc::Sender<()>,
+        release: Arc<Mutex<mpsc::Receiver<()>>>,
+    }
+    impl Write for StalledPty {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            let _ = self.entered.send(());
+            let _ = self.release.lock().unwrap().recv();
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // A paste into a terminal that is not reading blocks in write(). If that write held
+    // the sessions lock, no other terminal could take input and pty_kill could not
+    // remove the stuck one, so the window stayed frozen until the child read.
+    #[test]
+    fn a_stalled_write_does_not_hold_the_sessions_lock() {
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let writer: SharedWriter = Arc::new(Mutex::new(Box::new(StalledPty {
+            entered: entered_tx,
+            release: Arc::new(Mutex::new(release_rx)),
+        })));
+        let map = Arc::new(Mutex::new(HashMap::from([("s".to_string(), writer)])));
+        let m2 = Arc::clone(&map);
+        let t = std::thread::spawn(move || send_input(&m2, "s", b"paste", |w| w));
+        entered_rx.recv().unwrap(); // the write is now blocked inside the pty
+        let free = map.try_lock().is_ok();
+        release_tx.send(()).unwrap();
+        t.join().unwrap();
+        assert!(free, "the sessions lock is held for the whole blocked write");
     }
 }
