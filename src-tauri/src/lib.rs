@@ -216,8 +216,11 @@ pub(crate) fn is_safe_slug(s: &str) -> bool {
 }
 
 /// Validate an optional space (`--root`) override: empty = no override (fine); otherwise
-/// it must name a declared root AND be a safe token (it rides the skill prompt). Shared by
-/// start_session + import_session so the rule lives once.
+/// it must name a declared root AND contain no quote, backtick, `$`, backslash or control
+/// char. Any other name Settings accepts (spaces, accents, punctuation) is valid: it rides
+/// the skill prompt double-quoted (root_flag), inside a single-quoted shell word, and only
+/// those chars can break out of either. Shared by start_session + import_session so the
+/// rule lives once.
 pub(crate) fn validate_root_override(cfg: &serde_json::Value, want_root: &str) -> Result<(), String> {
     if want_root.is_empty() {
         return Ok(());
@@ -226,11 +229,22 @@ pub(crate) fn validate_root_override(cfg: &serde_json::Value, want_root: &str) -
         rs.iter().any(|r| r.get("name").and_then(serde_json::Value::as_str) == Some(want_root))
     });
     let safe = want_root.len() <= 30
-        && want_root.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+        && !want_root.chars().any(|c| c.is_control() || "'\"`$\\".contains(c));
     if !known || !safe {
         return Err("invalid space".into());
     }
     Ok(())
+}
+
+/// The ` --root "<space>"` suffix of a skill prompt, or "" for no override. Double-quoted
+/// so a space name with a space in it stays one argument; validate_root_override has
+/// already refused every char that could break the quoting.
+pub(crate) fn root_flag(want_root: &str) -> String {
+    if want_root.is_empty() {
+        String::new()
+    } else {
+        format!(" --root \"{want_root}\"")
+    }
 }
 
 /// Sanitize a session NAME for the skill prompt + YAML frontmatter + iTerm title:
@@ -372,7 +386,7 @@ fn start_session(
     let cfg = config::load();
     // Optional space (root) override — disambiguates a category present in 2+ spaces,
     // and decides the launch dir + the `--root` the skill writes under. Must be a
-    // declared root and a safe token (it rides the /start-session prompt).
+    // declared root free of quote/shell chars (it rides the /start-session prompt).
     let want_root = root.trim();
     validate_root_override(&cfg, want_root)?;
     let cats = cfg.get("categories").and_then(serde_json::Value::as_array);
@@ -436,7 +450,7 @@ fn start_session(
         return Err("not a GitHub PR URL (https://github.com/owner/repo/pull/N)".into());
     }
 
-    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>] [--root <space>]
+    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>] [--root "<space>"]
     let parts: Vec<&str> = [category.as_str(), safe_ticket.as_str(), safe_name.as_str()]
         .into_iter()
         .filter(|p| !p.is_empty())
@@ -446,10 +460,8 @@ fn start_session(
         prompt.push_str(&format!(" --pr {pr}"));
     }
     // Tell the skill which space to write under (only when one was chosen) — resolves
-    // a category that exists in several spaces. Validated as a safe token above.
-    if !want_root.is_empty() {
-        prompt.push_str(&format!(" --root {want_root}"));
-    }
+    // a category that exists in several spaces. Validated above, double-quoted here.
+    prompt.push_str(&root_flag(want_root));
     let model_flag = pty::model_flag();
     // Start NEW sessions in auto mode. /start-session must WRITE notes.md + register the
     // session in active-sessions.json — plan mode BLOCKS that (the skill aborts at its
@@ -1529,7 +1541,7 @@ mod tests {
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_frontmatter_links, slugify, stamp_archived, strip_archived, usage_view,
-        validate_root_override, url_opener_args, path_opener_args,
+        validate_root_override, root_flag, url_opener_args, path_opener_args,
     };
     use crate::reader;
     use serde_json::{json, Value};
@@ -1570,8 +1582,30 @@ mod tests {
         assert!(validate_root_override(&cfg, "").is_ok()); // empty = no override
         assert!(validate_root_override(&cfg, "Work").is_ok());
         assert!(validate_root_override(&cfg, "Ghost").is_err()); // not a declared root
-        assert!(validate_root_override(&cfg, "a b").is_err()); // unsafe token
+        assert!(validate_root_override(&cfg, "a b").is_err()); // not declared either
         assert!(validate_root_override(&cfg, &"x".repeat(31)).is_err()); // > 30 chars
+    }
+
+    // Settings accepts any non-empty name up to 30 chars, so a space named "My Work" or
+    // "Été" must be startable. Only the chars that break the double-quoted `--root "<name>"`
+    // in the skill prompt (or the shell around it) stay refused.
+    #[test]
+    fn validate_root_override_accepts_every_settings_name_but_prompt_breakers() {
+        for name in ["My Work", "Été", "a.b", "R&D"] {
+            let cfg = json!({ "roots": [{ "name": name, "path": "/w" }] });
+            assert!(validate_root_override(&cfg, name).is_ok(), "{name} should be accepted");
+        }
+        for name in ["a'b", "a\"b", "a`b", "a$b", "a\\b", "a\nb", "a\tb", "a\u{7f}b"] {
+            let cfg = json!({ "roots": [{ "name": name, "path": "/w" }] });
+            assert!(validate_root_override(&cfg, name).is_err(), "{name:?} should be refused");
+        }
+    }
+
+    #[test]
+    fn root_flag_double_quotes_the_space_name() {
+        assert_eq!(root_flag(""), "");
+        assert_eq!(root_flag("Work"), " --root \"Work\"");
+        assert_eq!(root_flag("My Work"), " --root \"My Work\"");
     }
 
     #[test]
