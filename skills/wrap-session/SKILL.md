@@ -72,8 +72,9 @@ tickets:
 
 Collect every PR URL this session is about:
 
-- `gh pr view --json url -q .url` on the session's branch. A valid
-  `https://github.com/owner/repo/pull/N` → use it.
+- `gh pr view "$BRANCH" --json url -q .url`, with `BRANCH` the frontmatter `branch` from
+  Step 1 (skip when it is empty or `to fill`: the checkout may now be on another branch).
+  A valid `https://github.com/owner/repo/pull/N` → use it.
 - The PRs created or handled in THIS conversation (scan it) — `gh` only ever reports the
   current branch's, so this is how a session's *other* PR is found.
 

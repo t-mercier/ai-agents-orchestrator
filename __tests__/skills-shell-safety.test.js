@@ -97,3 +97,11 @@ describe('sync-refs branch match', () => {
     expect(out).toEqual(['https://github.com/o/r/pull/1'])
   })
 })
+
+// wrap-session runs headless, possibly in a checkout now on another branch: a bare
+// `gh pr view` attached that branch's PR to the session, forever.
+test('wrap-session looks up the PR of the branch recorded in the notes', () => {
+  const t = read('wrap-session')
+  expect(t).toMatch(/gh pr view "\$BRANCH" --json url -q \.url/)
+  expect(t).not.toMatch(/gh pr view --json/)
+})
