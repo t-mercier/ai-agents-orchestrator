@@ -1428,13 +1428,13 @@ async function boot() {
       }
       if (kind === 'group' && containerKey.startsWith('cat:')) {
         const category = containerKey.slice(4)
-        window.CSMListOrg.save(window.CSMListOrg.moveGroupRef(window.CSMListOrg.load(), category, id, index))
+        window.CSMListOrg.save(window.CSMListOrg.moveGroupRef(window.CSMListOrg.load(), category, id, index, (window._listLiveKeys || {})[category]))
         fetchAndRender(false); return
       }
       if (kind === 'session' && containerKey.startsWith('cat:')) {
         const category = containerKey.slice(4)
         const st = window.CSMListOrg.load()
-        window.CSMListOrg.save(window.CSMListOrg.moveSession(st, category, id, index))
+        window.CSMListOrg.save(window.CSMListOrg.moveSession(st, category, id, index, (window._listLiveKeys || {})[category]))
         fetchAndRender(false)
         return
       }

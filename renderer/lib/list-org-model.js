@@ -75,13 +75,17 @@
   // while c.order holds only what was moved before. Pass `liveKeys` (as given to
   // orderedItems) so the rendered order is folded into c.order first; without it an
   // unmoved tail is invisible to the splice and a drop below the top lands first.
+  // The drop index counts every rendered top-level item, while c.order holds only the ones
+  // moved before. Folding the rendered order in first makes the index mean what it shows.
+  function foldRendered(s, c, catName, liveKeys) {
+    if (!liveKeys) return
+    const top = orderedItems(s, catName, liveKeys).map(it => it.kind === 'group' ? groupRef(it.id) : it.key)
+    const shown = new Set(top)
+    c.order = [...top, ...c.order.filter(id => !shown.has(id))]
+  }
   function moveSession(state, catName, key, index, liveKeys) {
     const s = clone(state); const c = cat(s, catName)
-    if (liveKeys) {
-      const top = orderedItems(s, catName, liveKeys).map(it => it.kind === 'group' ? groupRef(it.id) : it.key)
-      const shown = new Set(top)
-      c.order = [...top, ...c.order.filter(id => !shown.has(id))]
-    }
+    foldRendered(s, c, catName, liveKeys)
     removeFromGroups(c, key); removeFromTop(c, key)
     const i = (index == null || index < 0 || index > c.order.length) ? c.order.length : index
     c.order.splice(i, 0, key)
@@ -165,9 +169,10 @@
     cleanupGroups(c)
     return s
   }
-  function moveGroupRef(state, catName, gid, index) {
+  function moveGroupRef(state, catName, gid, index, liveKeys) {
     const s = clone(state); const c = cat(s, catName); const ref = groupRef(gid)
     if (!c.groups[gid]) return s
+    foldRendered(s, c, catName, liveKeys)
     removeFromTop(c, ref)
     const i = (index == null || index < 0 || index > c.order.length) ? c.order.length : index
     c.order.splice(i, 0, ref)

@@ -425,6 +425,8 @@ function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
     const st = window.CSMListOrg.load()
     const byKey = new Map(sessions.map(s => [sessionKey(s), s]))
     const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
+    // The drop handler folds this exact order into the model, so a drop lands where it shows.
+    ;(window._listLiveKeys = window._listLiveKeys || {})[category] = liveKeys
     const items = window.CSMListOrg.orderedItems(st, category, liveKeys)
     body = items.map(it => {
       if (it.kind === 'session') {
@@ -579,6 +581,7 @@ function renderPinnedBlock(pinned, selectedKey, changedKeys) {
   const st = window.CSMListOrg.load()
   const byKey = new Map(pinned.map(s => [sessionKey(s), s]))
   const liveKeys = pinned.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)
+  ;(window._listLiveKeys = window._listLiveKeys || {})[PINNED_CAT] = liveKeys
   const body = window.CSMListOrg.orderedItems(st, PINNED_CAT, liveKeys).map(it => {
     if (it.kind === 'session') {
       const s = byKey.get(it.key); if (!s) return ''

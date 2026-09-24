@@ -160,3 +160,13 @@ describe('moveSession lands where it was dropped', () => {
     expect(items.map(i => i.kind === 'group' ? 'g1' : i.key)).toEqual(['g1', 'D', 'A'])
   })
 })
+
+describe('moveGroupRef with the rendered order', () => {
+  it('a group dragged to the bottom of a fresh category lands there', () => {
+    let s = M.createGroupWith(M.emptyState(), 'FEAT', 'g1', ['a', 'b'], 0)
+    // Rendered: [group g1, c, d]. Drop the group after d (index 2 once it is lifted out).
+    s = M.moveGroupRef(s, 'FEAT', 'g1', 2, ['a', 'b', 'c', 'd'])
+    expect(M.orderedItems(s, 'FEAT', ['a', 'b', 'c', 'd']).map(i => i.kind === 'group' ? i.id : i.key))
+      .toEqual(['c', 'd', 'g1'])
+  })
+})
