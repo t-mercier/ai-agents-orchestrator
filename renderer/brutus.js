@@ -54,7 +54,7 @@
     if (palette && turns.length > 2) { lead = `<div class="bru-earlier">↑ ${turns.length - 2} earlier messages</div>`; turns = turns.slice(-2) }
     return lead + turns.map(turnHTML).join('') + liveHTML()
   }
-  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : ''}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
+  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : ''}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
   const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop">${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his own memory</span></div></div>`
 
   function render() {
@@ -179,7 +179,8 @@
   }
   async function refresh() {
     const s = await window.api.brutusStatus()
-    state.memory = s.memoryCount || 0
+    // null: the file exists but could not be read, which is not "nothing remembered".
+    state.memory = s.memoryCount === null ? null : (s.memoryCount || 0)
     render()
   }
   document.getElementById('brutus-btn')?.addEventListener('click', () => { state.homeOpen = !state.homeOpen; render() })

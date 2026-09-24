@@ -191,8 +191,8 @@ fn read_conversation() -> Option<String> {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(conversation_path()).ok()?).ok()?;
     v.get("sessionId").and_then(Value::as_str).filter(|s| crate::is_valid_session_id(s)).map(str::to_string)
 }
-fn write_conversation(id: &str) {
-    let _ = std::fs::write(conversation_path(), json!({ "sessionId": id }).to_string());
+fn write_conversation_at(path: &std::path::Path, id: &str) -> std::io::Result<()> {
+    std::fs::write(path, json!({ "sessionId": id }).to_string())
 }
 
 /// `--restricted` ignores ~/.claude/settings.json, so the model is passed explicitly: the
@@ -337,7 +337,11 @@ pub(crate) fn run(plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -
         for ev in parse_line(&line) {
             if let Event::Init { session_id } = &ev {
                 if crate::is_valid_session_id(session_id) {
-                    write_conversation(session_id);
+                    // Not fatal to this answer, but the next message will start a new
+                    // conversation: say so in the log rather than nowhere.
+                    if let Err(e) = write_conversation_at(&conversation_path(), session_id) {
+                        log::warn!("brutus: could not save the conversation id: {e}");
+                    }
                 }
             }
             if matches!(ev, Event::Done { .. }) {
@@ -416,11 +420,19 @@ pub fn brutus_reset() -> Result<(), String> {
     }
 }
 
+/// No file yet is nothing remembered; a file that cannot be read is unknown (null), not 0.
+fn memory_count_value(read: std::io::Result<String>) -> Value {
+    match read {
+        Ok(text) => json!(brutus_home::memory_count(&text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!(0),
+        Err(_) => Value::Null,
+    }
+}
+
 #[tauri::command]
 pub fn brutus_status() -> Value {
-    let mem = std::fs::read_to_string(brutus_home::dir().join("memory.md")).unwrap_or_default();
     json!({
-        "memoryCount": brutus_home::memory_count(&mem),
+        "memoryCount": memory_count_value(std::fs::read_to_string(brutus_home::dir().join("memory.md"))),
         "running": BUSY.load(Ordering::SeqCst),
         "hasConversation": read_conversation().is_some(),
     })
@@ -603,6 +615,21 @@ mod tests {
         assert_eq!(days_before("not a date", 14), None);
         let c = cutoff_date(None);
         assert!(c.len() == 10 && c.as_str() > "2020-01-01", "from the clock: {c}");
+    }
+
+    // Shipped: an unreadable memory file showed "0 memories", and a failed conversation
+    // write was dropped in silence, so the next message started a new conversation.
+    #[test]
+    fn an_unreadable_memory_file_is_not_zero_memories() {
+        use std::io::{Error, ErrorKind};
+        assert_eq!(memory_count_value(Ok("- a\n- b\n".into())), json!(2));
+        assert_eq!(memory_count_value(Err(Error::from(ErrorKind::NotFound))), json!(0), "no file yet: nothing remembered");
+        assert_eq!(memory_count_value(Err(Error::from(ErrorKind::PermissionDenied))), Value::Null);
+    }
+
+    #[test]
+    fn a_failed_conversation_write_is_reported() {
+        assert!(write_conversation_at(std::path::Path::new("/nonexistent-ao-dir/conversation.json"), "abc").is_err());
     }
 
     #[test]
