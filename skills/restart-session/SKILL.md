@@ -147,23 +147,29 @@ PY
 Point this NEW `$SESSION_ID` at the existing `$NOTES_PATH` (substitute frontmatter values):
 
 ```bash
-python3 - <<EOF
-import json, os
+CATEGORY="<CATEGORY from frontmatter>"
+TICKET="<TICKET from frontmatter>"
+NAME="<NAME from frontmatter>"
+NOW=$(date +"%Y-%m-%d %H:%M")
+# Values go through argv, never spliced into the Python: a name like "fix l'import" must not break it.
+python3 - "$SESSION_ID" "$NOTES_PATH" "$CATEGORY" "$TICKET" "$NAME" "$NOW" <<'PY'
+import json, os, sys
+sid, notes_path, category, ticket, name, now = sys.argv[1:7]
 p = os.path.expanduser('~/.claude/active-sessions.json')
 data = {}
 if os.path.exists(p):
     try: data = json.load(open(p))
     except: data = {}
-data['$SESSION_ID'] = {
-    'notes_path': '$NOTES_PATH',
-    'category': '<CATEGORY from frontmatter>',
-    'ticket': '<TICKET from frontmatter>',
-    'name': '<NAME from frontmatter>',
-    'started_at': '$(date +"%Y-%m-%d %H:%M")'
+data[sid] = {
+    'notes_path': notes_path,
+    'category': category,
+    'ticket': ticket,
+    'name': name,
+    'started_at': now
 }
 tmp = p + '.tmp'
 json.dump(data, open(tmp, 'w'), indent=2); os.replace(tmp, p)
-EOF
+PY
 ```
 
 ### Step 4.1 — Point the notes.md frontmatter at THIS session

@@ -66,18 +66,19 @@ Use `date +"%Y-%m-%d %H:%M"` for the timestamp.
 ## Step 5 — Remove from active-sessions.json
 
 ```bash
-python3 - <<EOF
-import json, os
+python3 - "$NOTES_PATH" <<'PY'
+import json, os, sys
+notes_path = sys.argv[1]
 p = os.path.expanduser('~/.claude/active-sessions.json')
 if not os.path.exists(p):
     print("active-sessions.json not found — nothing to remove"); raise SystemExit
 data = json.load(open(p))
 before = len(data)
-data = {k: v for k, v in data.items() if v.get('notes_path') != '$NOTES_PATH'}
+data = {k: v for k, v in data.items() if v.get('notes_path') != notes_path}
 tmp = p + '.tmp'
 json.dump(data, open(tmp, 'w'), indent=2); os.replace(tmp, p)
 print(f"Removed {before - len(data)} entry(ies) from active-sessions.json")
-EOF
+PY
 ```
 
 ## Step 6 — Confirm

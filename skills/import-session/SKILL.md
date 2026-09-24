@@ -172,24 +172,26 @@ started_at: <NOW>
 ## Step 6 — Register in active-sessions.json
 
 ```bash
-python3 - <<EOF
-import json, os
+# Values go through argv, never spliced into the Python: a name like "fix l'import" must not break it.
+python3 - "$SESSION_ID" "$NOTES_PATH" "$CATEGORY" "$NAME" "$NOW" <<'PY'
+import json, os, sys
+sid, notes_path, category, name, now = sys.argv[1:6]
 p = os.path.expanduser('~/.claude/active-sessions.json')
 data = {}
 if os.path.exists(p):
     try: data = json.load(open(p))
     except: data = {}
-data['$SESSION_ID'] = {
-    'notes_path': '$NOTES_PATH',
-    'category': '$CATEGORY',
+data[sid] = {
+    'notes_path': notes_path,
+    'category': category,
     'ticket': '',
-    'name': '$NAME',
-    'started_at': '$NOW',
+    'name': name,
+    'started_at': now,
 }
 tmp = p + '.tmp'
 json.dump(data, open(tmp,'w'), indent=2)
 os.replace(tmp, p)
-EOF
+PY
 ```
 
 ## Step 7 — Confirm

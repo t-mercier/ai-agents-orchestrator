@@ -216,23 +216,25 @@ Use the Edit tool to replace the `<one-line why — FILL IN>` and the `- [ ] …
 > **Skip this step** if Step 4.5's collision guard fired and the user chose "New session in a fresh terminal" — the workspace stays unbound (empty `session_id`) until `/restart-session` opens it elsewhere.
 
 ```bash
-python3 - <<EOF
-import json, os
+# Values go through argv, never spliced into the Python: a name like "fix l'import" must not break it.
+python3 - "$SESSION_ID" "$NOTES_PATH" "$CATEGORY" "$TICKET" "$NAME" "$NOW" <<'PY'
+import json, os, sys
+sid, notes_path, category, ticket, name, now = sys.argv[1:7]
 path = os.path.expanduser('~/.claude/active-sessions.json')
 data = {}
 if os.path.exists(path):
     try: data = json.load(open(path))
     except: data = {}
-data['$SESSION_ID'] = {
-    'notes_path': '$NOTES_PATH',
-    'category': '$CATEGORY',
-    'ticket': '${TICKET}',
-    'name': '$NAME',
-    'started_at': '$NOW'
+data[sid] = {
+    'notes_path': notes_path,
+    'category': category,
+    'ticket': ticket,
+    'name': name,
+    'started_at': now
 }
 tmp = path + '.tmp'
 json.dump(data, open(tmp, 'w'), indent=2); os.replace(tmp, path)
-EOF
+PY
 ```
 
 ## Step 8 — Git sync (only if in a repo)
