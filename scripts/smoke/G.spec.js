@@ -122,3 +122,26 @@ test('a terminal whose claude exited while on screen is gone once hidden', async
   expect(r.spawns).toEqual(['S3', 'S3'])
   expect(r.reopenedLive).toBe(true)
 })
+
+test('a pinned skill on a session with a terminal keyed by notes.md is typed into it', async ({ page }) => {
+  // +New keys the terminal by notesPath; pinCtxFor looked it up by sessionId only, so the
+  // skill ran as a second headless `claude --resume` of the same conversation.
+  await boot(page)
+  const r = await page.evaluate(async () => {
+    const s = window._lastSessions.find(x => x.name === 'legacy-export')
+    const calls = []
+    window.api.ptyInput = (sid, data) => { calls.push(['pty', sid, data]); return Promise.resolve() }
+    window.api.runSkill = async (...a) => { calls.push(['headless', ...a]); return { summary: 'ok' } }
+    window.openTerminalPane(s.notesPath, s.cwd, '', '', s.notesPath)
+    await new Promise(r => setTimeout(r, 50))
+    window.hideTerminalPane()
+    window._lastSelectedKey = sessionKey(s)
+    const ctx = pinCtxFor(s)
+    const btn = document.createElement('button')
+    btn.dataset.pinRun = 'session'; btn.dataset.pinSkill = 'review'; btn.dataset.pinIndex = '0'
+    await runPinnedSkill(btn)
+    return { hasTerminal: ctx.hasTerminal, calls, key: s.notesPath }
+  })
+  expect(r.hasTerminal).toBe(true)
+  expect(r.calls).toEqual([['pty', r.key, '/review\r']])
+})

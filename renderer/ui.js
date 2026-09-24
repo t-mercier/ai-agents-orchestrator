@@ -1323,10 +1323,17 @@ function renderGlobalPins() {
   if (host) host.innerHTML = pinSlotsHtml('global', {})
 }
 
+// The terminal a session's pinned skills are typed into, or null. Found by notes.md
+// first: a +New terminal is keyed by notesPath and a resumed one by an older sid, so a
+// lookup by the current sessionId alone misses both.
+function pinTerminalKey(s) {
+  return (window.liveTerminalKeyFor && window.liveTerminalKeyFor(s.sessionId, s.notesPath)) || null
+}
+
 // The context a session's slots are judged against: an open terminal plus its live status.
 function pinCtxFor(s) {
   return {
-    hasTerminal: !!(window.hasLiveTerminal && window.hasLiveTerminal(s.sessionId)),
+    hasTerminal: !!pinTerminalKey(s),
     status: s.state === 'active' ? (s.status || 'idle') : '',
     sessionId: s.sessionId || '',
   }
@@ -1345,7 +1352,7 @@ async function runPinnedSkill(btn) {
   if (d.mode === 'terminal') {
     // The pane may be backgrounded; the pty takes the line either way, so say where it went
     // rather than yanking the view around behind the user.
-    window.api.ptyInput(s.sessionId, d.input)
+    window.api.ptyInput(pinTerminalKey(s), d.input)
     if (window.showBanner) window.showBanner(`/${L.clean(name)} sent to ${s.name || 'the session'}'s terminal.`)
     return
   }
