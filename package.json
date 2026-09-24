@@ -15,7 +15,7 @@
     "check:secrets": "bash scripts/check-no-secrets.sh",
     "check:bundle": "bash scripts/check-bundle-current.sh",
     "test:ui": "playwright test",
-    "test:py": "python3 -m unittest discover -s hooks -p 'test_*.py' && python3 skills/lib/route_search.py selftest && python3 skills/lib/skill_usage.py selftest && python3 skills/lib/patch_apply.py selftest"
+    "test:py": "python3 -m unittest discover -s hooks -p 'test_*.py' && python3 skills/lib/route_search.py selftest && python3 skills/lib/skill_usage.py selftest && python3 skills/lib/patch_apply.py selftest && python3 -m unittest discover -s skills/lib -p 'test_*.py'"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
