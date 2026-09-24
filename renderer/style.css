@@ -2215,11 +2215,12 @@ body.dl-drag-active .list-card { pointer-events: none; }
   color:var(--text-secondary); cursor:pointer; }
 .bru-ib:hover { background:rgba(var(--tint),.08); color:var(--text-primary); }
 .bru-ib svg { width:15px; height:15px; }
-.bru-body { flex:1; overflow:auto; padding:14px; display:flex; flex-direction:column; gap:14px; }
+.bru-body { flex:1; overflow-y:auto; overflow-x:hidden; padding:14px; display:flex; flex-direction:column; gap:14px; }
 .bru-u { align-self:flex-end; max-width:82%; background:rgba(var(--accent-rgb),.18); border:.5px solid rgba(var(--accent-rgb),.3);
-  padding:8px 11px; border-radius:12px 12px 3px 12px; font-size:12.5px; line-height:1.45; }
+  padding:8px 11px; border-radius:12px 12px 3px 12px; font-size:12.5px; line-height:1.45; overflow-wrap:anywhere; }
 .bru-b { display:flex; gap:9px; align-items:flex-start; }
-.bru-bt { flex:1; font-size:12.5px; line-height:1.55; color:var(--text-primary); }
+/* min-width:0 lets the answer shrink to the panel; anywhere breaks a long path or URL. */
+.bru-bt { flex:1; min-width:0; overflow-wrap:anywhere; font-size:12.5px; line-height:1.55; color:var(--text-primary); }
 .bru-bt p { margin:0 0 6px; } .bru-bt ul { margin:4px 0 6px; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:6px; }
 .bru-bt li { display:block; }
 .bru-steps { font:500 10.5px var(--font); color:var(--text-tertiary); display:flex; align-items:center; gap:6px; margin-bottom:5px; }
@@ -2282,7 +2283,19 @@ body.dl-drag-active .list-card { pointer-events: none; }
 @keyframes bru-slide { from{transform:translateX(24px); opacity:0} to{transform:none; opacity:1} }
 
 .v-C.docked { box-shadow:none; }
-body.bru-docked .layout { margin-right:400px; transition: margin-right .18s ease-out; }
+body.bru-docked .layout { margin-right:var(--bru-side-w, 400px); transition: margin-right .18s ease-out; }
+body.bru-resizing .layout { transition: none; }
+/* Resize grips: the side panel's left edge, the bubble's top-left corner and its two free
+   edges. Invisible until hovered, like the list's own resize handle. */
+.bru-rs { position:absolute; z-index:2; }
+.bru-rs.w { left:-3px; top:0; bottom:0; width:6px; cursor:ew-resize; }
+.bru-rs.n { top:-3px; left:12px; right:12px; height:6px; cursor:ns-resize; }
+.bru-rs.nw { top:-4px; left:-4px; width:14px; height:14px; cursor:nwse-resize; }
+.bru-rs.w::after { content:''; position:absolute; top:0; bottom:0; left:2px; width:2px; background:transparent; transition:background .15s; }
+.bru-rs.w:hover::after, body.bru-resizing .bru-rs.w::after { background:var(--accent); }
+.v-A .bru-rs.w { top:12px; bottom:12px; }
+.bru-panel.v-A, .bru-panel.v-C { overflow:visible; }
+.bru-panel.v-A > .bru-body, .bru-panel.v-C > .bru-body { overflow-y:auto; }
 .bru-menu { position:fixed; z-index:1002; min-width:230px; background:var(--surface-modal); border:.5px solid rgba(var(--tint),.14);
   border-radius:9px; box-shadow:var(--shadow-md); padding:4px; font:500 12px var(--font); color:var(--text-primary); }
 .bru-menu button { display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:transparent; border:0; color:inherit;
@@ -2297,7 +2310,8 @@ body.bru-docked .layout { margin-right:400px; transition: margin-right .18s ease
 .bru-cont { font:600 11px var(--font); color:var(--accent); cursor:pointer; text-align:right; margin-top:-4px; }
 .bru-err { color: var(--danger); }
 .bru-panel .bru-body ul { margin: 4px 0 6px; padding-left: 16px; }
-.bru-panel code { font-size: 11.5px; background: rgba(var(--tint), 0.08); border-radius: 4px; padding: 0 4px; }
+.bru-panel code { font-size: 11.5px; background: rgba(var(--tint), 0.08); border-radius: 4px; padding: 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bru-chip { max-width: 100%; }
 .bru-tb[hidden] { display: none; }
 /* The chosen style in Settings → Assistant reads as chosen, not as hovered. */
 .bru-sugg button.on { color: var(--text-primary); border-color: rgba(var(--accent-rgb), 0.7); background: rgba(var(--accent-rgb), 0.18); }

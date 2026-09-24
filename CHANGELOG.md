@@ -10,8 +10,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Brutus fits the way you work.** His chat wraps instead of scrolling sideways. Widen the
+  side panel from its left edge and enlarge the bubble from its top-left corner or edges,
+  up to half the window's width; the size is remembered. The bubble's header now has an
+  icon to move him to the side panel, as the side panel has one back to the bubble.
+
 ### Fixed
 
+- **Enter in Brutus's bubble or side panel only sends.** Sending re-rendered his panel and
+  dropped the focus, so the app's shortcuts took the same Enter as "open the selected
+  session" and warned it was already running.
 - **The save reminders reach the model.** The Stop hook's advice at 75% of context and
   after 30 minutes without a checkpoint was shown to you only: a Stop hook's message never
   reaches the model, so it never acted on it. A new hook, `ao_checkpoint_relay`, hands that

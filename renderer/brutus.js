@@ -25,11 +25,68 @@
   const kbd = () => `${window.modKeyLabel || '⌘'}K`
   const say = (text) => { state.log.push({ role: 'error', text }); saveLog(); render() }
 
+  // How big each home is, kept per viewer. Neither grows past half the window's width: he
+  // sits beside the work, he does not cover it.
+  const SIDE_KEY = 'csm.brutusSideW', BUBBLE_KEY = 'csm.brutusBubble'
+  const MIN_W = 320, MIN_H = 360
+  const maxW = () => Math.max(MIN_W, Math.floor(window.innerWidth * 0.5))
+  const maxH = () => Math.max(MIN_H, window.innerHeight - 100)
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)))
+  const size = {
+    side: Number(store.get(SIDE_KEY, 400)) || 400,
+    bubble: (() => { try { return JSON.parse(store.get(BUBBLE_KEY, 'null')) || { w: 380, h: 560 } } catch { return { w: 380, h: 560 } } })(),
+  }
+  function applySize(panel) {
+    if (!panel) return
+    if (panel.classList.contains('v-C')) {
+      const w = clamp(size.side, MIN_W, maxW())
+      panel.style.width = `${w}px`
+      document.documentElement.style.setProperty('--bru-side-w', `${w}px`)
+    } else if (panel.classList.contains('v-A')) {
+      panel.style.width = `${clamp(size.bubble.w, MIN_W, maxW())}px`
+      panel.style.height = `${clamp(size.bubble.h, MIN_H, maxH())}px`
+    }
+  }
+  // Drag a grip: the side panel grows leftwards; the bubble is anchored bottom-right, so
+  // its left edge sets the width and its top edge the height. The panel is re-rendered
+  // whenever his status refreshes, so the drag works on sizes, and applies them to
+  // whichever panel is on screen at each move, never to the element the drag began on.
+  const homePanel = () => document.querySelector('.bru-panel.v-A, .bru-panel.v-C')
+  function startResize(e, dir) {
+    const panel = homePanel()
+    if (!panel) return
+    e.preventDefault()
+    const side = panel.classList.contains('v-C')
+    const r = panel.getBoundingClientRect()
+    const x0 = e.clientX, y0 = e.clientY
+    document.body.classList.add('bru-resizing')
+    const move = (ev) => {
+      const dx = x0 - ev.clientX, dy = y0 - ev.clientY
+      if (side) size.side = clamp(r.width + dx, MIN_W, maxW())
+      else {
+        if (dir.includes('w')) size.bubble.w = clamp(r.width + dx, MIN_W, maxW())
+        if (dir.includes('n')) size.bubble.h = clamp(r.height + dy, MIN_H, maxH())
+      }
+      applySize(homePanel())
+    }
+    const up = () => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', up)
+      document.body.classList.remove('bru-resizing')
+      store.set(SIDE_KEY, String(size.side))
+      store.set(BUBBLE_KEY, JSON.stringify(size.bubble))
+      if (window.fitActiveTerminal) window.fitActiveTerminal()
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
+  }
+
   const I = {
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
     send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
     stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>',
+    side: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/></svg>',
     bubble: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="16" cy="16" r="2.6" fill="currentColor"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
   }
@@ -58,7 +115,7 @@
     if (palette && turns.length > 2) { lead = `<div class="bru-earlier">↑ ${turns.length - 2} earlier messages</div>`; turns = turns.slice(-2) }
     return lead + turns.map(turnHTML).join('') + liveHTML()
   }
-  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : ''}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
+  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
   const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his own memory</span></div></div>`
 
   function render() {
@@ -81,7 +138,11 @@
       fab.oncontextmenu = (e) => { e.preventDefault(); menu(e.clientX, e.clientY) }
       document.body.appendChild(fab)
     }
-    if (state.homeOpen) mount(`bru-panel ${state.home === 'side' ? 'v-C docked' : 'v-A'}`, head() + `<div class="bru-body">${bodyHTML(false)}</div>` + foot(false))
+    if (state.homeOpen) {
+      const grips = state.home === 'side' ? '<div class="bru-rs w"></div>' : '<div class="bru-rs nw"></div><div class="bru-rs n"></div><div class="bru-rs w"></div>'
+      const panel = mount(`bru-panel ${state.home === 'side' ? 'v-C docked' : 'v-A'}`, grips + head() + `<div class="bru-body">${bodyHTML(false)}</div>` + foot(false))
+      applySize(panel)
+    }
     if (state.palette) {
       const sc = document.createElement('div'); sc.className = 'bru-scrim'
       sc.onclick = () => { state.palette = false; render() }
@@ -113,6 +174,7 @@
     else if (k === 'reset') reset()
     else if (k === 'memory') openMemory()
     else if (k === 'to-bubble') setHome('bubble')
+    else if (k === 'to-side') setHome('side')
     else if (k === 'continue') { state.palette = false; state.homeOpen = true; render() }
   }
   async function send(text) {
@@ -202,6 +264,11 @@
     render()
   }
   document.getElementById('brutus-btn')?.addEventListener('click', () => { state.homeOpen = !state.homeOpen; render() })
+  // One delegated listener: grips come and go with every render.
+  document.addEventListener('mousedown', (e) => {
+    const g = e.target.closest && e.target.closest('.bru-rs')
+    if (g && e.button === 0) startResize(e, [...g.classList].find(c => c !== 'bru-rs') || '')
+  })
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); state.palette = !state.palette; render(); return }
     if (e.key !== 'Escape') return
