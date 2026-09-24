@@ -682,6 +682,8 @@ body.mode-board .panel-detail {
   z-index: 51;
 }
 body.mode-board .panel-detail.open { opacity: 1; pointer-events: auto; }
+/* The fixed usage bar (z 100) would cover the drawer's last 26px. */
+html.has-usage body.mode-board .panel-detail { height: calc(100% - 26px); }
 
 /* Drawer controls (detach / close) — only in cards mode */
 .drawer-ctl {
