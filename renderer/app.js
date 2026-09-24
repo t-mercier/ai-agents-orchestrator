@@ -1042,6 +1042,10 @@ document.addEventListener('keydown', (e) => {
   // An open dialog owns the keyboard: without this, Enter on its focused button also
   // resumed the list's selected session behind it, and the arrows moved the list.
   if (document.querySelector('dialog[open]')) return
+  // A key another part of the page already handled is not a shortcut. Brutus's input
+  // sends on Enter and re-renders, which drops the focus, so activeElement no longer
+  // says someone was typing: Enter then opened the selected session.
+  if (e.defaultPrevented) return
   // Leave modifier combos to the OS / the Cmd+K palette (added in P2).
   if (e.metaKey || e.ctrlKey || e.altKey) return
   const typing = isTypingTarget(document.activeElement)
