@@ -10,6 +10,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The bubble folds when you click elsewhere**, like a popover; the side panel stays
+  open. Its resize edges no longer draw the accent line only the side panel's edge needs.
+
 ### Fixed
 
 - **A session started from the home folder resumes in its space again.** 0.20.1 resumed a

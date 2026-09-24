@@ -2295,6 +2295,8 @@ body.bru-resizing .layout { transition: none; }
 .bru-rs.w::after { content:''; position:absolute; top:0; bottom:0; left:2px; width:2px; background:transparent; transition:background .15s; }
 .bru-rs.w:hover::after, body.bru-resizing .bru-rs.w::after { background:var(--accent); }
 .v-A .bru-rs.w { top:12px; bottom:12px; }
+/* The bubble resizes from three sides; a line on one of them only read as odd. */
+.v-A .bru-rs.w::after { display:none; }
 .bru-panel.v-A, .bru-panel.v-C { overflow:visible; }
 .bru-panel.v-A > .bru-body, .bru-panel.v-C > .bru-body { overflow-y:auto; }
 .bru-menu { position:fixed; z-index:1002; min-width:230px; background:var(--surface-modal); border:.5px solid rgba(var(--tint),.14);

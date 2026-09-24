@@ -72,3 +72,41 @@ test('the bubble wraps long lines, grows from its corner, and offers the side pa
   await expect(page.locator('.bru-panel.v-C')).toBeVisible()
   await expect(page.locator('body')).toHaveClass(/bru-docked/)
 })
+
+test('only the side panel draws an accent line on its resize edge', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  // Read with the resize in progress, which draws the line like a hover does and does
+  // not depend on the pointer landing on a 6px grip.
+  // The line fades in over .15s, so read it once the transition is done.
+  const lineOn = async (sel) => {
+    await page.evaluate(() => document.body.classList.add('bru-resizing'))
+    await page.waitForTimeout(250)
+    const on = await page.locator(sel).evaluate(el => {
+      const a = getComputedStyle(el, '::after')
+      return a.display !== 'none' && a.backgroundColor !== 'rgba(0, 0, 0, 0)' && a.backgroundColor !== 'transparent'
+    })
+    await page.evaluate(() => document.body.classList.remove('bru-resizing'))
+    return on
+  }
+  await page.evaluate(() => window.CSMBrutusUI.setHome('bubble'))
+  expect(await lineOn('.bru-panel.v-A .bru-rs.w'), 'no line on the bubble').toBe(false)
+  await page.evaluate(() => window.CSMBrutusUI.setHome('side'))
+  expect(await lineOn('.bru-panel.v-C .bru-rs.w'), 'the side panel keeps its line').toBe(true)
+})
+
+test('a click outside the bubble folds it; inside, it stays; the side panel stays either way', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.evaluate(() => window.CSMBrutusUI.setHome('bubble'))
+  await page.locator('.bru-panel.v-A .bru-body').click()
+  await expect(page.locator('.bru-panel.v-A')).toBeVisible()
+  await page.mouse.click(300, 450)
+  await expect(page.locator('.bru-panel.v-A')).toHaveCount(0)
+  await expect(page.locator('.bru-fab')).toBeVisible()
+  await page.evaluate(() => window.CSMBrutusUI.setHome('side'))
+  await page.mouse.click(300, 450)
+  await expect(page.locator('.bru-panel.v-C')).toBeVisible()
+})

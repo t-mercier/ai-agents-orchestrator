@@ -270,6 +270,16 @@
     render()
   }
   document.getElementById('brutus-btn')?.addEventListener('click', () => { state.homeOpen = !state.homeOpen; render() })
+  // The bubble folds on a click anywhere else, like a popover. The side panel stays:
+  // it is docked beside the work, not over it. The ⌘K palette has its own scrim.
+  document.addEventListener('mousedown', (e) => {
+    if (state.home !== 'bubble' || !state.homeOpen || state.palette) return
+    if (document.body.classList.contains('bru-resizing')) return
+    const t = e.target
+    if (!t.closest || t.closest('.bru-panel, .bru-fab, .bru-menu, dialog, .bru-toast')) return
+    state.homeOpen = false
+    render()
+  }, true)
   // One delegated listener: grips come and go with every render.
   document.addEventListener('mousedown', (e) => {
     const g = e.target.closest && e.target.closest('.bru-rs')
