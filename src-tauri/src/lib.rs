@@ -345,6 +345,37 @@ fn is_git_repo(dir: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Can `git checkout <branch> --` start the session on that branch in `repo`? A local
+/// branch, or a branch that exists only on a remote (checkout then creates the local
+/// tracking branch), is accepted. `origin/<b>` is refused: checking it out detaches HEAD.
+/// Any other revision `rev-parse` resolves (a tag, a commit) stays accepted, as before.
+fn branch_preflight(repo: &std::path::Path, branch: &str) -> Result<(), String> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git").arg("-C").arg(repo).args(args).output().ok()
+    };
+    let verifies = |rev: &str| {
+        git(&["rev-parse", "--verify", "--quiet", rev]).is_some_and(|o| o.status.success())
+    };
+    if verifies(&format!("refs/heads/{branch}")) {
+        return Ok(());
+    }
+    if verifies(&format!("refs/remotes/{branch}")) {
+        let local = branch.split_once('/').map_or(branch, |(_, rest)| rest);
+        return Err(format!(
+            "'{branch}' is a remote branch, which would start detached; use '{local}'"
+        ));
+    }
+    if verifies(branch) {
+        return Ok(());
+    }
+    let on_a_remote = git(&["for-each-ref", "--format=%(refname)", &format!("refs/remotes/*/{branch}")])
+        .is_some_and(|o| o.status.success() && !o.stdout.is_empty());
+    if on_a_remote {
+        return Ok(());
+    }
+    Err(format!("branch '{branch}' not found in that repo"))
+}
+
 /// Whether a requested Branch can be honoured, given what the form supplied. A branch
 /// needs somewhere to be checked out, and that somewhere has to be a git checkout —
 /// pure so the two refusals are tested without a repo on disk.
@@ -428,19 +459,7 @@ fn start_session(
         if !is_safe_branch(branch) {
             return Err("invalid branch name".into());
         }
-        // Confirm the branch resolves in that checkout (local or remote-tracking ref).
-        let abs = dir_abs.as_ref().unwrap();
-        let exists = std::process::Command::new("git")
-            .arg("-C")
-            .arg(abs)
-            .args(["rev-parse", "--verify", "--quiet"])
-            .arg(branch)
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if !exists {
-            return Err(format!("branch '{branch}' not found in that repo"));
-        }
+        branch_preflight(dir_abs.as_ref().unwrap(), branch)?;
     }
 
     // Optional reviewed-PR link (REVIEW sessions). Validated up front; appended as a
@@ -1556,7 +1575,7 @@ mod tests {
     }
 
     use super::{
-        atomic_write, branch_target_error, category_root_dir, is_git_repo, validate_launch_dir,
+        atomic_write, branch_preflight, branch_target_error, category_root_dir, is_git_repo, validate_launch_dir,
         is_deletable_session_dir, is_pr_url, is_safe_branch,
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
@@ -2072,5 +2091,34 @@ mod tests {
         let after = joined();
         // Bracketed, so a minute ticking over mid-test cannot fail it.
         assert!(stamp == before || stamp == after, "{stamp} vs {before}..{after}");
+    }
+
+    // `git checkout <b> --` creates a local branch from a remote-only one, so the form must
+    // accept it; `origin/<b>` would start the session on a detached HEAD, so it must not.
+    #[test]
+    fn branch_preflight_accepts_remote_only_branches_and_refuses_remote_prefixes() {
+        let tmp = std::env::temp_dir().join(format!("ao-branch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let git = |dir: &std::path::Path, args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .arg("-C").arg(dir)
+                .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=main"])
+                .args(args)
+                .output().unwrap().status.success();
+            assert!(ok, "git {args:?}");
+        };
+        let (upstream, clone) = (tmp.join("up"), tmp.join("clone"));
+        std::fs::create_dir_all(&upstream).unwrap();
+        git(&upstream, &["init", "-q"]);
+        git(&upstream, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git(&upstream, &["branch", "feat/x"]);
+        git(&tmp, &["clone", "-q", upstream.to_str().unwrap(), clone.to_str().unwrap()]);
+
+        assert!(branch_preflight(&clone, "main").is_ok()); // local
+        assert!(branch_preflight(&clone, "feat/x").is_ok()); // remote-only
+        assert!(branch_preflight(&clone, "origin/feat/x").is_err()); // would detach HEAD
+        assert!(branch_preflight(&clone, "feat/missing").is_err());
+        std::fs::remove_dir_all(&tmp).ok();
     }
 }
