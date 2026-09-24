@@ -20,17 +20,19 @@ patterns=(
 )
 
 # Only scan tracked files (ignores node_modules, dist, etc. via .gitignore).
-files=$(git ls-files)
+# Excluded: files whose tests hold fake tokens on purpose (secaudit detects them).
+exclude=(':(exclude)src-tauri/src/secaudit.rs')
 
 found=0
 for pat in "${patterns[@]}"; do
-  # grep over tracked files; -I skips binaries; -nE extended regex
-  if matches=$(printf '%s\n' "$files" | xargs -I{} grep -InE "$pat" {} 2>/dev/null); then
-    if [ -n "$matches" ]; then
-      echo "❌ Possible secret matching /$pat/:"
-      echo "$matches"
-      found=1
-    fi
+  # -I skips binaries. The pattern goes through -e because one starts with '-'. The exit
+  # status is ignored: grep and xargs return non-zero whenever a file does not match, so
+  # only the output tells a finding. /dev/null keeps grep off stdin when no file is listed.
+  matches=$(git ls-files -z -- . "${exclude[@]}" | xargs -0 grep -InE -e "$pat" -- /dev/null 2>/dev/null || true)
+  if [ -n "$matches" ]; then
+    echo "❌ Possible secret matching /$pat/:"
+    echo "$matches"
+    found=1
   fi
 done
 
