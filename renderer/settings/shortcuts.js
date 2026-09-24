@@ -4,6 +4,15 @@
   if (!modal) return
   const $ = (id) => document.getElementById(id)
 
+  // ⌘ exists only on macOS. brutus.js binds metaKey || ctrlKey, so elsewhere the key is
+  // Ctrl: rewrite every label marked data-mod-key, text and title alike.
+  const IS_MAC = /Mac/.test(navigator.platform || navigator.userAgent || '')
+  window.modKeyLabel = IS_MAC ? '⌘' : 'Ctrl+'
+  if (!IS_MAC) document.querySelectorAll('[data-mod-key]').forEach((el) => {
+    if (el.title) el.title = el.title.replace(/⌘/g, 'Ctrl+')
+    if (!el.children.length) el.textContent = el.textContent.replace(/⌘/g, 'Ctrl+')
+  })
+
   const escKey = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   const keyLabel = (k) => k === ' ' ? 'Space' : (k.length === 1 ? k.toUpperCase() : k)
 
