@@ -33,13 +33,26 @@ jobs:
         run: npm run test:ui
 
   rust:
-    name: Rust backend (clippy + tests)
-    runs-on: macos-14
+    name: Rust backend (clippy + tests, ${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux too: the cfg(not(target_os = "macos")) code is otherwise first compiled
+        # by release.yml, at tag time.
+        platform: [macos-14, ubuntu-22.04]
+    runs-on: ${{ matrix.platform }}
     defaults:
       run:
         working-directory: src-tauri
     steps:
       - uses: actions/checkout@v4
+      - name: Linux system deps (webkit2gtk, as in release.yml)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf \
+            libayatana-appindicator3-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
