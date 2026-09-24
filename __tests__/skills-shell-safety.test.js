@@ -144,3 +144,14 @@ describe.each(['start-session', 'import-session'])('%s category spelling', (skil
     expect(t).toMatch(/keep the configured spelling/)
   })
 })
+
+// +New's "Start in" folder was used to launch and then forgotten, so Resume went back to
+// the space root and the session worked in the wrong folder. The skill records it.
+describe('start-session --start-in', () => {
+  test('captures the double-quoted folder, strips it from NAME and writes start_in:', () => {
+    const t = read('start-session')
+    expect(t).toMatch(/--start-in "<dir>"/)
+    expect(t).toMatch(/strip[^\n]*--start-in/i)
+    expect(t).toMatch(/^start_in: <START_IN/m)
+  })
+})

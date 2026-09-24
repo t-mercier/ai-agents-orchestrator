@@ -341,13 +341,19 @@ pub fn resolve_slug_cwd(slug: &str) -> Option<String> {
             Some(b) => b,
             None => continue,
         };
-        if std::path::Path::new(base).join(slug).join("notes.md").is_file() {
-            return std::path::Path::new(base)
-                .parent()
-                .map(|p| p.to_string_lossy().into_owned());
+        let notes = std::path::Path::new(base).join(slug).join("notes.md");
+        if notes.is_file() {
+            return restart_dir(&notes, std::path::Path::new(base));
         }
     }
     None
+}
+
+/// Where a session restarted from its notes opens: the Start-in folder they record, else
+/// the space root (the category folder's parent).
+fn restart_dir(notes: &std::path::Path, base: &std::path::Path) -> Option<String> {
+    let start_in = fs::read_to_string(notes).ok().and_then(|c| parse_frontmatter(&c).get("start_in").cloned());
+    session_dir(start_in.as_deref(), None, base.parent().map(|p| p.to_string_lossy().into_owned()))
 }
 
 /// Claude Code prepends machine context to the first user turn — skill bodies,
@@ -609,6 +615,8 @@ struct NotesMeta {
     tickets: Vec<String>,
     ticket_states: Vec<String>,
     last_summary: Value,
+    // The Start-in folder +New recorded, when the session was not started at its space root.
+    start_in: Option<String>,
 }
 
 fn read_notes_meta(notes_path: &str) -> NotesMeta {
@@ -622,6 +630,7 @@ fn read_notes_meta(notes_path: &str) -> NotesMeta {
             // list parser already returns each one whole, so no map parser is needed.
             ticket_states: frontmatter_values(&c, "ticket_state", "ticket_states"),
             last_summary: last_history_summary(&c).map(Value::String).unwrap_or(Value::Null),
+            start_in: parse_frontmatter(&c).get("start_in").cloned().filter(|v| !v.trim().is_empty()),
         },
         Err(_) => NotesMeta::default(),
     }
@@ -722,6 +731,20 @@ fn space_root_for_notes(cfg: &Value, notes_path: &str) -> Option<String> {
         .find(|r| r.get("name").and_then(Value::as_str) == Some(root_name))
         .and_then(|r| r.get("path").and_then(Value::as_str))
         .map(String::from)
+}
+
+/// The folder a session works in, and so the one Resume, Restart and "open in terminal"
+/// cd into: the Start-in folder its notes.md records, else the folder its conversation
+/// started in, else its space root. A recorded folder that no longer exists is skipped,
+/// so a moved space still opens its sessions somewhere real.
+pub(crate) fn session_dir(start_in: Option<&str>, launch_cwd: Option<&str>, space_root: Option<String>) -> Option<String> {
+    let usable = |d: &&str| !d.trim().is_empty() && std::path::Path::new(d).is_dir();
+    start_in
+        .filter(usable)
+        .or(launch_cwd.filter(usable))
+        .map(String::from)
+        .or(space_root)
+        .or_else(|| launch_cwd.or(start_in).filter(|d| !d.trim().is_empty()).map(String::from))
 }
 
 /// PR links for a session: the explicit frontmatter list wins (a task can span several
@@ -845,7 +868,7 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
             None => NotesMeta::default(),
         };
         let NotesMeta {
-            goal, next_steps, pr_links: pr_links_fm, tickets: tickets_fm, ticket_states, last_summary
+            goal, next_steps, pr_links: pr_links_fm, tickets: tickets_fm, ticket_states, last_summary, start_in
         } = notes_meta;
         // The transcript records where the session actually works (it cd's into a
         // repo/worktree); the launch cwd is just where `claude` started. Use the
@@ -911,11 +934,13 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
             "name": entry_meta.get("name").and_then(Value::as_str).filter(|s| !s.is_empty())
                 .or_else(|| data.get("name").and_then(Value::as_str))
                 .unwrap_or(""),
-            // The space root, always — see space_root_for_notes. Falls back to the
-            // recorded directory for a session that belongs to no space.
-            "cwd": notes_path.as_deref()
-                .and_then(|p| space_root_for_notes(&cfg, p))
-                .unwrap_or_else(|| launch_cwd.to_string()),
+            // Where it was started — see session_dir. The pidfile's cwd is where the latest
+            // resume ran, so the transcript's first cwd stands for the launch folder.
+            "cwd": session_dir(
+                start_in.as_deref(),
+                tr.launch_cwd.as_deref().or(Some(launch_cwd)),
+                notes_path.as_deref().and_then(|p| space_root_for_notes(&cfg, p)),
+            ).unwrap_or_else(|| launch_cwd.to_string()),
             "pid": pid,
             "status": status,
             // The session this conversation was continued into, when it was. The notes still
@@ -1707,8 +1732,10 @@ fn scan_historical() -> Vec<Value> {
             // renderer takes the MORE RECENT of updatedAt vs lastActivityAt for the age
             // pill, so a same-day Pause doesn't display a days-old "last activity").
             let last_activity_at = tr.as_ref().and_then(|t| t.last_activity_at.clone());
-            let cwd = space_root_for_notes(&cfg, &notes_path)
-                .unwrap_or_else(|| tr.and_then(|t| t.launch_cwd).unwrap_or(root_dir));
+            let start_in = parse_frontmatter(&content).get("start_in").cloned();
+            let launch = tr.as_ref().and_then(|t| t.launch_cwd.clone());
+            let cwd = session_dir(start_in.as_deref(), launch.as_deref(), space_root_for_notes(&cfg, &notes_path))
+                .unwrap_or(root_dir);
 
             let last_summary = last_history_summary(&content);
 
@@ -1776,6 +1803,45 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::remember_identity;
+    use super::session_dir;
+
+    // Restart with the transcript gone read the space root only, so a session started in a
+    // chosen folder restarted outside it.
+    #[test]
+    fn a_restart_from_notes_goes_back_to_the_recorded_folder() {
+        let tmp = std::env::temp_dir().join(format!("ao-slug-dir-{}", std::process::id()));
+        let base = tmp.join("space").join("FEAT");
+        let chosen = tmp.join("code");
+        std::fs::create_dir_all(base.join("s1")).unwrap();
+        std::fs::create_dir_all(&chosen).unwrap();
+        let notes = base.join("s1").join("notes.md");
+        std::fs::write(&notes, format!("---\nname: s1\nstart_in: {}\n---\n", chosen.display())).unwrap();
+        assert_eq!(super::restart_dir(&notes, &base), Some(chosen.to_string_lossy().to_string()));
+        std::fs::write(&notes, "---\nname: s1\n---\n").unwrap();
+        assert_eq!(super::restart_dir(&notes, &base), Some(tmp.join("space").to_string_lossy().to_string()));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    // A session started with "Start in" works there; resuming it at the space root put
+    // its reads, edits and git in the wrong folder.
+    #[test]
+    fn a_session_resumes_where_it_was_started() {
+        let tmp = std::env::temp_dir().join(format!("ao-session-dir-{}", std::process::id()));
+        let chosen = tmp.join("repo");
+        std::fs::create_dir_all(&chosen).unwrap();
+        let chosen = chosen.to_string_lossy().to_string();
+        let gone = tmp.join("moved-away").to_string_lossy().to_string();
+        let space = Some("/w".to_string());
+        // The recorded Start-in folder wins.
+        assert_eq!(session_dir(Some(&chosen), None, space.clone()), Some(chosen.clone()));
+        // No record (an older session): the folder the conversation started in.
+        assert_eq!(session_dir(None, Some(&chosen), space.clone()), Some(chosen.clone()));
+        // A folder that no longer exists falls back to the space root, then the launch dir.
+        assert_eq!(session_dir(Some(&gone), Some(&gone), space.clone()), space);
+        assert_eq!(session_dir(Some(&gone), None, None), Some(gone.clone()));
+        assert_eq!(session_dir(None, None, None), None);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
     use std::collections::HashMap;
     #[test]
     fn a_pid_is_identified_once_while_it_lives_and_forgotten_when_it_dies() {

@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session resumes in the folder it was started in.** Resume, Restart and "open in
+  terminal" always went back to the space root, so a session started with **Start in**
+  somewhere else read, edited and ran git in the wrong folder. +New now records that
+  folder in the session's notes, and every way back in opens there; a session from
+  before this release goes back to the folder its conversation started in.
+
 ## [0.20.0-alpha] - 2026-09-24
 
 ### Added

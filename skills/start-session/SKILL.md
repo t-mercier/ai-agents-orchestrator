@@ -42,7 +42,8 @@ or empty/partial → prompt for missing fields with `AskUserQuestion`.
 - `TICKET` — keep only if it matches `^[A-Za-z][A-Za-z0-9]*-[0-9]+$` (e.g. `PROJ-1234`); uppercase it. Else empty.
 - `PR_LINK` — if a `--pr <url>` token appears (the dashboard's +New passes it for REVIEW sessions), capture `<url>` and **strip `--pr <url>` from the args** before computing NAME. Keep only a GitHub PR URL (`https://github.com/owner/repo/pull/N`); else empty. Default empty.
 - `ROOT` — if `--root "<space>"` appears (the dashboard's +New passes it when more than one space is configured, to pick which space a category that exists in several should land under), capture `<space>` and **strip the whole `--root "<space>"` from the args** before computing NAME. The name is double-quoted and may contain spaces (`--root "My Perso"` → `ROOT=My Perso`): take everything between the quotes, not the next word. Else empty.
-- `NAME` — anything else (after stripping any `--pr <url>` and `--root "<space>"`). If absent and a `TICKET` was given, ask for a short name (3–6 words).
+- `START_IN` — if `--start-in "<dir>"` appears (the dashboard's +New passes it when the user chose a folder to start in), capture the absolute folder between the quotes and **strip the whole `--start-in "<dir>"` from the args** before computing NAME. It is where this session works, so Resume goes back there. Else empty.
+- `NAME` — anything else (after stripping any `--pr <url>`, `--root "<space>"` and `--start-in "<dir>"`). If absent and a `TICKET` was given, ask for a short name (3–6 words).
 
 ## Step 2 — Compute slug + path
 
@@ -164,6 +165,7 @@ ticket: <TICKET or empty>
 name: <NAME>
 branch: <BRANCH or "to fill">
 pr_link: <PR_LINK or empty>
+start_in: <START_IN — omit the line when empty>
 started_at: <NOW>
 ---
 

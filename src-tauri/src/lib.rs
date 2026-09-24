@@ -239,6 +239,17 @@ pub(crate) fn validate_root_override(cfg: &serde_json::Value, want_root: &str) -
 /// The ` --root "<space>"` suffix of a skill prompt, or "" for no override. Double-quoted
 /// so a space name with a space in it stays one argument; validate_root_override has
 /// already refused every char that could break the quoting.
+/// ` --start-in "<folder>"` when +New was given a folder to start in, so /start-session
+/// records it in the frontmatter and Resume can go back there; empty for the space root.
+/// A folder whose name holds a double quote or a control character is not recorded: the
+/// skill could not read it back, and the conversation's first folder stands in for it.
+pub(crate) fn start_in_flag(dir: Option<&std::path::Path>) -> String {
+    match dir.map(|d| d.to_string_lossy().to_string()) {
+        Some(d) if !d.contains('"') && !d.chars().any(char::is_control) => format!(" --start-in \"{d}\""),
+        _ => String::new(),
+    }
+}
+
 pub(crate) fn root_flag(want_root: &str) -> String {
     if want_root.is_empty() {
         String::new()
@@ -469,7 +480,7 @@ fn start_session(
         return Err("not a GitHub PR URL (https://github.com/owner/repo/pull/N)".into());
     }
 
-    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>] [--root "<space>"]
+    // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>] [--root "<space>"] [--start-in "<dir>"]
     let parts: Vec<&str> = [category.as_str(), safe_ticket.as_str(), safe_name.as_str()]
         .into_iter()
         .filter(|p| !p.is_empty())
@@ -481,6 +492,7 @@ fn start_session(
     // Tell the skill which space to write under (only when one was chosen) — resolves
     // a category that exists in several spaces. Validated above, double-quoted here.
     prompt.push_str(&root_flag(want_root));
+    prompt.push_str(&start_in_flag(dir_abs.as_deref()));
     let model_flag = pty::model_flag();
     // Start NEW sessions in auto mode. /start-session must WRITE notes.md + register the
     // session in active-sessions.json — plan mode BLOCKS that (the skill aborts at its
@@ -1592,7 +1604,7 @@ mod tests {
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_frontmatter_links, slugify, stamp_archived, strip_archived, usage_view,
-        validate_root_override, root_flag, close_marker, closed_since, local_date_time, local_stamp_at, url_opener_args, path_opener_args,
+        validate_root_override, root_flag, start_in_flag, close_marker, closed_since, local_date_time, local_stamp_at, url_opener_args, path_opener_args,
     };
     use crate::reader;
     use serde_json::{json, Value};
@@ -1650,6 +1662,13 @@ mod tests {
             let cfg = json!({ "roots": [{ "name": name, "path": "/w" }] });
             assert!(validate_root_override(&cfg, name).is_err(), "{name:?} should be refused");
         }
+    }
+
+    #[test]
+    fn start_in_flag_records_a_chosen_folder_only() {
+        assert_eq!(start_in_flag(None), "");
+        assert_eq!(start_in_flag(Some(std::path::Path::new("/Users/me/code/nav sdk"))), " --start-in \"/Users/me/code/nav sdk\"");
+        assert_eq!(start_in_flag(Some(std::path::Path::new("/Users/me/a\"b"))), "");
     }
 
     #[test]
