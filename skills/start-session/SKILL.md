@@ -41,8 +41,8 @@ or empty/partial → prompt for missing fields with `AskUserQuestion`.
   categories, or tell the user to add it in Settings / via the +New dialog).
 - `TICKET` — keep only if it matches `^[A-Za-z][A-Za-z0-9]*-[0-9]+$` (e.g. `PROJ-1234`); uppercase it. Else empty.
 - `PR_LINK` — if a `--pr <url>` token appears (the dashboard's +New passes it for REVIEW sessions), capture `<url>` and **strip `--pr <url>` from the args** before computing NAME. Keep only a GitHub PR URL (`https://github.com/owner/repo/pull/N`); else empty. Default empty.
-- `ROOT` — if a `--root <space>` token appears (the dashboard's +New passes it when more than one space is configured, to pick which space a category that exists in several should land under), capture `<space>` and **strip `--root <space>` from the args** before computing NAME. Else empty.
-- `NAME` — anything else (after stripping any `--pr <url>` and `--root <space>`). If absent and a `TICKET` was given, ask for a short name (3–6 words).
+- `ROOT` — if `--root "<space>"` appears (the dashboard's +New passes it when more than one space is configured, to pick which space a category that exists in several should land under), capture `<space>` and **strip the whole `--root "<space>"` from the args** before computing NAME. The name is double-quoted and may contain spaces (`--root "My Perso"` → `ROOT=My Perso`): take everything between the quotes, not the next word. Else empty.
+- `NAME` — anything else (after stripping any `--pr <url>` and `--root "<space>"`). If absent and a `TICKET` was given, ask for a short name (3–6 words).
 
 ## Step 2 — Compute slug + path
 

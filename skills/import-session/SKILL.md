@@ -27,7 +27,7 @@ If plan mode is active (a `Plan mode is active` system reminder is present): sto
 
 ## Step 1 — Parse arguments + validate category
 
-Read `$ARGUMENTS`. Form: `<CATEGORY> [name] [--root <space>]`.
+Read `$ARGUMENTS`. Form: `<CATEGORY> [name] [--root "<space>"]`.
 
 - `CATEGORY` — uppercase it; it must be one of the configured categories:
   ```bash
@@ -37,8 +37,8 @@ Read `$ARGUMENTS`. Form: `<CATEGORY> [name] [--root <space>]`.
   > No categories configured. Add one in the app's **Settings** (or via **＋New**) first — a session needs a category folder to live under.
 
   If `CATEGORY` isn't in the list, prompt with `AskUserQuestion` (offer the listed categories).
-- `ROOT` — if a `--root <space>` token appears (the dashboard's Import passes it when more than one space is configured, to pick which space the imported session lands under), capture `<space>` as `ROOT` and **remove `--root <space>` from the args** before computing NAME. Else empty.
-- `NAME` — everything after the category (after stripping any `--root <space>`). If absent, derive a short slug from the session's first goal/topic, or ask with `AskUserQuestion` ("Short name for this session? 3–6 words").
+- `ROOT` — if `--root "<space>"` appears (the dashboard's Import passes it when more than one space is configured, to pick which space the imported session lands under), capture `<space>` as `ROOT` and **remove the whole `--root "<space>"` from the args** before computing NAME. The name is double-quoted and may contain spaces (`--root "My Perso"` → `ROOT=My Perso`): take everything between the quotes, not the next word. Else empty.
+- `NAME` — everything after the category (after stripping any `--root "<space>"`). If absent, derive a short slug from the session's first goal/topic, or ask with `AskUserQuestion` ("Short name for this session? 3–6 words").
 
 ## Step 2 — Resolve the CURRENT session ID
 

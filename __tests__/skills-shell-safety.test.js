@@ -122,3 +122,14 @@ test('restart-session checks out a branch pushed after the last fetch', () => {
   sh(script, path.join(dir, 'a'))
   expect(sh('git branch --show-current', path.join(dir, 'a')).trim()).toBe('feat')
 })
+
+// The dashboard passes `--root "<space name>"` double-quoted, and a space name may hold
+// spaces ("My Perso"). Reading `--root <space>` as one token kept "My" and left "Perso" in NAME.
+describe.each(['start-session', 'import-session'])('%s --root', (skill) => {
+  test('accepts a double-quoted space name that may contain spaces', () => {
+    const t = read(skill)
+    expect(t).toMatch(/--root "<space>"/)
+    expect(t).toMatch(/double-quoted[^\n]*spaces/i)
+    expect(t).not.toMatch(/--root <space>/)
+  })
+})
