@@ -1432,18 +1432,24 @@ async function boot() {
         return
       }
       if (containerKey === '__toplevel__' && kind === 'category') {
-        // Reorder the top-level category blocks and persist the new order to the config.
+        // Reorder the top-level category blocks. The config derives `order` from the
+        // `categories` array and ignores a written one, so the array itself is reordered.
         const cfg = window.CSM_CONFIG || {}
         const cats = (window._listRenderedCats || []).slice()
         const from = cats.indexOf(id)
         if (from < 0) return
         cats.splice(from, 1)
         cats.splice(index, 0, id)
-        const newCats = cats
         const configured = (cfg.order || window.CSMCategories.order())
-        const merged = [...newCats, ...configured.filter(c => !newCats.includes(c))]
-        if (JSON.stringify(merged) !== JSON.stringify(cfg.order || [])) {
-          const w = await window.api.setConfig({ ...cfg, order: merged })
+        const merged = [...cats, ...configured.filter(c => !cats.includes(c))]
+        const rank = (c) => { const i = merged.indexOf(c.name); return i < 0 ? Infinity : i }
+        const current = cfg.categories || []
+        const sorted = current.slice().sort((a, b) => rank(a) - rank(b))   // stable: same-name entries keep their order
+        if (sorted.some((c, i) => c !== current[i])) {
+          // Send only what the config file stores: scanDirs, order, colorMap and home are
+          // derived by get_config on every read and must not be written back.
+          const { scanDirs, order, colorMap, home, ...persisted } = cfg
+          const w = await window.api.setConfig({ ...persisted, categories: sorted })
           if (w && w.ok && window.reloadConfig) await window.reloadConfig()
         }
         fetchAndRender(false)
