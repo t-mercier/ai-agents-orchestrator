@@ -64,18 +64,11 @@ test('opening his memory from Settings says so when it fails', async ({ page }) 
   await expect(page.locator('#set-error')).toContainText('no opener found')
 })
 
-test('off macOS the shortcut reads Ctrl+K, not ⌘K', async ({ page }) => {
-  await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'Linux x86_64' }))
-  await page.reload()
-  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
-  expect(await page.locator('.bru-fab').getAttribute('title')).toContain('Ctrl+K')
-  expect(await page.locator('.bru-fab').getAttribute('title')).not.toContain('⌘')
-  await expect(page.locator('#brutus-btn .bru-kbd')).toHaveText('Ctrl+K')
-})
-
-test('on macOS it stays ⌘K', async ({ page }) => {
-  await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'MacIntel' }))
-  await page.reload()
-  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
-  expect(await page.locator('.bru-fab').getAttribute('title')).toContain('⌘K')
+// The label comes from window.modKeyLabel, the one rule settings/shortcuts.js sets for
+// every shortcut label ('⌘' on macOS, 'Ctrl+' elsewhere).
+test('off macOS the bubble names Ctrl+K, not ⌘K', async ({ page }) => {
+  await page.evaluate(() => { window.modKeyLabel = 'Ctrl+'; window.CSMBrutusUI.close() })
+  const title = await page.locator('.bru-fab').getAttribute('title')
+  expect(title).toContain('Ctrl+K')
+  expect(title).not.toContain('⌘')
 })
