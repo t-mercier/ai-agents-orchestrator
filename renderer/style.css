@@ -2280,7 +2280,6 @@ body.dl-drag-active .list-card { pointer-events: none; }
 @keyframes bru-drop { from{opacity:0; translate:0 -6px} to{opacity:1; translate:0 0} }
 @keyframes bru-slide { from{transform:translateX(24px); opacity:0} to{transform:none; opacity:1} }
 
-  font:600 11px var(--font); color:#ddd; background:rgba(20,20,22,.94); border:1px dashed rgba(255,255,255,.28); border-radius:10px; padding:7px 9px; }
 .v-C.docked { box-shadow:none; }
 body.bru-docked .layout { margin-right:400px; transition: margin-right .18s ease-out; }
 .bru-menu { position:fixed; z-index:1002; min-width:230px; background:var(--surface-modal); border:.5px solid rgba(var(--tint),.14);
