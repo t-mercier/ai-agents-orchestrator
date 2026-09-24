@@ -352,11 +352,11 @@ const ending = new Set()
 function closeTerminalPane() {
   const sid = activeTerminalSession
   if (!sid) { hideTerminalPane(); return }
-  // Its process has already exited, so no claude is left to write a wrap-up: the button
-  // dismisses the pane instead of waiting out the timeout below.
-  const shownEntry = terminals.get(sid)
-  if (shownEntry && shownEntry.dead) { killTerminal(sid); return }
   const notesPath = notesPathForKey(sid)
+  // Its process has already exited, so no claude is left to write a wrap-up. Stamp the
+  // close now instead of waiting out the timeout below; the session still lands in Closed.
+  const shownEntry = terminals.get(sid)
+  if (shownEntry && shownEntry.dead) return endNow(sid, notesPath, '[session already ended — closed from the dashboard]')
   // Second click while a wrap-up is in flight = end now (stamp a close, no AI summary).
   if (ending.has(sid)) { ending.delete(sid); endNow(sid, notesPath, '[ending now — closing without a summary]'); return }
   // Unmanaged session (no notes.md): nothing to wrap up — just kill.

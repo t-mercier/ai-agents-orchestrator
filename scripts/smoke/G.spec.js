@@ -99,7 +99,11 @@ test('a terminal whose claude exited while on screen is gone once hidden', async
     window.openTerminalPane('S2', '/tmp', '', '', '/m/notes.md')
     await new Promise(r => setTimeout(r, 50))
     exit('S2')
-    window.closeTerminalPane()
+    const closes = []
+    window.api.closeSession = async (n) => { closes.push(n); return { ok: true } }
+    // Resolved by sid, as for a resumed session. Set late: opening a pane refreshes the list.
+    window._lastSessions = [...(window._lastSessions || []), { sessionId: 'S2', notesPath: '/m/notes.md' }]
+    await window.closeTerminalPane()
     const afterClose = window.hasLiveTerminal('S2')
     const shown = window.getTerminalVisible()
 
@@ -112,13 +116,14 @@ test('a terminal whose claude exited while on screen is gone once hidden', async
     window.openTerminalPane('S3', '/tmp')
     await new Promise(r => setTimeout(r, 50))
     return { liveWhileShown, afterHide, afterClose, shown,
-      inputs, spawns, reopenedLive: window.hasLiveTerminal('S3') }
+      inputs, closes, spawns, reopenedLive: window.hasLiveTerminal('S3') }
   })
   expect(r.liveWhileShown).toBe(false)
   expect(r.afterHide).toEqual({ live: false, key: null })
   expect(r.afterClose).toBe(false)
   expect(r.shown).toBe(false)
   expect(r.inputs).toEqual([])
+  expect(r.closes, 'Close on an ended session still moves it to Closed').toEqual(['/m/notes.md'])
   expect(r.spawns).toEqual(['S3', 'S3'])
   expect(r.reopenedLive).toBe(true)
 })
