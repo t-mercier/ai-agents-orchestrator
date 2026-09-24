@@ -37,7 +37,7 @@ pub(crate) fn settings_json(resolved_dir: &Path) -> Value {
 /// repos, `.env` files included. Absolute (`//`) on purpose — measured: `Read(**/.env)` is
 /// relative to this settings file and blocked nothing, `Read(//**/.env)` blocked the read.
 /// Read rules cover Grep and Glob too.
-const SECRET_READS: [&str; 10] = [
+const SECRET_READS: [&str; 19] = [
     "Read(//**/.env)",
     "Read(//**/.env.*)",
     "Read(//**/.ssh/**)",
@@ -48,6 +48,15 @@ const SECRET_READS: [&str; 10] = [
     "Read(//**/*secret*.json)",
     "Read(//**/.netrc)",
     "Read(//**/.npmrc)",
+    "Read(//**/.envrc)",
+    "Read(//**/.git-credentials)",
+    "Read(//**/credentials*.json)",
+    "Read(//**/.aws/**)",
+    "Read(//**/*.p12)",
+    "Read(//**/*.jks)",
+    "Read(//**/*.keystore)",
+    "Read(//**/*.tfvars)",
+    "Read(//**/.pypirc)",
 ];
 
 /// What he may read: the category folders (where notes.md live) and the knowledge
@@ -215,6 +224,27 @@ mod tests {
             assert!(deny.iter().any(|d| d == must), "missing {must}: {deny:?}");
         }
         assert!(deny.iter().all(|d| d.starts_with("Read(//")), "a pattern without // matches nothing: {deny:?}");
+    }
+
+    // The review found these still readable inside a category folder.
+    #[test]
+    fn credentials_beyond_env_and_keys_are_denied_too() {
+        let deny = settings_json(Path::new("/x"))["permissions"]["deny"].clone();
+        let deny: Vec<String> = serde_json::from_value(deny).unwrap();
+        for must in ["Read(//**/.envrc)", "Read(//**/.git-credentials)", "Read(//**/credentials*.json)",
+                     "Read(//**/.aws/**)", "Read(//**/*.p12)", "Read(//**/*.jks)", "Read(//**/*.keystore)",
+                     "Read(//**/*.tfvars)", "Read(//**/.pypirc)"] {
+            assert!(deny.iter().any(|d| d == must), "missing {must}: {deny:?}");
+        }
+    }
+
+    // The probe replays these rules against the real claude; it must replay all of them.
+    #[test]
+    fn the_sandbox_probe_uses_the_same_deny_rules() {
+        let probe = include_str!("../../scripts/probe-brutus-sandbox.sh");
+        for rule in SECRET_READS {
+            assert!(probe.contains(&format!("\"{rule}\"")), "probe-brutus-sandbox.sh lacks {rule}");
+        }
     }
 
     #[test]
