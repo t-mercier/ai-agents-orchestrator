@@ -346,6 +346,7 @@ async function fetchAndRender(resort = false) {
         window.api.getSessions(),
         window.api.getHistoricalSessions('stale'),
       ])
+      noteLiveSessions(active)
       fetched = [...active, ...stale]
     } else {
       fetched = await window.api.getHistoricalSessions(tab)
@@ -406,12 +407,18 @@ window.openBoardDetail = (key) => {
 // The board is GLOBAL — it resolves placed sessions across all states. Cache the
 // combined lists by sessionKey so board cards render without per-card fetches.
 window._boardIndex = {}
+// Session ids with a live claude process, as of the last get_sessions() answer.
+let liveSessionIds = new Set()
+function noteLiveSessions(active) {
+  liveSessionIds = new Set((active || []).filter(s => s.state === 'active').map(s => s.sessionId).filter(Boolean))
+}
 async function buildBoardIndex() {
   try {
     const [running, hist] = await Promise.all([
       window.api.getSessions(),
       window.api.getHistoricalAll(),   // {stale, closed, archived} in one scan
     ])
+    noteLiveSessions(running)
     const idx = {}
     for (const s of [...running, ...hist.stale, ...hist.closed, ...hist.archived]) idx[sessionKey(s)] = s
     window._boardIndex = idx
@@ -647,14 +654,13 @@ window.onTerminalClosed = () => {
   renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, false)
 }
 
-// True if this session's claude process is currently live. On the Running tab
-// every listed session is alive (get_sessions filters by alive pid); live sessions
-// never appear on Closed/Archived. So "running tab + in the list" == live.
-// Live = an ACTIVE running process. The Running tab now also lists stale sessions
-// (dead pid, not /closed); those must NOT count as live or opening one wrongly warns
-// "already running".
-window.isSessionLive = (sid) =>
-  activeTab === 'running' && !!sid && sessions.some(s => s.sessionId === sid && s.state === 'active')
+// True if this session's claude process is currently live. Read from the last
+// get_sessions() answer, whichever view asked for it: the List's Running tab and the
+// Board both fetch it on every poll. It used to read the List's own array, which is
+// frozen on the Board and holds no running session on Closed/Archived, so a Board
+// Resume skipped the "already running" warning. Stale sessions (dead pid, not
+// /closed) are not live.
+window.isSessionLive = (sid) => !!sid && liveSessionIds.has(sid)
 
 window.sessionNameFor = (sid) => {
   const s = (window._lastSessions || []).find(x => x.sessionId === sid)
@@ -1086,6 +1092,7 @@ async function seedTabCounts() {
       window.api.getSessions(),
       window.api.getHistoricalAll(),   // {stale, closed, archived} in one scan
     ])
+    noteLiveSessions(active)
     window._tabCounts = {
       running: active.length + hist.stale.length,
       closed: hist.closed.length,
