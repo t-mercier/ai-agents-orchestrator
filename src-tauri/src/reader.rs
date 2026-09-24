@@ -737,13 +737,23 @@ fn space_root_for_notes(cfg: &Value, notes_path: &str) -> Option<String> {
 /// cd into: the Start-in folder its notes.md records, else the folder its conversation
 /// started in, else its space root. A recorded folder that no longer exists is skipped,
 /// so a moved space still opens its sessions somewhere real.
+///
+/// A conversation that started in a folder holding the space — the home folder, where
+/// sessions opened before they opened at the space root — did not choose it: the space
+/// root wins there, or every such session would resume in the home folder.
 pub(crate) fn session_dir(start_in: Option<&str>, launch_cwd: Option<&str>, space_root: Option<String>) -> Option<String> {
     let usable = |d: &&str| !d.trim().is_empty() && std::path::Path::new(d).is_dir();
+    let holds_space = |d: &&str| {
+        space_root.as_deref().is_some_and(|root| {
+            let (d, root) = (std::path::Path::new(d), std::path::Path::new(root));
+            root != d && root.starts_with(d)
+        })
+    };
     start_in
         .filter(usable)
-        .or(launch_cwd.filter(usable))
+        .or(launch_cwd.filter(usable).filter(|d| !holds_space(d)))
         .map(String::from)
-        .or(space_root)
+        .or(space_root.clone())
         .or_else(|| launch_cwd.or(start_in).filter(|d| !d.trim().is_empty()).map(String::from))
 }
 
@@ -1840,6 +1850,11 @@ mod tests {
         assert_eq!(session_dir(Some(&gone), Some(&gone), space.clone()), space);
         assert_eq!(session_dir(Some(&gone), None, None), Some(gone.clone()));
         assert_eq!(session_dir(None, None, None), None);
+        // A conversation started in a folder that holds the space (the home folder, from
+        // before sessions opened at the space root) is not a chosen place: the space wins.
+        let home = tmp.to_string_lossy().to_string();
+        let space_in_home = Some(tmp.join("repo").to_string_lossy().to_string());
+        assert_eq!(session_dir(None, Some(&home), space_in_home.clone()), space_in_home);
         let _ = std::fs::remove_dir_all(&tmp);
     }
     use std::collections::HashMap;

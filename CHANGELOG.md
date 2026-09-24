@@ -12,6 +12,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A session started from the home folder resumes in its space again.** 0.20.1 resumed a
+  session in the folder its conversation started in, and a session from before sessions
+  opened at the space root had started in the home folder, so it resumed there. A folder
+  that holds the space is no longer taken for a chosen one.
 - **Brutus's panel stays put when he answers.** Every re-render mounted a new panel, and
   each new one played its entrance again, so after an answer the panel slid in anew and
   whatever was under the pointer moved with it.
