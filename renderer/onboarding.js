@@ -31,6 +31,7 @@
   let running = false
   let advisorSet = ''
   let hooksAllWired = false
+  let catOwner = []           // category index -> index of its space row (step 1)
 
   // ── Step 1: what is on the machine ───────────────────────────────────────────────
 
@@ -248,6 +249,7 @@
   // ── Step 2: spaces, categories, colours ─────────────────────────────────────────
 
   function renderTaxonomy() {
+    catOwner = (cfg.categories || []).map((c) => ownerOf(c.root))
     const spaces = $('onb-spaces')
     spaces.textContent = ''
     ;(cfg.roots || []).forEach((r, i) => {
@@ -258,7 +260,13 @@
       name.value = r.name || ''
       name.placeholder = 'name — e.g. Work'
       name.maxLength = 30
-      name.addEventListener('input', () => { cfg.roots[i].name = name.value; validate() })
+      // A category names its space, so a rename carries the space's categories along;
+      // otherwise Next fails on a category that points at the old name.
+      name.addEventListener('input', () => {
+        cfg.roots[i].name = name.value
+        ;(cfg.categories || []).forEach((c, j) => { if (catOwner[j] === i) c.root = name.value })
+        renderCategories()
+      })
       const path = document.createElement('input')
       path.type = 'text'
       path.className = 'onb-grow'
@@ -315,7 +323,15 @@
       block.appendChild(vaultRow)
       spaces.appendChild(block)
     })
+    renderCategories()
+  }
 
+  // Which space row each category belongs to, by index. Kept across a rename rather than
+  // looked up by name, so two spaces that briefly share a name while one is being typed
+  // do not merge their categories.
+  function ownerOf(rootName) { return (cfg.roots || []).findIndex((r) => r.name === rootName) }
+
+  function renderCategories() {
     const cats = $('onb-cats')
     cats.textContent = ''
     ;(cfg.categories || []).forEach((c, i) => {
@@ -346,9 +362,15 @@
         opt.textContent = r.name || ''
         space.appendChild(opt)
       })
-      space.value = c.root || ((cfg.roots || [])[0] || {}).name || ''
+      const own = catOwner[i]
+      if (own >= 0 && own < space.options.length) space.selectedIndex = own
+      else { space.value = c.root || ((cfg.roots || [])[0] || {}).name || ''; catOwner[i] = space.selectedIndex }
       cfg.categories[i].root = space.value
-      space.addEventListener('change', () => { cfg.categories[i].root = space.value; validate() })
+      space.addEventListener('change', () => {
+        cfg.categories[i].root = space.value
+        catOwner[i] = space.selectedIndex
+        validate()
+      })
       row.appendChild(colour)
       row.appendChild(name)
       row.appendChild(space)
@@ -357,6 +379,25 @@
     })
     validate()
   }
+
+  // New rows start empty and focused; validate() says what is still missing.
+  function focusLast(host) {
+    const last = host.lastElementChild
+    const input = last && last.querySelector('input[type=text]')
+    if (input) input.focus()
+  }
+  $('onb-add-space').addEventListener('click', () => {
+    cfg.roots = cfg.roots || []
+    cfg.roots.push({ name: '', path: '' })
+    renderTaxonomy()
+    focusLast($('onb-spaces'))
+  })
+  $('onb-add-cat').addEventListener('click', () => {
+    cfg.categories = cfg.categories || []
+    cfg.categories.push({ name: '', color: window.CSM_COLORS.newCategory, root: ((cfg.roots || [])[0] || {}).name || '' })
+    renderTaxonomy()
+    focusLast($('onb-cats'))
+  })
 
   function removeBtn(onClick, enabled) {
     const b = document.createElement('button')
