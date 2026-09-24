@@ -6,12 +6,13 @@ const POLL_INTERVAL = 5000
 function keyOf(s) { return s.notesPath || s.sessionId || s.name || '' }
 
 async function findSession() {
-  // Try running first, then closed, then archived
+  // Running first, then stale, closed and archived. Stale belongs to the Running tab,
+  // as in the main window, but get_sessions does not return it.
   const running = await window.api.getSessions()
   let found = running.find(s => keyOf(s) === targetKey)
   if (found) return { session: found, tab: 'running' }
-  for (const tab of ['closed', 'archived']) {
-    const list = await window.api.getHistoricalSessions(tab)
+  for (const [status, tab] of [['stale', 'running'], ['closed', 'closed'], ['archived', 'archived']]) {
+    const list = (await window.api.getHistoricalSessions(status)) || []
     found = list.find(s => keyOf(s) === targetKey)
     if (found) return { session: found, tab }
   }

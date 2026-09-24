@@ -39,3 +39,12 @@ test('the detached window renders the session it was opened for', async ({ page 
   await expect(page.locator('#detail-info-pane')).toContainText('Resume')
   expect(errors).toEqual([])
 })
+
+test('the detached window finds a stale session', async ({ page }) => {
+  // A stale session (terminal gone, not closed) is not in get_sessions; the window
+  // searched active, closed and archived only, and stayed on "Loading…".
+  const errors = await openDetached(page, { active: [], stale: [{ ...DETACHED, state: 'stale' }] })
+  await expect(page.locator('#win-title')).toHaveText(DETACHED.name)
+  await expect(page.locator('#detail-info-pane')).not.toContainText('Loading…')
+  expect(errors).toEqual([])
+})
