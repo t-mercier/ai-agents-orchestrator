@@ -22,6 +22,15 @@ async function boot(page, home) {
 const noSideScroll = (page) => page.locator('.bru-panel:not(.v-B) .bru-body')
   .evaluate(b => b.scrollWidth <= b.clientWidth + 1)
 
+test('an answer does not replay the panel\'s entrance animation', async ({ page }) => {
+  // Every render mounts a new panel, and each new panel slid in again: after each answer
+  // the whole panel moved 24px and back, and whatever was under the pointer moved with it.
+  await boot(page, 'side')
+  await page.evaluate(() => window.CSMBrutusUI.refresh())
+  const running = await page.locator('.bru-panel.v-C').evaluate(el => el.getAnimations().length)
+  expect(running).toBe(0)
+})
+
 test('the side panel wraps long lines and widens from its edge, to half the window', async ({ page }) => {
   await boot(page, 'side')
   expect(await noSideScroll(page), 'no horizontal scroll in the side panel').toBe(true)

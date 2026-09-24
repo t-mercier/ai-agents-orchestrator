@@ -10,6 +10,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Brutus's panel stays put when he answers.** Every re-render mounted a new panel, and
+  each new one played its entrance again, so after an answer the panel slid in anew and
+  whatever was under the pointer moved with it.
+
 ## [0.20.1-alpha] - 2026-09-24
 
 ### Changed

@@ -119,6 +119,10 @@
   const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his own memory</span></div></div>`
 
   function render() {
+    // A panel already on screen is re-rendered in place: only a panel that is opening
+    // plays its entrance, or every answer would slide it in again.
+    const wasHome = !!document.querySelector('.bru-panel.v-A, .bru-panel.v-C')
+    const wasPalette = !!document.querySelector('.bru-panel.v-B')
     document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab').forEach(e => e.remove())
     const tb = document.getElementById('brutus-btn')
     if (tb) {
@@ -142,12 +146,14 @@
       const grips = state.home === 'side' ? '<div class="bru-rs w"></div>' : '<div class="bru-rs nw"></div><div class="bru-rs n"></div><div class="bru-rs w"></div>'
       const panel = mount(`bru-panel ${state.home === 'side' ? 'v-C docked' : 'v-A'}`, grips + head() + `<div class="bru-body">${bodyHTML(false)}</div>` + foot(false))
       applySize(panel)
+      if (wasHome) panel.classList.add('bru-still')
     }
     if (state.palette) {
       const sc = document.createElement('div'); sc.className = 'bru-scrim'
       sc.onclick = () => { state.palette = false; render() }
       document.body.appendChild(sc)
       const p = mount('bru-panel v-B', foot(true) + `<div class="bru-body">${bodyHTML(true)}${state.log.length ? `<div class="bru-cont" data-bru="continue">Continue in the ${state.home === 'side' ? 'side panel' : 'bubble'} ↗</div>` : ''}</div>`)
+      if (wasPalette) p.classList.add('bru-still')
       p.querySelector('input')?.focus()
     }
   }
