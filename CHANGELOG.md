@@ -10,6 +10,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **A session opens at its space root unless you chose a Start-in folder.** A session
+  with no Start-in folder recorded used to resume in the folder its conversation started
+  in, so one begun in another space's folder resumed there. The folder a conversation
+  started in is no longer taken for a choice.
+
 ## [0.20.2-alpha] - 2026-09-24
 
 ### Changed
