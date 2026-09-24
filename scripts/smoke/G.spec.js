@@ -145,3 +145,42 @@ test('a pinned skill on a session with a terminal keyed by notes.md is typed int
   expect(r.hasTerminal).toBe(true)
   expect(r.calls).toEqual([['pty', r.key, '/review\r']])
 })
+
+test('Close picked from the menu cannot be started twice', async ({ page }) => {
+  // The menu row is detached by the time the confirm resolves, so the busy state landed
+  // on a removed element and the card's own Close button stayed live.
+  await boot(page)
+  await page.evaluate(() => {
+    window.__wraps = 0
+    window.confirmAction = async () => 'confirm'
+    window.api.wrapSession = () => { window.__wraps++; return new Promise(() => {}) }
+  })
+  await page.locator('.tab-btn[data-tab="running"]').click()
+  const card = page.locator('#panel-list .list-card[data-key*="legacy-export"]')
+  await card.click({ button: 'right' })
+  await page.locator('#session-menu .board-menu-item', { hasText: 'Close session' }).click()
+  await expect.poll(() => page.evaluate(() => window.__wraps)).toBe(1)
+  const btn = card.locator('[data-close-notes]').first()
+  await expect(btn).toBeDisabled()
+  await btn.evaluate((b) => { b.disabled = false; b.click() })   // even a forced second click
+  await page.waitForTimeout(100)
+  expect(await page.evaluate(() => window.__wraps)).toBe(1)
+})
+
+test('Sync picked from the menu cannot be started twice', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => {
+    window.__syncs = 0
+    window.api.syncRefs = () => { window.__syncs++; return new Promise(() => {}) }
+  })
+  await page.locator('.tab-btn[data-tab="running"]').click()
+  const card = page.locator('#panel-list .list-card[data-key*="legacy-export"]')
+  await card.click({ button: 'right' })
+  await page.locator('#session-menu .board-menu-item', { hasText: 'Sync tickets' }).click()
+  await expect.poll(() => page.evaluate(() => window.__syncs)).toBe(1)
+  await card.click()
+  const btn = page.locator('#panel-detail [data-sync-prs]').first()
+  await btn.evaluate((b) => { b.disabled = false; b.click() })
+  await page.waitForTimeout(100)
+  expect(await page.evaluate(() => window.__syncs)).toBe(1)
+})

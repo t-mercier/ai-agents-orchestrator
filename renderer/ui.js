@@ -166,7 +166,8 @@ function syncBtn(s) {
   // now able to discover.
   const prs = prLinksOf(s)
   if (!prs.length && !ticketsOf(s).length) return ''
-  return `<button class="act" data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}" aria-label="Sync tickets and pull requests"
+  const busy = s.notesPath && notesInFlight.has(s.notesPath) ? ' disabled' : ''
+  return `<button class="act" data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}"${busy} aria-label="Sync tickets and pull requests"
            data-tip="Refresh ticket statuses and pull requests — the only network calls this app makes">${svgIcon('<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64L3 16"/><path d="M3 21v-5h5"/>')}</button>`
 }
 
@@ -259,7 +260,21 @@ function pinBtn(s) {
 // without a transcript there is nothing to summarise, so the plain marker is all we can do.
 function closeAttrs(s) {
   return `data-close-notes="${escapeHtml(s.notesPath)}" data-close-name="${escapeHtml(s.name || '')}"` +
-    ` data-close-sid="${escapeHtml(canResume(s) ? (s.sessionId || '') : '')}" data-close-cwd="${escapeHtml(s.cwd || '')}"`
+    ` data-close-sid="${escapeHtml(canResume(s) ? (s.sessionId || '') : '')}" data-close-cwd="${escapeHtml(s.cwd || '')}"` +
+    (notesInFlight.has(s.notesPath) ? ' disabled' : '')
+}
+
+// Close and Sync each run a headless claude that rewrites the session's notes.md, and
+// either can be started from the card, the detail panel or the right-click menu. One
+// run per notes.md at a time: the menu row is gone by the time a Close is confirmed,
+// so disabling the clicked element alone left the other buttons live.
+const notesInFlight = new Set()
+function markNotesBusy(notes, attr, on) {
+  document.querySelectorAll('[data-close-notes], [data-sync-notes]').forEach(el => {
+    if (el.dataset.closeNotes !== notes && el.dataset.syncNotes !== notes) return
+    el.disabled = on
+    if (el.hasAttribute(attr)) el.classList.toggle('busy', on)
+  })
 }
 
 // ── When each action applies ──
@@ -1973,6 +1988,8 @@ function installDelegatedHandlers() {
       e.stopPropagation()
       const notes = sync.dataset.syncNotes || ''
       const cwd = sync.dataset.syncCwd || ''
+      if (notes && notesInFlight.has(notes)) return
+      if (notes) { notesInFlight.add(notes); markNotesBusy(notes, 'data-sync-notes', true) }
       sync.disabled = true
       sync.classList.add('busy')
       const fail = (res) => {
@@ -1985,6 +2002,7 @@ function installDelegatedHandlers() {
       const done = () => {
         sync.disabled = false
         sync.classList.remove('busy')
+        if (notes) { notesInFlight.delete(notes); markNotesBusy(notes, 'data-sync-notes', false) }
         if (window.refreshSessions) window.refreshSessions()
       }
       // Two passes, in order. First the agent realigns the frontmatter — ticket statuses
@@ -2021,6 +2039,7 @@ function installDelegatedHandlers() {
       const name = close.dataset.closeName || 'this session'
       const sid = close.dataset.closeSid || ''
       const cwd = close.dataset.closeCwd || ''
+      if (notesInFlight.has(notes)) return
       const canWrap = !!(sid && cwd && window.api.wrapSession)
       if (window.confirmAction && window.api.closeSession) {
         window.confirmAction({
@@ -2030,14 +2049,14 @@ function installDelegatedHandlers() {
             : `Close "${name}"? Its transcript is gone, so it moves to the Closed tab without a summary.`,
           confirmLabel: 'Close',
         }).then(choice => {
-          if (choice !== 'confirm') return
-          // The wrap is slow: disable the button so a second click can't start a
-          // second headless resume of the same session.
-          close.disabled = true
-          close.classList.add('busy')
+          // A second Close confirmed while the first dialog was open must not start
+          // a second headless resume of the same session.
+          if (choice !== 'confirm' || notesInFlight.has(notes)) return
+          notesInFlight.add(notes)
+          markNotesBusy(notes, 'data-close-notes', true)
           const done = (res) => {
-            close.disabled = false
-            close.classList.remove('busy')
+            notesInFlight.delete(notes)
+            markNotesBusy(notes, 'data-close-notes', false)
             if (res && res.ok) {
               if (window.refreshSessions) window.refreshSessions()
             } else if (window.confirmAction) {
