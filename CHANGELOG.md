@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.0-alpha] - 2026-09-24
+
 ### Added
 
 - **Brutus, the assistant you ask about all your sessions.** A bubble in the corner (or a
