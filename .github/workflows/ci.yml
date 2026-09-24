@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:   # run on any branch by hand: gh workflow run ci.yml --ref <branch>
 
 jobs:
   js:
