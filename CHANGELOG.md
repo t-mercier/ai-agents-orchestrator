@@ -39,6 +39,67 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   the config the app reads back never carried them, and Settings → Save rebuilt the file
   without them.
 
+A review of the whole codebase, every file read in full, found the defects below. Each fix
+has a test that failed first.
+
+- **The CI secret scan reports what it finds.** It ran grep once per file, and the first
+  file with no match made the whole check pass, so it never reported anything; the
+  private-key pattern was never searched at all. The secaudit.rs test fixtures are
+  excluded by name.
+- **A dashboard Close keeps the session's summary.** The "closed today" check compared
+  `2026-09-24 16:05` with `2026-09-24` and never matched, so every Close appended a second
+  "ended without a summary" marker that replaced the real summary on the card. A session
+  closed again later the same day still lands Closed, and End no longer kills a wrap-up
+  in progress because of this morning's close.
+- **The detached session window renders.** It stayed on "Loading…" for every session
+  since 0.19.0, missing two scripts, and never found a stale session.
+- **Settings keep what you set.** Saving no longer resets the terminal app to System
+  default, closing Settings mid-remap no longer captures the next key you type, and Cancel
+  puts Brutus back where he was.
+- **Hooks checkpoint after a compaction.** The Stop hook advises at 75% and requires a
+  save at 90% on every climb, not only the first; the post-compaction reminder is judged
+  from the last real save, not from the line the PreCompact hook writes; the injected text
+  names the real thresholds.
+- **Session skills handle real names.** A name or path with an apostrophe no longer
+  crashes /start-session, /import-session, /restart-session or /archive-session halfway.
+  A category name used in two spaces now resolves to the session's own space for the
+  knowledge vault (/learn, /save-session, /close-session, /route) and for the relink
+  fallback. /sync-refs no longer attaches every pull request of a repository to a session
+  with no ticket, /wrap-session looks up the pull request of the session's own branch, and
+  /restart-session fetches before checking out a branch pushed elsewhere.
+- **Spaces with any name.** A space whose name has a space or an accent can start and
+  import sessions; the name reaches the skill quoted. A lowercase category added in
+  Settings can be imported into.
+- **Drag and drop lands where you drop.** In the List, the first drag in a category no
+  longer puts the card back at the top, and a dragged category block keeps its place. On
+  the Board, a drop while a search or filter is active lands between the cards you see,
+  and "+ note" during a search edits the new note instead of an existing one.
+- **Terminals.** A paste into a terminal that is not reading no longer freezes the whole
+  window. A terminal whose claude exited is dropped once hidden, so Resume starts claude
+  again. A pinned skill goes to the session's open terminal instead of starting a second
+  headless run of the same conversation. A failed Resume in iTerm or Terminal reports its
+  error. ⌘-clicking a printed file or app bundle reveals it in its folder instead of
+  opening it.
+- **One run per action.** Close and Sync picked from a session's menu can no longer be
+  started twice. Resuming a running session from the Board warns that it is already
+  running. Keyboard shortcuts no longer act behind an open dialog.
+- **Doctor and the security audit.** A pid reused by another process no longer reads as
+  a running session. The audit also reads settings.local.json and project MCP servers,
+  and reports a settings file that does not parse. Wiring hooks refuses an unparseable
+  settings.json instead of replacing it with a hooks-only file.
+- **Config.** Derived fields (scan dirs, colour map, order) are no longer written back
+  into config.json, and a v1 config with custom-named spaces migrates onto them.
+- **First-run setup.** "+ Add a space" and "+ Add a category" add rows, renaming a space
+  keeps its categories, Import after going Back imports the newly ticked sessions, and
+  "+ New" accepts a branch that exists only on the remote.
+- **Linux.** Links and folders open again (xdg-open rejects `--`), the Brutus shortcut
+  reads Ctrl+K, and CI now builds and tests the Rust backend on ubuntu-22.04 and runs the
+  Python hook tests.
+- **Smaller fixes.** A completed step keeps words that contain "done"; Clean-up reports a
+  failed archive as failed; a statusline given as a command line runs; dialog buttons
+  show a keyboard focus ring; the Board drawer ends above the usage bar; the docked Brutus
+  panel lost its shadow again.
+
 ## [0.19.4-alpha] - 2026-09-23
 
 ### Fixed
