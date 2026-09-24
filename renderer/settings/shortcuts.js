@@ -38,5 +38,7 @@
     if (e.key === 'Escape') { capturingKey = null; renderKeys(); return }
     if (e.key.length === 1) { if (window.setKey) window.setKey(capturingKey, e.key); capturingKey = null; renderKeys() }
   }, true)
+  // A remap armed when the dialog closes would take the next key typed anywhere.
+  modal.addEventListener('close', () => { capturingKey = null })
   if ($('set-keys-reset')) $('set-keys-reset').addEventListener('click', () => { if (window.resetKeys) window.resetKeys(); renderKeys() })
 })()

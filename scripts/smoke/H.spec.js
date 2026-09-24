@@ -60,3 +60,33 @@ test.describe('board', () => {
     expect(st.find(n => n.id === 'n-2').text).toBe('Blocked on design sign-off for the summary column.')
   })
 })
+
+test.describe('settings', () => {
+  test('saving Settings keeps the chosen terminal app', async ({ page }) => {
+    await page.evaluate(() => { window.CSM_CONFIG.terminalApp = 'iterm' })
+    await page.locator('#settings-btn').click()
+    await expect(page.locator('#set-terminal')).toHaveValue('iterm')
+    await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
+    await expect.poll(() => page.evaluate(() => window.__LAST_SET_CONFIG__ && window.__LAST_SET_CONFIG__.terminalApp))
+      .toBe('iterm')
+  })
+
+  test('closing Settings mid-remap does not swallow the next key', async ({ page }) => {
+    await page.locator('#settings-btn').click()
+    await page.locator('[data-settings-tab="shortcuts"]').click()
+    const cap = page.locator('#set-keys .key-cap').first()
+    const action = await cap.getAttribute('data-key-action')
+    const before = await page.evaluate((a) => window.getKeys()[a], action)
+    await cap.click()
+    // <dialog> fires 'close' as a queued task, after close() returns; a user's next key
+    // always comes later than that, so wait for it rather than race it.
+    await page.evaluate(() => {
+      const m = document.getElementById('settings-modal')
+      window.__settingsClosed = new Promise(r => m.addEventListener('close', r, { once: true }))
+    })
+    await page.locator('#set-cancel').click()
+    await page.evaluate(() => window.__settingsClosed)
+    await page.keyboard.press('q')
+    expect(await page.evaluate((a) => window.getKeys()[a], action)).toBe(before)
+  })
+})
