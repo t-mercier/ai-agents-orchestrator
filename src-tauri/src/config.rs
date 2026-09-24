@@ -320,13 +320,27 @@ fn validate(c: &Value) -> Result<(), String> {
 /// Validate then atomically write the user config (shared atomic_write: tmp +
 /// fsync + rename).
 fn save(cfg: &Value) -> Result<(), String> {
+    save_to(&config_path(), cfg)
+}
+
+/// Keys `derive()` computes rather than reads. Callers hand `set_config` the derived
+/// config back, so these are dropped before the write: rebuilt on every load, a copy on
+/// disk is only ever stale.
+const DERIVED_KEYS: [&str; 4] = ["scanDirs", "order", "colorMap", "home"];
+
+fn save_to(path: &Path, cfg: &Value) -> Result<(), String> {
     validate(cfg)?;
-    let path = config_path();
+    let mut cfg = cfg.clone();
+    if let Some(obj) = cfg.as_object_mut() {
+        for key in DERIVED_KEYS {
+            obj.remove(key);
+        }
+    }
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let body = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    crate::atomic_write(&path, &body)
+    let body = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    crate::atomic_write(path, &body)
 }
 
 /// Migrate v1 config to v2 on disk (idempotent, run-once at startup).
@@ -576,7 +590,9 @@ pub fn set_config(cfg: Value) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clean_assistant_name, default_config, derive, migrate_v1_value, onboarding_needed, validate};
+    use super::{
+        clean_assistant_name, default_config, derive, migrate_v1_value, onboarding_needed, save_to, validate,
+    };
     use serde_json::json;
 
     // The in-app skills installer seeds default_config() via save() → validate() on first
@@ -849,6 +865,26 @@ mod tests {
         assert_eq!(v2["categories"][0]["root"], "Job");
         assert_eq!(v2["categories"][1]["root"], "Home");
         assert!(validate(&v2).is_ok(), "{:?}", validate(&v2));
+    }
+
+    // Settings and the board send back the config they were given, which is the DERIVED
+    // one. What reaches the file must still be only what the user sets: the computed keys
+    // are rebuilt on every load, and a stale copy on disk only misleads.
+    #[test]
+    fn saving_a_derived_config_writes_only_persisted_keys() {
+        let dir = std::env::temp_dir().join(format!("ao-config-save-{}", std::process::id()));
+        let path = dir.join("config.json");
+        let derived = derive(&default_config());
+        let saved = save_to(&path, &derived);
+        let on_disk: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_default()).unwrap_or_default();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(saved.is_ok(), "{saved:?}");
+        for key in ["scanDirs", "order", "colorMap", "home"] {
+            assert!(on_disk.get(key).is_none(), "{key} was written to disk");
+        }
+        assert_eq!(derive(&on_disk), derived);
     }
 
     #[test]
