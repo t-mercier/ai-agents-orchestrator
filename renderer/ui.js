@@ -55,13 +55,17 @@ function sessionByKey(key) {
 }
 
 
-// Manual order + groups + drag apply only on the Running tab AND when NOT searching.
-// Search is a find mode, not an organize mode: applying the model during a search would
-// render groups with only their matching members (often none → an empty group title) and
-// make drops confusing. Search → plain filtered list; organize with the search cleared.
+// Manual order + groups + drag apply on Running, Closed and Archived, each tab in its own
+// buckets (CSMListOrg.bucketName), and never during a search. Search is a find mode, not
+// an organize mode: applying the model during a search would render groups with only
+// their matching members (often none → an empty group title) and make drops confusing.
 function listReorgActive() {
   const q = (typeof searchQuery === 'string' ? searchQuery : '').trim()
-  return activeTab === 'running' && !q
+  return ['running', 'closed', 'archived'].includes(activeTab) && !q
+}
+// The bucket a category's order and groups live under on the current tab.
+function orgBucket(category, space) {
+  return window.CSMListOrg.bucketName(activeTab, space, category, !!(window.multiSpace && window.multiSpace()))
 }
 
 // Display title with the redundant leading "<CATEGORY> | " prefix stripped — the
@@ -413,31 +417,31 @@ function groupBlock(category, g, byKey, selectedKey, changedKeys) {
     </div>`
 }
 
-function renderCategoryGroup(category, sessions, selectedKey, changedKeys) {
+function renderCategoryGroup(category, sessions, selectedKey, changedKeys, space) {
   const collapsed = collapsedCategories.has(category)
   const active = hasBusy(sessions)
-  // The reorg model (manual order + groups + drag) is a RUNNING-tab feature. On
-  // Closed/Archived the same category name holds DIFFERENT sessions (other keys), so
-  // applying the model would render empty groups (title only, nothing inside). Those
-  // tabs render plainly — no model, no groups, no drag.
+  // Each tab, and each space when there are several, keeps its own bucket: the same
+  // category name holds different sessions there, and one shared bucket rendered the
+  // other's groups as empty headers.
   let body, dragAttrs = '', dropAttrs = ''
   if (listReorgActive()) {
+    const bucket = orgBucket(category, space)
     const st = window.CSMListOrg.load()
     const byKey = new Map(sessions.map(s => [sessionKey(s), s]))
     const liveKeys = sessions.slice().sort((a, b) => rankOf(a) - rankOf(b)).map(sessionKey)  // activity fallback order
     // The drop handler folds this exact order into the model, so a drop lands where it shows.
-    ;(window._listLiveKeys = window._listLiveKeys || {})[category] = liveKeys
-    const items = window.CSMListOrg.orderedItems(st, category, liveKeys)
+    ;(window._listLiveKeys = window._listLiveKeys || {})[bucket] = liveKeys
+    const items = window.CSMListOrg.orderedItems(st, bucket, liveKeys)
     body = items.map(it => {
       if (it.kind === 'session') {
         const s = byKey.get(it.key); if (!s) return ''
         return `<div class="list-drag-item" data-drag-kind="session" data-drag-id="${escapeHtml(it.key)}">${renderListCard(s, selectedKey, changedKeys.has(it.key))}</div>`
       }
-      if (it.kind === 'group') return groupBlock(category, it, byKey, selectedKey, changedKeys)
+      if (it.kind === 'group') return groupBlock(bucket, it, byKey, selectedKey, changedKeys)
       return ''
     }).join('')
     dragAttrs = ` data-drag-kind="category" data-drag-id="${escapeHtml(category)}"`
-    dropAttrs = ` data-drop-key="cat:${escapeHtml(category)}" data-drop-accept="session"`
+    dropAttrs = ` data-drop-key="cat:${escapeHtml(bucket)}" data-drop-accept="session"`
   } else {
     body = sessions.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')
   }
@@ -464,7 +468,7 @@ function renderSpaceSection(space, sessions, selectedKey, changedKeys) {
   const collapsed = collapsedSpaces.has(space)
   const active = hasBusy(sessions)
   const inner = groupByCategory(sessions)
-    .map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys))
+    .map(([cat, sess]) => renderCategoryGroup(cat, sess, selectedKey, changedKeys, space))
     .join('')
   return `
     <div class="space-group">
@@ -575,7 +579,7 @@ window.PINNED_CAT = PINNED_CAT
 // the filled bookmark is the marker, and a heading here would re-create the section
 // that floating the pins was meant to avoid.
 function renderPinnedBlock(pinned, selectedKey, changedKeys) {
-  if (!listReorgActive()) {
+  if (!listReorgActive() || activeTab !== 'running') {
     return `<div class="list-pinned">${pinned.map(s => renderListCard(s, selectedKey, changedKeys.has(sessionKey(s)))).join('')}</div>`
   }
   const st = window.CSMListOrg.load()

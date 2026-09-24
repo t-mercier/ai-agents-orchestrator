@@ -178,14 +178,42 @@
     c.order.splice(i, 0, ref)
     return s
   }
-  function prune(state, liveKeysByCat) {
+  // Drop keys that are no longer shown, in the buckets `belongs` names (all by default),
+  // and dissolve the groups left with fewer than two members. A tab prunes only its own
+  // buckets: the Closed tab's keys are not live on Running, and the reverse.
+  function prune(state, liveKeysByCat, belongs) {
     const s = clone(state)
     for (const [catName, c] of Object.entries(s.categories)) {
+      if (belongs && !belongs(catName)) continue
       const live = (liveKeysByCat && liveKeysByCat[catName]) || new Set()
       c.order = c.order.filter(id => isGroupRef(id) ? !!c.groups[id.slice(GROUP_PREFIX.length)] : live.has(id))
       for (const g of Object.values(c.groups)) g.members = g.members.filter(m => live.has(m))
+      cleanupGroups(c)
     }
     return s
+  }
+  // A bucket renamed (a category split per space) starts from the old one's order and
+  // groups, once; prune then keeps only what belongs there.
+  function adopt(state, bucket, legacy) {
+    if (state.categories[bucket] || !state.categories[legacy]) return state
+    const s = clone(state)
+    s.categories[bucket] = JSON.parse(JSON.stringify(s.categories[legacy]))
+    return s
+  }
+
+  // The bucket a category's order and groups are kept under. Each tab has its own, since
+  // Running, Closed and Archived show different sessions under the same category name; and
+  // with several spaces, a category name used in two of them is two buckets. Running with a
+  // single space keeps the bare category name, which is what earlier versions stored.
+  const TAB_PREFIXES = ['closed', 'archived']
+  function bucketName(tab, space, category, multiSpace) {
+    const scoped = multiSpace && space ? `${space}/${category}` : category
+    return TAB_PREFIXES.includes(tab) ? `${tab}:${scoped}` : scoped
+  }
+  function bucketTab(bucket) {
+    const i = String(bucket).indexOf(':')
+    const head = i > 0 ? bucket.slice(0, i) : ''
+    return TAB_PREFIXES.includes(head) ? head : 'running'
   }
 
   function load() {
@@ -200,6 +228,6 @@
     emptyState, normalize, orderedItems,
     moveSession,
     createGroup, createGroupWith, renameGroup, setGroupColor, toggleGroupCollapsed, deleteGroup, addToGroup, removeFromGroup, moveGroupRef,
-    prune, load, save,
+    prune, adopt, bucketName, bucketTab, load, save,
   }
 })

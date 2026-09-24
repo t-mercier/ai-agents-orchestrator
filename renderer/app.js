@@ -365,22 +365,27 @@ async function fetchAndRender(resort = false) {
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"
     if (tab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
     // Prune list-org of sessions no longer present (moved to Closed/Archived, etc.).
-    // Only prune on the Running tab — manual order/groups apply to the running list;
-    // pruning on other tabs would drop running keys not present in those tabs' session sets.
-    if (tab === 'running') {
+    // Each tab prunes only its own buckets: another tab's keys are not in this session set.
+    if (['running', 'closed', 'archived'].includes(tab)) {
+      const Org = window.CSMListOrg
+      const multi = !!(window.multiSpace && window.multiSpace())
       const liveByCat = {}
       // The pinned block keeps its manual order under a reserved bucket (ui.js
       // PINNED_CAT). It is not a real category, so nothing would list its keys as live
       // and prune would empty it on the very next poll — feed it explicitly.
       const pinnedCat = window.PINNED_CAT || '__pinned__'
-      liveByCat[pinnedCat] = new Set()
+      if (tab === 'running') liveByCat[pinnedCat] = new Set()
+      let st = Org.load()
       for (const s of sessions) {
         const key = s.notesPath || s.sessionId || s.name || ''
         const c = s.category || (s.entrypoint === 'claude-desktop' ? 'Claude Desktop' : 'OTHER')
-        ;(liveByCat[c] = liveByCat[c] || new Set()).add(key)
-        if (isPinned(key)) liveByCat[pinnedCat].add(key)
+        const bucket = Org.bucketName(tab, s.root || '—', c, multi)
+        // A category split per space starts from what the shared bucket held.
+        if (tab === 'running' && bucket !== c) st = Org.adopt(st, bucket, c)
+        ;(liveByCat[bucket] = liveByCat[bucket] || new Set()).add(key)
+        if (tab === 'running' && isPinned(key)) liveByCat[pinnedCat].add(key)
       }
-      window.CSMListOrg.save(window.CSMListOrg.prune(window.CSMListOrg.load(), liveByCat))
+      Org.save(Org.prune(st, liveByCat, (name) => Org.bucketTab(name) === tab))
     }
     renderAll(filterSessions(sessions, searchQuery), selectedKey, tab, resort)
   } catch (err) {

@@ -27,6 +27,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   group colour menu now has a palette of 24 swatches — twelve hues, light and deeper —
   since seven colours were too few to tell groups apart.
 
+- **Groups and manual order on the Closed and Archived tabs.** Drag a card to reorder it,
+  or onto another to group them, as on Running. Each tab keeps its own groups, and with
+  several spaces a category name used in two of them is organised separately in each; the
+  groups you already had are carried over.
+
 ### Changed
 
 - **A session card no longer has a pause button.** It appeared on hover exactly where a

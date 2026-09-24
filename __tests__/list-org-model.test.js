@@ -96,9 +96,15 @@ describe('prune + load', () => {
     s = M.createGroupWith(s, 'FEAT', 'g1', ['alive', 'deadmember'], 1)
     s = M.prune(s, { FEAT: new Set(['alive']) })
     expect(s.categories.FEAT.order).not.toContain('dead')
-    // After prune, group has only 1 live member (deadmember is removed from members)
-    // The group still exists in this implementation (prune doesn't call cleanupGroups)
-    expect(s.categories.FEAT.groups.g1.members).toEqual(['alive'])
+    // A group left with one live member dissolves: the member stays, loose, where the group was.
+    expect(s.categories.FEAT.groups.g1).toBeUndefined()
+    expect(M.orderedItems(s, 'FEAT', ['alive']).map(i => i.key)).toEqual(['alive'])
+  })
+  it('prune leaves the buckets of other tabs alone', () => {
+    let s = M.createGroupWith(base(), 'closed:FEAT', 'g1', ['x', 'y'], 0)
+    s = M.moveSession(s, 'FEAT', 'a', 0)
+    s = M.prune(s, { FEAT: new Set(['a']) }, (name) => !name.includes(':'))
+    expect(s.categories['closed:FEAT'].groups.g1.members).toEqual(['x', 'y'])
   })
   it('load tolerates corrupt input', () => {
     expect(M.normalize(null)).toEqual(M.emptyState())
@@ -168,5 +174,36 @@ describe('moveGroupRef with the rendered order', () => {
     s = M.moveGroupRef(s, 'FEAT', 'g1', 2, ['a', 'b', 'c', 'd'])
     expect(M.orderedItems(s, 'FEAT', ['a', 'b', 'c', 'd']).map(i => i.kind === 'group' ? i.id : i.key))
       .toEqual(['c', 'd', 'g1'])
+  })
+})
+
+describe('adopt', () => {
+  it('copies a legacy bucket into a new one once, and never over an existing one', () => {
+    let s = M.createGroupWith(base(), 'FEAT', 'g1', ['a', 'b'], 0)
+    s = M.adopt(s, 'Work/FEAT', 'FEAT')
+    expect(s.categories['Work/FEAT'].groups.g1.members).toEqual(['a', 'b'])
+    const before = JSON.stringify(s.categories['Work/FEAT'])
+    s = M.moveSession(s, 'FEAT', 'z', 0)
+    s = M.adopt(s, 'Work/FEAT', 'FEAT')
+    expect(JSON.stringify(s.categories['Work/FEAT'])).toBe(before)
+    expect(M.adopt(base(), 'Work/FEAT', 'FEAT').categories['Work/FEAT']).toBeUndefined()
+  })
+})
+
+describe('bucketName', () => {
+  it('keeps the Running bucket of a single space as the category name', () => {
+    expect(M.bucketName('running', 'Work', 'FEAT', false)).toBe('FEAT')
+  })
+  it('splits a category per space when there are several, and per tab off Running', () => {
+    expect(M.bucketName('running', 'Work', 'AI-SYSTEM', true)).toBe('Work/AI-SYSTEM')
+    expect(M.bucketName('running', 'Perso', 'AI-SYSTEM', true)).toBe('Perso/AI-SYSTEM')
+    expect(M.bucketName('closed', 'Work', 'FEAT', false)).toBe('closed:FEAT')
+    expect(M.bucketName('archived', 'Perso', 'FEAT', true)).toBe('archived:Perso/FEAT')
+  })
+  it('says which tab a bucket belongs to', () => {
+    expect(M.bucketTab('FEAT')).toBe('running')
+    expect(M.bucketTab('Work/FEAT')).toBe('running')
+    expect(M.bucketTab('closed:Work/FEAT')).toBe('closed')
+    expect(M.bucketTab('archived:FEAT')).toBe('archived')
   })
 })
