@@ -164,11 +164,25 @@ fn gap(settings: &Value, file: &str, matcher: Option<&str>) -> Option<Option<Str
     None
 }
 
-fn read_settings() -> Value {
-    fs::read_to_string(settings_path())
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_else(|| json!({}))
+fn read_settings() -> Result<Value, String> {
+    read_settings_at(&settings_path())
+}
+
+/// settings.json as it stands: `{}` when the file does not exist yet, an error when it
+/// exists but cannot be read or parsed. That error must stop the wiring: merging into a
+/// `{}` stand-in would write a hooks-only file over the user's permissions and env.
+fn read_settings_at(path: &std::path::Path) -> Result<Value, String> {
+    let text = match fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(json!({})),
+        Err(e) => return Err(format!("could not read {}: {e}", path.display())),
+    };
+    serde_json::from_str(&text).map_err(|e| {
+        format!(
+            "{} is not valid JSON ({e}); fix it before wiring hooks, nothing was changed",
+            path.display()
+        )
+    })
 }
 
 /// The `advisorModel` currently in settings.json, if any — so the UI shows what is set
@@ -176,6 +190,7 @@ fn read_settings() -> Value {
 #[tauri::command]
 pub fn advisor_model() -> String {
     read_settings()
+        .unwrap_or_else(|_| json!({}))
         .get("advisorModel")
         .and_then(Value::as_str)
         .unwrap_or("")
@@ -186,7 +201,7 @@ pub fn advisor_model() -> String {
 /// settings.json already runs it.
 pub fn status() -> Vec<HookStatus> {
     let dir = hooks_dir();
-    let settings = read_settings();
+    let settings = read_settings().unwrap_or_else(|_| json!({}));
     SHIPPED
         .iter()
         .map(|(file, event, _matcher, describes)| HookStatus {
@@ -319,8 +334,16 @@ pub struct WirePreview {
 /// The exact before/after the user approves. Pretty-printed both sides so the UI can diff
 /// them line by line and the user reads real JSON, not a description of it.
 pub fn wire_preview(wanted: Vec<String>, advisor: Option<String>) -> Result<WirePreview, String> {
+    wire_preview_at(&settings_path(), wanted, advisor)
+}
+
+fn wire_preview_at(
+    path: &std::path::Path,
+    wanted: Vec<String>,
+    advisor: Option<String>,
+) -> Result<WirePreview, String> {
     let refs: Vec<&str> = wanted.iter().map(String::as_str).collect();
-    let before_val = read_settings();
+    let before_val = read_settings_at(path)?;
     let after_val = merge_settings(before_val.clone(), &refs, advisor.as_deref());
     let before = serde_json::to_string_pretty(&before_val).map_err(|e| e.to_string())?;
     let after = serde_json::to_string_pretty(&after_val).map_err(|e| e.to_string())?;
@@ -328,7 +351,7 @@ pub fn wire_preview(wanted: Vec<String>, advisor: Option<String>) -> Result<Wire
         unchanged: before == after,
         before,
         after,
-        settings_path: settings_path().to_string_lossy().into_owned(),
+        settings_path: path.to_string_lossy().into_owned(),
     })
 }
 
@@ -337,9 +360,12 @@ pub fn wire_preview(wanted: Vec<String>, advisor: Option<String>) -> Result<Wire
 /// true, so it is made before the write and its path is returned even when the write then
 /// fails.
 pub fn wire(wanted: Vec<String>, advisor: Option<String>) -> Result<Value, String> {
+    wire_at(&settings_path(), wanted, advisor)
+}
+
+fn wire_at(path: &std::path::Path, wanted: Vec<String>, advisor: Option<String>) -> Result<Value, String> {
     let refs: Vec<&str> = wanted.iter().map(String::as_str).collect();
-    let path = settings_path();
-    let before = read_settings();
+    let before = read_settings_at(path)?;
     let after = merge_settings(before.clone(), &refs, advisor.as_deref());
     if before == after {
         return Ok(json!({ "ok": true, "unchanged": true, "backup": Value::Null }));
@@ -351,14 +377,14 @@ pub fn wire(wanted: Vec<String>, advisor: Option<String>) -> Result<Value, Strin
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let dest = path.with_file_name(format!("settings.json.ao-backup-{stamp}"));
-        fs::copy(&path, &dest).map_err(|e| format!("could not back up settings.json: {e}"))?;
+        fs::copy(path, &dest).map_err(|e| format!("could not back up settings.json: {e}"))?;
         backup = json!(dest.to_string_lossy());
     }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let body = serde_json::to_string_pretty(&after).map_err(|e| e.to_string())?;
-    crate::atomic_write(&path, &format!("{body}\n"))?;
+    crate::atomic_write(path, &format!("{body}\n"))?;
     Ok(json!({ "ok": true, "unchanged": false, "backup": backup }))
 }
 
@@ -516,6 +542,43 @@ mod tests {
     fn a_malformed_settings_object_is_replaced_rather_than_panicking() {
         let out = merge_settings(json!([1, 2, 3]), &["pr_attach.py"], None);
         assert!(out["hooks"]["PostToolUse"].is_array());
+    }
+
+    // One trailing comma must not cost the user their permissions: an unparseable
+    // settings.json is refused, by the preview and by the write, and left as it was.
+    #[test]
+    fn an_unparseable_settings_file_is_refused_and_left_untouched() {
+        let dir = std::env::temp_dir().join(format!("ao-hooks-bad-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        let text = "{ \"permissions\": { \"deny\": [\"Read(**/.env)\"] }, }\n";
+        fs::write(&path, text).unwrap();
+        let wanted = vec!["pr_attach.py".to_string()];
+
+        let preview = wire_preview_at(&path, wanted.clone(), None);
+        let wired = wire_at(&path, wanted, None);
+        let after = fs::read_to_string(&path).unwrap();
+        let backups = fs::read_dir(&dir).unwrap().count();
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(preview.is_err(), "preview accepted an unparseable file");
+        assert!(wired.is_err(), "wire accepted an unparseable file");
+        assert!(wired.unwrap_err().contains("settings.json"));
+        assert_eq!(after, text);
+        assert_eq!(backups, 1, "no backup should be made when nothing is written");
+    }
+
+    // A missing settings.json is a fresh install, not an error.
+    #[test]
+    fn a_missing_settings_file_is_wired_from_scratch() {
+        let dir = std::env::temp_dir().join(format!("ao-hooks-none-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let path = dir.join("settings.json");
+        let out = wire_at(&path, vec!["pr_attach.py".to_string()], None);
+        let written = fs::read_to_string(&path).ok();
+        let _ = fs::remove_dir_all(&dir);
+        assert!(out.is_ok(), "{out:?}");
+        assert!(written.unwrap().contains("pr_attach"));
     }
 
     #[test]
