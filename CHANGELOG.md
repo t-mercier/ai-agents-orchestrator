@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.3-alpha] - 2026-09-25
+
 ### Changed
 
 - **A session opens at its space root unless you chose a Start-in folder.** A session
