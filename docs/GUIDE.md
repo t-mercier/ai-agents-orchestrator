@@ -226,8 +226,8 @@ with it:
   wording carries that signal ("always", "toujours", "from now on", "ne … plus"…), reminds
   the model for that one turn. Nothing else; it never writes.
 
-**All six scripts are copied for you**, with the skills, every launch. **Every session you
-start from the dashboard runs all six already**: the app hands Claude Code a `--settings`
+**All seven scripts are copied for you**, with the skills, every launch. **Every session you
+start from the dashboard runs all seven already**: the app hands Claude Code a `--settings`
 file of its own, and Claude Code merges its hooks with yours. So for the ordinary case
 there is nothing to switch on.
 
@@ -237,7 +237,7 @@ happens on its own.
 
 The last step of first-run setup does it properly when you ask: it shows you the exact file
 it would write, copies your current one to a timestamped backup, then writes. It also says
-which are already on, and offers nothing when all six are. **Settings → first-run setup**
+which are already on, and offers nothing when all seven are. **Settings → first-run setup**
 reopens it any time. If you would rather do it by hand,
 `bash scripts/install.sh --with-hooks` prints the exact lines to paste.
 

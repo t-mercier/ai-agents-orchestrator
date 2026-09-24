@@ -12,6 +12,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The save reminders reach the model.** The Stop hook's advice at 75% of context and
+  after 30 minutes without a checkpoint was shown to you only: a Stop hook's message never
+  reaches the model, so it never acted on it. A new hook, `ao_checkpoint_relay`, hands that
+  advice to the model with your next message, once. The 90% save, which blocks, already
+  reached it.
 - **A session resumes in the folder it was started in.** Resume, Restart and "open in
   terminal" always went back to the space root, so a session started with **Start in**
   somewhere else read, edited and ran git in the wrong folder. +New now records that

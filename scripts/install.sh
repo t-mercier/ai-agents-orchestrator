@@ -166,10 +166,10 @@ done
 # ($HOOKS only decides whether the entries are printed; --with-hooks is kept as an alias
 # for that, since the README and muscle memory both still reach for it.)
 mkdir -p "$HOME/.claude/hooks"
-for h in ao_skill_guard ao_autosave ao_precompact ao_session_start pr_attach learn_nudge; do
+for h in ao_skill_guard ao_autosave ao_checkpoint_relay ao_precompact ao_session_start pr_attach learn_nudge; do
   cp "$HERE/hooks/$h.py" "$HOME/.claude/hooks/$h.py"
 done
-echo "installed hooks: ~/.claude/hooks/{ao_skill_guard,ao_autosave,ao_precompact,ao_session_start,pr_attach,learn_nudge}.py"
+echo "installed hooks: ~/.claude/hooks/{ao_skill_guard,ao_autosave,ao_checkpoint_relay,ao_precompact,ao_session_start,pr_attach,learn_nudge}.py"
 echo "  Sessions started from the app run all six already (they ride in its --settings file)."
 echo "  Enabling them in settings.json extends that to sessions you start from a terminal."
 if [ "$HOOKS" -eq 1 ]; then
@@ -194,12 +194,14 @@ if [ "$HOOKS" -eq 1 ]; then
   echo "  To enable it, add this PreToolUse group (it refuses an edit to one of this app's skills):"
   echo '    { "matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_skill_guard.py\" 2>/dev/null; true" } ] }'
   echo
-  echo "installed hook scripts: ~/.claude/hooks/ao_autosave.py, ao_precompact.py, ao_session_start.py"
-  echo "  To enable them, add to the Stop, PreCompact and SessionStart hooks respectively:"
+  echo "installed hook scripts: ~/.claude/hooks/ao_autosave.py, ao_checkpoint_relay.py, ao_precompact.py, ao_session_start.py"
+  echo "  To enable them, add to the Stop, UserPromptSubmit, PreCompact and SessionStart hooks respectively:"
   echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_autosave.py\" 2>/dev/null; true" } ] }'
+  echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_checkpoint_relay.py\" 2>/dev/null; true" } ] }'
   echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_precompact.py\" 2>/dev/null; true" } ] }'
   echo '    { "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/ao_session_start.py\" 2>/dev/null; true" } ] }'
-  echo "  Auto-save at 60%/80% of context and after 30 min without a checkpoint; a history line"
+  echo "  Save advised at 75% of context and after 30 min without a checkpoint, required at 90%"
+  echo "  (the relay hands the advice to the model with your next message); a history line"
   echo "  before each compaction; the /learn habit stated at every session start."
   echo "  (The first-run setup in the app writes these for you, with a preview and a backup.)"
 fi
@@ -220,7 +222,7 @@ if [ ${#STALE[@]} -gt 0 ]; then
   echo
 fi
 if [ "$HOOKS" -eq 0 ]; then
-  echo "→ The two hooks are copied but not ENABLED — enabling one means adding a line to"
+  echo "→ The hooks are copied but not ENABLED — enabling one means adding a line to"
   echo "  ~/.claude/settings.json, which this installer will not do for you. Re-run with"
   echo "  --with-hooks (or --all) to print the exact lines to paste, or enable them from"
   echo "  the app: Settings → first-run setup, last step, shows the diff and backs the file up."

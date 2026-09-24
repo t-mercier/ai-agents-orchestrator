@@ -37,7 +37,7 @@ static HOOKS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../hooks");
 
 /// The hooks this app ships, in the order the UI lists them.
 /// (`file`, the settings.json event, the matcher it needs, one line of what it does)
-const SHIPPED: [(&str, &str, Option<&str>, &str); 6] = [
+const SHIPPED: [(&str, &str, Option<&str>, &str); 7] = [
     (
         "ao_skill_guard.py",
         "PreToolUse",
@@ -49,6 +49,12 @@ const SHIPPED: [(&str, &str, Option<&str>, &str); 6] = [
         "Stop",
         None,
         "Has the model run /save-session itself: suggested at 75% of context, required at 90%, and suggested after 30 minutes without a checkpoint — from the real context figure, not a byte count.",
+    ),
+    (
+        "ao_checkpoint_relay.py",
+        "UserPromptSubmit",
+        None,
+        "Hands the model the save advice ao_autosave left after its last reply — a Stop hook can show advice to you, but not to the model.",
     ),
     (
         "ao_precompact.py",
@@ -589,6 +595,15 @@ mod tests {
             SHIPPED.iter().find(|(f, ..)| *f == "ao_autosave.py").expect("autosave is shipped");
         assert!(describes.contains("75%") && describes.contains("90%"), "{describes}");
         assert!(!describes.contains("60%") && !describes.contains("80%"), "{describes}");
+    }
+
+    // A Stop hook's advice reaches the user only; the relay is what puts it in front of
+    // the model, so it ships, and is wired, with the Stop hook.
+    #[test]
+    fn the_checkpoint_relay_ships_on_user_prompt_submit() {
+        let relay = SHIPPED.iter().find(|(f, ..)| *f == "ao_checkpoint_relay.py").expect("relay is shipped");
+        assert_eq!(relay.1, "UserPromptSubmit");
+        assert!(HOOKS.get_file("ao_checkpoint_relay.py").is_some(), "the script is bundled");
     }
 
     #[test]

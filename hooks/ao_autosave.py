@@ -150,6 +150,15 @@ def main():
         )
     except Exception:
         return
+    # A Stop hook's systemMessage reaches the user only. Keep the advice for
+    # ao_checkpoint_relay, which hands it to the model with the next prompt; a block
+    # reaches the model by itself, so nothing is left pending then.
+    if isinstance(new_state, dict):
+        new_state = {k: v for k, v in new_state.items() if k != "pending"}
+        if reason and not blocking:
+            new_state["pending"] = reason
+        elif isinstance(state, dict) and "pending" in state and not reason:
+            new_state["pending"] = state["pending"]     # not delivered yet: keep it
     if new_state != state:
         try:
             os.makedirs(state_dir, exist_ok=True)
@@ -162,8 +171,9 @@ def main():
     if blocking:
         print(json.dumps({"decision": "block", "reason": reason}))
     else:
-        # Seen, not obeyed: the model reads it and decides when to act, instead of being
-        # pulled out of whatever it was doing.
+        # Advice, not an order: shown to the user now, and relayed to the model with the
+        # next prompt (see above), so it acts when it chooses instead of being pulled out
+        # of whatever it was doing.
         print(json.dumps({"systemMessage": reason}))
 
 

@@ -164,6 +164,15 @@ class TestMain(unittest.TestCase):
         self.assertIn("systemMessage", self.turn(76))
         self.assertEqual(self.turn(91)["decision"], "block")
 
+    def test_advice_is_kept_for_the_model_to_read_on_the_next_prompt(self):
+        # A Stop hook's systemMessage is shown to the user only. The advice is also stored,
+        # so ao_checkpoint_relay can hand it to the model with the next prompt.
+        self.assertIn("systemMessage", self.turn(76))
+        self.assertIn("/save-session", self.stored().get("pending", ""))
+        # A block reaches the model on its own: nothing to relay.
+        self.turn(91)
+        self.assertNotIn("pending", self.stored())
+
 
 if __name__ == "__main__":
     unittest.main()

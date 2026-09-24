@@ -239,7 +239,7 @@ They are ordinary Claude Code skills in your ordinary skills folder:
 
 ~/.claude/hooks/
 ├── ao_skill_guard.py             ← copied with the skills; sessions from the app run them all
-├── ao_autosave.py  ao_precompact.py  ao_session_start.py
+├── ao_autosave.py  ao_checkpoint_relay.py  ao_precompact.py  ao_session_start.py
 ├── pr_attach.py
 └── learn_nudge.py
 ```
@@ -285,9 +285,9 @@ with the context nearly full, a compaction, a PR opened in passing. A hook is a 
 **Claude Code** runs at one of those moments — not the app: the app puts the script on
 disk and decides where it is declared.
 
-All six ship inside the app and are **copied automatically** — with the skills, on every
+All seven ship inside the app and are **copied automatically** — with the skills, on every
 launch. **Every session started from the
-dashboard runs all six** without touching your settings: the app passes Claude Code a
+dashboard runs all seven** without touching your settings: the app passes Claude Code a
 `--settings` file of its own, and Claude Code merges that file's hooks with your global
 ones (only `statusLine` is replace-not-merge, which is why the app wraps yours rather than
 setting its own). A hook you have already enabled globally is not injected a second time.
@@ -296,6 +296,7 @@ setting its own). A hook you have already enabled globally is not injected a sec
 |---|---|---|
 | `ao_skill_guard.py` | `PreToolUse` (`Edit`, `Write`…) | The 14 skills are the app's; an edit to one is refused with the reason and the alternative — a skill of your own under another name. |
 | `ao_autosave.py` | `Stop` | The checkpoint only happened when someone typed `/save-session`. This has the model run it itself — at 75 % and again at 90 % of context, and after 30 minutes without a checkpoint while the conversation moved. The figure is the session's real context percentage from the statusline cache, not a transcript byte count. |
+| `ao_checkpoint_relay.py` | `UserPromptSubmit` | The advice `ao_autosave` gives at 75 % and after 30 minutes is shown to you, but a Stop hook cannot show it to the model. This hands it over with your next message, once. |
 | `ao_precompact.py` | `PreCompact` | Compaction is when a session forgets. This appends an `(in progress)` line to the session history with the transcript path and the moment — the summary stays the model's to write, and the next hook says so once tools are back. |
 | `ao_session_start.py` | `SessionStart` | The `/learn` habit — write a durable fact the moment it emerges — depended on whose `CLAUDE.md` the session loaded. This states it at every tracked session's start; after a compaction with stale notes, it asks for `/save-session` first. |
 | `pr_attach.py` | `PostToolUse` (`Bash`, or the GitHub MCP create tool) | A session's PRs are read from its `notes.md`, which only the skills write — so a PR opened mid-session is invisible until your next `/save-session`, exactly when the link matters most. This attaches the URL the moment `gh pr create` (or `edit`, `reopen`) prints it, or the GitHub MCP server's `create_pull_request` returns it. The URL is always taken from the tool's result, never from its input. |
@@ -310,7 +311,7 @@ Nothing does that behind your back.
 - **From the app** — first-run setup's last step, or **Settings → first-run setup** later.
   It shows the exact `settings.json` it would write, copies your current one to a
   timestamped backup, then writes atomically. It also tells you which are already enabled,
-  and offers nothing when all six are.
+  and offers nothing when all seven are.
 - **By hand** — they are ordinary Claude Code hook entries.
 
 Two things worth knowing about how they behave. `pr_attach` is the only one that **writes**:
