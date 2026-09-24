@@ -76,19 +76,32 @@ window.api.onPtyData((sessionId, data) => {
 // When the pty dies (claude/shell exited, or killed by last-window-close),
 // dispose this window's xterm so it can't leak (ADR-010). If the terminal is
 // currently visible, keep the pane and show a banner — it disposes on close.
+// A kept entry is marked dead: it no longer counts as a live terminal for Resume, the
+// pinned skills or Pause, and it is disposed as soon as it leaves the screen.
 window.api.onPtyExit((sessionId) => {
   const entry = terminals.get(sessionId)
   if (!entry) return
   if (activeTerminalSession === sessionId && terminalVisible) {
+    entry.dead = true
     entry.term.write('\r\n\x1b[2m[session ended — close to dismiss]\x1b[0m\r\n')
   } else {
-    entry.term.dispose()
-    entry.div.remove()
-    terminals.delete(sessionId)
+    disposeEntry(sessionId)
   }
 })
 
+// Drop one xterm and its div from the map. The pty is not touched.
+function disposeEntry(sessionId) {
+  const entry = terminals.get(sessionId)
+  if (!entry) return
+  try { entry.term.dispose() } catch (e) { console.error('xterm dispose failed:', e) }
+  entry.div.remove()
+  terminals.delete(sessionId)
+}
+
 function ensureTerminal(sessionId, restartSlug = '', command = '') {
+  // A dead entry holds the output of a process that has exited. Replace it, so opening
+  // the session again spawns claude instead of showing the old buffer.
+  if (terminals.has(sessionId) && terminals.get(sessionId).dead) disposeEntry(sessionId)
   if (terminals.has(sessionId)) return terminals.get(sessionId)
 
   const container = document.getElementById('detail-terminal-pane')
@@ -266,7 +279,7 @@ function openTerminalPane(sessionId, cwd, restartSlug = '', command = '', notesP
 function terminalKeyForNotes(notesPath) {
   if (!notesPath) return null
   for (const [key, entry] of terminals) {
-    if (entry.notesPath === notesPath) return key
+    if (entry.notesPath === notesPath && !entry.dead) return key
   }
   return null
 }
@@ -281,7 +294,10 @@ function hideTerminalPane() {
   termPane.style.display = 'none'
   infoPane.style.display = ''
   terminalVisible = false
+  const shown = activeTerminalSession
   activeTerminalSession = null
+  // Its process has exited, so there is nothing left to come back to.
+  if (shown && terminals.has(shown) && terminals.get(shown).dead) disposeEntry(shown)
 }
 
 // The terminal key is a notesPath (embedded +New) or a sessionId (Resume/Restart) —
@@ -336,6 +352,10 @@ const ending = new Set()
 function closeTerminalPane() {
   const sid = activeTerminalSession
   if (!sid) { hideTerminalPane(); return }
+  // Its process has already exited, so no claude is left to write a wrap-up: the button
+  // dismisses the pane instead of waiting out the timeout below.
+  const shownEntry = terminals.get(sid)
+  if (shownEntry && shownEntry.dead) { killTerminal(sid); return }
   const notesPath = notesPathForKey(sid)
   // Second click while a wrap-up is in flight = end now (stamp a close, no AI summary).
   if (ending.has(sid)) { ending.delete(sid); endNow(sid, notesPath, '[ending now — closing without a summary]'); return }
@@ -370,7 +390,8 @@ function closeTerminalPane() {
 
 // Is there a live (alive, possibly-backgrounded) terminal for this session?
 function hasLiveTerminal(sessionId) {
-  return terminals.has(sessionId)
+  const entry = terminals.get(sessionId)
+  return !!entry && !entry.dead
 }
 
 function toggleEmbeddedTerminal(sessionId, cwd, restartSlug = '', notesPath = '') {

@@ -79,3 +79,46 @@ test('clean-up counts a failed archive as failed, and names it', async ({ page }
   await expect(page.locator('#clean-list')).toContainText('1 could not be applied')
   await expect(page.locator('#clean-list')).toContainText('boom')
 })
+
+test('a terminal whose claude exited while on screen is gone once hidden', async ({ page }) => {
+  // The visible branch of pty-exit only wrote a banner, so the dead entry stayed in the
+  // map for good: Resume re-showed the dead buffer and Close waited 75 s for a wrap-up
+  // that no process could write.
+  await boot(page)
+  const r = await page.evaluate(async () => {
+    const inputs = []
+    window.api.ptyInput = (sid, data) => { inputs.push([sid, data]); return Promise.resolve() }
+    const exit = (sid) => (window.__PTY_HANDLERS__['pty-exit'] || []).forEach(cb => cb({ payload: { sessionId: sid } }))
+    window.openTerminalPane('S1', '/tmp', '', '', '/n/notes.md')
+    await new Promise(r => setTimeout(r, 50))
+    exit('S1')
+    const liveWhileShown = window.hasLiveTerminal('S1')
+    window.hideTerminalPane()
+    const afterHide = { live: window.hasLiveTerminal('S1'), key: window.terminalKeyForNotes('/n/notes.md') }
+
+    window.openTerminalPane('S2', '/tmp', '', '', '/m/notes.md')
+    await new Promise(r => setTimeout(r, 50))
+    exit('S2')
+    window.closeTerminalPane()
+    const afterClose = window.hasLiveTerminal('S2')
+    const shown = window.getTerminalVisible()
+
+    // Reopened while the dead pane is still on screen: a fresh claude, not the old buffer.
+    const spawns = []
+    window.api.ptySpawn = (sid) => { spawns.push(sid); return Promise.resolve() }
+    window.openTerminalPane('S3', '/tmp', '', '', '/k/notes.md')
+    await new Promise(r => setTimeout(r, 50))
+    exit('S3')
+    window.openTerminalPane('S3', '/tmp')
+    await new Promise(r => setTimeout(r, 50))
+    return { liveWhileShown, afterHide, afterClose, shown,
+      inputs, spawns, reopenedLive: window.hasLiveTerminal('S3') }
+  })
+  expect(r.liveWhileShown).toBe(false)
+  expect(r.afterHide).toEqual({ live: false, key: null })
+  expect(r.afterClose).toBe(false)
+  expect(r.shown).toBe(false)
+  expect(r.inputs).toEqual([])
+  expect(r.spawns).toEqual(['S3', 'S3'])
+  expect(r.reopenedLive).toBe(true)
+})
