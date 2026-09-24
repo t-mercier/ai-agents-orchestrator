@@ -434,14 +434,17 @@ fn migrate_v1_value(raw: &Value) -> Option<Value> {
         }
     }
 
-    // Categories: migrate `scope` → `root` when root is absent; drop `scope`.
+    // Categories: migrate `scope` → `root` when root is absent; drop `scope`. The root
+    // must be one the config declares, or validate() rejects the migration at every
+    // launch: the root at workRoot/personalRoot, else the first/second declared root.
+    let (work_name, personal_name) = scope_roots(&v2_roots, &work_root, &personal_root);
     let mut v2_cats: Vec<Value> = vec![];
     if let Some(cats) = raw.get("categories").and_then(Value::as_array) {
         for cat in cats {
             let mut c = cat.clone();
             if c.get("root").is_none() {
                 let scope = c.get("scope").and_then(Value::as_str).unwrap_or("work");
-                c["root"] = json!(if scope == "personal" { "Perso" } else { "Work" });
+                c["root"] = json!(if scope == "personal" { &personal_name } else { &work_name });
             }
             if let Some(obj) = c.as_object_mut() {
                 obj.remove("scope");
@@ -461,6 +464,24 @@ fn migrate_v1_value(raw: &Value) -> Option<Value> {
         "terminalApp": raw.get("terminalApp").cloned().unwrap_or(json!("")),
         "migratedToV2": true,
     }))
+}
+
+/// The declared roots a v1 `scope` of "work" and "personal" map to, by name.
+fn scope_roots(roots: &[Value], work_path: &str, personal_path: &str) -> (String, String) {
+    let name = |r: &Value| r.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+    let pick = |path: &str, index: usize, taken: Option<&str>| -> String {
+        let by_path = roots.iter().map(name).zip(roots.iter()).find(|(n, r)| {
+            Some(n.as_str()) != taken
+                && r.get("path").and_then(Value::as_str).map(expand).as_deref() == Some(path)
+        });
+        if let Some((n, _)) = by_path {
+            return n;
+        }
+        roots.get(index).or_else(|| roots.first()).map(name).unwrap_or_default()
+    };
+    let work = pick(work_path, 0, None);
+    let personal = pick(personal_path, 1, Some(&work));
+    (work, personal)
 }
 
 /// The default config written on a fresh install (v2 schema). Kept in sync with the
@@ -787,6 +808,47 @@ mod tests {
         assert!(roots[2].get("vaultPath").is_none(), "a non-Work/Perso root gets no vault");
         assert_eq!(v2["migratedToV2"], json!(true));
         assert!(validate(&v2).is_ok());
+    }
+
+    #[test]
+    fn migrate_v1_value_maps_scope_onto_custom_named_roots() {
+        // Custom-named roots with scope-only categories: scope must land on a root that
+        // exists, never on a "Work"/"Perso" the config does not declare. The path match
+        // wins over the position.
+        let v1 = json!({
+            "version": 1,
+            "roots": [
+                {"name":"Side","path":"/side"},
+                {"name":"Job","path":"/job"},
+                {"name":"Home","path":"/home/me"}
+            ],
+            "workRoot": "/job",
+            "personalRoot": "/home/me",
+            "categories": [
+                {"name":"FEAT","color":"#7df0c0","scope":"work"},
+                {"name":"PERSO","color":"#8fd9ff","scope":"personal"}
+            ]
+        });
+        let v2 = migrate_v1_value(&v1).expect("scope-only categories must migrate");
+        assert_eq!(v2["categories"][0]["root"], "Job");
+        assert_eq!(v2["categories"][1]["root"], "Home");
+        assert!(validate(&v2).is_ok(), "{:?}", validate(&v2));
+
+        // No path matches: fall back to the first and second declared roots.
+        let drifted = json!({
+            "version": 1,
+            "roots": [{"name":"Job","path":"/job"}, {"name":"Home","path":"/home/me"}],
+            "workRoot": "/elsewhere",
+            "personalRoot": "/nowhere",
+            "categories": [
+                {"name":"FEAT","color":"#7df0c0","scope":"work"},
+                {"name":"PERSO","color":"#8fd9ff","scope":"personal"}
+            ]
+        });
+        let v2 = migrate_v1_value(&drifted).expect("must migrate");
+        assert_eq!(v2["categories"][0]["root"], "Job");
+        assert_eq!(v2["categories"][1]["root"], "Home");
+        assert!(validate(&v2).is_ok(), "{:?}", validate(&v2));
     }
 
     #[test]
