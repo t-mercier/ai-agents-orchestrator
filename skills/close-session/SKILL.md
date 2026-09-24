@@ -122,7 +122,19 @@ Collect every PR URL this session is about:
 - Deterministic source: `gh pr view --json url -q .url` on the current branch (session's repo). A valid GitHub PR URL (`https://github.com/owner/repo/pull/N`) → use it.
 - Also the PRs Claude created/manipulated in THIS conversation (scan it for GitHub PR URLs) — that's how the session's *other* PR is found, since `gh` only ever reports the current branch's.
 
-Then, with the Edit tool: add any URL **not already** in `pr_link:` / `pr_links:`, keeping
+**Only the user's PRs.** A candidate is attached only when the user opened it or reviewed
+it — sharing a ticket or being mentioned is not enough, and a colleague's backport on the
+same ticket is exactly what used to land in the user's session. Pass every candidate not
+already listed through one call; it prints those to keep:
+
+```bash
+python3 ~/.claude/skills/lib/pr_mine.py keep <url> <url> ...
+```
+
+"The user" is every account `gh` is logged in with. A PR no account can read is dropped.
+
+Then, with the Edit tool: add any URL **kept by that filter** and **not already** in
+`pr_link:` / `pr_links:`, keeping
 the existing primary as the primary (a session's first PR stays its headline). Write extras
 as `pr_links:` list items. NEVER remove a link and NEVER overwrite a value with empty — the
 dashboard's PR editor is where links get pruned, deliberately.

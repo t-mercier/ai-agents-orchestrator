@@ -10,6 +10,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session lists only your pull requests.** Sync attached any PR whose branch named one
+  of the session's tickets, and saving attached any PR mentioned in the conversation, so a
+  colleague's backport on the same ticket showed up as yours. Both now keep a PR only when
+  you opened it or reviewed it; the PR link a Review session starts with always stays.
+
 ## [0.20.3-alpha] - 2026-09-25
 
 ### Changed

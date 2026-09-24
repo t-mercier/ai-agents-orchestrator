@@ -114,7 +114,18 @@ names it in the branch. Keep a result when its `title` names one of the session'
 ids; treat the rest as noise, not as the session's. This is the fallback, not the rule —
 when a repo IS known, the branch-name rule above stays authoritative.
 
-Add every PR kept, by either route, that is not already listed — keeping the existing
+**Only the user's PRs.** A candidate is attached only when the user opened it or reviewed
+it — sharing a ticket or being mentioned is not enough, and a colleague's backport on the
+same ticket is exactly what used to land in the user's session. Pass every candidate not
+already listed through one call; it prints those to keep:
+
+```bash
+python3 ~/.claude/skills/lib/pr_mine.py keep <url> <url> ...
+```
+
+"The user" is every account `gh` is logged in with. A PR no account can read is dropped.
+
+Add every PR kept, by either route and by that filter, that is not already listed — keeping the existing
 `pr_link:` as the primary (a session's first PR stays its headline) and writing the rest
 as `pr_links:` entries.
 
@@ -123,7 +134,8 @@ hand is a deliberate act, and a branch can be deleted while its PR still matters
 is the dashboard's editor, on purpose.
 
 **The whole sync is those calls and no others**: one read of the file, one JQL, one
-`gh pr list` per known repo (or one `gh search prs`), one edit, one line of confirmation.
+`gh pr list` per known repo (or one `gh search prs`), one `pr_mine.py keep`, one edit, one
+line of confirmation.
 A run that needs more than that is a run that went wrong — say so rather than improvise.
 
 ## Step 4 — Confirm in one line
