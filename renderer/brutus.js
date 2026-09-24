@@ -20,6 +20,7 @@
   const sessions = () => (window.CSMBrutusSessions ? window.CSMBrutusSessions() : [])
   const esc = window.CSMFormatters.escapeHtml
   const saveLog = () => store.set(LOG_KEY, JSON.stringify(state.log.slice(-60)))
+  const say = (text) => { state.log.push({ role: 'error', text }); saveLog(); render() }
 
   const I = {
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -107,7 +108,7 @@
     else if (k === 'send') send(a.closest('.bru-panel').querySelector('input').value)
     else if (k === 'stop') stop()
     else if (k === 'reset') reset()
-    else if (k === 'memory') window.api.brutusOpenMemory()
+    else if (k === 'memory') openMemory()
     else if (k === 'to-bubble') setHome('bubble')
     else if (k === 'continue') { state.palette = false; state.homeOpen = true; render() }
   }
@@ -145,10 +146,17 @@
     else if (ev.kind === 'text') { state.pendingText += (state.pendingText ? '\n\n' : '') + ev.text; render() }
     else if (ev.kind === 'done' || ev.kind === 'error') finish(ev)
   })
+  // A reset that failed leaves the saved conversation in place, and the next message would
+  // resume it: keep the chat, and say why.
   async function reset() {
     if (state.running) return
-    await window.api.brutusReset()
+    const r = await window.api.brutusReset()
+    if (!r || !r.ok) return say(`Could not start a new conversation: ${(r && r.error) || 'unknown error'}`)
     state.log = []; saveLog(); render()
+  }
+  async function openMemory() {
+    const r = await window.api.brutusOpenMemory()
+    if (!r || !r.ok) say(`Could not open his memory: ${(r && r.error) || 'unknown error'}`)
   }
   function flash(n) {
     const el = [...document.querySelectorAll('#panel-list .list-card[data-key]')].find(c => (c.textContent || '').includes(n))

@@ -38,8 +38,13 @@
   document.addEventListener('click', (e) => {
     const b = e.target.closest('#set-assistant-styles [data-style]')
     if (b) { style = b.dataset.style; paint() }
-    if (e.target.closest('#set-assistant-memory')) window.api.brutusOpenMemory()
+    if (e.target.closest('#set-assistant-memory')) openMemory()
   })
+  async function openMemory() {
+    if (window.clearSettingsError) window.clearSettingsError()
+    const r = await window.api.brutusOpenMemory()
+    if ((!r || !r.ok) && window.showSettingsError) window.showSettingsError(`Could not open his memory: ${(r && r.error) || 'unknown error'}`)
+  }
   document.addEventListener('input', (e) => { if (e.target.id === 'set-assistant-name') paint() })
   window.CSMSettings.register({ populate, collect })
 })()
