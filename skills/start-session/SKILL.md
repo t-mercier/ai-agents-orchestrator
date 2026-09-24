@@ -33,7 +33,7 @@ If plan mode is active (a `Plan mode is active` system reminder is present): sto
 Read `$ARGUMENTS`. Forms: `<CATEGORY> <TICKET-OR-NAME>`, `<CATEGORY> <TICKET> <name>`,
 or empty/partial → prompt for missing fields with `AskUserQuestion`.
 
-- `CATEGORY` — uppercase it; it must be one of the configured categories:
+- `CATEGORY` — match it case-insensitively against the configured categories, then keep the configured spelling (a `bugs` category stays `bugs`; never uppercase it):
   ```bash
   python3 ~/.claude/skills/lib/aoconfig.py categories
   ```

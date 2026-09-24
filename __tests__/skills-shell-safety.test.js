@@ -133,3 +133,14 @@ describe.each(['start-session', 'import-session'])('%s --root', (skill) => {
     expect(t).not.toMatch(/--root <space>/)
   })
 })
+
+// The app passes the category in its configured spelling (a lowercase `bugs` exists).
+// Uppercasing it named a folder and a category that do not exist.
+describe.each(['start-session', 'import-session'])('%s category spelling', (skill) => {
+  test('matches case-insensitively and keeps the configured spelling', () => {
+    const t = read(skill)
+    expect(t).not.toMatch(/`CATEGORY` — uppercase it/)
+    expect(t).toMatch(/`CATEGORY` — match it case-insensitively/)
+    expect(t).toMatch(/keep the configured spelling/)
+  })
+})
