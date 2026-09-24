@@ -32,6 +32,11 @@ test('an interpreter plus a script path runs', () => {
   expect(r.stdout).toBe('from real.sh\n')
 })
 
+test('a ~/ path runs, with the tilde expanded', () => {
+  fs.writeFileSync(path.join(home, 't.sh'), '#!/bin/sh\necho from tilde\n', { mode: 0o755 })
+  expect(run('~/t.sh').stdout).toBe('from tilde\n')
+})
+
 test('a bare executable path still runs', () => {
   const script = path.join(home, 'exec.sh')
   fs.writeFileSync(script, '#!/bin/sh\necho from exec.sh\n', { mode: 0o755 })
