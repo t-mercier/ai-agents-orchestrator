@@ -1098,14 +1098,12 @@ fn set_tickets(notes_path: String, tickets: Vec<String>) -> Result<(), String> {
 /// pty, then polls this until the wrap-up is written — then it kills the pty so the
 /// session moves to Closed (not stale). Read-only, confined to a notes.md under a root.
 ///
-/// Requires the latest Session history entry to be a close dated **today** — NOT merely
-/// "status closed + file touched". A session with a pre-existing (older) close entry
-/// already reads as "closed", so /close-session's early section writes (Decisions/Files)
-/// bump the mtime and would trip a status-only check BEFORE it appends the fresh close
-/// line — killing the pty too early, so no today-dated close is recorded and
-/// reopened_after_close (transcript touched today > the old close date) flips it to stale.
-/// Gating on a today-dated close both fixes that race and guarantees the recorded close is
-/// same-day as the transcript, so it won't be flipped.
+/// Requires the latest Session history entry to be a close stamped at or after the minute
+/// `since_ms` falls in — NOT merely "status closed + file touched", and not merely "closed
+/// today". A session with a pre-existing close entry, even one from this morning, already
+/// reads as "closed", so /close-session's early section writes (Decisions/Files) bump the
+/// mtime and would trip a weaker check BEFORE it appends the fresh close line — killing
+/// the pty mid-wrap-up, so the new summary is lost.
 #[tauri::command]
 fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String> {
     let abs = notes_md_under_root(&notes_path)?;
@@ -1119,14 +1117,32 @@ fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String>
         return Ok(false); // not written since we injected /close-session
     }
     let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
-    let (status, date) = reader::session_history_info(&content);
-    if status != "closed" {
+    let Some(since_stamp) = local_stamp_at((since_ms / 1000.0) as i64) else {
         return Ok(false);
-    }
-    // The close entry must be dated today (local, matching how /close-session and
-    // close_session stamp it) — else an older close reads as "closed" and trips this early.
-    let today = local_date_time().map(|(d, _)| d);
-    Ok(today.is_some_and(|t| date.as_deref().is_some_and(|d| d.starts_with(&t))))
+    };
+    Ok(closed_since(&content, &since_stamp))
+}
+
+/// Is the newest Session history entry a close stamped at or after `since_stamp`
+/// (`YYYY-MM-DD HH:MM`, local)? Zero-padded stamps compare correctly as strings. A close
+/// without a time (the dashboard marker, legacy lines) cannot be placed after the
+/// injection, so it never counts.
+fn closed_since(content: &str, since_stamp: &str) -> bool {
+    let (status, date) = reader::session_history_info(content);
+    status == "closed" && date.is_some_and(|d| d.len() == 16 && d.as_str() >= since_stamp)
+}
+
+/// Local `YYYY-MM-DD HH:MM` of a Unix time, from `date` like local_date_time (so it
+/// matches the skills' stamps). `date -r <secs>` on macOS, `date -d @<secs>` elsewhere.
+fn local_stamp_at(secs: i64) -> Option<String> {
+    let at = if cfg!(target_os = "macos") {
+        ["-r".to_string(), secs.to_string()]
+    } else {
+        ["-d".to_string(), format!("@{secs}")]
+    };
+    let out = std::process::Command::new("date").args(at).arg("+%Y-%m-%d %H:%M").output().ok()?;
+    let s = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    (out.status.success() && s.len() == 16).then_some(s)
 }
 
 /// Is the newest Session history entry a close stamped on `today` (`YYYY-MM-DD`)? A prefix
@@ -1545,7 +1561,7 @@ mod tests {
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_frontmatter_links, slugify, stamp_archived, strip_archived, usage_view,
-        validate_root_override, root_flag, closed_on, url_opener_args, path_opener_args,
+        validate_root_override, root_flag, closed_on, closed_since, local_date_time, local_stamp_at, url_opener_args, path_opener_args,
     };
     use crate::reader;
     use serde_json::{json, Value};
@@ -2030,5 +2046,31 @@ mod tests {
         assert!(closed_on(&notes("- 2026-09-24 ?? → 14:43 | closed from the dashboard"), "2026-09-24"));
         assert!(!closed_on(&notes("- 2026-09-23 14:43 | session=abc | Shipped the fix"), "2026-09-24"));
         assert!(!closed_on(&notes("- 2026-09-24 14:43 (in progress) | session=abc | wip"), "2026-09-24"));
+    }
+
+    // A session closed in the morning and Ended again in the afternoon: the morning line
+    // must not count, or End kills the terminal in the middle of the new /close-session.
+    #[test]
+    fn closed_since_needs_a_close_stamped_at_or_after_the_injection() {
+        let notes = |line: &str| format!("## Session history\n{line}\n");
+        let morning = notes("- 2026-09-24 09:05 | session=abc | Morning wrap-up");
+        assert!(!closed_since(&morning, "2026-09-24 14:30"));
+        assert!(closed_since(&notes("- 2026-09-24 14:30 | session=abc | Fresh"), "2026-09-24 14:30"));
+        assert!(closed_since(&notes("- 2026-09-24 14:31 | session=abc | Fresh"), "2026-09-24 14:30"));
+        // A date-only close carries no time to compare, so it never counts as fresh.
+        assert!(!closed_since(&notes("- 2026-09-24 ?? → 14:40 | closed from the dashboard"), "2026-09-24 14:30"));
+        assert!(!closed_since(&notes("- 2026-09-24 14:40 (in progress) | session=abc | wip"), "2026-09-24 14:30"));
+    }
+
+    // The injection stamp must read like the skills' own `date +"%Y-%m-%d %H:%M"`.
+    #[test]
+    fn local_stamp_at_formats_now_like_local_date_time() {
+        let joined = || local_date_time().map(|(d, t)| format!("{d} {t}")).unwrap();
+        let before = joined();
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let stamp = local_stamp_at(now as i64).expect("date formats a Unix time");
+        let after = joined();
+        // Bracketed, so a minute ticking over mid-test cannot fail it.
+        assert!(stamp == before || stamp == after, "{stamp} vs {before}..{after}");
     }
 }
