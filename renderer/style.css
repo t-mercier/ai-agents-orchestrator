@@ -71,10 +71,11 @@ html, body {
    keep their focus-visible ring for keyboard a11y.) */
 .settings-tab:focus-visible,
 .view-btn:focus-visible,
-.tab-btn:focus-visible,
-/* Modal buttons too: a dialog auto-focuses its first button on open, so the ring
-   popped onto Cancel as a heavy stray contour. The .primary fill is the anchor. */
-.modal-btn:focus-visible { outline: none; }
+.tab-btn:focus-visible { outline: none; }
+/* Modal buttons: a dialog auto-focuses its first button on open, and the 2px outline
+   popped onto Cancel as a heavy stray contour. They keep a lighter ring instead of
+   none, so a keyboard user can still tell Delete from Cancel. */
+.modal-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.55); }
 
 /* ===== Motion Preferences ===== */
 /* Respect the OS "reduce motion" setting — neutralise transitions + animations. */
