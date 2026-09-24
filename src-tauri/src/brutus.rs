@@ -98,10 +98,15 @@ pub(crate) fn parse_line(line: &str) -> Vec<Event> {
                 _ => None,
             })
             .collect(),
-        Some("result") => vec![Event::Done {
-            is_error: v.get("is_error").and_then(Value::as_bool).unwrap_or(false),
-            result: s(&v, "result"),
-        }],
+        Some("result") => {
+            // error_max_turns and its kind carry no `result`, only `errors[]`.
+            let mut result = s(&v, "result");
+            if result.is_empty() {
+                result = v.get("errors").and_then(Value::as_array).into_iter().flatten()
+                    .filter_map(Value::as_str).collect::<Vec<_>>().join("\n");
+            }
+            vec![Event::Done { is_error: v.get("is_error").and_then(Value::as_bool).unwrap_or(false), result }]
+        }
         _ => Vec::new(),
     }
 }
@@ -461,6 +466,14 @@ mod tests {
             vec![Event::Done { is_error: false, result: "Teal".into() }]);
         assert_eq!(l(r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Not logged in"}"#),
             vec![Event::Done { is_error: true, result: "Not logged in".into() }]);
+    }
+
+    // An error result can carry only `errors[]` (error_max_turns does): the panel then
+    // showed "Something went wrong." instead of the reason.
+    #[test]
+    fn an_error_result_without_a_result_field_reports_its_errors() {
+        assert_eq!(parse_line(r#"{"type":"result","subtype":"error_max_turns","is_error":true,"errors":["Reached maximum number of turns (8)","second"]}"#),
+            vec![Event::Done { is_error: true, result: "Reached maximum number of turns (8)\nsecond".into() }]);
     }
 
     #[test]
