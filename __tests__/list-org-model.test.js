@@ -136,3 +136,27 @@ describe('group colour', () => {
     expect(M.normalize(JSON.parse(JSON.stringify(s))).categories.FEAT.groups.g1.color).toBe('#8FC9B9')
   })
 })
+
+describe('moveSession lands where it was dropped', () => {
+  // drag-list passes the index over the RENDERED items, the dragged one excluded.
+  it('in a category nobody has reordered yet, a drop below the top stays there', () => {
+    const live = ['A', 'B', 'C']
+    const last = M.moveSession(M.emptyState(), 'FEAT', 'A', 2, live)
+    expect(M.orderedItems(last, 'FEAT', live).map(i => i.key)).toEqual(['B', 'C', 'A'])
+    const mid = M.moveSession(M.emptyState(), 'FEAT', 'A', 1, live)
+    expect(M.orderedItems(mid, 'FEAT', live).map(i => i.key)).toEqual(['B', 'A', 'C'])
+  })
+  it('a partly reordered category counts the unmoved tail too', () => {
+    const live = ['A', 'B', 'C', 'D']
+    let s = M.moveSession(M.emptyState(), 'FEAT', 'C', 0, live)   // C, A, B, D
+    s = M.moveSession(s, 'FEAT', 'C', 2, live)                     // A, B, C, D
+    expect(M.orderedItems(s, 'FEAT', live).map(i => i.key)).toEqual(['A', 'B', 'C', 'D'])
+  })
+  it('a group block counts as one rendered item', () => {
+    const live = ['A', 'B', 'C', 'D']
+    let s = M.createGroupWith(M.emptyState(), 'FEAT', 'g1', ['B', 'C'], 0)   // [g1], A, D
+    s = M.moveSession(s, 'FEAT', 'D', 1, live)                              // [g1], D, A
+    const items = M.orderedItems(s, 'FEAT', live)
+    expect(items.map(i => i.kind === 'group' ? 'g1' : i.key)).toEqual(['g1', 'D', 'A'])
+  })
+})

@@ -71,8 +71,17 @@
     })
   }
 
-  function moveSession(state, catName, key, index) {
+  // `index` counts the rendered top-level items (drag-list excludes the dragged one),
+  // while c.order holds only what was moved before. Pass `liveKeys` (as given to
+  // orderedItems) so the rendered order is folded into c.order first; without it an
+  // unmoved tail is invisible to the splice and a drop below the top lands first.
+  function moveSession(state, catName, key, index, liveKeys) {
     const s = clone(state); const c = cat(s, catName)
+    if (liveKeys) {
+      const top = orderedItems(s, catName, liveKeys).map(it => it.kind === 'group' ? groupRef(it.id) : it.key)
+      const shown = new Set(top)
+      c.order = [...top, ...c.order.filter(id => !shown.has(id))]
+    }
     removeFromGroups(c, key); removeFromTop(c, key)
     const i = (index == null || index < 0 || index > c.order.length) ? c.order.length : index
     c.order.splice(i, 0, key)
