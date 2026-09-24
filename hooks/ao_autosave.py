@@ -68,12 +68,14 @@ def decide(context, notes_mtime, transcript_mtime, state, now):
     Returns (reason, blocking, state); `blocking` is true only at BLOCKING_TIER."""
     tiers = set(state.get("tiers") or [])
     last = float(state.get("last") or 0)
+    stored = sorted(tiers)
 
     if context is not None:
         # A compaction drops the figure back to 20-30 %. The tiers were "once each" so a
-        # session hovering at 61 % is not nagged every turn — not so that the second climb
-        # to 60 % passes in silence. Below the lowest tier, they re-arm.
-        if context < CONTEXT_TIERS[0]:
+        # session hovering at 76 % is not nagged every turn — not so that the second climb
+        # to 75 % passes in silence. Context only shrinks through a compaction or a clear,
+        # so a figure under any announced tier means a new climb: the tiers re-arm.
+        if tiers and context < max(tiers):
             tiers = set()
         due = [t for t in CONTEXT_TIERS if context >= t and t not in tiers]
         if due:
@@ -97,6 +99,10 @@ def decide(context, notes_mtime, transcript_mtime, state, now):
                   "since — run /save-session when the current step is finished.".format(minutes))
         return reason, False, {"tiers": sorted(tiers), "last": now}
 
+    if sorted(tiers) != stored:
+        # Nothing to say, but the re-armed tiers must be stored, or the next climb still
+        # finds them marked.
+        return None, False, {"tiers": sorted(tiers), "last": last}
     return None, False, state
 
 
@@ -144,14 +150,15 @@ def main():
         )
     except Exception:
         return
+    if new_state != state:
+        try:
+            os.makedirs(state_dir, exist_ok=True)
+            with open(state_file, "w") as f:
+                json.dump(new_state, f)
+        except Exception:
+            return                                  # cannot remember we asked → do not ask
     if not reason:
         return
-    try:
-        os.makedirs(state_dir, exist_ok=True)
-        with open(state_file, "w") as f:
-            json.dump(new_state, f)
-    except Exception:
-        return                                      # cannot remember we asked → do not ask
     if blocking:
         print(json.dumps({"decision": "block", "reason": reason}))
     else:
