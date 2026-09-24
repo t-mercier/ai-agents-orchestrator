@@ -266,7 +266,7 @@ pub(crate) fn sanitize_session_name(name: &str) -> String {
 /// Resume a session's full conversation in the user's terminal. sessionId is regex-
 /// restricted; the cwd is POSIX single-quoted, and `claude --model 'opus[1m]'` must stay
 /// quoted (the `[1m]` would otherwise be glob-expanded by the shell and the launch fails).
-#[tauri::command]
+#[tauri::command(async)]
 fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
     if !is_valid_session_id(&session_id) {
         return Err("invalid session id".into());
@@ -402,7 +402,7 @@ fn branch_target_error(branch_given: bool, dir_given: bool, dir_is_git: bool) ->
 /// itself — /start-session creates the notes folder (ADR-001/ADR-012). Category must pass
 /// the strict token regex AND exist in config. Folder/branch are pre-flight-validated so
 /// errors surface in the form, not as a dead iTerm tab.
-#[tauri::command]
+#[tauri::command(async)]
 #[allow(clippy::too_many_arguments)] // tauri command: one param per form field
 fn start_session(
     category: String,
@@ -595,7 +595,7 @@ pub(crate) fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::V
 /// (un-archiving it). Launcher only — the app writes nothing (ADR-001/ADR-012).
 /// Distinct from resume: `/restart-session` reloads the notes summary, not the raw transcript,
 /// so it works for sessions with no recorded sessionId (e.g. "to fill").
-#[tauri::command]
+#[tauri::command(async)]
 fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     // Slug is a folder name (allows '.') — validate at the boundary before it
     // reaches the filesystem/prompt. sessionId, if present, must be a clean id.
