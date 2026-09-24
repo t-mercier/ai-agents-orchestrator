@@ -72,15 +72,13 @@ PY
 # Relink fallback: a RESUMED session's id is often absent from active-sessions.json (it
 # was closed/archived → de-registered), but its managed notes.md still records the id as a
 # `session=<id>` history line. Find that notes.md so the close lands in the RIGHT place
-# instead of nowhere. Searches each configured category folder via aoconfig.
+# instead of nowhere. Searches every (space, category) folder via aoconfig.
 if [ -z "$NOTES_PATH" ] && [ -n "$SESSION_ID" ]; then
-  while IFS= read -r cat; do
-    [ -z "$cat" ] && continue
-    base=$(python3 ~/.claude/skills/lib/aoconfig.py base "$cat" 2>/dev/null)
+  while IFS= read -r base; do
     [ -z "$base" ] && continue
     hit=$(grep -rl "session=$SESSION_ID" "$base"/*/notes.md 2>/dev/null | head -1)
     [ -n "$hit" ] && { NOTES_PATH="$hit"; break; }
-  done < <(python3 ~/.claude/skills/lib/aoconfig.py categories 2>/dev/null)
+  done < <(python3 ~/.claude/skills/lib/aoconfig.py bases 2>/dev/null)
 fi
 ```
 
