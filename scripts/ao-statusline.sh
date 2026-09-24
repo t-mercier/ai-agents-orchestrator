@@ -105,6 +105,10 @@ os.replace(tmp, p)
 PY
 
 # Delegate to your real statusline command (if provided), preserving its output verbatim.
+# The app passes your whole statusLine command as ONE argument, so anything that is not a
+# script file (`npx ccstatusline@latest`, `bash ~/x.sh`) runs as a shell command line.
 if [ "$#" -ge 1 ] && [ -n "$1" ]; then
-  if [ -x "$1" ]; then printf '%s' "$INPUT" | "$1"; else printf '%s' "$INPUT" | bash "$1"; fi
+  if [ -f "$1" ] && [ -x "$1" ]; then printf '%s' "$INPUT" | "$1"
+  elif [ -f "$1" ]; then printf '%s' "$INPUT" | bash "$1"
+  else printf '%s' "$INPUT" | bash -c "$1"; fi
 fi
