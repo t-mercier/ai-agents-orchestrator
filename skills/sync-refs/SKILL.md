@@ -89,10 +89,13 @@ run once got 15 of 57 PRs that way):
 
 ```bash
 TICKETS='GOSDK-201341|GOSDK-221110'            # the session's ticket ids, `|`-joined
-for repo in owner/repo-a owner/repo-b; do
-  gh pr list --repo "$repo" --state all --limit 60 --json number,url,headRefName,title < /dev/null \
-    | jq -r --arg t "$TICKETS" '.[] | select(.headRefName | test($t)) | .url'
-done
+# No tickets → skip the branch match: an empty pattern matches every branch in the repo.
+if [ -n "$TICKETS" ]; then
+  for repo in owner/repo-a owner/repo-b; do
+    gh pr list --repo "$repo" --state all --limit 60 --json number,url,headRefName,title < /dev/null \
+      | jq -r --arg t "$TICKETS" '.[] | select(.headRefName | test($t)) | .url'
+  done
+fi
 ```
 
 **No repository known at all** (no PR attached, and the current directory is not a

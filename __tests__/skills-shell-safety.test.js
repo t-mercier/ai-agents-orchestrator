@@ -78,3 +78,22 @@ test('archive-session removes a registered path containing an apostrophe', () =>
   run(bashBlock('archive-session', '## Step 5 — Remove from active-sessions.json'), home, { NOTES_PATH: NOTES })
   expect(Object.keys(registry(home))).toEqual(['b'])
 })
+
+// With no tickets the branch pattern was "", which matches every branch: every PR in the
+// repository (up to 60) was attached to the session, permanently.
+describe('sync-refs branch match', () => {
+  const block = bashBlock('sync-refs', '## Step 3 — Pull requests')
+  const prs = JSON.stringify([
+    { number: 1, url: 'https://github.com/o/r/pull/1', headRefName: 'fix/GOSDK-1-a', title: 'a' },
+    { number: 2, url: 'https://github.com/o/r/pull/2', headRefName: 'feat/other', title: 'b' },
+  ])
+  const withTickets = (t) =>
+    `gh() { printf '%s' '${prs}'; }\n` + block.replace(/^TICKETS=.*$/m, `TICKETS='${t}'`)
+  test('attaches nothing when the session has no tickets', () => {
+    expect(run(withTickets(''), os.tmpdir(), {}).trim()).toBe('')
+  })
+  test('still matches branches naming a ticket', () => {
+    const out = [...new Set(run(withTickets('GOSDK-1'), os.tmpdir(), {}).trim().split('\n'))]
+    expect(out).toEqual(['https://github.com/o/r/pull/1'])
+  })
+})
