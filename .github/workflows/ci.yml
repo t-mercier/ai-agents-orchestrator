@@ -20,6 +20,8 @@ jobs:
         run: npm run check:secrets
       - name: Unit tests (renderer/lib)
         run: npm test
+      - name: Python tests (hooks + skills/lib selftests)
+        run: npm run test:py
       - name: Vendored xterm bundle is current
         run: npm run check:bundle
       - name: Browser for the UI smoke tests
