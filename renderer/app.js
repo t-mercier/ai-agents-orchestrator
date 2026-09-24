@@ -277,8 +277,9 @@ function openFilterMenu(anchor) {
     document.addEventListener('keydown', onFilterEsc, true)
   }, 0)
 }
-// Minimal attribute escaper (category names are validated tokens, but be safe).
-function escapeAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;') }
+// Escapes a value for an HTML attribute or text. Space names are free text (quotes,
+// accents, spaces), so every name interpolated into markup goes through this.
+function escapeAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') }
 
 // +New: the selected space (a config root name). Both the category list AND the space
 // the session launches under derive from it.
@@ -292,8 +293,7 @@ function categoriesForRoot(rootName) {
   return names.length ? [...new Set(names)] : filterCategories()
 }
 
-// Fill the +New modal's category dropdown from config (validated names, so safe to
-// interpolate). Shows the Space <select> only when >1 space exists, and filters the
+// Fill the +New modal's category dropdown from config, escaping every name. Shows the Space <select> only when >1 space exists, and filters the
 // categories to the selected space.
 function populateNewSessionCategories() {
   const sel = document.getElementById('ns-category')
@@ -305,11 +305,11 @@ function populateNewSessionCategories() {
   if (field) field.hidden = !multi
   if (multi && spaceSel) {
     if (!spaces.includes(nsRoot)) nsRoot = spaces[0]
-    spaceSel.innerHTML = spaces.map(s => `<option value="${s}">${s}</option>`).join('')
+    spaceSel.innerHTML = spaces.map(s => `<option value="${escapeAttr(s)}">${escapeAttr(s)}</option>`).join('')
     spaceSel.value = nsRoot
   }
   const list = multi ? categoriesForRoot(nsRoot) : filterCategories()
-  sel.innerHTML = list.map(cat => `<option value="${cat}">${cat}</option>`).join('')
+  sel.innerHTML = list.map(cat => `<option value="${escapeAttr(cat)}">${escapeAttr(cat)}</option>`).join('')
   syncPrField()   // selected category may have changed → toggle the PR field
 }
 
