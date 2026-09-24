@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.2-alpha] - 2026-09-24
+
 ### Changed
 
 - **The bubble folds when you click elsewhere**, like a popover; the side panel stays
