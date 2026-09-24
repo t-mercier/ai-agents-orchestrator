@@ -129,7 +129,9 @@
     }
     if (it.kind === 'note') {
       const n = boardState.notes.find((x) => x.id === it.id)
-      return !window.queryMatches || window.queryMatches(n ? n.text : '')
+      // An empty note is one being written: a search must not hide it from its author.
+      if (!n || !n.text) return true
+      return !window.queryMatches || window.queryMatches(n.text)
     }
     if (it.kind === 'group') return CSMBoard.orderedItems(boardState, 'g:' + it.id).some(visible)
     return true
@@ -371,10 +373,12 @@
       const addNote = e.target.closest('[data-add-note]')
       if (addNote) {
         const col = addNote.dataset.addNote
-        applyBoard(CSMBoard.addNote(CSMBoard.load(), col, ''))
-        const body = host.querySelector(`[data-col-drop="${CSS.escape(col)}"]`)
-        const notes = body ? body.querySelectorAll('[data-note-edit]') : []
-        if (notes.length) startNoteEdit(notes[notes.length - 1])
+        const next = CSMBoard.addNote(CSMBoard.load(), col, '')
+        applyBoard(next)
+        // By id: the last rendered note is an older one whenever a search hides some.
+        const id = next.notes.length ? next.notes[next.notes.length - 1].id : null
+        const span = id && host.querySelector(`[data-note-edit="${CSS.escape(id)}"]`)
+        if (span) startNoteEdit(span)
         return
       }
       const addSess = e.target.closest('[data-add-session]')
