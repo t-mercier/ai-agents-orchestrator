@@ -105,3 +105,20 @@ test('wrap-session looks up the PR of the branch recorded in the notes', () => {
   expect(t).toMatch(/gh pr view "\$BRANCH" --json url -q \.url/)
   expect(t).not.toMatch(/gh pr view --json/)
 })
+
+// restart-session checked out origin/<branch> before fetching, so a branch pushed after
+// the last local fetch failed with "not a commit" and the user was told to stash.
+test('restart-session checks out a branch pushed after the last fetch', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-restart-'))
+  const env = {
+    ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: '1',
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t',
+  }
+  const sh = (cmd, cwd) => execFileSync('bash', ['-c', cmd], { cwd, env, encoding: 'utf8', stdio: 'pipe' })
+  sh('git init -q --bare -b main origin.git && git clone -q origin.git a 2>/dev/null && cd a && git commit -q --allow-empty -m init && git push -q origin main && cd .. && git clone -q origin.git b', dir)
+  sh('git checkout -q -b feat && git commit -q --allow-empty -m f && git push -q origin feat', path.join(dir, 'b'))
+  const script = bashBlock('restart-session', '### Step 5 — Git sync')
+    .replace('<BRANCH from Step 2 frontmatter>', 'feat')
+  sh(script, path.join(dir, 'a'))
+  expect(sh('git branch --show-current', path.join(dir, 'a')).trim()).toBe('feat')
+})

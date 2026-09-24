@@ -255,6 +255,8 @@ Sync the branch recorded in the notes (not whatever the shell is on):
 
 ```bash
 if git rev-parse --git-dir >/dev/null 2>&1; then
+  # Fetch first: a branch pushed since the last fetch has no origin/<branch> to check out yet.
+  git fetch --all --prune || echo "WARN: fetch failed"
   NOTES_BRANCH="<BRANCH from Step 2 frontmatter>"
   CURRENT_BRANCH=$(git branch --show-current)
   if [ -z "$NOTES_BRANCH" ] || [ "$NOTES_BRANCH" = "to fill" ]; then
@@ -273,7 +275,6 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
       fi
     fi
   fi
-  git fetch --all --prune || echo "WARN: fetch failed"
   if [ -n "$BRANCH" ] && git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
     git rebase "origin/$BRANCH" || { git rebase --abort; echo "WARN: conflicts on origin/$BRANCH — aborted"; }
   fi
