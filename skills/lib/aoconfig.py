@@ -18,12 +18,15 @@ Subcommands:
   roots             → newline-separated list of root names
   rootpath <ROOT>   → absolute path of a named root, or '' if unknown
   root     <CAT>    → the root name a category lives under
-  scope    <CAT>    → 'work' | 'personal' (default 'work'; inferred from root if absent)
+  scope    <CAT> [<ROOT>] → 'work' | 'personal' (default 'work'; inferred from root if absent)
   base     <CAT> [<ROOT>] → absolute base dir for a category (= <root path>/<CAT>);
                       optional <ROOT> disambiguates a category present under several roots
   dir      <CAT> <SLUG> [<ROOT>] → absolute workspace dir = base/<SLUG>
-  vault    <CAT>    → Obsidian vault path for the category's scope, or '' if
-                      Obsidian is disabled / no vault set for that scope
+  vault    <CAT> [<ROOT>] → Obsidian vault path for the category's scope, or '' if
+                      Obsidian is disabled / no vault set for that scope; optional <ROOT>
+                      picks the space when the category name exists under several
+  rootof   <PATH>   → the root name whose path contains <PATH> (longest match), or ''
+  bases             → newline-separated base dir of every (root, category) pair
   find     <SLUG>   → newline-separated notes.md paths matching <SLUG> across all
                       (root, category) bases (for /restart-session, /close-session, /archive-session lookups)
 """
@@ -129,17 +132,22 @@ def base_for(cfg, name, root=None):
     return base_for_entry(cfg, entry)
 
 
-def scope_of(cfg, name):
-    entry = find_entry(cfg, name)
+def scope_of(cfg, name, root=None):
+    entry = find_entry(cfg, name, root)
     if entry is None:
+        if root:
+            return 'personal' if root.lower() in PERSONAL_ROOTS else 'work'
         return 'work'
     if entry.get('scope'):
         return entry['scope']
     return 'personal' if root_name_of(entry).lower() in PERSONAL_ROOTS else 'work'
 
 
-def vault_for(cfg, name):
+def vault_for(cfg, name, root=None):
     """Obsidian vault path for a category's root.
+
+    `root` names the space when the same category name exists under several; without it
+    the first matching entry wins.
 
     v2: the vault lives on the category's root (roots[].vaultPath).
     v1 shim: scope → workVaultPath/personalVaultPath (remove in ADR-015 Release N+1).
@@ -151,9 +159,9 @@ def vault_for(cfg, name):
         return ''
 
     # v2: read vaultPath from the category's root.
-    entry = find_entry(cfg, name)
-    if entry:
-        root_name = root_name_of(entry)
+    entry = find_entry(cfg, name, root)
+    if entry or root:
+        root_name = root_name_of(entry) if entry else root
         # Look up the root in the raw config to get its vaultPath.
         roots = cfg.get('roots', [])
         if isinstance(roots, list):
@@ -166,7 +174,7 @@ def vault_for(cfg, name):
 
     # v1 shim: scope → workVaultPath/personalVaultPath.
     # Keep until ADR-015 Release N+1.
-    key = 'personalVaultPath' if scope_of(cfg, name) == 'personal' else 'workVaultPath'
+    key = 'personalVaultPath' if scope_of(cfg, name, root) == 'personal' else 'workVaultPath'
     return expand(obs.get(key) or '')
 
 
@@ -217,6 +225,28 @@ def flag(cfg, key):
     return 'on' if value is True else ''
 
 
+def root_of_path(cfg, path):
+    """The root whose path contains `path`, or ''. Longest match wins: roots can nest
+    (the v1 defaults put Work at ~/work inside Perso at ~)."""
+    path = os.path.abspath(expand(path))
+    best, best_len = '', -1
+    for name, rp in roots_list(cfg):
+        prefix = os.path.abspath(rp).rstrip(os.sep) + os.sep
+        if path.startswith(prefix) and len(prefix) > best_len:
+            best, best_len = name, len(prefix)
+    return best
+
+
+def all_bases(cfg):
+    """Base dir of every (root, category) pair, deduplicated, in config order."""
+    out = []
+    for c in categories(cfg) or [{'name': n} for n in DEFAULT_CATEGORIES]:
+        b = base_for_entry(cfg, c)
+        if b not in out:
+            out.append(b)
+    return out
+
+
 def find_notes(cfg, slug):
     out, seen = [], set()
     entries = categories(cfg) or [{'name': n} for n in DEFAULT_CATEGORIES]
@@ -232,7 +262,7 @@ def main():
     args = sys.argv[1:]
     cfg = load()
     if not args:
-        print("usage: aoconfig.py categories|roots|rootpath|root|scope|base|dir|vault|vaults|flag|find [args]")
+        print("usage: aoconfig.py categories|roots|rootpath|root|scope|base|dir|vault|vaults|rootof|bases|flag|find [args]")
         return
     cmd = args[0]
     if cmd == 'categories':
@@ -251,7 +281,12 @@ def main():
     elif cmd == 'flag' and len(args) >= 2:
         print(flag(cfg, args[1]))
     elif cmd in ('scope', 'vault') and len(args) >= 2:
-        print({'scope': scope_of, 'vault': vault_for}[cmd](cfg, args[1]))
+        root = args[2] if len(args) >= 3 and args[2] else None
+        print({'scope': scope_of, 'vault': vault_for}[cmd](cfg, args[1], root))
+    elif cmd == 'rootof' and len(args) >= 2:
+        print(root_of_path(cfg, args[1]))
+    elif cmd == 'bases':
+        print('\n'.join(all_bases(cfg)))
     elif cmd == 'base' and len(args) >= 2:
         print(base_for(cfg, args[1], args[2] if len(args) >= 3 else None))
     elif cmd == 'dir' and len(args) >= 3:
@@ -262,4 +297,5 @@ def main():
         sys.exit(1)
 
 
-main()
+if __name__ == '__main__':
+    main()

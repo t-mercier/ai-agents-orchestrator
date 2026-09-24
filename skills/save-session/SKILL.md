@@ -165,7 +165,9 @@ checkpoint is when a decision is fresh, and a session that is never closed would
 teach the next one nothing. Only if a vault is configured for this category's scope:
 
 ```bash
-VAULT=$(python3 ~/.claude/skills/lib/aoconfig.py vault "<CATEGORY>")
+# The space the notes live under: a category name can exist in several spaces.
+ROOT=$(python3 ~/.claude/skills/lib/aoconfig.py rootof "$NOTES_PATH")
+VAULT=$(python3 ~/.claude/skills/lib/aoconfig.py vault "<CATEGORY>" ${ROOT:+"$ROOT"})
 ```
 
 `$VAULT` empty → skip silently.

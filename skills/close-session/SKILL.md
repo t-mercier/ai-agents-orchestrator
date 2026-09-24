@@ -177,7 +177,9 @@ NOW=$(date +"%Y-%m-%d %H:%M")
 Only if a vault is configured for this category's scope:
 
 ```bash
-VAULT=$(python3 ~/.claude/skills/lib/aoconfig.py vault "<CATEGORY>")
+# The space the notes live under: a category name can exist in several spaces.
+ROOT=$(python3 ~/.claude/skills/lib/aoconfig.py rootof "$NOTES_PATH")
+VAULT=$(python3 ~/.claude/skills/lib/aoconfig.py vault "<CATEGORY>" ${ROOT:+"$ROOT"})
 ```
 
 `$VAULT` empty → skip silently.

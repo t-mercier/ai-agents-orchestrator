@@ -86,7 +86,9 @@ print((e.get('category') or '').strip() + '|' + (e.get('notes_path') or ''))
 PY
 )
 NOTES_PATH="${CATEGORY#*|}"; CATEGORY="${CATEGORY%%|*}"
-VAULT=$([ -n "$CATEGORY" ] && python3 "$LIB" vault "$CATEGORY" || python3 "$LIB" vaults | head -1)
+# The space the notes live under: a category name can exist in several spaces.
+ROOT=$([ -n "$NOTES_PATH" ] && python3 "$LIB" rootof "$NOTES_PATH")
+VAULT=$([ -n "$CATEGORY" ] && python3 "$LIB" vault "$CATEGORY" ${ROOT:+"$ROOT"} || python3 "$LIB" vaults | head -1)
 ```
 
 `$VAULT` empty → no knowledge notes configured for this space. Say so once, suggest
