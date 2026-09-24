@@ -42,13 +42,20 @@ pub(crate) fn alive(pid: i64) -> bool {
     if !exists {
         return false;
     }
-    match std::process::Command::new("ps")
-        .args(["-o", "comm=", "-p", &pid.to_string()])
-        .stderr(std::process::Stdio::null())
-        .output()
-    {
+    let ps = |field: &str| {
+        std::process::Command::new("ps")
+            .args(["-o", field, "-p", &pid.to_string()])
+            .stderr(std::process::Stdio::null())
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    match ps("comm=") {
         // `ps` exits non-zero with no output when the pid vanished in between.
-        Ok(out) => is_session_comm(String::from_utf8_lossy(&out.stdout).trim()),
+        Ok(comm) if comm.is_empty() => false,
+        Ok(comm) if is_session_comm(&comm) => true,
+        // Linux reports the kernel task name, which for the native installer is the
+        // version-named binary alone (`2.1.278`); its command line still starts `claude`.
+        Ok(comm) => is_session_process(&comm, &ps("args=").unwrap_or_default()),
         // No `ps` to ask: nothing better than the signal check is available.
         Err(_) => true,
     }
@@ -65,6 +72,16 @@ pub(crate) fn is_session_comm(comm: &str) -> bool {
     }
     let head = comm.split_whitespace().next().unwrap_or("");
     matches!(head.rsplit('/').next(), Some("claude" | "node"))
+}
+
+/// [`is_session_comm`] with the command line as a second chance, for a `comm` that is
+/// only the binary's version-named basename. A bare version is not trusted on its own.
+pub(crate) fn is_session_process(comm: &str, args: &str) -> bool {
+    if is_session_comm(comm) {
+        return true;
+    }
+    let version_named = !comm.is_empty() && comm.chars().all(|c| c.is_ascii_digit() || c == '.');
+    version_named && is_session_comm(args.split_whitespace().next().unwrap_or(""))
 }
 
 /// Fields pulled from a session's transcript (jsonl). The transcript is the
@@ -1767,6 +1784,16 @@ mod tests {
         for comm in ["", "sleep", "/bin/bash", "2.1.278", "claudette", "/opt/claude-tools/python3", "launchd"] {
             assert!(!is_session_comm(comm), "{comm} is not Claude Code");
         }
+    }
+
+    #[test]
+    fn a_version_named_comm_is_claude_code_only_when_its_command_line_says_so() {
+        use super::is_session_process;
+        assert!(is_session_process("2.1.278", "claude --resume abc"), "Linux native installer");
+        assert!(is_session_process("2.1.278", "/home/me/.local/bin/claude"));
+        assert!(!is_session_process("2.1.278", "python3 serve.py"));
+        assert!(!is_session_process("sleep", "claude"), "only a version-named comm gets the second chance");
+        assert!(!is_session_process("", "claude"));
     }
 
     // A conversation continued elsewhere leaves its process parked and its pidfile frozen:
