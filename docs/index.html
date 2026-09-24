@@ -163,6 +163,7 @@
   .feature ul { list-style: none; margin-top: 18px; display: grid; gap: 10px; }
   .feature li { display: flex; gap: 11px; color: var(--muted); font-size: 15px; }
   .feature li svg { flex: none; margin-top: 4px; color: var(--tone); }
+  kbd { display: inline-block; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line-2); border-bottom-width: 2px; background: rgba(255, 255, 255, 0.05); font-family: inherit; font-size: 0.86em; font-weight: 600; color: var(--text); line-height: 1.5; }
   @media (max-width: 860px) { .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; } .feature.flip .copy { order: 0; } }
 
   /* ── Card grid (problem / values) ── */
@@ -282,6 +283,7 @@
     <div class="brand"><span class="mark"><span></span></span> AI Agents Orchestrator</div>
     <div class="nav-links">
       <a href="#memory">Memory</a>
+      <a href="#brutus">Brutus</a>
       <a href="#features">Features</a>
       <a href="#skills">Skills</a>
       <a href="#security">Security</a>
@@ -408,6 +410,34 @@
   </div>
 </section>
 
+<!-- BRUTUS -->
+<section id="brutus">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">New in 0.20 · Brutus</p>
+      <h2>Ask Brutus what's waiting on you.</h2>
+      <p class="lead">He has read every session's notes, so you don't open ten of them to find out where you are. Ask from the bubble in the corner, a panel docked on the right, or <kbd>⌘K</kbd> from anywhere in the app.</p>
+    </div>
+    <div class="feature">
+      <div class="copy reveal">
+        <h3>One question, every session</h3>
+        <p>He answers with the sessions as chips: click one and its card opens. And he remembers what you tell him, so he gets better the more you use him.</p>
+        <ul>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> <span><em>"What's waiting on me?"</em>, <em>"brief me on FEAT-1842"</em>, <em>"what did I decide last week?"</em></span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> <span><kbd>⌘K</kbd> opens him over whatever you are doing; <kbd>Esc</kbd> puts him away</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> <span>Name him, and pick his style: concise, friendly, casual, nerdy or sarcastic</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> <span><strong>He reads and remembers, nothing else.</strong> No MCP servers, no network tools, and the only file he writes is his own memory</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m20 6-11 11-5-5"/></svg> <span>Next: he proposes the obvious chores, like archiving what went stale, and does them only on your yes</span></li>
+        </ul>
+      </div>
+      <div class="shot reveal">
+        <div class="bar"><i></i><i></i><i></i><span class="t">⌘K · Brutus</span></div>
+        <img src="media/brutus.png" alt="Brutus's ⌘K palette over the List, answering which sessions are waiting, with the sessions as chips and his bubble in the corner" loading="lazy" />
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- FEATURES -->
 <section id="features">
   <div class="wrap">
@@ -433,17 +463,6 @@
         <h4>One click back in</h4>
         <p>Resume in an embedded terminal, pop it into its own pinned window, or jump to the branch, PR, or notes.</p>
       </div>
-    </div>
-    <div class="card reveal" style="margin-top:18px">
-      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg></div>
-      <h4>Ask Brutus</h4>
-      <p>"What's waiting on me?", "brief me on FEAT-1842", "what did I decide last week?" — from a bubble, a docked panel, or <strong>⌘K</strong>. He reads the dashboard and the notes, answers with the sessions as clickable chips, and remembers what you tell him. Name him, pick his style — concise, friendly, casual, nerdy or sarcastic. He can read and remember, nothing else.</p>
-    </div>
-
-    <div class="section-head reveal" style="margin-top:56px">
-      <p class="eyebrow">Two ways to look</p>
-      <h2>List or kanban — your call.</h2>
-      <p class="lead">The same live session data, rendered the way you think — a tidy list, or a full kanban cockpit.</p>
     </div>
 
     <div class="feature">

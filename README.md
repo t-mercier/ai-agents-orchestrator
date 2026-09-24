@@ -19,6 +19,8 @@
 > A long Claude Code session gets **compacted** — the decisions you made on day one are squeezed out, and the next conversation starts from nothing. Run several in parallel and you also lose track of which one is waiting on you.
 >
 > **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure. Nothing becomes active until you have seen the exact wording and said yes. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync** or **Close**.
+>
+> **New in 0.20: Brutus.** Ask him what's waiting on you, what a session is about, or what you decided last week — from a bubble in the corner, or **⌘K** from anywhere in the app. He has read every session's notes, and remembers what you tell him.
 
 ## TL;DR — how you're meant to use it
 
@@ -77,6 +79,8 @@ Four things you shouldn't have to do twice — each one something you already wo
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 
 ### Brutus, the one you ask
+
+![Brutus's ⌘K palette over the List, answering which sessions are waiting on you, with the sessions as chips and his bubble in the corner](docs/media/brutus.png)
 
 Ask **Brutus** anything about your sessions — *what's waiting on me?*, *brief me on
 FEAT-1842*, *what did I decide last week?* — from the bubble in the corner, a panel docked on
@@ -445,6 +449,8 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 > [!NOTE]
 > ## What's new
 >
+> - 💬 **Brutus, the one you ask** — *what's waiting on me?*, *brief me on FEAT-1842*, *what did I decide last week?* From the bubble, a docked panel or **⌘K**. He answers with the sessions as clickable chips, remembers what you tell him, and can read and remember nothing else. Name him and pick his style in **Settings → Assistant**.
+> - ↕ **Order, group and sort every tab** — groups and drag-to-order now work on Closed and Archived too, and **Sort** orders each category by last update or ticket number.
 > - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. **Sync all**, in the titlebar, does it for every open session at once — one `gh` batch, then the agents one at a time. Nothing runs in the background.
 > - 🔀 **Pull requests carry their state** — open, merged, closed or draft, on the card and spelled out with each PR's title in the detail panel.
 > - 🏷 **Tickets carry their tracker's own status word** — `In Review`, `Triaged`, whatever your project calls it. Read through MCP, so the app itself never holds a tracker credential.
