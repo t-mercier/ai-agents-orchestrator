@@ -110,11 +110,14 @@ test('a terminal whose claude exited while on screen is gone once hidden', async
     // Reopened while the dead pane is still on screen: a fresh claude, not the old buffer.
     const spawns = []
     window.api.ptySpawn = (sid) => { spawns.push(sid); return Promise.resolve() }
+    // A terminal spawns after the fonts load and a frame, which a slow runner takes longer
+    // than a fixed pause to reach: wait for the spawn itself.
+    const until = async (ok) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 30)) }
     window.openTerminalPane('S3', '/tmp', '', '', '/k/notes.md')
-    await new Promise(r => setTimeout(r, 50))
+    await until(() => spawns.length === 1)
     exit('S3')
     window.openTerminalPane('S3', '/tmp')
-    await new Promise(r => setTimeout(r, 50))
+    await until(() => spawns.length === 2)
     return { liveWhileShown, afterHide, afterClose, shown,
       inputs, closes, spawns, reopenedLive: window.hasLiveTerminal('S3') }
   })
