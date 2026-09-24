@@ -17,6 +17,7 @@ test('a refused Save then Cancel leaves Brutus where he was', async ({ page }) =
   await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
   await expect(page.locator('#settings-modal')).toHaveAttribute('open', '')
   await page.evaluate(() => document.getElementById('settings-modal').close())
-  expect(await page.evaluate(() => localStorage.getItem('csm.brutusHome'))).toBe('bubble')
+  // The dialog's close event, which runs the revert, is dispatched after close() returns.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('csm.brutusHome'))).toBe('bubble')
   await expect(page.locator('body')).not.toHaveClass(/bru-docked/)
 })
