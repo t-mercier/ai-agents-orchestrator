@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.1-alpha] - 2026-09-24
+
 ### Changed
 
 - **Brutus fits the way you work.** His chat wraps instead of scrolling sideways. Widen the
