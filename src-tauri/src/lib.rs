@@ -1129,6 +1129,14 @@ fn notes_closed_since(notes_path: String, since_ms: f64) -> Result<bool, String>
     Ok(today.is_some_and(|t| date.as_deref().is_some_and(|d| d.starts_with(&t))))
 }
 
+/// Is the newest Session history entry a close stamped on `today` (`YYYY-MM-DD`)? A prefix
+/// match, because the skills stamp `YYYY-MM-DD HH:MM` and the dashboard marker the bare
+/// date. Shared by close_session's "already closed" guard and wrap_session's success check.
+pub(crate) fn closed_on(content: &str, today: &str) -> bool {
+    let (status, date) = reader::session_history_info(content);
+    status == "closed" && date.is_some_and(|d| d.starts_with(today))
+}
+
 /// Stamp a close marker directly into the session's notes.md history — the guaranteed
 /// fallback for the "End session" button when `/close-session` produced no fresh wrap-up
 /// (nothing new to summarise, or it was in plan mode). Ensures the session lands in
@@ -1143,8 +1151,7 @@ fn close_session(notes_path: String) -> Result<(), String> {
         local_date_time().ok_or("could not determine the current date")?;
     let (date, time) = (date.as_str(), time.as_str());
     // Already closed today (e.g. /close-session just wrote a fresh wrap-up) → no double-stamp.
-    let (status, last_date) = reader::session_history_info(&content);
-    if status == "closed" && last_date.as_deref() == Some(date) {
+    if closed_on(&content, date) {
         return Ok(());
     }
     // `?? → HH:MM` is the legacy close shape is_wrapped_up recognises (no session id needed).
@@ -1229,11 +1236,8 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
     // history line, and that line is the only thing that actually means "Closed".
     let closed_today = std::fs::read_to_string(&abs)
         .ok()
-        .map(|c| reader::session_history_info(&c))
         .zip(local_date_time())
-        .is_some_and(|((status, date), (today, _))| {
-            status == "closed" && date.as_deref() == Some(today.as_str())
-        });
+        .is_some_and(|(c, (today, _))| closed_on(&c, &today));
     if !closed_today {
         return fallback();
     }
@@ -1541,7 +1545,7 @@ mod tests {
         is_safe_category,
         is_safe_slug, is_ticket, is_valid_session_id, parse_usage, percent_encode, sanitize_session_name,
         set_frontmatter_links, slugify, stamp_archived, strip_archived, usage_view,
-        validate_root_override, root_flag, url_opener_args, path_opener_args,
+        validate_root_override, root_flag, closed_on, url_opener_args, path_opener_args,
     };
     use crate::reader;
     use serde_json::{json, Value};
@@ -2015,5 +2019,16 @@ mod tests {
         // Linux: no `--` (xdg-open rejects it); a non-folder opens its parent folder.
         assert_eq!(v(path_opener_args(false, dir, true)), ["/w/notes"]);
         assert_eq!(v(path_opener_args(false, file, false)), ["/w/notes"]);
+    }
+
+    // The skills stamp `YYYY-MM-DD HH:MM`; today is `YYYY-MM-DD`. An exact compare never
+    // matched, so every dashboard Close appended a marker that hid the real summary.
+    #[test]
+    fn closed_on_matches_a_timed_close_line_from_today() {
+        let notes = |line: &str| format!("## Session history\n{line}\n");
+        assert!(closed_on(&notes("- 2026-09-24 14:43 | session=abc | Shipped the fix"), "2026-09-24"));
+        assert!(closed_on(&notes("- 2026-09-24 ?? → 14:43 | closed from the dashboard"), "2026-09-24"));
+        assert!(!closed_on(&notes("- 2026-09-23 14:43 | session=abc | Shipped the fix"), "2026-09-24"));
+        assert!(!closed_on(&notes("- 2026-09-24 14:43 (in progress) | session=abc | wip"), "2026-09-24"));
     }
 }
