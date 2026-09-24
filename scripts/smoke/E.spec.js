@@ -21,3 +21,18 @@ test('an unreadable memory file is not shown as nothing remembered', async ({ pa
   await page.locator('.bru-fab').click()
   await expect(page.locator('.bru-panel .bru-sub')).toHaveText('Could not read his memory')
 })
+
+test('Stop pressed before claude has started says it was received', async ({ page }) => {
+  // Still preparing: the ask has not answered and no event has arrived.
+  await page.evaluate(() => {
+    window.api.brutusAsk = () => new Promise(() => {})
+    window.api.brutusCancel = () => Promise.resolve(true)
+  })
+  await page.locator('.bru-fab').click()
+  await page.locator('.bru-panel input').fill('anything')
+  await page.keyboard.press('Enter')
+  // Each render re-mounts the panel with its pop animation: click without waiting for it.
+  await page.locator('.bru-panel [data-bru="stop"]').dispatchEvent('click')
+  await expect(page.locator('.bru-panel .bru-steps').last()).toContainText('Stopping')
+  await expect(page.locator('.bru-panel [data-bru="stop"]')).toBeDisabled()
+})

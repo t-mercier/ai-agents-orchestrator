@@ -143,8 +143,10 @@ static BUSY: AtomicBool = AtomicBool::new(false);
 /// if the slot still holds that run.
 static CHILD: Mutex<Option<(u64, Child)>> = Mutex::new(None);
 static RUN: AtomicU64 = AtomicU64::new(0);
-/// Set by brutus_cancel, so the end of a stopped run says "Stopped." — not a SIGKILL
-/// reported as a broken install.
+/// Set by brutus_cancel and cleared only when the next run takes BUSY. A run checks it
+/// before spawning and right after, so a Stop pressed while he prepares, or between the
+/// two runs of a retry, still stops him. Also makes a stopped run end on "Stopped.", not
+/// on a SIGKILL reported as a broken install.
 static CANCELLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, PartialEq)]
@@ -179,7 +181,10 @@ pub(crate) struct Busy;
 impl Busy {
     pub(crate) fn acquire() -> Result<Busy, String> {
         BUSY.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .map(|_| Busy)
+            .map(|_| {
+                CANCELLED.store(false, Ordering::SeqCst);
+                Busy
+            })
             .map_err(|_| "Brutus is still answering the previous message".to_string())
     }
 }
@@ -305,6 +310,10 @@ pub(crate) fn run(plan: &Plan, message: &str, on_event: impl FnMut(Value)) -> Re
 }
 
 fn run_in(shell: &str, plan: &Plan, message: &str, mut on_event: impl FnMut(Value)) -> Result<bool, String> {
+    if CANCELLED.load(Ordering::SeqCst) {
+        on_event(json!({ "kind": "error", "message": end_message(true, false, None) }));
+        return Ok(false);
+    }
     let msg_path = std::path::Path::new(&plan.dir).join(MESSAGE_FILE);
     std::fs::write(&msg_path, message).map_err(|e| format!("could not write the message: {e}"))?;
     let mut child = Command::new(shell)
@@ -316,8 +325,14 @@ fn run_in(shell: &str, plan: &Plan, message: &str, mut on_event: impl FnMut(Valu
         .map_err(|e| format!("could not start claude: {e}"))?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let run_id = RUN.fetch_add(1, Ordering::SeqCst) + 1;
-    CANCELLED.store(false, Ordering::SeqCst);
-    *CHILD.lock().unwrap() = Some((run_id, child));
+    {
+        // A Stop that landed between the check above and this point found no child.
+        let mut guard = CHILD.lock().unwrap();
+        if CANCELLED.load(Ordering::SeqCst) {
+            let _ = child.kill();
+        }
+        *guard = Some((run_id, child));
+    }
 
     // The ceiling: this run's watcher kills this run if it outlives it, and nothing else.
     let started = Instant::now();
@@ -408,16 +423,15 @@ pub fn brutus_ask(
     })
 }
 
+/// True when a run is in flight, whether or not claude has started yet.
 #[tauri::command]
 pub fn brutus_cancel() -> bool {
     let mut guard = CHILD.lock().unwrap();
-    match guard.as_mut() {
-        Some((_, c)) => {
-            CANCELLED.store(true, Ordering::SeqCst);
-            c.kill().is_ok()
-        }
-        None => false,
+    CANCELLED.store(true, Ordering::SeqCst);
+    if let Some((_, c)) = guard.as_mut() {
+        let _ = c.kill();
     }
+    BUSY.load(Ordering::SeqCst)
 }
 
 /// A new conversation. His memory is untouched.
@@ -545,8 +559,12 @@ mod tests {
         assert_eq!(check_message("  hi  ").unwrap(), "hi");
     }
 
+    /// BUSY and CANCELLED are process-wide: the tests that touch them take turns.
+    static GLOBALS: Mutex<()> = Mutex::new(());
+
     #[test]
     fn a_second_run_is_refused_while_one_is_in_flight() {
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
         let first = Busy::acquire().expect("free");
         assert!(Busy::acquire().is_err(), "second acquire must fail");
         drop(first);
@@ -647,6 +665,7 @@ mod tests {
     // and a stand-in claude answers with whatever it received on stdin.
     #[test]
     fn a_shell_rc_that_reads_stdin_cannot_swallow_the_message() {
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
         use std::os::unix::fs::PermissionsExt;
         let Some(zsh) = ["/bin/zsh", "/usr/bin/zsh"].into_iter().find(|z| std::path::Path::new(z).exists()) else { return };
         let t = std::env::temp_dir().join(format!("ao-brutus-rc-{}", std::process::id()));
@@ -668,6 +687,24 @@ mod tests {
         run_in(&t.join("shell").to_string_lossy(), &p, "hello brutus", |e| events.push(e)).expect("run");
         let _ = std::fs::remove_dir_all(&t);
         assert!(events.iter().any(|e| e["kind"] == "done" && e["result"] == "hello brutus"), "{events:?}");
+    }
+
+    // Shipped: Stop pressed while Brutus was still preparing (no child yet) or between
+    // the two runs of a pruned-conversation retry did nothing, and the run went ahead.
+    #[test]
+    fn a_stop_requested_before_the_child_exists_ends_the_run_unstarted() {
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
+        let busy = Busy::acquire().expect("free");
+        assert!(brutus_cancel(), "a Stop during a run is received even with no child yet");
+        let mut events: Vec<Value> = Vec::new();
+        // A shell that does not exist: if the run got as far as spawning, this is an Err.
+        let r = run_in("/nonexistent/shell", &plan(), "hi", |e| events.push(e));
+        assert_eq!(r, Ok(false));
+        assert_eq!(events, vec![json!({ "kind": "error", "message": "Stopped." })]);
+        drop(busy);
+        let next = Busy::acquire().expect("free");
+        assert!(!CANCELLED.load(Ordering::SeqCst), "the next run starts un-cancelled");
+        drop(next);
     }
 
     #[test]

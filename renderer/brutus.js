@@ -12,7 +12,7 @@
   }
   const state = {
     home: store.get(HOME_KEY, 'bubble') === 'side' ? 'side' : 'bubble',
-    homeOpen: false, palette: false, running: false,
+    homeOpen: false, palette: false, running: false, stopping: false,
     log: (() => { try { return JSON.parse(store.get(LOG_KEY, '[]')) } catch { return [] } })(),
     steps: [], pendingText: '', memory: 0,
   }
@@ -39,7 +39,7 @@
   function liveHTML() {
     if (!state.running) return ''
     const last = state.steps[state.steps.length - 1]
-    const label = last ? M.stepLabel(last, sessions()) : 'Thinking'
+    const label = state.stopping ? 'Stopping' : last ? M.stepLabel(last, sessions()) : 'Thinking'
     const text = state.pendingText ? M.renderAnswer(state.pendingText, sessions()) : '<div class="bru-think"><i></i><i></i><i></i></div><div class="bru-skel" style="width:88%"></div><div class="bru-skel" style="width:64%"></div>'
     return `<div class="bru-b">${av()}<div class="bru-bt"><div class="bru-steps">${I.eye}${esc(label)}…</div>${text}</div></div>`
   }
@@ -55,7 +55,7 @@
     return lead + turns.map(turnHTML).join('') + liveHTML()
   }
   const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : ''}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
-  const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop">${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his own memory</span></div></div>`
+  const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his own memory</span></div></div>`
 
   function render() {
     document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab').forEach(e => e.remove())
@@ -105,7 +105,7 @@
     const k = a.dataset.bru
     if (k === 'close') { state.homeOpen = false; render() }
     else if (k === 'send') send(a.closest('.bru-panel').querySelector('input').value)
-    else if (k === 'stop') window.api.brutusCancel()
+    else if (k === 'stop') stop()
     else if (k === 'reset') reset()
     else if (k === 'memory') window.api.brutusOpenMemory()
     else if (k === 'to-bubble') setHome('bubble')
@@ -115,14 +115,21 @@
     const t = String(text || '').trim()
     if (!t || state.running) return
     state.log.push({ role: 'user', text: t }); saveLog()
-    state.running = true; state.steps = []; state.pendingText = ''
+    state.running = true; state.stopping = false; state.steps = []; state.pendingText = ''
     render()
     try { await window.api.brutusAsk(t) }
     catch (e) { finish({ kind: 'error', message: String(e) }) }
   }
+  // Stop is received even before claude has started (the backend is still preparing):
+  // the run ends on "Stopped." as soon as it would spawn. Say so meanwhile.
+  async function stop() {
+    if (!state.running || state.stopping) return
+    const ok = await window.api.brutusCancel()
+    if (ok && state.running) { state.stopping = true; render() }
+  }
   function finish(ev) {
     if (!state.running) return
-    state.running = false
+    state.running = false; state.stopping = false
     if (ev.kind === 'error' || (ev.kind === 'done' && ev.is_error)) {
       state.log.push({ role: 'error', text: ev.message || ev.result || 'Something went wrong.' })
     } else {
