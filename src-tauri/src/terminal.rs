@@ -6,6 +6,22 @@
 
 use crate::config;
 
+/// The outcome of an osascript launch. A launch the user never sees (Automation
+/// permission denied, terminal app missing) exits non-zero with the reason on stderr;
+/// that reason becomes the error, or the exit status when stderr is empty.
+#[cfg(target_os = "macos")]
+fn osascript_result(out: std::process::Output) -> Result<(), String> {
+    if out.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if stderr.is_empty() {
+        Err(format!("osascript failed ({})", out.status))
+    } else {
+        Err(stderr)
+    }
+}
+
 /// Run a shell command in a new iTerm2 tab. The command is delivered to osascript
 /// as an `on run argv` argument — never interpolated into the AppleScript body —
 /// so there is no AppleScript/shell injection (mirrors the Electron ADR-005 shape).
@@ -25,9 +41,9 @@ fn run_in_iterm_tab(cmd: &str) -> Result<(), String> {
             "-e", "end run",
         ])
         .arg(cmd)
-        .spawn()
-        .map(|_| ())
+        .output()
         .map_err(|e| e.to_string())
+        .and_then(osascript_result)
 }
 
 /// Run a shell command in a new Terminal.app window. Same `on run argv` shape as
@@ -46,9 +62,9 @@ fn run_in_terminal_app(cmd: &str) -> Result<(), String> {
             "-e", "end run",
         ])
         .arg(cmd)
-        .spawn()
-        .map(|_| ())
+        .output()
         .map_err(|e| e.to_string())
+        .and_then(osascript_result)
 }
 
 /// Launch `cmd` in the user's chosen terminal. The selector comes from
@@ -297,5 +313,35 @@ mod tests {
         assert_eq!(terminal_argv("kitty", "X"),     vec!["kitty", "bash", "-lc", "X; exec bash"]);
         assert_eq!(terminal_argv("foot", "X"),      vec!["foot", "bash", "-lc", "X; exec bash"]);
         assert_eq!(terminal_argv("xfce4-terminal", "X"), vec!["xfce4-terminal", "-x", "bash", "-lc", "X; exec bash"]);
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod macos_tests {
+    use super::osascript_result;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::{ExitStatus, Output};
+
+    fn out(code: i32, stderr: &str) -> Output {
+        Output { status: ExitStatus::from_raw(code << 8), stdout: Vec::new(), stderr: stderr.into() }
+    }
+
+    #[test]
+    fn a_successful_launch_is_ok() {
+        assert_eq!(osascript_result(out(0, "")), Ok(()));
+    }
+
+    // Denied Automation permission: osascript exits 1 and explains why on stderr. The
+    // launch used to report success, so Resume did nothing and showed no error.
+    #[test]
+    fn a_denied_launch_reports_the_stderr() {
+        let err = osascript_result(out(1, "execution error: Not authorized to send Apple events to iTerm2. (-1743)\n"));
+        assert_eq!(err, Err("execution error: Not authorized to send Apple events to iTerm2. (-1743)".into()));
+    }
+
+    #[test]
+    fn a_failure_without_stderr_reports_the_exit_code() {
+        let err = osascript_result(out(1, "  ")).unwrap_err();
+        assert!(err.contains('1'), "{err}");
     }
 }
