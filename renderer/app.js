@@ -984,6 +984,9 @@ function moveSelection(delta) {
   navSelect(next)
 }
 document.addEventListener('keydown', (e) => {
+  // An open dialog owns the keyboard: without this, Enter on its focused button also
+  // resumed the list's selected session behind it, and the arrows moved the list.
+  if (document.querySelector('dialog[open]')) return
   // Leave modifier combos to the OS / the Cmd+K palette (added in P2).
   if (e.metaKey || e.ctrlKey || e.altKey) return
   const typing = isTypingTarget(document.activeElement)
