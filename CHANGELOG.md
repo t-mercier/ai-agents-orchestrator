@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.4-alpha] - 2026-09-25
+
 ### Fixed
 
 - **A session lists only your pull requests.** Sync attached any PR whose branch named one
