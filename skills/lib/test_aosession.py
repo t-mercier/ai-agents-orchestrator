@@ -43,6 +43,13 @@ class Current(unittest.TestCase):
         pidfiles = {3: "c4c77b93"}
         self.assertEqual(aosession.current({}, [(3, "claude")], pidfiles.get), ("claude", "c4c77b93", 3))
 
+    def test_claude_trusts_its_pidfile_over_the_variable(self):
+        # Every managed session today is keyed by the pidfile's id; whether the variable
+        # follows `--resume` and `/clear` has not been checked, so it must not win.
+        pidfiles = {3: "c4c77b93"}
+        env = {"CLAUDE_CODE_SESSION_ID": "0badbeef", "CLAUDECODE": "1"}
+        self.assertEqual(aosession.current(env, [(3, "claude")], pidfiles.get), ("claude", "c4c77b93", 3))
+
     def test_no_known_cli_falls_back_to_any_claude_pidfile_in_the_chain(self):
         pidfiles = {7: "c4c77b93"}
         self.assertEqual(aosession.current({}, [(9, "/bin/zsh"), (7, "weird-wrapper")], pidfiles.get), ("claude", "c4c77b93", 7))

@@ -5,8 +5,8 @@ Each CLI exports its session id to the shell commands it runs: Claude Code as
 CLAUDE_CODE_SESSION_ID, Codex as CODEX_THREAD_ID, Copilot as COPILOT_AGENT_SESSION_ID.
 Those variables are inherited by a CLI started from inside another one, so the variable
 alone can name the wrong session. The nearest ancestor process that is one of the three
-CLIs decides which variable is read. Claude Code's pidfiles (~/.claude/sessions/<pid>.json)
-remain the fallback for builds that do not export the variable.
+CLIs decides which variable is read. For Claude Code its pidfile
+(~/.claude/sessions/<pid>.json) comes first and the variable is only the fallback.
 
     aosession.py current                          -> "<agent> <session_id> <pid>", or nothing
     aosession.py register <notes_path> [<name>]   -> writes the live-session state file
@@ -54,9 +54,10 @@ def current(env, chain, pidfile_session):
     """(agent, session_id, pid). `pidfile_session(pid)` reads a Claude pidfile's id or None."""
     agent, pid = nearest_agent(chain, env)
     if agent:
-        sid = env.get(ENV_VAR[agent], "")
-        if not sid and agent == "claude":
-            sid = pidfile_session(pid) or ""
+        # Claude Code: its pidfile first. Every managed session is keyed by that id, and
+        # whether the variable follows `--resume` or `/clear` has not been checked.
+        sid = (pidfile_session(pid) or "") if agent == "claude" else ""
+        sid = sid or env.get(ENV_VAR[agent], "")
         return agent, sid, pid
     for pid, _ in chain:
         sid = pidfile_session(pid)
