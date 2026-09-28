@@ -264,7 +264,8 @@ function pinBtn(s) {
 // without a transcript there is nothing to summarise, so the plain marker is all we can do.
 function closeAttrs(s) {
   return `data-close-notes="${escapeHtml(s.notesPath)}" data-close-name="${escapeHtml(s.name || '')}"` +
-    ` data-close-sid="${escapeHtml(canResume(s) ? (s.sessionId || '') : '')}" data-close-cwd="${escapeHtml(s.cwd || '')}"` +
+    ` data-close-sid="${escapeHtml(canResume(s) && !agentOf(s) ? (s.sessionId || '') : '')}" data-close-cwd="${escapeHtml(s.cwd || '')}"` +
+    (agentOf(s) ? ` data-close-agent="${agentOf(s)}"` : '') +
     (notesInFlight.has(s.notesPath) ? ' disabled' : '')
 }
 
@@ -319,11 +320,28 @@ function deleteBtn(s) {
 // the detail-panel pills, so a click opens the link/folder via the delegated handlers
 // (which return early → the card isn't also selected). Visible in detailed + compact
 // density, hidden in minimal (CSS). Returns '' when the session has none of the three.
+// Codex and Copilot sessions carry their agent; a Claude Code session has none or 'claude'.
+const AGENT_NAMES = { codex: 'Codex', copilot: 'Copilot' }
+function agentOf(s) { return (s && AGENT_NAMES[s.agent]) ? s.agent : '' }
+// The agent of a session known by id or notes path, from whatever list is on screen.
+function agentFor(sid, notesPath) {
+  const all = [...(window._lastSessions || []), ...(window._historicalForBrutus || []), ...Object.values(window._boardIndex || {})]
+  const s = all.find(x => x && ((notesPath && x.notesPath === notesPath) || (sid && x.sessionId === sid)))
+  return agentOf(s)
+}
+window.agentFor = agentFor
+// Claude Code sessions stay unbadged, so today's cards look exactly as they did.
+function agentChip(s) {
+  const a = agentOf(s)
+  return a ? `<span class="agent-chip ${a}" title="Runs in ${AGENT_NAMES[a]}">${AGENT_NAMES[a]}</span>` : ''
+}
+window.agentChip = agentChip
+
 function cardIcons(s) {
   // Ticket as a number label (consistent with the board); PR + notes stay as icons.
   // (No space label anywhere — the list groups into space sections, PINNED floats
   // above them all, and the board filters by space.)
-  const icons = [ticketChip(s), prPill(s), notesPill(s.notesPath)].filter(Boolean).join('')
+  const icons = [agentChip(s), ticketChip(s), prPill(s), notesPill(s.notesPath)].filter(Boolean).join('')
   return icons ? `<div class="card-icons">${icons}</div>` : ''
 }
 
@@ -1373,6 +1391,7 @@ async function runPinnedSkill(btn) {
   const name = btn.dataset.pinSkill
   if (!name) return openSkillPicker(scope, Number(btn.dataset.pinIndex))
   const s = scope === 'session' ? sessionByKey(window._lastSelectedKey) : null
+  if (agentOf(s)) { if (window.showBanner) window.showBanner(`Pinned skills run in Claude Code sessions only for now — this one runs in ${AGENT_NAMES[agentOf(s)]}.`); return }
   const ctx = scope === 'session' ? (s ? pinCtxFor(s) : {}) : {}
   const d = L.decide(name, ctx)
   if (d.mode === 'blocked') { if (window.showBanner) window.showBanner(d.reason); return }
@@ -1747,7 +1766,8 @@ function unarchiveOnResume(notesPath) {
 
 function routeResume(sid, cwd, notesPath) {
   unarchiveOnResume(notesPath)
-  const dest = window.getOpenIn ? window.getOpenIn() : 'embedded'
+  // A Codex or Copilot session is only seen running in the app's own terminal.
+  const dest = agentFor(sid, notesPath) ? 'embedded' : (window.getOpenIn ? window.getOpenIn() : 'embedded')
   const liveKey = window.liveTerminalKeyFor ? window.liveTerminalKeyFor(sid, notesPath) : null
   if (dest === 'terminal') {
     const open = () => window.api.openInTerminal(cwd, sid)
@@ -1798,7 +1818,7 @@ function toListForEmbedded() {
   if (window.viewMode && window.viewMode !== 'list' && window.setViewMode) window.setViewMode('list')
 }
 function routeRestart(slug, sid, cwd, notesPath) {
-  const dest = window.getOpenIn ? window.getOpenIn() : 'embedded'
+  const dest = agentFor(sid, notesPath) ? 'embedded' : (window.getOpenIn ? window.getOpenIn() : 'embedded')
   if (dest === 'terminal') window.api.restoreSession(slug, sid)
   else if (window.toggleEmbeddedTerminal) {
     // Re-reveal an existing terminal for this notes.md if it's already live.
@@ -2058,7 +2078,9 @@ function installDelegatedHandlers() {
           title: 'Close session',
           body: canWrap
             ? `Close "${name}"? It gets summarised into its notes first — that takes up to a minute — then moves to the Closed tab.`
-            : `Close "${name}"? Its transcript is gone, so it moves to the Closed tab without a summary.`,
+            : close.dataset.closeAgent
+              ? `Close "${name}"? It moves to the Closed tab. ${AGENT_NAMES[close.dataset.closeAgent]} sessions close without a summary for now; its notes stay as it left them.`
+              : `Close "${name}"? Its transcript is gone, so it moves to the Closed tab without a summary.`,
           confirmLabel: 'Close',
         }).then(choice => {
           // A second Close confirmed while the first dialog was open must not start

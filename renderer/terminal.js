@@ -242,7 +242,7 @@ function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
     if (!entry.spawned) {
       // Spawn at the measured size so the first render fills the width. A non-empty
       // restartSlug makes the pty run `/restart <slug>` instead of `--resume`.
-      window.api.ptySpawn(sessionId, cwd, entry.term.cols, entry.term.rows, entry.restartSlug, entry.command)
+      window.api.ptySpawn(sessionId, cwd, entry.term.cols, entry.term.rows, entry.restartSlug, entry.command, entry.notesPath || notesPathForKey(sessionId) || '')
       entry.spawned = true
     } else {
       window.api.ptyResize(sessionId, entry.term.cols, entry.term.rows)
@@ -361,6 +361,8 @@ function closeTerminalPane() {
   if (ending.has(sid)) { const began = ending.get(sid); ending.delete(sid); endNow(sid, notesPath, '[ending now — closing without a summary]', began); return }
   // Unmanaged session (no notes.md): nothing to wrap up — just kill.
   if (!notesPath || !window.api.notesClosedSince) { killTerminal(sid); return }
+  // Codex and Copilot do not run /close-session yet: stamp the close and end the terminal.
+  if (window.agentFor && window.agentFor(sid, notesPath)) return endNow(sid, notesPath, '[closed from the dashboard — no summary for this agent yet]')
 
   const since = Date.now()
   ending.set(sid, since)

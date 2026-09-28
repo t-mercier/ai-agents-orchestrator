@@ -54,6 +54,14 @@
         <select id="ns-space"></select>
       </label>
 
+      <!-- Agent picker — shown only when Codex or Copilot is installed too (app.js,
+           fillAgentChoice), so a Claude-only machine sees the form it always had. -->
+      <label class="modal-field" id="ns-agent-field" hidden>
+        <span>Agent</span>
+        <select id="ns-agent"></select>
+        <small class="field-hint" id="ns-agent-hint" hidden></small>
+      </label>
+
       <label class="modal-field">
         <span>Category</span>
         <!-- Options are populated from config at boot (populateNewSessionCategories) -->

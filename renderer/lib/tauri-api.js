@@ -51,8 +51,11 @@
     // verbatim to CREATE a new session in this pty; sessionId is then its notesPath.
     // pty commands propagate: terminal.js owns the pane and reports a failed spawn/input in
     // the terminal itself; a swallowed rejection here would leave a silent blank pane.
-    ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command) =>
-      invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '' }),
+    // notesPath: the session's notes, from which the backend reads which agent runs it.
+    ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command, notesPath) =>
+      invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '', notesPath: notesPath || null }),
+    // [{ agent, found, version, supported, hint }] for claude, codex, copilot.
+    agentsAvailable: () => invoke('agents_available').catch(() => []),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
     listSkills: () => invoke('list_skills'),
     runSkill: (skill, cwd, resume) => invoke('run_skill', { skill, cwd, resume }),
@@ -77,11 +80,11 @@
     // embedded=false (default): launches an external iTerm tab, returns { ok }.
     // embedded=true: launches NOTHING — returns { ok, command, notesPath } so the renderer
     // can run the command in an in-app pty keyed by notesPath.
-    startSession: ({ category, name, ticket, startIn, branch, prLink, root, embedded } = {}) =>
+    startSession: ({ category, name, ticket, startIn, branch, prLink, root, embedded, agent } = {}) =>
       invoke('start_session', {
         category: category || '', name: name || '', ticket: ticket || '',
         startIn: startIn || '', branch: branch || '', prLink: prLink || '', root: root || '',
-        embedded: !!embedded,
+        embedded: !!embedded, agent: agent || null,
       })
         .then((res) => ({ ok: true, ...(res || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),

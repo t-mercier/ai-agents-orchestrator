@@ -23,6 +23,8 @@
   --status-waiting: #ff453a;     --status-waiting-rgb: 255, 69, 58;
   --status-idle: #30d158;        --status-idle-rgb: 48, 209, 88;
   --status-shell: #5ac8fa;       --status-shell-rgb: 90, 200, 250;
+  --agent-codex: #4fd1c5;        --agent-codex-rgb: 79, 209, 197;
+  --agent-copilot: #b794f4;      --agent-copilot-rgb: 183, 148, 244;
   /* Elevation scale — one consistent ladder instead of ad-hoc shadows. */
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.18);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
@@ -42,6 +44,8 @@
   --surface-modal: rgba(252, 252, 254, 0.98);
   --card-bg: rgba(255, 255, 255, 0.72);
   --danger: #d70015;   /* darker red for contrast on light surfaces */
+  --agent-codex: #0f8a80;        --agent-codex-rgb: 15, 138, 128;
+  --agent-copilot: #7b4fc9;      --agent-copilot-rgb: 123, 79, 201;
 }
 
 /* ===== Base Typography & Focus ===== */
@@ -160,6 +164,8 @@ html, body {
 .modal-hint { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; margin-top: -4px; }
 .modal-hint code { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; background: rgba(var(--tint), 0.08); padding: 1px 4px; border-radius: 3px; }
 .modal-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+/* `display: flex` beats the browser's own [hidden] rule, so a field the form hides stayed on screen. */
+.modal-field[hidden] { display: none; }
 .modal-field > span { color: var(--text-secondary); font-weight: 600; }
 .modal-field em { color: var(--text-tertiary); font-style: normal; font-weight: 400; }
 .modal-field .field-hint { color: var(--text-tertiary); font-weight: 400; line-height: 1.5; margin-top: 2px; }
@@ -2321,3 +2327,12 @@ body.bru-resizing .layout { transition: none; }
 /* The tab badges toggle `hidden` in place (ui.js updateTabBadges); keep it effective
    whatever display the badge rules set. */
 .tab-btn .tab-count[hidden], .tab-btn .tab-wait-dot[hidden] { display: none; }
+
+/* Which agent a Codex or Copilot session runs in (Claude Code sessions carry no chip).
+   Same box as .ticket-tag, so the icon row keeps one height. */
+.agent-chip {
+  display: inline-flex; align-items: center; height: 24px; box-sizing: border-box; padding: 0 8px;
+  border-radius: 7px; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap;
+}
+.agent-chip.codex { color: var(--agent-codex); background: rgba(var(--agent-codex-rgb), 0.14); }
+.agent-chip.copilot { color: var(--agent-copilot); background: rgba(var(--agent-copilot-rgb), 0.14); }

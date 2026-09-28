@@ -888,7 +888,29 @@ if (skillClear) skillClear.addEventListener('click', () => {
   document.getElementById('skill-pick-modal').close()
 })
 
+// Which agent CLIs this machine has — asked once per app run (a login shell per CLI is
+// not something to pay on every +New), then kept.
+let agentsKnown = null
+async function fillAgentChoice() {
+  const field = document.getElementById('ns-agent-field')
+  const sel = document.getElementById('ns-agent')
+  const hint = document.getElementById('ns-agent-hint')
+  if (!field || !sel || !window.api.agentsAvailable) return
+  if (!agentsKnown) agentsKnown = await window.api.agentsAvailable()
+  const names = { claude: 'Claude Code', codex: 'Codex', copilot: 'Copilot' }
+  const usable = agentsKnown.filter(a => a.found && a.supported).map(a => a.agent)
+  const others = usable.filter(a => a !== 'claude')
+  const notes = agentsKnown.filter(a => a.found && !a.supported && a.hint).map(a => a.hint)
+  field.hidden = !others.length && !notes.length
+  const last = (() => { try { return localStorage.getItem('csm.nsAgent') } catch { return null } })()
+  const list = usable.includes('claude') ? usable : ['claude', ...usable]
+  sel.innerHTML = list.map(a => `<option value="${a}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('')
+  hint.textContent = notes.join(' ')
+  hint.hidden = !notes.length
+}
+
 document.getElementById('new-session-btn').addEventListener('click', () => {
+  fillAgentChoice()
   for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
     document.getElementById(id).value = ''
   }
@@ -944,8 +966,12 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   // pref defaults to 'embedded', so +New now defaults to the in-app terminal — a change
   // from its historical always-iTerm behaviour. The modal toggle shows the current pick.
   // 'terminal' = external iTerm tab (the old behaviour).
-  const embedded = !!(window.getOpenIn && window.getOpenIn() === 'embedded')
-  const res = await window.api.startSession({ category, name, ticket, startIn, branch, prLink, root, embedded })
+  const agentSel = document.getElementById('ns-agent')
+  const agent = agentSel && !document.getElementById('ns-agent-field').hidden ? agentSel.value : 'claude'
+  try { localStorage.setItem('csm.nsAgent', agent) } catch {}
+  // Codex and Copilot sessions run in the app's terminal: it is where the app sees them.
+  const embedded = agent !== 'claude' || !!(window.getOpenIn && window.getOpenIn() === 'embedded')
+  const res = await window.api.startSession({ category, name, ticket, startIn, branch, prLink, root, embedded, agent: agent === 'claude' ? null : agent })
   if (!res || !res.ok) {
     showNsError('Could not start: ' + ((res && res.error) || 'unknown error'))
     return
@@ -957,7 +983,7 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
     // this same pty (no re-key; pty_spawn's guard blocks a double-client). Seed a synthetic
     // _terminalSession so the panel survives until renderAll re-resolves it by key (notesPath).
     window._terminalSession = {
-      notesPath: res.notesPath, name, category, root,
+      notesPath: res.notesPath, name, category, root, agent: res.agent || '',
       cwd: '', status: 'busy', state: 'active',
       // safe-empty defaults: the synthetic feeds renderDetailPanel (which fills the visible
       // header) until the ~5s poll discovers the real session and renderAll re-resolves it
@@ -970,7 +996,8 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
     window._lastSelectedKey = res.notesPath
     // openTerminalPane → onTerminalOpened flips to the Running tab WITHOUT nulling the
     // selection (switchTab() would reset selectedKey, collapsing the panel — bug fixed).
-    window.openTerminalPane(res.notesPath, '', '', res.command, res.notesPath)
+    // cwd: where the CLI starts, which is how a new Codex session's rollout is found.
+    window.openTerminalPane(res.notesPath, res.cwd || '', '', res.command, res.notesPath)
   }
 })
 
