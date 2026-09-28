@@ -1,188 +1,158 @@
 # Codex CLI and Copilot CLI sessions, beside Claude Code
 
-Status: draft for review, 2026-09-28. Written by Claude overnight under Timothée's
-mandate; she reviews it in the morning. Nothing here is pushed or released.
+Status: v2, 2026-09-28. Written by Claude overnight under Timothée's mandate; she reviews it
+in the morning. Nothing here is pushed or released. v1 was reviewed by an independent Opus
+agent: it found that no Codex card would ever appear (the liveness check recognises only
+Claude processes), that a Codex session resumed from Closed would never go live, and that
+Codex's sandbox blocks the writes the skills make. v2 is the smaller slice it proposed.
 
 Sources: `docs/superpowers/research/2026-09-28-codex-copilot-parity.md` (docs, Codex source,
-and the **probe results** section, which was observed on real runs) and
+and the **probe results** section, observed on real runs) and
 `docs/superpowers/research/2026-09-28-claude-coupling-map.md` (every place the app assumes
-Claude Code, with file:line). A claim below marked *(probe)* was observed; *(docs)* was read
-and not observed; *(assumed)* is neither and has a test that would settle it.
+Claude Code, with file:line). *(probe)* = observed; *(docs)* = read, not observed;
+*(assumed)* = neither, with the test that settles it.
 
 ## What the user gets
 
-A developer who uses Codex or Copilot, alone or next to Claude Code, sees those sessions in
-the same dashboard and works with them the same way:
+1. **+New** has an *Agent* choice — Claude Code, Codex, Copilot — listing only the CLIs found
+   on this machine. It is hidden when only Claude Code is installed, so today's form is
+   unchanged for Claude-only users.
+2. A Codex or Copilot session **runs in the app's embedded terminal**. It gets a `notes.md`
+   in its category folder like any session, and its first prompt tells the agent where that
+   file is and to keep it current. That file is its memory across restarts.
+3. Its card shows an agent badge and a live dot: **busy** while it works, **idle** when it
+   waits for the next prompt.
+4. **Resume** and **Restart** on a closed Codex or Copilot session reopen it in the embedded
+   terminal with the right CLI.
+5. **Close** writes the close marker, like Close without a summary does today.
 
-1. **+New** has an *Agent* choice (Claude Code, Codex, Copilot), showing only the CLIs found
-   on this machine. The session starts in its space folder, runs `/start-session` (the Codex
-   form is `$start-session`), and gets its `notes.md`, ticket and PRs like any other.
-2. The card shows which agent runs it (a small badge) and a live dot: **busy** while it works,
-   **idle** when it waits for the next prompt. **waiting** (a permission question) is
-   Claude-only at launch; see *Limits*.
-3. **Resume**, **Restart**, **Close** and **Sync** work on a Codex or Copilot session: the app
-   launches the right CLI with the right flags.
-4. **Import** lists existing Codex and Copilot sessions next to Claude Code ones.
-5. The app skills are installed where each tool reads them, so `/save-session`, `/learn`,
-   `/close-session` work inside Codex and Copilot too.
+Claude Code users see no change: no Claude command line, skill, hook or status path is
+modified. Brutus stays a Claude Code agent and lists Codex and Copilot sessions like any other.
 
-Claude Code users see no change. Brutus stays a Claude Code agent.
+## Not in this slice (README "Supported agents" says so)
 
-## Launch slice and what waits
-
-In the launch slice: everything in *What the user gets*.
-
-After the launch (Phase 2, listed in the README as not yet supported):
-- the **waiting** status for Codex and Copilot;
-- the usage bar (context %, 5-hour and 7-day limits) for Codex and Copilot. The bar shows only
-  the model name for them;
-- Doctor, the security audit and the context-budget panel for Codex and Copilot config files;
-- the automatic checkpoint hooks (`ao_autosave`, `ao_checkpoint_relay`, `ao_precompact`,
-  `learn_nudge`, `pr_attach`, `ao_skill_guard`) on Codex and Copilot. The skills still work;
-  only the reminders that fire on their own are Claude-only at launch;
-- multi-agent collaboration (cross-review, collab, parallel), already scheduled after launch.
+- The app skills (`/save-session`, `/learn`, `/route`, `/close-session`…) inside Codex and
+  Copilot. They find their session through Claude Code's pidfiles and write outside a Codex
+  sandbox; porting them is its own plan. `skills/lib/aosession.py` (already built) is the
+  first piece of that plan.
+- Close with a summary, Sync, Import and pinned skills for Codex and Copilot sessions: these
+  run a skill headless. Their buttons are disabled with the tooltip "Claude Code only for now".
+- The **waiting** status. Codex writes nothing while it waits for an approval *(docs)*, so a
+  session waiting for approval shows **busy**. Copilot asks before every tool unless allowed.
+- Opening a Codex or Copilot session in an external terminal (iTerm, Terminal): the app
+  would not see it running.
+- Usage bar (context %, limits), Doctor, security audit and context budget for their configs.
+- Multi-agent collaboration (cross-review, collab, parallel), scheduled after the launch.
 
 ## Rulings
 
-Each ruling is a decision taken without her, with its cost if wrong.
+Decisions taken without her, each with its cost if wrong.
 
-1. **Claude Code keeps its own status source** (`~/.claude/sessions/<pid>.json`). Her install
-   runs 100+ managed sessions on it. Moving Claude to a new source the night before launch
-   buys nothing for Claude users. *Cost if wrong:* two status paths to maintain.
-2. **Copilot ≥ 1.0 is required.** 0.0.x hooks carry no session id and its session files carry
-   no cwd *(probe)*. The app shows "Copilot CLI 0.0.369 is too old — update it with
-   `npm i -g @github/copilot`" with a copy button. *Cost if wrong:* users on 0.0.x cannot
-   use Copilot sessions until they update.
-3. **No `--dangerously-bypass-hook-trust`, ever.** Codex runs no hook until the user trusts it
-   *(probe: silently skipped)*. So the launch slice does not depend on any Codex hook.
-   *Cost if wrong:* none for launch; Phase 2 adds an onboarding step for trust.
-4. **The session id comes from the environment, not from pidfiles.** Each tool exports it to
-   the shell commands it runs *(probe)*: `CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`,
-   `COPILOT_AGENT_SESSION_ID`. Those variables leak into nested tools *(probe)*, so the lookup
-   first finds the nearest ancestor process that is one of the three CLIs, and reads only
-   that tool's variable. The parent-pid walk over `~/.claude/sessions` stays as the fallback
-   for older Claude Code builds. This also settles the open item "seven skills guess their
-   session id". *Cost if wrong:* a skill run under an unrecognised wrapper falls back to the
-   old guess, exactly as today.
-5. **One registry for live Codex and Copilot sessions**:
-   `~/.config/ai-agents-orchestrator/state/<pid>.json`, written by the skills
-   (`/start-session`, `/restart-session`, `/import-session`, through `aosession.py
-   register`) and, for Copilot, also by a `sessionStart` hook. The pid is the CLI's own pid:
-   the nearest-ancestor walk above finds it, and the Copilot hook's parent is the `copilot`
-   binary *(probe)*. *Cost if wrong:* a Codex session started outside the app without
-   `/start-session` is not live on the dashboard until it is imported, which matches how
-   unmanaged Claude sessions behave today.
-6. **busy/idle for Codex and Copilot is read from the transcript**, not from hooks: Codex
-   writes `task_started` / `task_complete`, Copilot writes `assistant.turn_start` /
-   `assistant.turn_end` *(probe)*. The last of the pair that appears decides. *Cost if wrong:*
-   a turn cut off by a crash shows busy until the process is gone; liveness is checked by
-   pid, so the card then leaves Running.
-7. **`agent` is persisted in two places**: the notes.md frontmatter (`agent: codex`) and each
-   `active-sessions.json` entry. Absent means `claude`, so every existing session is
-   unchanged. Resume, Restart, Close and Sync on a closed session read it from there.
-8. **Skills install to `~/.agents/skills` for Codex and Copilot**, which both read *(Codex:
-   probe; Copilot: docs)*, and stay in `~/.claude/skills` for Claude. The skill sources are
-   edited in this repo only (the app skills are locked; `~/.claude/skills` is never edited by
-   hand). Wording that only Claude understands becomes neutral: "the arguments after the
-   skill name (`$ARGUMENTS` in Claude Code)", "ask the user (with AskUserQuestion when that
-   tool exists)".
-9. **Hooks for Copilot are a global write** to `~/.copilot/hooks/ao.json` *(probe: user-level
-   hooks fire; repo-level did not)*, behind the same preview, backup and atomic-write steps as
-   the Claude settings write (`hooks.rs:342-395`), offered in onboarding and Settings, never
-   silent.
+1. **Claude Code is untouched.** Its status stays on `~/.claude/sessions/<pid>.json`, its
+   skills keep finding their id there, and golden tests pin every Claude command line byte
+   for byte. *Cost if wrong:* none for Claude; two status paths to maintain.
+2. **Codex and Copilot sessions live only in the embedded terminal**, where the app spawns
+   the process and so knows its pid, agent and notes path. Liveness is "the pty child is
+   still running" — no process-name check, which is what defeated v1. *Cost if wrong:* a
+   user who runs `codex` in their own terminal does not see it as a live card.
+3. **The app writes the notes.md and the registry entry itself** for Codex and Copilot,
+   with the same frontmatter `/start-session` writes plus `agent:`. No skill is needed to
+   create a session. *Cost if wrong:* the notes start with an empty Goal, which the first
+   prompt asks the agent to fill.
+4. **Session ids.** Copilot: the app generates a UUID and passes `--session-id` *(docs;
+   flag present in `copilot --help` 1.0.89, probe)*. Codex has no such flag, so the app finds
+   the rollout it started: the newest `$CODEX_HOME/sessions/**/rollout-*.jsonl` created after
+   the spawn whose `session_meta.cwd` is the launch directory *(probe: both fields exist)*,
+   then records the id in the frontmatter and the registry. *Cost if wrong:* two Codex
+   sessions started in the same folder within the same second could be swapped; the second
+   match is refused rather than guessed.
+5. **Copilot ≥ 1.0 is required.** 0.0.x has no `--session-id`, no session id in its hooks and
+   no cwd in its session files *(probe)*. The Agent choice shows "Copilot CLI 0.0.369 is too
+   old — update it" with the command for the way it was installed (`brew upgrade copilot`
+   when Homebrew installed it, `npm i -g @github/copilot` otherwise).
+6. **busy/idle is read from the transcript.** Codex: the last of `task_started`,
+   `task_complete`, `turn_aborted`; `task_started` last → busy *(probe for the first two;
+   `turn_aborted` docs)*. Copilot: the last of `assistant.turn_start` / `assistant.turn_end`
+   *(probe)*. Unreadable or missing transcript → idle. *Cost if wrong:* a dot is wrong for
+   one poll; liveness never depends on it.
+7. **`agent` is persisted** in the notes.md frontmatter (`agent: codex`) and in the registry
+   entry. Absent means `claude`, so every existing session is unchanged. An unknown value
+   (`agent: codx`) is refused with an error, never launched as Claude.
+8. **No hook, no config write** into `~/.codex` or `~/.copilot` in this slice. Codex runs no
+   hook until the user trusts it interactively *(probe)*; the app never uses
+   `--dangerously-bypass-hook-trust`.
+9. **Interactive sandbox left to the user's defaults.** `codex` and `copilot` run with the
+   user's own approval settings; the app adds no permission flag to an interactive launch.
 
 ## Design
 
 ### Units
 
-- `src-tauri/src/agents/mod.rs` — `AgentId { Claude, Codex, Copilot }`, `from_str` (unknown or
-  absent → Claude), and the per-agent functions below as plain `match` arms. No trait objects:
-  three variants do not need dynamic dispatch, and a `match` shows every case in one place.
-- `src-tauri/src/agents/codex.rs`, `copilot.rs` — transcript location, fold, enumeration and
-  status for each tool. Claude's existing code stays where it is (`reader.rs`) and is called
-  from the `Claude` arms.
-- `src-tauri/src/agents/launch.rs` — every command line the app builds, for every agent:
-  interactive new, resume, restart, headless run (wrap, sync, run-skill, import).
-- `src-tauri/src/state.rs` — reads the state directory, drops entries whose pid is dead.
-- `skills/lib/aosession.py` — `current` (prints `<agent> <session_id>`) and `register <notes>
-  [<name>]` (writes the state file). Every skill that looks up its own id calls it.
-- `hooks/ao_state.py` — the Copilot `sessionStart` / `sessionEnd` hook: writes and removes
-  the state file.
+- `src-tauri/src/agents/mod.rs` — *(built)* `AgentId`, `command()` for every launch line.
+  `parse` changes to return `Err` for an unknown value (ruling 7).
+- `src-tauri/src/agents/codex.rs`, `copilot.rs` — transcript path by id, status fold, last
+  activity, and (Codex) the rollout match of ruling 4. Pure functions over file contents,
+  with the directory walk kept thin.
+- `src-tauri/src/agents/session.rs` — create a Codex/Copilot session: build the notes.md
+  text, write it (refusing to overwrite), write the registry entry, build the first prompt.
+- `pty.rs` — each pty entry records `agent`, `notes_path`, launch `cwd`, `spawned_at`, and
+  the session id once known. New `PtyManager::agent_sessions()` lists the live ones.
+- `reader.rs::get_sessions` — appends one session per live agent pty, before any early
+  return, shaped like a running Claude session plus `agent`.
+- `reader.rs` historical scan — reads `agent:` from the frontmatter; `resumable` asks the
+  agent's transcript lookup instead of `~/.claude/projects`.
+- Renderer — the Agent select, the badge, disabled buttons with the tooltip, Resume and
+  Restart through `pty_spawn` with the agent.
 
-### Command lines
+### Command lines (interactive, embedded)
 
-`<p>` is the prompt, `<id>` the session id, `<m>` the model when one is set. Every piece goes
-through `pty::shell_quote`.
+| | Codex | Copilot ≥ 1.0 |
+|---|---|---|
+| New | `codex <first prompt>` | `copilot --session-id <uuid> -i <first prompt>` |
+| Resume | `codex resume <id>` | `copilot --resume=<id>` |
+| Restart (no transcript) | `codex <first prompt>` with the notes path | `copilot --session-id <new uuid> -i <first prompt>` |
 
-| | Claude Code (unchanged) | Codex | Copilot |
-|---|---|---|---|
-| New, interactive | `claude [--model <m>] --permission-mode auto --settings … <p>` | `codex [-m <m>] <p>` | `copilot [--model <m>] -i <p>` |
-| Resume | `claude --resume <id> …` | `codex resume <id> -C <cwd> [-m <m>]` | `copilot --resume=<id> [--model <m>]` |
-| Headless (wrap, sync, run-skill, import) | `claude … --permission-mode acceptEdits -p <p>` | `codex exec resume <id> -s workspace-write <p>`, or `codex exec -s workspace-write <p>` with no id | `copilot [--resume=<id>] -p <p> --allow-all-tools` |
-| Skill invocation in `<p>` | `/name args` | `$name args` | `/name args` |
+Every line starts `cd <dir> && ` and goes through `pty::shell_quote`. The first prompt:
 
-`-C <cwd>` on Codex resume avoids its interactive cwd prompt *(docs)*. The Codex and Copilot
-headless forms are *(docs)* until Task 0 of the plan runs them once.
+> This is an AI Agents Orchestrator session, "<name>". Its notes are at <notes.md>: read
+> them first. Keep them current as you work — dated entries under "Decisions made", files
+> you change under "Files touched", and an up-to-date "Next steps". Fill in "Goal" now if it
+> is empty.
 
 ### Transcripts
 
 | | Codex | Copilot ≥ 1.0 |
 |---|---|---|
-| Find by id | `$CODEX_HOME/sessions/**/rollout-*-<id>.jsonl` (`CODEX_HOME` defaults to `~/.codex`) | `$COPILOT_HOME/session-state/<id>/events.jsonl` (default `~/.copilot`) |
-| cwd, branch | `session_meta.payload.cwd`; branch from live git | `workspace.yaml` `cwd`, `branch` |
-| Title | first user message | `workspace.yaml` `name` |
-| Last activity | last `response_item` message from the assistant, and its timestamp | last `assistant.message` `content`, and its timestamp |
-| busy/idle | `task_started` after the last `task_complete` → busy | `turn_start` after the last `turn_end` → busy |
-| Enumerate (Import) | walk `sessions/`, newest first, bounded like today's scan | walk `session-state/`, newest first |
+| By id | `$CODEX_HOME/sessions/**/rollout-*-<id>.jsonl` (default `~/.codex`) | `$COPILOT_HOME/session-state/<id>/events.jsonl` (default `~/.copilot`) |
+| Status | ruling 6 | ruling 6 |
+| Last activity | last `response_item` with an assistant message *(assumed: test on a fixture cut from a real rollout)* | last `assistant.message` `content` *(assumed: the 0.0.369 probe had it; confirm on 1.0.89)* |
 
-Reads stay bounded (head for identity, tail for activity), with the same (len, mtime) cache as
-`read_transcript`.
-
-### Renderer
-
-- +New: an *Agent* select above the category, defaulting to the last one used; hidden when
-  only Claude Code is installed, so Claude-only users see today's form.
-- Cards and board tiles: a badge `Codex` / `Copilot` (none for Claude, to keep today's cards).
-- Model select: one list per agent, from a new `agent_models` command.
-- Usage bar: model name only for Codex and Copilot sessions.
-- Import picker: an Agent column.
-- Terminal Close: types the agent's skill invocation (`$close-session` for Codex).
-- Pinned skills: invoked with the session's agent syntax.
-
-### Onboarding and Settings
-
-- Detect `claude`, `codex`, `copilot` on the login-shell PATH, with their versions
-  (`--version`). Copilot below 1.0 shows the update line from ruling 2.
-- Install skills for each detected agent (ruling 8).
-- Offer the Copilot hook write (ruling 9) with the same preview as the Claude one.
+Reads are bounded: the first line for identity, the last 64 KiB for status and activity.
+Ids read from folder or file names are checked with `is_valid_session_id` before use.
 
 ## Error handling
 
-- Agent CLI missing at launch: the same error path as a missing `claude` today, naming the
-  CLI ("`codex` was not found on your PATH").
-- Transcript missing or unreadable: the session shows no activity and stays resumable only if
-  the tool says so; nothing crashes the poll.
-- State file with a dead pid: ignored and removed on the next read.
-- Malformed state file: ignored, never deleted (it may be mid-write by a newer app version).
+- CLI not found: the pty prints the shell's "command not found"; the Agent choice never
+  offers a CLI that was not detected.
+- notes.md already exists at the predicted path: refused, as `/start-session` does.
+- Codex rollout not found yet: the card shows the session as busy with no id; the poll keeps
+  looking for 60 s, then stops and the card says "Codex session id not found".
+- Transcript unreadable: idle, no activity line; nothing breaks the poll.
 
 ## Testing
 
-- Rust unit tests per agent: command lines (exact argv), transcript fold on fixture files cut
-  from the probe runs, status from turn events, `from_str` defaulting to Claude.
-- Python tests for `aosession.py`: the nearest-ancestor rule with a nested-tool environment
-  (the probe case: Copilot under Claude), the fallback to pidfiles, `register` atomicity.
-- Playwright: the +New agent select (hidden with one agent), the badge, the import column.
-- One real round trip per tool, recorded in the plan's ledger: +New → `/start-session` →
-  card busy then idle → Close.
-
-## Limits stated to the user (README "Supported agents")
-
-- Codex and Copilot: no waiting status, no usage limits, no automatic checkpoint reminders yet.
-- Copilot needs version 1.0 or later.
-- Codex hooks are not used at all, because Codex requires trusting each hook interactively.
+- Golden tests: every Claude line from `agents::command` equals what the call sites build
+  today *(built)*.
+- Rust unit tests: `parse` refusing unknown values; notes.md text (frontmatter includes
+  `agent:`); status fold on fixtures cut from the probe transcripts; the rollout match
+  (newest after spawn, cwd equal, second match refused); `agent_sessions()` merge shape.
+- Playwright: Agent select hidden with Claude only; badge; disabled buttons and tooltip.
+- One real round trip per tool, recorded in the plan ledger: +New → card busy → idle →
+  Close → Resume.
 
 ## Open for her
 
-- The waiting status needs Codex hooks, so Phase 2 needs an onboarding step where the user
-  trusts them. Acceptable?
-- The badge text and position on cards: a mock-up is in the plan's first UI task.
+- Launch posts must say "Codex and Copilot sessions in the dashboard, with memory in their
+  notes; the skills are Claude Code only for now" — not "full parity".
+- Phase 2 order: skills in Codex/Copilot (with `aosession.py`), then the waiting status
+  (needs Codex hook trust in onboarding), then headless Close/Sync/Import.
