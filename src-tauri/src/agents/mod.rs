@@ -6,6 +6,7 @@ use crate::pty::shell_quote;
 
 pub(crate) mod codex;
 pub(crate) mod copilot;
+pub(crate) mod session;
 
 /// What a transcript says about its session, whichever agent wrote it.
 #[derive(Debug, Default, PartialEq)]
