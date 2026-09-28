@@ -800,11 +800,11 @@ fn follow_continued(sid: &str, next_of: impl Fn(&str) -> Option<String>) -> Stri
     cur
 }
 
-/// How long a Codex session the app started may go without a rollout before its card says
-/// it needs you. Codex writes nothing until the user has answered what it asks first — to
-/// trust a folder it does not know, to review hooks (both observed on 0.158.0) — so a
-/// session still without one after this is waiting on the user, not working.
-const CODEX_FIRST_WRITE: std::time::Duration = std::time::Duration::from_secs(10);
+/// How long a Codex or Copilot session the app started may go without a transcript before
+/// its card says it needs you. Neither writes one until the user has answered what it asks
+/// first — to trust a folder it does not know (both), to review hooks (Codex); observed on
+/// Codex 0.158.0 and Copilot 1.0.89 — so a session still without one is waiting, not working.
+const FIRST_WRITE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// A Codex or Copilot session running in an embedded terminal, shaped like a running
 /// Claude Code session plus `agent`. The homes are parameters so a test can point them
@@ -834,13 +834,14 @@ pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &
         .and_then(|p| crate::agents::read_tail(p, 64 * 1024))
         .map(|t| if a.agent == AgentId::Codex { codex::fold(&t) } else { copilot::fold(&t) })
         .unwrap_or_default();
-    // A Codex session with no rollout yet is starting (busy), then asking the user
-    // something before it starts (waiting).
-    let asking = searching && sid.is_empty() && a.spawned_at.elapsed().is_ok_and(|e| e >= CODEX_FIRST_WRITE);
-    let status = if asking { "waiting" } else if fold.busy || (searching && sid.is_empty()) { "busy" } else { "idle" };
+    // No transcript yet: starting (busy), then asking the user something before it starts
+    // (waiting) — both tools ask to trust a folder they do not know before writing one.
+    let starting = transcript.is_none();
+    let asking = starting && a.spawned_at.elapsed().is_ok_and(|e| e >= FIRST_WRITE);
+    let status = if asking || fold.waiting { "waiting" } else if fold.busy || starting { "busy" } else { "idle" };
     let last_activity = match &fold.last_activity {
         Some(t) => Value::String(t.clone()),
-        None if asking => Value::String("Codex is asking something in its terminal".into()),
+        None if asking => Value::String(format!("{} is asking something in its terminal", crate::agents::session::display_name(a.agent))),
         None => Value::Null,
     };
     let NotesMeta { goal, next_steps, pr_links, tickets: tickets_fm, ticket_states, last_summary, start_in: _ } =

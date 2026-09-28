@@ -12,6 +12,8 @@ pub(crate) mod session;
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct Fold {
     pub busy: bool,
+    /// The agent is asking the user a permission question (Copilot writes these).
+    pub waiting: bool,
     pub last_activity: Option<String>,
     pub last_activity_at: Option<String>,
     pub cwd: Option<String>,

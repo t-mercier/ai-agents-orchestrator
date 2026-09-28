@@ -37,8 +37,10 @@ modified. Brutus stays a Claude Code agent and lists Codex and Copilot sessions 
   first piece of that plan.
 - Close with a summary, Sync, Import and pinned skills for Codex and Copilot sessions: these
   run a skill headless. Their buttons are disabled with the tooltip "Claude Code only for now".
-- The **waiting** status. Codex writes nothing while it waits for an approval *(docs)*, so a
-  session waiting for approval shows **busy**. Copilot asks before every tool unless allowed.
+- The **waiting** status for Codex approvals. Codex writes nothing while it waits for an
+  approval *(docs)*, so a Codex session waiting for one shows **busy**. Copilot does write
+  `permission.requested` *(round trip)*, so a Copilot session asking permission shows
+  **waiting**, and so does either tool while it asks to trust a new folder (no transcript yet).
 - Opening a Codex or Copilot session in an external terminal (iTerm, Terminal): the app
   would not see it running.
 - Usage bar (context %, limits), Doctor, security audit and context budget for their configs.
