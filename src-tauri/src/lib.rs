@@ -15,6 +15,7 @@ mod prstatus;
 mod doctor;
 mod secaudit;
 mod ctxbudget;
+mod updater;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
@@ -1456,6 +1457,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(pty::PtyManager::new())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -1507,6 +1509,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            updater::app_update_check,
+            updater::app_update_install,
             pinned::list_skills,
             pinned::run_skill,
             config::get_config,

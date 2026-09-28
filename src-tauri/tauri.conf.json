@@ -38,6 +38,15 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE4NDM0NjkwRjRFQjZFMTAKUldRUWJ1djBrRVpEcUplU3l4R0xzK1JEK09uamU0azM4ZkhnODFEUXBjMlRuSC9pYzNBU05yS3gK",
+      "endpoints": [
+        "https://github.com/t-mercier/ai-agents-orchestrator/releases/latest/download/latest.json"
+      ]
     }
   }
 }

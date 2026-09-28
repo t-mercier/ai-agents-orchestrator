@@ -1202,6 +1202,7 @@ async function maybeShowSkillsBanner() {
     return
   }
   await syncSkillsOnLaunch(el)
+  await maybeOfferAppUpdate(el)
   maybeOfferCheckoutUpdate(el)
 }
 
@@ -1236,6 +1237,42 @@ async function syncSkillsOnLaunch(el) {
     el.hidden = true; el.innerHTML = ''
   })
 }
+
+// A newer release is published → offer it in place. The app checks at launch and at most
+// every six hours when the window regains focus: a release is a weekly event, not a poll.
+// Dismiss is per version, so the notice comes back for the NEXT release, not this one.
+let appUpdateCheckedAt = 0
+async function maybeOfferAppUpdate(el) {
+  if (!el || !window.api || !window.api.appUpdateCheck) return
+  if (window.onboardingPending) return
+  if (!el.hidden) return
+  const now = Date.now()
+  if (now - appUpdateCheckedAt < 6 * 3600 * 1000) return
+  appUpdateCheckedAt = now
+  const upd = await window.api.appUpdateCheck()
+  if (!upd || !upd.version || !el.hidden) return
+  if (localStorage.getItem('csm.appUpdateDismissed') === upd.version) return
+  const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  el.innerHTML =
+    `<span class="sb-text">Version <strong>${esc(upd.version)}</strong> is available — you have ${esc(upd.current)}.</span>` +
+    '<button type="button" class="sb-install">Install and restart</button>' +
+    '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
+  el.hidden = false
+  const install = el.querySelector('.sb-install')
+  install.addEventListener('click', async () => {
+    install.disabled = true; install.textContent = 'Installing…'
+    const res = await window.api.appUpdateInstall()
+    if (res && !res.ok) {
+      install.disabled = false; install.textContent = 'Install and restart'
+      if (window.confirmAction) window.confirmAction({ title: 'Update failed', body: res.error || 'unknown error', confirmLabel: 'OK' })
+    }
+  })
+  el.querySelector('.sb-dismiss').addEventListener('click', () => {
+    localStorage.setItem('csm.appUpdateDismissed', upd.version)
+    el.hidden = true; el.innerHTML = ''
+  })
+}
+window.addEventListener('focus', () => maybeOfferAppUpdate(document.getElementById('skills-banner')))
 
 // After `git pull` in a clone, the repo's skills/ and hooks/ move and ~/.claude/skills does
 // not — and nothing said so; the README could only ask people to remember `install.sh`.

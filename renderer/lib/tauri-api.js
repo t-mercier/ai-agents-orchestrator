@@ -226,6 +226,15 @@
     // to offer. On error → null too: this is a courtesy notice, and a failed check must
     // read as "nothing to say", never as a banner about an update that may not exist.
     checkoutUpdate: () => invoke('checkout_update').catch(() => null),
+    // A newer published release → { version, current, notes }, or null. On error → null: a
+    // failed check (offline, feed down) must read as "nothing to say", never as an error.
+    appUpdateCheck: () => invoke('app_update_check').catch(() => null),
+    // Download, verify the signature, install and restart. Resolves only on failure — on
+    // success the app restarts into the new version before the promise settles.
+    appUpdateInstall: () =>
+      invoke('app_update_install')
+        .then(() => ({ ok: true }))
+        .catch((e) => ({ ok: false, error: String(e) })),
     // Runs that checkout's `install.sh --all` (the path is the backend's, never ours).
     // { ok, report } — the script's own output, which names what it replaced and archived.
     updateFromCheckout: () =>
