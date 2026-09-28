@@ -1567,6 +1567,7 @@ window.reloadConfig = async () => {           // called by Settings after save
   populateNewSessionCategories()
   fetchAndRender(true)   // refreshes the active tab + its badge
   seedTabCounts()        // re-seed ALL tab badges — roots/categories may have changed
+  if (window.CSMBrutusUI) window.CSMBrutusUI.refresh()   // he may have been turned on or off
 }
 
 // v1 → v2 migration notification (emitted by Rust on startup).

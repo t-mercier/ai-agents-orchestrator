@@ -111,7 +111,14 @@ fn assistant_of(user: &Value) -> Value {
         .and_then(Value::as_str)
         .filter(|s| ASSISTANT_STYLES.contains(s))
         .unwrap_or("concise");
-    json!({ "name": name, "style": style })
+    // Only an explicit false turns him off: a config from before the setting keeps him.
+    let enabled = a.and_then(|a| a.get("enabled")).and_then(Value::as_bool).unwrap_or(true);
+    json!({ "name": name, "style": style, "enabled": enabled })
+}
+
+/// Whether the user has Brutus turned on, read from a derived config.
+pub(crate) fn assistant_enabled(cfg: &Value) -> bool {
+    cfg.get("assistant").and_then(|a| a.get("enabled")).and_then(Value::as_bool).unwrap_or(true)
 }
 
 /// The pinned skills per scope, strings only, blanks dropped. Carried through derive
@@ -591,7 +598,7 @@ pub fn set_config(cfg: Value) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        clean_assistant_name, default_config, derive, migrate_v1_value, onboarding_needed, save_to, validate,
+        assistant_enabled, clean_assistant_name, default_config, derive, migrate_v1_value, onboarding_needed, save_to, validate,
     };
     use serde_json::json;
 
@@ -603,15 +610,29 @@ mod tests {
     #[test]
     fn assistant_defaults_to_brutus_concise_and_normalises_what_it_is_given() {
         let d = derive(&default_config());
-        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise" }));
+        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true }));
 
         let mut c = default_config();
         c["assistant"] = json!({ "name": "  Jarvis\u{7}  ", "style": "nerdy" });
-        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy" }));
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy", "enabled": true }));
 
         c["assistant"] = json!({ "name": "", "style": "shouty" });
-        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise" }),
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true }),
             "an empty name and an unknown style fall back, never pass through");
+    }
+
+    // Asked for on 2026-09-28: not everyone wants an assistant. Only an explicit false
+    // turns him off, so a config written before the setting existed keeps him.
+    #[test]
+    fn assistant_is_on_unless_turned_off_explicitly() {
+        let mut c = default_config();
+        c["assistant"] = json!({ "name": "B", "enabled": false });
+        assert_eq!(derive(&c)["assistant"]["enabled"], false);
+        c["assistant"]["enabled"] = json!("no");
+        assert_eq!(derive(&c)["assistant"]["enabled"], true, "a non-boolean is not a choice");
+        assert!(assistant_enabled(&derive(&default_config())));
+        c["assistant"]["enabled"] = json!(false);
+        assert!(!assistant_enabled(&derive(&c)));
     }
 
     #[test]

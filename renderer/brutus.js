@@ -17,6 +17,8 @@
     steps: [], pendingText: '', memory: 0,
   }
   const name = () => ((window.CSM_CONFIG || {}).assistant || {}).name || 'Brutus'
+  // Turned off in Settings: nothing of him is drawn, and ⌘K goes back to the page.
+  const enabled = () => ((window.CSM_CONFIG || {}).assistant || {}).enabled !== false
   const sessions = () => (window.CSMBrutusSessions ? window.CSMBrutusSessions() : [])
   const esc = window.CSMFormatters.escapeHtml
   const saveLog = () => store.set(LOG_KEY, JSON.stringify(state.log.slice(-60)))
@@ -125,6 +127,12 @@
     const wasPalette = !!document.querySelector('.bru-panel.v-B')
     document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab').forEach(e => e.remove())
     const tb = document.getElementById('brutus-btn')
+    if (!enabled()) {
+      if (tb) tb.hidden = true
+      state.homeOpen = false; state.palette = false
+      document.body.classList.remove('bru-docked')
+      return
+    }
     if (tb) {
       tb.hidden = state.home !== 'side'
       tb.classList.toggle('on', state.homeOpen)
@@ -264,6 +272,7 @@
     state.homeOpen = true; render()
   }
   async function refresh() {
+    if (!enabled()) { render(); return }
     const s = await window.api.brutusStatus()
     // null: the file exists but could not be read, which is not "nothing remembered".
     state.memory = s.memoryCount === null ? null : (s.memoryCount || 0)
@@ -286,6 +295,7 @@
     if (g && e.button === 0) startResize(e, [...g.classList].find(c => c !== 'bru-rs') || '')
   })
   document.addEventListener('keydown', (e) => {
+    if (!enabled()) return
     if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); state.palette = !state.palette; render(); return }
     if (e.key !== 'Escape') return
     if (state.palette) { state.palette = false; render() } else if (state.homeOpen && document.activeElement?.closest('.bru-panel')) { state.homeOpen = false; render() }

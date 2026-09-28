@@ -1,4 +1,4 @@
-// Settings: Assistant — Brutus's name and style (config.json: the backend composes his
+// Settings: Assistant — whether Brutus is on, his name and style (config.json: the backend composes his
 // prompt from them) and where he appears (localStorage: how the app looks to you).
 ;(function () {
   if (!window.CSMSettings) return
@@ -22,6 +22,7 @@
   }
   function populate() {
     const a = (window.CSM_CONFIG || {}).assistant || {}
+    $('set-assistant-enabled').checked = a.enabled !== false
     $('set-assistant-name').value = a.name || 'Brutus'
     style = STYLES[a.style] ? a.style : 'concise'
     let home = 'bubble'; try { home = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}
@@ -29,7 +30,7 @@
     paint()
   }
   function collect(out) {
-    out.assistant = { name: ($('set-assistant-name').value || '').trim() || 'Brutus', style }
+    out.assistant = { name: ($('set-assistant-name').value || '').trim() || 'Brutus', style, enabled: $('set-assistant-enabled').checked }
     // Only on a real change: setHome opens him in his new home, which every Save must not do.
     const home = document.querySelector('input[name="set-assistant-home"]:checked')
     let was = 'bubble'; try { was = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}

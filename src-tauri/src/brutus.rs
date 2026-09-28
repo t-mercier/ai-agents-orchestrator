@@ -416,6 +416,10 @@ pub fn brutus_ask(
     message: String,
 ) -> Result<(), String> {
     let message = check_message(&message)?;
+    // The renderer hides him when he is off; this keeps a stray call from running him anyway.
+    if !config::assistant_enabled(&config::load()) {
+        return Err("The assistant is turned off in Settings → Assistant.".into());
+    }
     let _busy = Busy::acquire()?;
     let plan = prepare(crate::reader::get_sessions(pty_state), true)?;
     ask(plan, |p| run(p, &message, |ev| emit(&app, &ev)), || {

@@ -448,7 +448,7 @@ test.describe('Brutus', () => {
     await expect(page.locator('#set-assistant-sample .bru-av')).toHaveText('J')
     await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
     await expect.poll(() => page.evaluate(() => window.__LAST_SET_CONFIG__ && window.__LAST_SET_CONFIG__.assistant))
-      .toEqual({ name: 'Jarvis', style: 'nerdy' })
+      .toEqual({ name: 'Jarvis', style: 'nerdy', enabled: true })
   })
 
   test('a failed run shows one error line and gives the input back', async ({ page }) => {
