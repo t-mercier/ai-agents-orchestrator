@@ -35,8 +35,11 @@ modified. Brutus stays a Claude Code agent and lists Codex and Copilot sessions 
   Copilot. They find their session through Claude Code's pidfiles and write outside a Codex
   sandbox; porting them is its own plan. `skills/lib/aosession.py` (already built) is the
   first piece of that plan.
-- Close with a summary, Sync, Import and pinned skills for Codex and Copilot sessions: these
-  run a skill headless. Their buttons are disabled with the tooltip "Claude Code only for now".
+- Close with a summary and pinned skills for Codex and Copilot sessions: these run a skill
+  in the session. Close stamps the marker without a summary and says so; pinned skills say
+  "Claude Code sessions only for now". **Sync stays available**: it runs a headless Claude
+  Code on the notes, not on the session's conversation, so it works whatever the agent.
+  Import lists Claude Code sessions only.
 - The **waiting** status for Codex approvals. Codex writes nothing while it waits for an
   approval *(docs)*, so a Codex session waiting for one shows **busy**. Copilot does write
   `permission.requested` *(round trip)*, so a Copilot session asking permission shows
@@ -57,15 +60,18 @@ Decisions taken without her, each with its cost if wrong.
    the process and so knows its pid, agent and notes path. Liveness is "the pty child is
    still running" — no process-name check, which is what defeated v1. *Cost if wrong:* a
    user who runs `codex` in their own terminal does not see it as a live card.
-3. **The app writes the notes.md and the registry entry itself** for Codex and Copilot,
-   with the same frontmatter `/start-session` writes plus `agent:`. No skill is needed to
-   create a session. *Cost if wrong:* the notes start with an empty Goal, which the first
-   prompt asks the agent to fill.
-4. **Session ids.** Copilot: the app generates a UUID and passes `--session-id` *(docs;
-   flag present in `copilot --help` 1.0.89, probe)*. Codex has no such flag, so the app finds
-   the rollout it started: the newest `$CODEX_HOME/sessions/**/rollout-*.jsonl` created after
-   the spawn whose `session_meta.cwd` is the launch directory *(probe: both fields exist)*,
-   then records the id in the frontmatter and the registry. *Cost if wrong:* two Codex
+3. **The app writes the notes.md itself** for Codex and Copilot, with the same frontmatter
+   `/start-session` writes plus `agent:`. No skill is needed to create a session. It writes
+   **no** `active-sessions.json` entry: Doctor judges those entries by Claude Code
+   transcripts and would report a Codex one as broken; the terminal and the notes are
+   enough to identify these sessions. *Cost if wrong:* the notes start with an empty Goal,
+   which the first prompt asks the agent to fill.
+4. **Session ids.** Copilot: the app generates a UUID and passes `--session-id` *(round
+   trip: Copilot 1.0.89 used it)*. Codex has no such flag, so the app finds the rollout it
+   started: one whose `session_meta` says it **started** after the spawn (its `timestamp`,
+   not the file's modification time — another Codex session in the same folder keeps
+   writing its own), in the launch directory, with an id no other terminal holds *(round
+   trip)*. The id is kept on the terminal and written into the frontmatter. *Cost if wrong:* two Codex
    sessions started in the same folder within the same second could be swapped; the second
    match is refused rather than guessed.
 5. **Copilot ≥ 1.0 is required.** 0.0.x has no `--session-id`, no session id in its hooks and
