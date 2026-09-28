@@ -19,6 +19,16 @@ pub(crate) struct NewNotes<'a> {
     pub today: &'a str,
 }
 
+/// A value that goes on one frontmatter line: a line break in it would write a key of its
+/// own (a folder can be named with one).
+pub(crate) fn one_line(value: &str) -> Result<&str, String> {
+    if value.contains(['\n', '\r']) {
+        Err(format!("a line break is not allowed here: {value:?}"))
+    } else {
+        Ok(value)
+    }
+}
+
 /// The notes.md text, section for section what `/start-session` writes.
 pub(crate) fn notes_text(n: &NewNotes) -> String {
     let mut fm = vec![
@@ -97,12 +107,27 @@ pub(crate) fn uuid_v4() -> Result<String, String> {
 /// Resume continues its conversation. Restart, for a session whose conversation is gone,
 /// starts a new one on the same notes: Copilot under a fresh id written into the notes,
 /// Codex with the id cleared so the poll records the rollout it is about to write.
-pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session_id: &str, restart: bool) -> Result<String, String> {
+pub(crate) struct Relaunch {
+    pub line: String,
+    /// The folder the CLI starts in, canonical: what a new Codex session records as its cwd.
+    pub dir: String,
+    /// The session's id when it is known at launch (Resume, and a Copilot Restart).
+    pub session_id: Option<String>,
+}
+
+/// `path` resolved (symlinks, `..`), or as given when it cannot be.
+pub(crate) fn canonical(path: &str) -> String {
+    std::fs::canonicalize(path).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| path.to_string())
+}
+
+pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session_id: &str, restart: bool) -> Result<Relaunch, String> {
     let dir = if Path::new(cwd).is_dir() {
         cwd.to_string()
     } else {
         Path::new(notes_path).parent().map(|p| p.to_string_lossy().into_owned()).ok_or("no folder to start in")?
     };
+    let dir = canonical(&dir);
+    let known: Option<String>;
     let line = if restart {
         let content = std::fs::read_to_string(notes_path).map_err(|e| e.to_string())?;
         let name = crate::reader::parse_frontmatter(&content).get("name").cloned().unwrap_or_default();
@@ -110,17 +135,19 @@ pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session
         let ids: Vec<String> = if new_id.is_empty() { vec![] } else { vec![new_id.clone()] };
         let updated = crate::set_frontmatter_links(&content, "session_id", "session_ids", &ids);
         crate::atomic_write(Path::new(notes_path), &ensure_key(&updated, "session_id", &new_id))?;
+        known = Some(new_id.clone()).filter(|i| !i.is_empty());
         new_line(agent, &new_id, &first_prompt(&name, notes_path))
     } else {
         if !crate::is_valid_session_id(session_id) {
             return Err(format!("not a session id: {session_id}"));
         }
+        known = Some(session_id.to_string());
         super::command(agent, &super::Launch {
             resume: Some(session_id), prompt: None, model: "", mode: super::Mode::Interactive,
             claude_settings: "", writable_roots: &[],
         })
     };
-    Ok(format!("cd {} && {line}", crate::pty::shell_quote(&dir)))
+    Ok(Relaunch { line: format!("cd {} && {line}", crate::pty::shell_quote(&dir)), dir, session_id: known })
 }
 
 /// The command that starts a new session. Copilot takes the id the app chose.
@@ -187,6 +214,12 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_with_a_line_break_cannot_write_a_frontmatter_key() {
+        assert!(one_line("/w/x\nagent: claude").is_err());
+        assert_eq!(one_line("/w/x y"), Ok("/w/x y"));
+    }
+
+    #[test]
     fn an_existing_session_is_never_overwritten() {
         let dir = std::env::temp_dir().join(format!("ao-agents-create-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -223,12 +256,14 @@ mod tests {
         let mut n = notes(AgentId::Copilot, "fceb338b-f100-471c-9ed5-3975070c0ba2");
         n.name = "x";
         create(&p, &notes_text(&n)).unwrap();
-        let line = relaunch_line(AgentId::Copilot, p.to_str().unwrap(), dir.to_str().unwrap(), "", true).unwrap();
+        let r = relaunch_line(AgentId::Copilot, p.to_str().unwrap(), dir.to_str().unwrap(), "", true).unwrap();
+        let line = r.line;
         let fm = crate::reader::parse_frontmatter(&std::fs::read_to_string(&p).unwrap());
         let new_id = fm.get("session_id").cloned().unwrap();
         assert_ne!(new_id, "fceb338b-f100-471c-9ed5-3975070c0ba2");
         assert!(line.contains(&format!("--session-id '{new_id}'")), "{line}");
-        assert!(line.starts_with(&format!("cd '{}' && copilot", dir.display())));
+        assert!(line.starts_with(&format!("cd '{}' && copilot", canonical(dir.to_str().unwrap()))));
+        assert_eq!(r.session_id.as_deref(), Some(new_id.as_str()), "the terminal knows the new id from the start");
 
         let q = dir.join("FEAT/y/notes.md");
         create(&q, &notes_text(&notes(AgentId::Codex, "01a0e9da-76d9-7c12-882e-57b7554edd81"))).unwrap();
@@ -255,10 +290,13 @@ mod tests {
     #[test]
     fn resume_refuses_a_malformed_id() {
         assert!(relaunch_line(AgentId::Codex, "/w/n.md", "/", "x'; rm -rf ~", false).is_err());
-        assert_eq!(
-            relaunch_line(AgentId::Codex, "/w/n.md", "/", "01a0e9da-76d9", false).unwrap(),
-            "cd '/' && codex resume '01a0e9da-76d9'"
-        );
+        let r = relaunch_line(AgentId::Codex, "/w/n.md", "/", "01a0e9da-76d9", false).unwrap();
+        assert_eq!(r.line, "cd '/' && codex resume '01a0e9da-76d9'");
+        assert_eq!(r.session_id.as_deref(), Some("01a0e9da-76d9"));
+        // A launch folder that is gone falls back to the notes folder, and says so: a new
+        // Codex session records the folder it really started in.
+        let gone = relaunch_line(AgentId::Codex, "/tmp/n.md", "/no/such/dir", "01a0e9da-76d9", false).unwrap();
+        assert_eq!(gone.dir, canonical("/tmp"));
     }
 
     #[test]

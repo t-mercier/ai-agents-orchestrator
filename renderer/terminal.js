@@ -219,11 +219,12 @@ function ensureTerminal(sessionId, restartSlug = '', command = '') {
   return entry  // term.open + pty spawn happen in showTerminal, once the div is visible
 }
 
-function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
+function showTerminal(sessionId, cwd, restartSlug = '', command = '', agent = '') {
   document.querySelectorAll('.terminal-session-div').forEach(el => {
     el.style.display = 'none'
   })
   const entry = ensureTerminal(sessionId, restartSlug, command)
+  if (agent && !entry.agent) entry.agent = agent
   entry.div.style.display = 'flex'
   const fitSpawn = () => {
     if (!entry.opened) {
@@ -242,7 +243,14 @@ function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
     if (!entry.spawned) {
       // Spawn at the measured size so the first render fills the width. A non-empty
       // restartSlug makes the pty run `/restart <slug>` instead of `--resume`.
-      window.api.ptySpawn(sessionId, cwd, entry.term.cols, entry.term.rows, entry.restartSlug, entry.command, entry.notesPath || notesPathForKey(sessionId) || '')
+      // A spawn the backend refuses (an unknown agent, a missing notes file) says why in
+      // the pane itself; otherwise it would stay blank with a card that never goes live.
+      window.api.ptySpawn(sessionId, cwd, entry.term.cols, entry.term.rows, entry.restartSlug, entry.command,
+        entry.notesPath || notesPathForKey(sessionId) || '', entry.agent || '')
+        .catch((e) => {
+          entry.dead = true
+          try { entry.term.write(`\r\n\x1b[31m${String(e)}\x1b[0m\r\n`) } catch (_) {}
+        })
       entry.spawned = true
     } else {
       window.api.ptyResize(sessionId, entry.term.cols, entry.term.rows)
@@ -256,13 +264,13 @@ function showTerminal(sessionId, cwd, restartSlug = '', command = '') {
   activeTerminalSession = sessionId
 }
 
-function openTerminalPane(sessionId, cwd, restartSlug = '', command = '', notesPath = '') {
+function openTerminalPane(sessionId, cwd, restartSlug = '', command = '', notesPath = '', agent = '') {
   const infoPane = document.getElementById('detail-info-pane')
   const termPane = document.getElementById('detail-terminal-pane')
   infoPane.style.display = 'none'
   termPane.style.display = 'flex'
   terminalVisible = true
-  showTerminal(sessionId, cwd, restartSlug, command)
+  showTerminal(sessionId, cwd, restartSlug, command, agent)
   // Tag the terminal with its managed notes.md (stable across resume sid-changes). A
   // session resumed twice gets a new sessionId each time, but its notesPath is constant —
   // so we can re-find a backgrounded terminal by notesPath even when its Map key is an
@@ -362,7 +370,9 @@ function closeTerminalPane() {
   // Unmanaged session (no notes.md): nothing to wrap up — just kill.
   if (!notesPath || !window.api.notesClosedSince) { killTerminal(sid); return }
   // Codex and Copilot do not run /close-session yet: stamp the close and end the terminal.
-  if (window.agentFor && window.agentFor(sid, notesPath)) return endNow(sid, notesPath, '[closed from the dashboard — no summary for this agent yet]')
+  const shown = terminals.get(sid)
+  const isAgent = (shown && shown.agent && shown.agent !== 'claude') || (window.agentFor && window.agentFor(sid, notesPath))
+  if (isAgent) return endNow(sid, notesPath, '[closed from the dashboard — no summary for this agent yet]')
 
   const since = Date.now()
   ending.set(sid, since)

@@ -64,11 +64,9 @@ impl AgentId {
         }
     }
 
-    pub(crate) fn binary(self) -> &'static str {
-        self.as_str()
-    }
-
     /// How a skill is invoked in a prompt: Codex names skills with `$`, the others with `/`.
+    /// Used once the app skills run in Codex and Copilot (the next plan); kept with its test.
+    #[allow(dead_code)]
     pub(crate) fn skill_invocation(self, name: &str, args: &str) -> String {
         let sigil = if self == Self::Codex { '$' } else { '/' };
         let args = args.trim();

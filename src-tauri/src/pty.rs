@@ -68,6 +68,9 @@ pub(crate) struct AgentPty {
     pub cwd: String,
     pub spawned_at: std::time::SystemTime,
     pub pid: u32,
+    /// Known at launch (Resume, Copilot), or once the poll finds a new Codex rollout. Held
+    /// here and not only in the notes, which the agent itself is editing.
+    pub session_id: Option<String>,
 }
 
 #[derive(Default)]
@@ -106,6 +109,17 @@ impl PtyManager {
         list
     }
 
+
+    /// Record the id the poll found for the Codex session whose notes these are.
+    pub(crate) fn record_agent_id(&self, notes_path: &str, id: &str) {
+        if let Ok(mut m) = self.sessions.lock() {
+            for s in m.values_mut() {
+                if let Some(a) = s.agent.as_mut().filter(|a| a.notes_path == notes_path) {
+                    a.session_id = Some(id.to_string());
+                }
+            }
+        }
+    }
 
     /// Kill every embedded child. Called on app exit so the `claude` processes we
     /// spawned in embedded terminals don't orphan and keep the session "running"
@@ -227,10 +241,24 @@ pub fn pty_spawn(
     // can't find `claude`. `-ilc` sources both, matching a real terminal tab.
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let command = command.trim().to_string();
+    // Where a Codex or Copilot session starts, and its id when known at launch: the poll
+    // matches a new Codex rollout against the first, and never overwrites the second.
+    let mut agent_dir = crate::agents::session::canonical(&cwd);
+    let mut agent_id: Option<String> = None;
     let inner = if let Some(notes) = agent_notes.as_deref().filter(|_| command.is_empty()) {
         // Resume or Restart of a Codex or Copilot session (a new one comes as `command`).
-        crate::agents::session::relaunch_line(agent, notes, &cwd, &session_id, !restart_slug.is_empty())?
+        let r = crate::agents::session::relaunch_line(agent, notes, &cwd, &session_id, !restart_slug.is_empty())?;
+        agent_dir = r.dir;
+        agent_id = r.session_id;
+        r.line
     } else if !command.is_empty() {
+        if let Some(notes) = agent_notes.as_deref() {
+            // A new session: Copilot's id is the one the app wrote into its notes.
+            agent_id = std::fs::read_to_string(notes)
+                .ok()
+                .and_then(|c| crate::reader::parse_frontmatter(&c).get("session_id").cloned())
+                .filter(|s| crate::is_valid_session_id(s));
+        }
         // Verbatim command from start_session(embedded=true): `cd <dir> && [git checkout
         // <branch> && ] claude --model X '/start-session …'`. Every interpolation was
         // shell_quote'd in lib.rs, so it's safe to run as-is — same shape as the
@@ -327,9 +355,10 @@ pub fn pty_spawn(
     let agent_meta = agent_notes.map(|notes_path| AgentPty {
         agent,
         notes_path,
-        cwd: cwd.clone(),
+        cwd: agent_dir,
         spawned_at: std::time::SystemTime::now(),
         pid: child_pid,
+        session_id: agent_id,
     });
     sessions.insert(session_id, Session { master: pair.master, writer: Arc::new(Mutex::new(writer)), child, agent: agent_meta });
     set_live_agent_notes(&sessions.values().filter_map(|s| s.agent.clone()).collect::<Vec<_>>());

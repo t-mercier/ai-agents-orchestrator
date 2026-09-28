@@ -48,8 +48,9 @@ pub(crate) fn fold(text: &str) -> Fold {
     f
 }
 
-/// `(id, cwd)` from a rollout's first line, its `session_meta`.
-pub(crate) fn meta(first_line: &str) -> Option<(String, String)> {
+/// `(id, cwd, started)` from a rollout's first line, its `session_meta`. `started` is the
+/// UTC timestamp Codex writes there, e.g. `2026-09-28T21:10:04.579Z`.
+pub(crate) fn meta(first_line: &str) -> Option<(String, String, String)> {
     let d: Value = serde_json::from_str(first_line).ok()?;
     if d.get("type").and_then(Value::as_str) != Some("session_meta") {
         return None;
@@ -57,7 +58,27 @@ pub(crate) fn meta(first_line: &str) -> Option<(String, String)> {
     let p = d.get("payload")?;
     let id = p.get("id").and_then(Value::as_str)?.to_string();
     let cwd = p.get("cwd").and_then(Value::as_str)?.to_string();
-    Some((id, cwd))
+    let started = p.get("timestamp").or_else(|| d.get("timestamp")).and_then(Value::as_str).unwrap_or("").to_string();
+    Some((id, cwd, started))
+}
+
+/// A time as Codex writes it in `session_meta`: UTC, millisecond precision, `Z`. Two
+/// timestamps in this form compare correctly as strings.
+pub(crate) fn utc_rfc3339(t: SystemTime) -> String {
+    let d = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let (secs, ms) = (d.as_secs() as i64, d.subsec_millis());
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{ms:03}Z", rem / 3600, rem % 3600 / 60, rem % 60)
 }
 
 /// The two newest day folders under `sessions/YYYY/MM/DD`. A session the app has just
@@ -109,12 +130,15 @@ fn first_line(path: &Path) -> Option<String> {
     Some(line)
 }
 
-/// The rollout a session the app started at `since` in `cwd` wrote: modified at or after
-/// the spawn, with that launch directory. `Err` when two match — two sessions started in
-/// the same folder at once cannot be told apart, and a wrong match would attach one
-/// session's conversation to the other's notes.
-pub(crate) fn find_started(root: &Path, cwd: &str, since: SystemTime) -> Result<Option<String>, String> {
+/// The rollout a session the app started at `since` in `cwd` wrote: one whose
+/// `session_meta` says it *started* after the spawn, in that launch directory, and whose id
+/// no other terminal holds (`taken`). Being written to since the spawn is not enough:
+/// another Codex session working in the same folder keeps writing its own. `Err` when two
+/// match — two sessions started in one folder at once cannot be told apart, and a wrong
+/// match would attach one session's conversation to the other's notes.
+pub(crate) fn find_started(root: &Path, cwd: &str, since: SystemTime, taken: &[String]) -> Result<Option<String>, String> {
     let floor = since.checked_sub(std::time::Duration::from_secs(2)).unwrap_or(since);
+    let floor_utc = utc_rfc3339(floor);
     let mut found: Vec<String> = Vec::new();
     for day in newest_day_dirs(root) {
         for p in rollouts_in(&day) {
@@ -122,8 +146,9 @@ pub(crate) fn find_started(root: &Path, cwd: &str, since: SystemTime) -> Result<
             if !fresh {
                 continue;
             }
-            if let Some((id, c)) = first_line(&p).as_deref().and_then(meta) {
-                if c == cwd && crate::is_valid_session_id(&id) && !found.contains(&id) {
+            if let Some((id, c, started)) = first_line(&p).as_deref().and_then(meta) {
+                let new_enough = started.as_str() >= floor_utc.as_str();
+                if c == cwd && new_enough && crate::is_valid_session_id(&id) && !taken.contains(&id) && !found.contains(&id) {
                     found.push(id);
                 }
             }
@@ -136,12 +161,42 @@ pub(crate) fn find_started(root: &Path, cwd: &str, since: SystemTime) -> Result<
     }
 }
 
-/// The rollout of session `id`: its file name ends in `-<id>.jsonl`. The two newest day
-/// folders are searched first (where a live session writes), then the rest.
+/// Rollouts already found, by id. A resumed session keeps writing its original rollout,
+/// which may sit in an old day folder; without this each poll would walk every folder.
+static FOUND: std::sync::Mutex<Option<std::collections::HashMap<String, PathBuf>>> = std::sync::Mutex::new(None);
+
+/// A remembered rollout that is still on disk; one that has gone is forgotten.
+fn cached_path(id: &str) -> Option<PathBuf> {
+    let mut g = FOUND.lock().ok()?;
+    let map = g.get_or_insert_with(Default::default);
+    match map.get(id) {
+        Some(p) if p.is_file() => Some(p.clone()),
+        Some(_) => {
+            map.remove(id);
+            None
+        }
+        None => None,
+    }
+}
+
+/// The rollout of session `id`: its file name ends in `-<id>.jsonl`. Remembered once
+/// found; otherwise the two newest day folders are searched first (where a live session
+/// writes), then the rest.
 pub(crate) fn transcript_path(root: &Path, id: &str) -> Option<PathBuf> {
     if !crate::is_valid_session_id(id) {
         return None;
     }
+    if let Some(p) = cached_path(id).filter(|p| p.starts_with(root)) {
+        return Some(p);
+    }
+    let found = walk_for(root, id);
+    if let (Some(p), Ok(mut g)) = (&found, FOUND.lock()) {
+        g.get_or_insert_with(Default::default).insert(id.to_string(), p.clone());
+    }
+    found
+}
+
+fn walk_for(root: &Path, id: &str) -> Option<PathBuf> {
     let suffix = format!("-{id}.jsonl");
     let matches = |p: &PathBuf| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(&suffix));
     for day in newest_day_dirs(root) {
@@ -186,7 +241,10 @@ mod tests {
     const ID: &str = "01a0e9da-76d9-7c12-882e-57b7554edd81";
 
     fn meta_line(id: &str, cwd: &str) -> String {
-        format!(r#"{{"timestamp":"2026-09-28T21:10:04Z","type":"session_meta","payload":{{"session_id":"{id}","id":"{id}","cwd":"{cwd}"}}}}"#)
+        meta_line_at(id, cwd, &utc_rfc3339(SystemTime::now()))
+    }
+    fn meta_line_at(id: &str, cwd: &str, ts: &str) -> String {
+        format!(r#"{{"timestamp":"{ts}","type":"session_meta","payload":{{"session_id":"{id}","id":"{id}","cwd":"{cwd}","timestamp":"{ts}"}}}}"#)
     }
     const STARTED: &str = r#"{"type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}"#;
     const ANSWER: &str = r#"{"timestamp":"2026-09-28T21:10:08.542Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}}"#;
@@ -221,10 +279,52 @@ mod tests {
         let since = SystemTime::now() - std::time::Duration::from_secs(1);
         write_rollout(t.path(), "2026/09/28", ID, "/w/x");
         write_rollout(t.path(), "2026/09/28", "01a0e9da-0000-7c12-882e-57b7554edd81", "/w/other");
-        assert_eq!(find_started(t.path(), "/w/x", since).unwrap().as_deref(), Some(ID));
-        assert_eq!(find_started(t.path(), "/w/none", since).unwrap(), None);
+        assert_eq!(find_started(t.path(), "/w/x", since, &[]).unwrap().as_deref(), Some(ID));
+        assert_eq!(find_started(t.path(), "/w/none", since, &[]).unwrap(), None);
         write_rollout(t.path(), "2026/09/28", "01a0e9da-1111-7c12-882e-57b7554edd81", "/w/x");
-        assert!(find_started(t.path(), "/w/x", since).is_err(), "two in one folder: refused, not guessed");
+        assert!(find_started(t.path(), "/w/x", since, &[]).is_err(), "two in one folder: refused, not guessed");
+    }
+
+    // The review's scenario: another Codex session (or Codex Desktop) working in the same
+    // folder keeps writing its rollout. Written after the spawn is not started after it.
+    #[test]
+    fn a_busy_older_session_in_the_same_folder_is_not_the_new_one() {
+        let t = tmp("codex-busy");
+        let since = SystemTime::now();
+        let dir = t.path().join("sessions/2026/09/28");
+        std::fs::create_dir_all(&dir).unwrap();
+        let old_start = utc_rfc3339(since - std::time::Duration::from_secs(3600));
+        std::fs::write(dir.join(format!("rollout-x-{ID}.jsonl")), format!("{}\n{STARTED}\n", meta_line_at(ID, "/w/x", &old_start))).unwrap();
+        assert_eq!(find_started(t.path(), "/w/x", since, &[]).unwrap(), None);
+    }
+
+    #[test]
+    fn an_id_another_terminal_holds_is_never_given_to_this_one() {
+        let t = tmp("codex-taken");
+        let since = SystemTime::now() - std::time::Duration::from_secs(1);
+        write_rollout(t.path(), "2026/09/28", ID, "/w/x");
+        assert_eq!(find_started(t.path(), "/w/x", since, &[ID.to_string()]).unwrap(), None);
+    }
+
+    // Found once, then remembered: a session resumed days later writes into an old day
+    // folder, which would otherwise mean walking every folder on each 5 s poll. A file that
+    // has gone since is looked up again, never returned from memory.
+    #[test]
+    fn a_found_rollout_is_remembered_until_it_goes() {
+        let t = tmp("codex-cache");
+        let id = "01a0e9da-4444-7c12-882e-57b7554edd81";
+        let old = write_rollout(t.path(), "2025/01/02", id, "/w/x");
+        assert_eq!(transcript_path(t.path(), id), Some(old.clone()));
+        assert!(cached_path(id).is_some(), "remembered after the first walk");
+        std::fs::remove_file(&old).unwrap();
+        assert_eq!(transcript_path(t.path(), id), None);
+        assert!(cached_path(id).is_none(), "forgotten once the file is gone");
+    }
+
+    #[test]
+    fn utc_timestamps_compare_like_codex_writes_them() {
+        let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_790_629_804_579);
+        assert_eq!(utc_rfc3339(t), "2026-09-28T21:10:04.579Z");
     }
 
     #[test]
@@ -232,7 +332,7 @@ mod tests {
         let t = tmp("codex2");
         write_rollout(t.path(), "2026/09/28", ID, "/w/x");
         let later = SystemTime::now() + std::time::Duration::from_secs(60);
-        assert_eq!(find_started(t.path(), "/w/x", later).unwrap(), None);
+        assert_eq!(find_started(t.path(), "/w/x", later, &[]).unwrap(), None);
     }
 
     #[test]
@@ -254,7 +354,7 @@ mod tests {
         let cwd = std::env::var("AO_PROBE_CWD").unwrap();
         let since: u64 = std::env::var("AO_PROBE_SINCE").unwrap().parse().unwrap();
         let since = std::time::UNIX_EPOCH + std::time::Duration::from_secs(since);
-        let id = find_started(&home(), &cwd, since).unwrap().expect("the rollout of the run");
+        let id = find_started(&home(), &cwd, since, &[]).unwrap().expect("the rollout of the run");
         let path = transcript_path(&home(), &id).unwrap();
         let f = fold(&std::fs::read_to_string(&path).unwrap());
         eprintln!("id={id} busy={} last={:?}", f.busy, f.last_activity);

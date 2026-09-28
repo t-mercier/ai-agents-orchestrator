@@ -896,7 +896,11 @@ async function fillAgentChoice() {
   const sel = document.getElementById('ns-agent')
   const hint = document.getElementById('ns-agent-hint')
   if (!field || !sel || !window.api.agentsAvailable) return
-  if (!agentsKnown) agentsKnown = await window.api.agentsAvailable()
+  if (!agentsKnown) {
+    const got = await window.api.agentsAvailable()
+    if (!got || !got.length) return   // a failed probe is asked again at the next +New
+    agentsKnown = got
+  }
   const names = { claude: 'Claude Code', codex: 'Codex', copilot: 'Copilot' }
   const usable = agentsKnown.filter(a => a.found && a.supported).map(a => a.agent)
   const others = usable.filter(a => a !== 'claude')
@@ -909,8 +913,9 @@ async function fillAgentChoice() {
   hint.hidden = !notes.length
 }
 
+let agentChoiceReady = Promise.resolve()
 document.getElementById('new-session-btn').addEventListener('click', () => {
-  fillAgentChoice()
+  agentChoiceReady = fillAgentChoice()
   for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
     document.getElementById(id).value = ''
   }
@@ -966,6 +971,8 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   // pref defaults to 'embedded', so +New now defaults to the in-app terminal — a change
   // from its historical always-iTerm behaviour. The modal toggle shows the current pick.
   // 'terminal' = external iTerm tab (the old behaviour).
+  // The agent list may still be arriving (a login shell per CLI); the choice waits for it.
+  await agentChoiceReady
   const agentSel = document.getElementById('ns-agent')
   const agent = agentSel && !document.getElementById('ns-agent-field').hidden ? agentSel.value : 'claude'
   try { localStorage.setItem('csm.nsAgent', agent) } catch {}
@@ -997,7 +1004,7 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
     // openTerminalPane → onTerminalOpened flips to the Running tab WITHOUT nulling the
     // selection (switchTab() would reset selectedKey, collapsing the panel — bug fixed).
     // cwd: where the CLI starts, which is how a new Codex session's rollout is found.
-    window.openTerminalPane(res.notesPath, res.cwd || '', '', res.command, res.notesPath)
+    window.openTerminalPane(res.notesPath, res.cwd || '', '', res.command, res.notesPath, res.agent || 'claude')
   }
 })
 
@@ -1282,7 +1289,8 @@ async function maybeOfferAppUpdate(el) {
   // A check that failed (offline) asks again at the next focus instead of in six hours.
   if (upd === undefined) { appUpdateCheckedAt = 0; return }
   if (!upd || !upd.version || !el.hidden) return
-  if (localStorage.getItem('csm.appUpdateDismissed') === upd.version) return
+  let dismissed = null; try { dismissed = localStorage.getItem('csm.appUpdateDismissed') } catch {}
+  if (dismissed === upd.version) return
   const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   el.innerHTML =
     `<span class="sb-text">Version <strong>${esc(upd.version)}</strong> is available — you have ${esc(upd.current)}.</span>` +
@@ -1309,7 +1317,7 @@ async function maybeOfferAppUpdate(el) {
     }
   })
   el.querySelector('.sb-dismiss').addEventListener('click', () => {
-    localStorage.setItem('csm.appUpdateDismissed', upd.version)
+    try { localStorage.setItem('csm.appUpdateDismissed', upd.version) } catch {}
     el.hidden = true; el.innerHTML = ''
   })
 }

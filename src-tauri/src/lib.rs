@@ -496,7 +496,7 @@ fn start_session(
         let start_in_s = dir_abs.as_ref().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
         agents::session::create(std::path::Path::new(&notes_path), &agents::session::notes_text(&agents::session::NewNotes {
             agent, session_id: &session_id, category: &category, ticket: &safe_ticket, name: &safe_name,
-            pr_link: pr, start_in: &start_in_s, started_at: &started_at, today: &today,
+            pr_link: pr, start_in: agents::session::one_line(&start_in_s)?, started_at: &started_at, today: &today,
         }))?;
         let line = agents::session::new_line(agent, &session_id, &agents::session::first_prompt(&safe_name, &notes_path));
         let checkout = if branch.is_empty() { String::new() } else { format!("git checkout {} -- && ", pty::shell_quote(branch)) };

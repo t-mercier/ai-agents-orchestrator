@@ -30,6 +30,7 @@ async function stub(page, agents) {
               notesPath: '/Users/dev/work/FEAT/paused-codex/notes.md' }])
           }
           if (cmd === 'start_session') return Promise.resolve({ command: "cd '/w' && codex 'hi'", notesPath: '/w/FEAT/x/notes.md', cwd: '/w', agent: args.agent || undefined })
+          if (cmd === 'pty_spawn' && window.__FAIL_SPAWN__) return Promise.reject('unknown agent: codx')
           return orig(cmd, args)
         }
         t = v
@@ -69,6 +70,38 @@ test('+New offers the installed agents and says why Copilot is not one of them',
   expect(call.args.agent).toBe('codex')
   expect(call.args.embedded).toBe(true)
   await expect.poll(() => page.evaluate(() => window.__CALLS__.filter(c => c.cmd === 'pty_spawn').map(c => c.args.cwd))).toEqual(['/w'])
+  // The agent goes with the spawn: the notes at that path may belong to another session.
+  const spawn = await page.evaluate(() => window.__CALLS__.find(c => c.cmd === 'pty_spawn'))
+  expect(spawn.args.agent).toBe('codex')
+  // Closing it before the poll has seen it must not type /close-session into Codex.
+  await page.evaluate(() => window.closeTerminalPane())
+  await expect.poll(() => page.evaluate(() => window.__CALLS__.map(c => c.cmd))).toContain('close_session')
+  expect(await page.evaluate(() => window.__CALLS__.some(c => c.cmd === 'pty_input' && /close-session/.test(c.args.data)))).toBe(false)
+})
+
+test('a Claude Code +New spawns as Claude Code, whatever notes sit at that path', async ({ page }) => {
+  await stub(page, ALL)
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.locator('#new-session-btn').click()
+  await expect(page.locator('#ns-agent-field')).toBeVisible()
+  await page.locator('#ns-agent').selectOption('claude')
+  await page.locator('#ns-name').fill('plain claude')
+  await page.locator('#new-session-form').evaluate((f) => f.requestSubmit())
+  await expect.poll(() => page.evaluate(() => (window.__CALLS__.find(c => c.cmd === 'pty_spawn') || {}).args?.agent)).toBe('claude')
+})
+
+test('a terminal that cannot start says why instead of staying blank', async ({ page }) => {
+  await stub(page, ALL)
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.evaluate(() => { window.__FAIL_SPAWN__ = true })
+  await page.locator('#new-session-btn').click()
+  await page.locator('#ns-agent').selectOption('codex')
+  await page.locator('#ns-name').fill('broken')
+  await page.locator('#new-session-form').evaluate((f) => f.requestSubmit())
+  await expect(page.locator('.terminal-session-div').last()).toContainText('unknown agent: codx')
+  expect(await page.evaluate(() => window.hasLiveTerminal('/w/FEAT/x/notes.md'))).toBe(false)
 })
 
 test('with Claude Code alone, +New looks exactly as before', async ({ page }) => {

@@ -325,7 +325,8 @@ const AGENT_NAMES = { codex: 'Codex', copilot: 'Copilot' }
 function agentOf(s) { return (s && AGENT_NAMES[s.agent]) ? s.agent : '' }
 // The agent of a session known by id or notes path, from whatever list is on screen.
 function agentFor(sid, notesPath) {
-  const all = [...(window._lastSessions || []), ...(window._historicalForBrutus || []), ...Object.values(window._boardIndex || {})]
+  // _terminalSession: a session just started from +New, before the poll has listed it.
+  const all = [window._terminalSession, ...(window._lastSessions || []), ...(window._historicalForBrutus || []), ...Object.values(window._boardIndex || {})]
   const s = all.find(x => x && ((notesPath && x.notesPath === notesPath) || (sid && x.sessionId === sid)))
   return agentOf(s)
 }

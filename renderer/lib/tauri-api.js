@@ -52,8 +52,10 @@
     // pty commands propagate: terminal.js owns the pane and reports a failed spawn/input in
     // the terminal itself; a swallowed rejection here would leave a silent blank pane.
     // notesPath: the session's notes, from which the backend reads which agent runs it.
-    ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command, notesPath) =>
-      invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '', notesPath: notesPath || null }),
+    // agent: sent for a new session ("claude" included), whose notes path may already hold
+    // another session's notes; otherwise the backend reads it from the notes.
+    ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command, notesPath, agent) =>
+      invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '', notesPath: notesPath || null, agent: agent || null }),
     // [{ agent, found, version, supported, hint }] for claude, codex, copilot.
     agentsAvailable: () => invoke('agents_available').catch(() => []),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
