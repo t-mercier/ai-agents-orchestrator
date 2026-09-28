@@ -1250,6 +1250,8 @@ async function maybeOfferAppUpdate(el) {
   if (now - appUpdateCheckedAt < 6 * 3600 * 1000) return
   appUpdateCheckedAt = now
   const upd = await window.api.appUpdateCheck()
+  // A check that failed (offline) asks again at the next focus instead of in six hours.
+  if (upd === undefined) { appUpdateCheckedAt = 0; return }
   if (!upd || !upd.version || !el.hidden) return
   if (localStorage.getItem('csm.appUpdateDismissed') === upd.version) return
   const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -1260,6 +1262,16 @@ async function maybeOfferAppUpdate(el) {
   el.hidden = false
   const install = el.querySelector('.sb-install')
   install.addEventListener('click', async () => {
+    // The restart ends every session running in an embedded terminal.
+    const live = window.liveTerminalCount ? window.liveTerminalCount() : 0
+    if (live > 0) {
+      const choice = await window.confirmAction({
+        title: 'Restart to update?',
+        body: `${live} session${live > 1 ? 's are' : ' is'} running in the app. Restarting stops ${live > 1 ? 'them' : 'it'}; ${live > 1 ? 'they' : 'it'} can be resumed afterwards.`,
+        confirmLabel: 'Install and restart',
+      })
+      if (choice !== 'confirm') return
+    }
     install.disabled = true; install.textContent = 'Installing…'
     const res = await window.api.appUpdateInstall()
     if (res && !res.ok) {

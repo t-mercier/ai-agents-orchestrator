@@ -128,6 +128,7 @@
     document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab').forEach(e => e.remove())
     const tb = document.getElementById('brutus-btn')
     if (!enabled()) {
+      document.querySelectorAll('.bru-toast,.bru-menu').forEach(e => e.remove())
       if (tb) tb.hidden = true
       state.homeOpen = false; state.palette = false
       document.body.classList.remove('bru-docked')
@@ -272,7 +273,11 @@
     state.homeOpen = true; render()
   }
   async function refresh() {
-    if (!enabled()) { render(); return }
+    if (!enabled()) {
+      // Off means he does not run, including the answer he was in the middle of.
+      if (state.running) window.api.brutusCancel()
+      render(); return
+    }
     const s = await window.api.brutusStatus()
     // null: the file exists but could not be read, which is not "nothing remembered".
     state.memory = s.memoryCount === null ? null : (s.memoryCount || 0)

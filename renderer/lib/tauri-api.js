@@ -228,7 +228,8 @@
     checkoutUpdate: () => invoke('checkout_update').catch(() => null),
     // A newer published release → { version, current, notes }, or null. On error → null: a
     // failed check (offline, feed down) must read as "nothing to say", never as an error.
-    appUpdateCheck: () => invoke('app_update_check').catch(() => null),
+    // null: checked, nothing newer. undefined: the check itself failed (offline).
+    appUpdateCheck: () => invoke('app_update_check').catch(() => undefined),
     // Download, verify the signature, install and restart. Resolves only on failure — on
     // success the app restarts into the new version before the promise settles.
     appUpdateInstall: () =>

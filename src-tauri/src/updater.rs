@@ -25,9 +25,20 @@ pub(crate) fn endpoint_override(raw: Option<&str>) -> Option<url::Url> {
     }
 }
 
+/// The override applies only where a test needs it: a development build, or the
+/// `updater-e2e` test build. A release build reads the feed in tauri.conf.json and nothing
+/// else — the signature covers the archive, not the version a feed claims, so a
+/// substituted feed could offer an older signed release as a newer one.
+pub(crate) fn feed_override(raw: Option<&str>, allowed: bool) -> Option<url::Url> {
+    if allowed { endpoint_override(raw) } else { None }
+}
+
+const OVERRIDE_ALLOWED: bool = cfg!(any(debug_assertions, feature = "updater-e2e"));
+
 fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
-    let mut builder = app.updater_builder();
-    if let Some(url) = endpoint_override(std::env::var("AO_UPDATER_ENDPOINT").ok().as_deref()) {
+    // A slow network must not hold the launch notices back indefinitely.
+    let mut builder = app.updater_builder().timeout(std::time::Duration::from_secs(15));
+    if let Some(url) = feed_override(std::env::var("AO_UPDATER_ENDPOINT").ok().as_deref(), OVERRIDE_ALLOWED) {
         builder = builder.endpoints(vec![url]).map_err(|e| e.to_string())?;
     }
     builder.build().map_err(|e| e.to_string())
@@ -81,7 +92,7 @@ pub(crate) fn install_on_launch(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::endpoint_override;
+    use super::{endpoint_override, feed_override};
 
     #[test]
     fn a_test_feed_must_be_https_or_on_this_machine() {
@@ -92,5 +103,14 @@ mod tests {
         assert!(endpoint_override(Some("file:///tmp/latest.json")).is_none());
         assert!(endpoint_override(Some("not a url")).is_none());
         assert!(endpoint_override(None).is_none());
+    }
+
+    // A release build must only ever read the feed baked into tauri.conf.json: the
+    // signature covers the archive, not the version a feed claims, so a substituted feed
+    // could offer an older signed release as newer.
+    #[test]
+    fn a_release_build_ignores_the_feed_override() {
+        assert!(feed_override(Some("https://example.com/latest.json"), false).is_none());
+        assert!(feed_override(Some("https://example.com/latest.json"), true).is_some());
     }
 }

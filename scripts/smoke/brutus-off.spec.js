@@ -35,3 +35,33 @@ test('Settings writes the switch, and off leaves no way to reach him', async ({ 
   await page.keyboard.press('ControlOrMeta+k')
   await expect(page.locator('.bru-panel.v-B')).toHaveCount(1)
 })
+
+// "He never runs" includes the run already under way when he is turned off.
+test('turning him off stops the run in progress', async ({ page }) => {
+  // tauri-api.js binds invoke as the page loads, so wrap it as the fixture assigns it.
+  await page.addInitScript(() => {
+    let t
+    Object.defineProperty(window, '__TAURI__', {
+      configurable: true,
+      get() { return t },
+      set(v) {
+        const orig = v.core.invoke
+        window.__CALLS__ = []
+        v.core.invoke = (cmd, args) => {
+          window.__CALLS__.push(cmd)
+          if (cmd === 'brutus_ask') return new Promise(() => {})   // still thinking
+          return orig(cmd, args)
+        }
+        t = v
+      },
+    })
+  })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.evaluate(() => { try { localStorage.removeItem('csm.brutusLog') } catch {} ; window.CSMBrutusUI.open() })
+  await page.locator('.bru-panel input').fill('what is waiting on me?')
+  await page.locator('.bru-panel input').press('Enter')
+  await expect.poll(() => page.evaluate(() => window.__CALLS__.includes('brutus_ask'))).toBe(true)
+  await setEnabled(page, false)
+  await expect.poll(() => page.evaluate(() => window.__CALLS__.includes('brutus_cancel'))).toBe(true)
+})

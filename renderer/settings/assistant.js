@@ -34,7 +34,7 @@
     // Only on a real change: setHome opens him in his new home, which every Save must not do.
     const home = document.querySelector('input[name="set-assistant-home"]:checked')
     let was = 'bubble'; try { was = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}
-    if (home && home.value !== was && window.CSMBrutusUI) window.CSMBrutusUI.setHome(home.value)
+    if (home && home.value !== was && window.CSMBrutusUI && out.assistant.enabled) window.CSMBrutusUI.setHome(home.value)
   }
   document.addEventListener('click', (e) => {
     const b = e.target.closest('#set-assistant-styles [data-style]')

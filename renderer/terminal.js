@@ -419,6 +419,8 @@ if (termPaneEl && 'ResizeObserver' in window) {
   new ResizeObserver(() => fitActiveTerminal()).observe(termPaneEl)
 }
 
+// Sessions whose pty is still alive in this window (an update restart would end them).
+window.liveTerminalCount = () => [...terminals.values()].filter(e => !e.dead).length
 window.toggleEmbeddedTerminal = toggleEmbeddedTerminal
 window.openTerminalPane = openTerminalPane
 window.terminalKeyForNotes = terminalKeyForNotes
