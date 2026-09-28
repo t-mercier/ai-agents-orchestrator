@@ -911,7 +911,21 @@ async function fillAgentChoice() {
   sel.innerHTML = list.map(a => `<option value="${a}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('')
   hint.textContent = notes.join(' ')
   hint.hidden = !notes.length
+  describeAgent()
 }
+// The line at the top of +New says what Start will do, for the agent chosen.
+const NS_INTRO_CLAUDE = document.getElementById('ns-intro') ? document.getElementById('ns-intro').innerHTML : ''
+function describeAgent() {
+  const intro = document.getElementById('ns-intro')
+  const sel = document.getElementById('ns-agent')
+  if (!intro) return
+  const a = sel && !document.getElementById('ns-agent-field').hidden ? sel.value : 'claude'
+  const name = { codex: 'Codex', copilot: 'Copilot' }[a]
+  intro.innerHTML = name
+    ? `Starts <code>${a}</code> in the app's terminal. The app writes the session's <code>notes.md</code>, and ${name} is asked to keep it current.`
+    : NS_INTRO_CLAUDE
+}
+document.getElementById('ns-agent')?.addEventListener('change', describeAgent)
 
 let agentChoiceReady = Promise.resolve()
 document.getElementById('new-session-btn').addEventListener('click', () => {

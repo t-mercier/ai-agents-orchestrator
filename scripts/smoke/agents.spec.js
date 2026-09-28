@@ -63,7 +63,9 @@ test('+New offers the installed agents and says why Copilot is not one of them',
   await expect(page.locator('#ns-agent option')).toHaveText(['Claude Code', 'Codex'])
   await expect(page.locator('#ns-agent-hint')).toContainText('npm i -g @github/copilot')
 
+  await expect(page.locator('#ns-intro')).toContainText('Launches claude')
   await page.locator('#ns-agent').selectOption('codex')
+  await expect(page.locator('#ns-intro')).toContainText("Starts codex in the app's terminal")
   await page.locator('#ns-name').fill('try codex')
   await page.locator('#new-session-form').evaluate((f) => f.requestSubmit())
   const call = await page.evaluate(() => window.__CALLS__.find(c => c.cmd === 'start_session'))
