@@ -17,6 +17,23 @@ pub(crate) struct Fold {
     pub cwd: Option<String>,
 }
 
+/// The last `max` bytes of a file, from the first whole line in them. Status and the last
+/// activity are at the end of a transcript, and a long session's file runs to megabytes.
+pub(crate) fn read_tail(path: &std::path::Path, max: u64) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let start = len.saturating_sub(max);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf).into_owned();
+    if start == 0 {
+        return Some(text);
+    }
+    Some(text.split_once('\n').map(|(_, rest)| rest.to_string()).unwrap_or_default())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AgentId {
     Claude,
@@ -241,6 +258,16 @@ mod tests {
             command(AgentId::Copilot, &launch(Some("4fa67fb9"), Some("/sync-refs /n.md"), "", Mode::Headless)),
             "AO_HEADLESS=1 copilot --resume='4fa67fb9' -p '/sync-refs /n.md' --allow-all-tools"
         );
+    }
+
+    #[test]
+    fn the_tail_starts_at_a_whole_line() {
+        let p = std::env::temp_dir().join(format!("ao-agents-tail-{}", std::process::id()));
+        std::fs::write(&p, "first line\nsecond\nthird\n").unwrap();
+        assert_eq!(read_tail(&p, 1000).as_deref(), Some("first line\nsecond\nthird\n"));
+        assert_eq!(read_tail(&p, 10).as_deref(), Some("third\n"), "the cut line is dropped");
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(read_tail(&p, 10), None);
     }
 
     #[test]

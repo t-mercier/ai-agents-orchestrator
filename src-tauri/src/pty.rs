@@ -39,6 +39,20 @@ struct Session {
     master: Box<dyn MasterPty + Send>,
     writer: SharedWriter,
     child: Box<dyn Child + Send + Sync>,
+    /// Set for a Codex or Copilot session: the app knows these only through the pty it
+    /// spawned (neither tool keeps a pid registry the way Claude Code does).
+    agent: Option<AgentPty>,
+}
+
+/// A Codex or Copilot session running in an embedded terminal.
+#[derive(Clone, Debug)]
+pub(crate) struct AgentPty {
+    pub agent: crate::agents::AgentId,
+    pub notes_path: String,
+    /// Where the CLI was launched: a new Codex session's rollout records it.
+    pub cwd: String,
+    pub spawned_at: std::time::SystemTime,
+    pub pid: u32,
 }
 
 #[derive(Default)]
@@ -64,6 +78,14 @@ impl PtyManager {
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.retain(|_, s| !matches!(s.child.try_wait(), Ok(Some(_))));
         }
+    }
+
+    /// The Codex and Copilot sessions whose terminal is still running.
+    pub(crate) fn agent_sessions(&self) -> Vec<AgentPty> {
+        self.sessions
+            .lock()
+            .map(|m| m.values().filter_map(|s| s.agent.clone()).collect())
+            .unwrap_or_default()
     }
 
     /// Kill every embedded child. Called on app exit so the `claude` processes we
@@ -130,11 +152,22 @@ pub fn pty_spawn(
     // — run verbatim to CREATE a new session in this pty (the embedded +New path). Wins over
     // both branches below. session_id is then the new session's notesPath (the routing key).
     command: String,
+    // "codex" or "copilot" for a session of those tools; absent or "claude" otherwise.
+    agent: Option<String>,
+    // The session's notes.md: required for a Codex or Copilot session, which the app only
+    // knows through this terminal.
+    notes_path: Option<String>,
 ) -> Result<(), String> {
     let restart_slug = restart_slug.trim().to_string();
     if !restart_slug.is_empty() && !crate::is_safe_slug(&restart_slug) {
         return Err("invalid slug".into());
     }
+    let agent = crate::agents::AgentId::parse(agent.as_deref())?;
+    let agent_notes = match (agent, notes_path.as_deref().map(str::trim)) {
+        (crate::agents::AgentId::Claude, _) => None,
+        (_, Some(n)) if !n.is_empty() => Some(crate::notes_md_under_root(n)?.to_string_lossy().into_owned()),
+        _ => return Err(format!("a {} session needs its notes path", agent.as_str())),
+    };
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(existing) = sessions.get_mut(&session_id) {
         // A pty whose child already exited (user typed `exit`, or claude quit) still has
@@ -168,7 +201,10 @@ pub fn pty_spawn(
     // can't find `claude`. `-ilc` sources both, matching a real terminal tab.
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let command = command.trim().to_string();
-    let inner = if !command.is_empty() {
+    let inner = if let Some(notes) = agent_notes.as_deref().filter(|_| command.is_empty()) {
+        // Resume or Restart of a Codex or Copilot session (a new one comes as `command`).
+        crate::agents::session::relaunch_line(agent, notes, &cwd, &session_id, !restart_slug.is_empty())?
+    } else if !command.is_empty() {
         // Verbatim command from start_session(embedded=true): `cd <dir> && [git checkout
         // <branch> && ] claude --model X '/start-session …'`. Every interpolation was
         // shell_quote'd in lib.rs, so it's safe to run as-is — same shape as the
@@ -226,6 +262,7 @@ pub fn pty_spawn(
     }
 
     let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+    let child_pid = child.process_id().unwrap_or(0);
     // The child is live from here on — if wiring its I/O fails, kill + reap it
     // before erroring, or it runs unmanaged forever (never in the map, so no
     // pty_kill/kill_all can reach it) and its shell lingers as a zombie.
@@ -261,7 +298,14 @@ pub fn pty_spawn(
         let _ = app2.emit("pty-exit", serde_json::json!({ "sessionId": sid }));
     });
 
-    sessions.insert(session_id, Session { master: pair.master, writer: Arc::new(Mutex::new(writer)), child });
+    let agent_meta = agent_notes.map(|notes_path| AgentPty {
+        agent,
+        notes_path,
+        cwd: cwd.clone(),
+        spawned_at: std::time::SystemTime::now(),
+        pid: child_pid,
+    });
+    sessions.insert(session_id, Session { master: pair.master, writer: Arc::new(Mutex::new(writer)), child, agent: agent_meta });
     Ok(())
 }
 

@@ -426,7 +426,10 @@ fn start_session(
     pr_link: String,
     root: String,
     embedded: bool,
+    // "codex" or "copilot" for a session of those tools; absent means Claude Code.
+    agent: Option<String>,
 ) -> Result<serde_json::Value, String> {
+    let agent = agents::AgentId::parse(agent.as_deref())?;
     let cfg = config::load();
     // Optional space (root) override — disambiguates a category present in 2+ spaces,
     // and decides the launch dir + the `--root` the skill writes under. Must be a
@@ -480,6 +483,25 @@ fn start_session(
     let pr = pr_link.trim();
     if !pr.is_empty() && !is_pr_url(pr) {
         return Err("not a GitHub PR URL (https://github.com/owner/repo/pull/N)".into());
+    }
+    if agent != agents::AgentId::Claude {
+        if !embedded {
+            return Err(format!("{} sessions run in the app's terminal for now", agents::session::display_name(agent)));
+        }
+        let notes_path = predicted_notes_path(&cfg, cat_def, &category, &safe_ticket, &safe_name)?;
+        let dir = dir_abs.as_ref().map(|d| d.to_string_lossy().into_owned())
+            .unwrap_or_else(|| category_root_dir(&cfg, cat_def));
+        let (today, started_at) = local_date_time().map(|(d, t)| (d.clone(), format!("{d} {t}"))).unwrap_or_default();
+        let session_id = if agent == agents::AgentId::Copilot { agents::session::uuid_v4()? } else { String::new() };
+        let start_in_s = dir_abs.as_ref().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+        agents::session::create(std::path::Path::new(&notes_path), &agents::session::notes_text(&agents::session::NewNotes {
+            agent, session_id: &session_id, category: &category, ticket: &safe_ticket, name: &safe_name,
+            pr_link: pr, start_in: &start_in_s, started_at: &started_at, today: &today,
+        }))?;
+        let line = agents::session::new_line(agent, &session_id, &agents::session::first_prompt(&safe_name, &notes_path));
+        let checkout = if branch.is_empty() { String::new() } else { format!("git checkout {} -- && ", pty::shell_quote(branch)) };
+        let command = format!("cd {} && {checkout}{line}", pty::shell_quote(&dir));
+        return Ok(serde_json::json!({ "command": command, "notesPath": notes_path, "cwd": dir, "agent": agent.as_str() }));
     }
 
     // /start-session parses: <CATEGORY> [<TICKET>] <name> [--pr <url>] [--root "<space>"] [--start-in "<dir>"]
@@ -539,20 +561,28 @@ fn start_session(
         // notesPath MUST match the skill's TARGET_DIR (aoconfig.py `dir`):
         // <category root>/<CATEGORY>/<folder>/notes.md, folder = ticket || slugify(name).
         // slugify is byte-faithful to the skill's slug(); keep both in sync.
-        let folder = if safe_ticket.is_empty() { slugify(&safe_name) } else { safe_ticket.clone() };
-        // A name with no ASCII alphanumerics (e.g. "..." or "éé") slugifies to "" —
-        // the notesPath would collapse to <base>/<CAT>//notes.md and the skill's own
-        // slug() would bootstrap a mismatched (category-level) dir. Surface it in the
-        // form instead of launching a broken session.
-        if folder.is_empty() {
-            return Err("title needs at least one letter or digit (a-z, 0-9)".into());
-        }
-        let base = category_root_dir(&cfg, cat_def);
-        let notes_path = format!("{base}/{category}/{folder}/notes.md");
+        let notes_path = predicted_notes_path(&cfg, cat_def, &category, &safe_ticket, &safe_name)?;
         return Ok(serde_json::json!({ "command": cmd, "notesPath": notes_path }));
     }
     terminal::launch_in_terminal(&cmd)?;
     Ok(serde_json::json!({}))
+}
+
+/// Where a new session's notes.md goes: <category root>/<CATEGORY>/<folder>/notes.md,
+/// folder = ticket || slugify(name). It MUST match the /start-session skill's TARGET_DIR
+/// (aoconfig.py `dir`), which writes a Claude Code session's notes; slugify is
+/// byte-faithful to the skill's slug(). The app writes a Codex or Copilot session's notes
+/// itself, at the same place.
+fn predicted_notes_path(cfg: &serde_json::Value, cat_def: &serde_json::Value, category: &str, safe_ticket: &str, safe_name: &str) -> Result<String, String> {
+    let folder = if safe_ticket.is_empty() { slugify(safe_name) } else { safe_ticket.to_string() };
+    // A name with no ASCII alphanumerics (e.g. "..." or "éé") slugifies to "" — the
+    // notesPath would collapse to <base>/<CAT>//notes.md and the skill's own slug() would
+    // bootstrap a mismatched (category-level) dir. Surface it in the form instead.
+    if folder.is_empty() {
+        return Err("title needs at least one letter or digit (a-z, 0-9)".into());
+    }
+    let base = category_root_dir(cfg, cat_def);
+    Ok(format!("{base}/{category}/{folder}/notes.md"))
 }
 
 /// Slugify a session NAME into a folder slug, byte-faithful to the /start-session skill's
@@ -863,7 +893,7 @@ fn is_pr_url(url: &str) -> bool {
 /// link can survive. The list is written at the primary key's existing position when
 /// it had one (keeping frontmatter order stable), else appended. Content with no
 /// frontmatter block is returned unchanged (every session notes.md has frontmatter).
-fn set_frontmatter_links(content: &str, singular: &str, plural: &str, values: &[String]) -> String {
+pub(crate) fn set_frontmatter_links(content: &str, singular: &str, plural: &str, values: &[String]) -> String {
     let Some(rest) = content.strip_prefix("---\n") else {
         return content.to_string();
     };

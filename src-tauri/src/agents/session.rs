@@ -92,6 +92,76 @@ pub(crate) fn uuid_v4() -> Result<String, String> {
     Ok(format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32]))
 }
 
+/// The shell line that reopens a Codex or Copilot session in an embedded terminal.
+///
+/// Resume continues its conversation. Restart, for a session whose conversation is gone,
+/// starts a new one on the same notes: Copilot under a fresh id written into the notes,
+/// Codex with the id cleared so the poll records the rollout it is about to write.
+pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session_id: &str, restart: bool) -> Result<String, String> {
+    let dir = if Path::new(cwd).is_dir() {
+        cwd.to_string()
+    } else {
+        Path::new(notes_path).parent().map(|p| p.to_string_lossy().into_owned()).ok_or("no folder to start in")?
+    };
+    let line = if restart {
+        let content = std::fs::read_to_string(notes_path).map_err(|e| e.to_string())?;
+        let name = crate::reader::parse_frontmatter(&content).get("name").cloned().unwrap_or_default();
+        let new_id = if agent == AgentId::Copilot { uuid_v4()? } else { String::new() };
+        let ids: Vec<String> = if new_id.is_empty() { vec![] } else { vec![new_id.clone()] };
+        let updated = crate::set_frontmatter_links(&content, "session_id", "session_ids", &ids);
+        crate::atomic_write(Path::new(notes_path), &ensure_key(&updated, "session_id", &new_id))?;
+        new_line(agent, &new_id, &first_prompt(&name, notes_path))
+    } else {
+        if !crate::is_valid_session_id(session_id) {
+            return Err(format!("not a session id: {session_id}"));
+        }
+        super::command(agent, &super::Launch {
+            resume: Some(session_id), prompt: None, model: "", mode: super::Mode::Interactive,
+            claude_settings: "", writable_roots: &[],
+        })
+    };
+    Ok(format!("cd {} && {line}", crate::pty::shell_quote(&dir)))
+}
+
+/// The command that starts a new session. Copilot takes the id the app chose.
+pub(crate) fn new_line(agent: AgentId, copilot_id: &str, prompt: &str) -> String {
+    let line = super::command(agent, &super::Launch {
+        resume: None, prompt: Some(prompt), model: "", mode: super::Mode::Interactive,
+        claude_settings: "", writable_roots: &[],
+    });
+    match agent {
+        AgentId::Copilot if !copilot_id.is_empty() => {
+            line.replacen("copilot", &format!("copilot --session-id {}", crate::pty::shell_quote(copilot_id)), 1)
+        }
+        _ => line,
+    }
+}
+
+/// Record the id of a Codex session once its rollout is found, so Resume can find its
+/// conversation after the terminal closes.
+pub(crate) fn record_id(notes_path: &str, id: &str) -> Result<(), String> {
+    if !crate::is_valid_session_id(id) {
+        return Err(format!("not a session id: {id}"));
+    }
+    let path = Path::new(notes_path);
+    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    crate::atomic_write(path, &crate::set_frontmatter_links(&content, "session_id", "session_ids", &[id.to_string()]))
+}
+
+/// `set_frontmatter_links` drops a key whose list is empty; notes.md always carries
+/// `session_id:`, empty or not, so put it back first when it went.
+fn ensure_key(content: &str, key: &str, value: &str) -> String {
+    let has = crate::reader::frontmatter_block(content)
+        .is_some_and(|fm| fm.lines().any(|l| l.split_once(':').is_some_and(|(k, _)| k.trim() == key)));
+    if has {
+        return content.to_string();
+    }
+    match content.strip_prefix("---\n") {
+        Some(rest) => format!("---\n{key}: {value}\n{rest}"),
+        None => content.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +204,61 @@ mod tests {
         assert_eq!(&a[14..15], "4");
         assert!(crate::is_valid_session_id(&a));
         assert_ne!(a, uuid_v4().unwrap());
+    }
+
+    #[test]
+    fn a_new_copilot_session_runs_under_the_id_the_app_chose() {
+        assert_eq!(
+            new_line(AgentId::Copilot, "4fa67fb9-1148-41dc-acd9-4867ad017342", "hi"),
+            "copilot --session-id '4fa67fb9-1148-41dc-acd9-4867ad017342' -i 'hi'"
+        );
+        assert_eq!(new_line(AgentId::Codex, "", "hi"), "codex 'hi'");
+    }
+
+    #[test]
+    fn restart_gives_copilot_a_new_id_and_clears_codex_s() {
+        let dir = std::env::temp_dir().join(format!("ao-agents-restart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let p = dir.join("FEAT/x/notes.md");
+        let mut n = notes(AgentId::Copilot, "fceb338b-f100-471c-9ed5-3975070c0ba2");
+        n.name = "x";
+        create(&p, &notes_text(&n)).unwrap();
+        let line = relaunch_line(AgentId::Copilot, p.to_str().unwrap(), dir.to_str().unwrap(), "", true).unwrap();
+        let fm = crate::reader::parse_frontmatter(&std::fs::read_to_string(&p).unwrap());
+        let new_id = fm.get("session_id").cloned().unwrap();
+        assert_ne!(new_id, "fceb338b-f100-471c-9ed5-3975070c0ba2");
+        assert!(line.contains(&format!("--session-id '{new_id}'")), "{line}");
+        assert!(line.starts_with(&format!("cd '{}' && copilot", dir.display())));
+
+        let q = dir.join("FEAT/y/notes.md");
+        create(&q, &notes_text(&notes(AgentId::Codex, "01a0e9da-76d9-7c12-882e-57b7554edd81"))).unwrap();
+        relaunch_line(AgentId::Codex, q.to_str().unwrap(), "", "", true).unwrap();
+        let text = std::fs::read_to_string(&q).unwrap();
+        assert!(text.starts_with("---\nsession_id: \n"), "the key stays, empty: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_found_codex_id_is_written_into_the_notes() {
+        let dir = std::env::temp_dir().join(format!("ao-agents-record-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let p = dir.join("n/notes.md");
+        create(&p, &notes_text(&notes(AgentId::Codex, ""))).unwrap();
+        record_id(p.to_str().unwrap(), "01a0e9da-76d9-7c12-882e-57b7554edd81").unwrap();
+        let fm = crate::reader::parse_frontmatter(&std::fs::read_to_string(&p).unwrap());
+        assert_eq!(fm.get("session_id").map(String::as_str), Some("01a0e9da-76d9-7c12-882e-57b7554edd81"));
+        assert_eq!(fm.get("agent").map(String::as_str), Some("codex"));
+        assert!(record_id(p.to_str().unwrap(), "../x").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resume_refuses_a_malformed_id() {
+        assert!(relaunch_line(AgentId::Codex, "/w/n.md", "/", "x'; rm -rf ~", false).is_err());
+        assert_eq!(
+            relaunch_line(AgentId::Codex, "/w/n.md", "/", "01a0e9da-76d9", false).unwrap(),
+            "cd '/' && codex resume '01a0e9da-76d9'"
+        );
     }
 
     #[test]

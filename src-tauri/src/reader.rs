@@ -6,7 +6,7 @@ use crate::git;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime};
 
@@ -800,6 +800,81 @@ fn follow_continued(sid: &str, next_of: impl Fn(&str) -> Option<String>) -> Stri
     cur
 }
 
+/// How long the poll keeps looking for the rollout of a Codex session it started. A
+/// session that has written none by then was not started (the CLI failed, or is waiting
+/// on a first-run prompt), and the walk stops costing anything.
+const CODEX_ID_SEARCH: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// A Codex or Copilot session running in an embedded terminal, shaped like a running
+/// Claude Code session plus `agent`. The homes are parameters so a test can point them
+/// at a folder of its own.
+pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &Path, copilot_home: &Path) -> Value {
+    use crate::agents::{codex, copilot, AgentId};
+    let content = fs::read_to_string(&a.notes_path).unwrap_or_default();
+    let fm = parse_frontmatter(&content);
+    let mut sid = fm.get("session_id").cloned().unwrap_or_default();
+    let searching = sid.is_empty()
+        && a.agent == AgentId::Codex
+        && a.spawned_at.elapsed().is_ok_and(|e| e < CODEX_ID_SEARCH);
+    if searching {
+        if let Ok(Some(id)) = codex::find_started(codex_home, &a.cwd, a.spawned_at) {
+            if crate::agents::session::record_id(&a.notes_path, &id).is_ok() {
+                sid = id;
+            }
+        }
+    }
+    let transcript = match a.agent {
+        AgentId::Codex => codex::transcript_path(codex_home, &sid),
+        AgentId::Copilot => copilot::transcript_path(copilot_home, &sid),
+        AgentId::Claude => None,
+    };
+    let fold = transcript
+        .as_deref()
+        .and_then(|p| crate::agents::read_tail(p, 64 * 1024))
+        .map(|t| if a.agent == AgentId::Codex { codex::fold(&t) } else { copilot::fold(&t) })
+        .unwrap_or_default();
+    // A Codex session still starting has no rollout yet: it is busy, not idle.
+    let status = if fold.busy || (searching && sid.is_empty()) { "busy" } else { "idle" };
+    let last_activity = match (&fold.last_activity, sid.is_empty() && !searching && a.agent == AgentId::Codex) {
+        (Some(t), _) => Value::String(t.clone()),
+        (None, true) => Value::String("Codex session id not found".into()),
+        (None, false) => Value::Null,
+    };
+    let NotesMeta { goal, next_steps, pr_links, tickets: tickets_fm, ticket_states, last_summary, start_in: _ } =
+        read_notes_meta(&a.notes_path);
+    let registry_ticket = fm.get("ticket").map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+    let (ticket, tickets) = link_fields(merge_links(registry_ticket.into_iter().collect(), tickets_fm));
+    let (pr_link, pr_links) = link_fields(pr_links);
+    let (branch, worktree) = git::git_info(&a.cwd);
+    json!({
+        "sessionId": sid,
+        "agent": a.agent.as_str(),
+        "name": fm.get("name").cloned().unwrap_or_default(),
+        "cwd": a.cwd,
+        "pid": a.pid,
+        "status": status,
+        "continuedIn": Value::Null,
+        "entrypoint": "",
+        "state": "active",
+        "updatedAt": Value::Null,
+        "notesPath": a.notes_path,
+        "root": root_for_notes_path(cfg, &a.notes_path),
+        "category": fm.get("category").cloned().map(Value::String).unwrap_or(Value::Null),
+        "ticket": ticket,
+        "tickets": tickets,
+        "ticketStates": ticket_states,
+        "goal": goal,
+        "nextSteps": next_steps,
+        "gitBranch": branch,
+        "worktree": worktree,
+        "lastActivity": last_activity,
+        "lastActivityAt": fold.last_activity_at.map(Value::String).unwrap_or(Value::Null),
+        "lastSummary": last_summary,
+        "prLink": pr_link,
+        "prLinks": pr_links,
+    })
+}
+
 #[tauri::command(async)]
 pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
     // Reap first: an embedded child that exited since the last poll is still a zombie
@@ -826,7 +901,11 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
             })
             .collect();
 
-    let mut out = Vec::new();
+    // Codex and Copilot sessions first, and before anything that can return early: a
+    // machine with no Claude Code has no ~/.claude/sessions at all.
+    let (codex_home, copilot_home) = (crate::agents::codex::home(), crate::agents::copilot::home());
+    let mut out: Vec<Value> =
+        pty.agent_sessions().iter().map(|a| agent_session(&cfg, a, &codex_home, &copilot_home)).collect();
     let entries = match fs::read_dir(claude.join("sessions")) {
         Ok(e) => e,
         Err(_) => return out,
@@ -2650,4 +2729,63 @@ mod tests {
         let read: usize = head.iter().map(|l| l.len() + 1).sum();
         assert!(read <= 64 * 1024 + line.len(), "read {read} bytes past a 64 KB cap");
     }
+
+    // A Codex or Copilot card comes from the embedded terminal the app spawned, its notes
+    // and its transcript: none of it goes through Claude Code's pidfiles.
+    #[test]
+    fn a_codex_or_copilot_terminal_is_a_running_session() {
+        use super::{agent_session, parse_frontmatter};
+        use crate::agents::{session, AgentId};
+        use serde_json::json;
+        use std::fs;
+        let t = std::env::temp_dir().join(format!("ao-agent-session-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        let (codex_home, copilot_home, work) = (t.join("codex"), t.join("copilot"), t.join("work"));
+        fs::create_dir_all(&work).unwrap();
+        let cfg = json!({});
+        let notes = |dir: &str, agent: AgentId, sid: &'static str| {
+            let p = t.join(dir).join("notes.md");
+            session::create(&p, &session::notes_text(&session::NewNotes {
+                agent, session_id: sid, category: "FEAT", ticket: "ABC-1", name: "try it",
+                pr_link: "", start_in: "", started_at: "2026-09-29 00:40", today: "2026-09-29",
+            })).unwrap();
+            p.to_string_lossy().into_owned()
+        };
+        let pty = |agent, notes_path: String| crate::pty::AgentPty {
+            agent, notes_path, cwd: work.to_string_lossy().into_owned(),
+            spawned_at: std::time::SystemTime::now() - std::time::Duration::from_secs(1), pid: 42,
+        };
+
+        // Copilot: the id is in the notes from the start; its turn is still open.
+        let cid = "fceb338b-f100-471c-9ed5-3975070c0ba2";
+        let events = copilot_home.join("session-state").join(cid);
+        fs::create_dir_all(&events).unwrap();
+        fs::write(events.join("events.jsonl"), concat!(
+            r#"{"type":"assistant.message","data":{"content":"reading the notes"},"timestamp":"2026-09-29T00:41:00Z"}"#, "\n",
+            r#"{"type":"assistant.turn_start","data":{"turnId":"1"}}"#, "\n")).unwrap();
+        let s = agent_session(&cfg, &pty(AgentId::Copilot, notes("cp", AgentId::Copilot, cid)), &codex_home, &copilot_home);
+        assert_eq!((s["agent"].as_str(), s["sessionId"].as_str(), s["status"].as_str()), (Some("copilot"), Some(cid), Some("busy")));
+        assert_eq!(s["lastActivity"], "reading the notes");
+        assert_eq!((s["name"].as_str(), s["category"].as_str(), s["ticket"].as_str()), (Some("try it"), Some("FEAT"), Some("ABC-1")));
+        assert_eq!(s["state"], "active");
+
+        // Codex: starting, no rollout yet → busy with no id; then its rollout appears and
+        // the id is found and written into the notes.
+        let np = notes("cx", AgentId::Codex, "");
+        let a = pty(AgentId::Codex, np.clone());
+        let s = agent_session(&cfg, &a, &codex_home, &copilot_home);
+        assert_eq!((s["sessionId"].as_str(), s["status"].as_str()), (Some(""), Some("busy")));
+        let xid = "01a0e9da-76d9-7c12-882e-57b7554edd81";
+        let day = codex_home.join("sessions/2026/09/29");
+        fs::create_dir_all(&day).unwrap();
+        fs::write(day.join(format!("rollout-2026-09-29T00-41-00-{xid}.jsonl")), format!(concat!(
+            r#"{{"type":"session_meta","payload":{{"id":"{}","cwd":"{}"}}}}"#, "\n",
+            r#"{{"type":"event_msg","payload":{{"type":"task_started"}}}}"#, "\n",
+            r#"{{"type":"event_msg","payload":{{"type":"task_complete"}}}}"#, "\n"), xid, work.display())).unwrap();
+        let s = agent_session(&cfg, &a, &codex_home, &copilot_home);
+        assert_eq!((s["sessionId"].as_str(), s["status"].as_str()), (Some(xid), Some("idle")));
+        assert_eq!(parse_frontmatter(&fs::read_to_string(&np).unwrap()).get("session_id").map(String::as_str), Some(xid));
+        let _ = fs::remove_dir_all(&t);
+    }
+
 }
