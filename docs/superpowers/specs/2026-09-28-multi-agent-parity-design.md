@@ -76,7 +76,7 @@ Decisions taken without her, each with its cost if wrong.
    match is refused rather than guessed.
 5. **Copilot ≥ 1.0 is required.** 0.0.x has no `--session-id`, no session id in its hooks and
    no cwd in its session files *(probe)*. The Agent choice shows "Copilot CLI 0.0.369 is too
-   old — update it" with the command for the way it was installed (`brew upgrade copilot`
+   old — update it" with the command for the way it was installed (`brew upgrade copilot-cli`
    when Homebrew installed it, `npm i -g @github/copilot` otherwise).
 6. **busy/idle is read from the transcript.** Codex: the last of `task_started`,
    `task_complete`, `turn_aborted`; `task_started` last → busy *(probe for the first two;
