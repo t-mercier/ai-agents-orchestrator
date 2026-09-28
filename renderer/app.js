@@ -1271,6 +1271,8 @@ async function syncSkillsOnLaunch(el) {
 let appUpdateCheckedAt = 0
 async function maybeOfferAppUpdate(el) {
   if (!el || !window.api || !window.api.appUpdateCheck) return
+  // Turned off in Settings → General: the app then makes no call of its own.
+  try { if (localStorage.getItem('csm.updateCheck') === 'off') return } catch {}
   if (window.onboardingPending) return
   if (!el.hidden) return
   const now = Date.now()

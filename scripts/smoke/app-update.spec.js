@@ -51,3 +51,32 @@ test('with nothing running, Install goes straight ahead', async ({ page }) => {
   await page.locator('#skills-banner .sb-install').click()
   await expect.poll(() => page.evaluate(() => window.__CALLS__.includes('app_update_install'))).toBe(true)
 })
+
+// Checking for a new version is the one call the app makes on its own, so it can be
+// turned off in Settings → General, and then nothing is asked of GitHub.
+test('with update checks turned off, the app does not ask for a new version', async ({ page }) => {
+  await stubInvoke(page)
+  // The fixture clears localStorage as it loads; keep this one choice across that.
+  await page.addInitScript(() => {
+    const clear = Storage.prototype.clear
+    Storage.prototype.clear = function () { clear.call(this); this.setItem('csm.updateCheck', 'off') }
+    localStorage.setItem('csm.updateCheck', 'off')
+  })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.waitForTimeout(300)
+  expect(await page.evaluate(() => window.__CALLS__.includes('app_update_check'))).toBe(false)
+  await expect(page.locator('#skills-banner .sb-install')).toHaveCount(0)
+})
+
+test('Settings → General turns update checks off and on', async ({ page }) => {
+  await stubInvoke(page)
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.evaluate(() => window.openSettingsTab('general'))
+  await expect(page.locator('#set-update-check')).toBeChecked()
+  await page.locator('#set-update-check').uncheck()
+  await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('csm.updateCheck'))).toBe('off')
+})

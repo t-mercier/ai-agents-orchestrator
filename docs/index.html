@@ -6,7 +6,7 @@
 <title>AI Agents Orchestrator — memory for your Claude Code sessions</title>
 <meta name="description" content="Every Claude Code session keeps a notes.md beside its code, writes what it learns into a folder of knowledge notes, and proposes a skill when it learns a procedure — nothing active until you say yes. A tiny local-first dashboard for macOS &amp; Linux." />
 <meta property="og:title" content="AI Agents Orchestrator" />
-<meta property="og:description" content="Stop explaining your project to Claude every morning. Every session keeps its notes beside the code, and the agent reads them back before it digs. Local-first, silent on the network until you press Sync or Close." />
+<meta property="og:description" content="Stop explaining your project to Claude every morning. Every session keeps its notes beside the code, and the agent reads them back before it digs. Local-first: it reaches the network when you press Sync or Close, and to check for a new version of itself." />
 <meta property="og:image" content="media/hero.png" />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -298,7 +298,7 @@
     <h1>Stop explaining your project to Claude <span class="grad">every morning.</span></h1>
     <p class="vs">Claude Code forgets at every <strong>compaction</strong>. This keeps what it learned.<br><strong>The more you use it, the better it gets.</strong></p>
     <p class="sub"><strong>AI Agents Orchestrator</strong> gives every session a <code>notes.md</code> beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure — nothing becomes active until you have seen the exact wording and said yes.</p>
-    <p class="sub">Local-first, read-only on your sessions, silent on the network until you press Sync or Close. macOS &amp; Linux; the macOS download is 7 MB.</p>
+    <p class="sub">Local-first, read-only on your sessions, on the network only when you press Sync or Close, or to check for a new version. macOS &amp; Linux; the macOS download is 7 MB.</p>
 
     <div class="ba">
       <div class="ba-card">
@@ -619,7 +619,7 @@
     <div class="section-head reveal">
       <p class="eyebrow">Local-first by design</p>
       <h2>It reads your disk. It never phones home.</h2>
-      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It is silent on the network until you press <strong>Sync</strong> or <strong>Close</strong> — Sync reads your tracker and your pull requests, Close runs <code>gh pr view</code> to attach the PR while it files the session. Nothing else reaches out, and nothing runs in the background. It is read-only on your session data otherwise: it writes when you archive a session, save a PR link or ticket, tick a repair in Doctor, tick an archive-or-delete in Clean, or let it bring its own skills up to this version.</p>
+      <p class="lead">AI Agents Orchestrator is a projection of state Claude Code already writes to disk. It reaches the network when you press <strong>Sync</strong> or <strong>Close</strong> — Sync reads your tracker and your pull requests, Close runs <code>gh pr view</code> to attach the PR while it files the session — and to ask GitHub whether a newer version exists, which Settings turns off. Nothing else reaches out, and nothing runs in the background. It is read-only on your session data otherwise: it writes when you archive a session, save a PR link or ticket, tick a repair in Doctor, tick an archive-or-delete in Clean, or let it bring its own skills up to this version.</p>
     </div>
     <div class="secgrid">
       <div class="sec reveal"><h4><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg> Quoted, never raw</h4><p>The one command that needs a shell quotes every value it passes; everything else spawns with separate args.</p></div>

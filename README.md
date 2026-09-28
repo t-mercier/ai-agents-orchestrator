@@ -77,6 +77,8 @@ Four things you shouldn't have to do twice — each one something you already wo
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and a **⚲ Filter** popover (category checkboxes, one control across every view).
 - **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client). The **List** organises into collapsible **space sections** → category groups; the **Board** gets its own space filter next to its search. Pinned and ⚡ waiting cards float above every space section — they're your shortlist, so they stay at the top of the column. A single space configured ⇒ no space chrome at all.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
+- **Updates from inside the app** — when a new version is out, a notice offers to install it and restart.
+- **Codex and Copilot too** *(preview)* — start a **Codex** or **GitHub Copilot** session from **＋New**, next to your Claude Code ones. It runs in the built-in terminal, keeps its memory in the same `notes.md`, and its card shows when it is busy, idle or waiting on you. The session skills (`/save-session`, `/learn`, `/route`…) run in Claude Code only for now, and Copilot needs version 1.0 or later.
 
 ### Brutus, the one you ask
 
@@ -87,7 +89,7 @@ FEAT-1842*, *what did I decide last week?* — from the bubble in the corner, a 
 the right, or **⌘K** from anywhere in the app. He reads the dashboard and the sessions' notes,
 answers with the sessions as clickable chips, and keeps a memory of what you tell him, so he
 gets better the more you use him. Rename him and pick his style — concise, friendly, casual,
-nerdy or sarcastic — in **Settings → Assistant**.
+nerdy or sarcastic — in **Settings → Assistant**, or turn him off there if you would rather not have an assistant.
 
 He can read and remember, nothing else: every answer is a Claude Code run started with
 `--restricted`, no MCP servers and five file tools, reading only your category and knowledge
@@ -129,7 +131,7 @@ Every session resumes in an **embedded terminal** (xterm.js + a Rust pty) — pi
 
 **Local-first. Nothing in the background.**
 
-AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network **only** when you press **Sync** or **Close** — Sync reads ticket statuses and pull requests, Close runs `gh pr view` to attach the PR while filing the session; nothing else calls out, and nothing runs in the background — and it **never** stores secrets: it visualizes what's on disk and lets Claude Code do the rest.
+AI Agents Orchestrator is a *projection* of the session state Claude Code already writes under `~/.claude` (session metadata, `notes.md`, JSONL transcripts). It reaches the network when you press **Sync** or **Close** — Sync reads ticket statuses and pull requests, Close runs `gh pr view` to attach the PR while filing the session — and to ask GitHub whether a newer version of the app exists, which **Settings → General** turns off. Nothing else calls out, nothing runs in the background, and it **never** stores secrets: it visualizes what's on disk and lets your agent do the rest.
 
 **No `git worktree` anywhere.** A session's folder holds its `notes.md` and nothing else — your
 repo stays where it is, and a "Worktree" row appears in the detail panel only when a session
@@ -435,7 +437,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 - The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.
 - **The session skills** are app-owned: the app copies its bundled versions into `~/.claude/skills/` **silently at each launch**, plus on the Settings button. The write is confined to the 14 names it ships plus `lib/` and `.ao-base/`, never touches session transcripts or a skill of yours, and an older build stands down rather than revert a newer install. The files are installed read-only and the `ao_skill_guard` hook refuses an agent's edit to one; a copy forced anyway is restored and named.
 - External links open in your **system browser**, never inside the app.
-- **The app itself makes no network calls**, and stores no secrets — none of its direct dependencies is an HTTP client, and the one `Cargo.lock` does carry comes from Tauri core and is unused here. Two buttons do reach out, through Claude Code rather than the app: **Sync** (tracker via MCP, `gh` for pull requests) and **Close** (`/wrap-session` runs `gh pr view` to attach the PR before filing the session). Both are things you press.
+- **The app itself makes one network call**: it asks GitHub whether a newer release exists, at launch and at most every six hours — **Settings → General** turns it off. An update installs only when you click **Install**, and only if it is signed with the app's own key. It stores no secrets. Two buttons do reach out, through Claude Code rather than the app: **Sync** (tracker via MCP, `gh` for pull requests) and **Close** (`/wrap-session` runs `gh pr view` to attach the PR before filing the session). Both are things you press.
 
 ## Tech stack
 
@@ -473,7 +475,8 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 - [x] Kanban board (groups, attached notes, generative colours)
 - [x] Export / import settings
 - [x] Tracker-agnostic ticket links (Jira, Linear, GitHub Issues, Azure DevOps)
-- [ ] **Beyond Claude Code** — GitHub Copilot, and other agent CLIs next (today it reads Claude Code's session state)
+- [x] **Codex and Copilot sessions** *(preview)* — in the dashboard beside Claude Code, with their memory in their notes
+- [ ] **The session skills inside Codex and Copilot**, and their waiting status on every approval
 - [ ] **Custom agents, not only skills** — when a task keeps coming back, your agent weighs whether it calls for a skill or a dedicated custom agent, and offers to write the one that fits
 - [ ] Standalone terminal tab — use the in-app terminal for ad-hoc commands, not just resuming a session
 - [ ] Signed + notarized `.dmg` releases

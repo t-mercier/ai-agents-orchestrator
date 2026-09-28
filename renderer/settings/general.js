@@ -80,6 +80,19 @@
   }
 
   // Register this tab's hooks.
+  // Whether the app looks for a new version by itself: a choice for this machine, kept
+  // with the other per-machine preferences.
+  const UPDATE_KEY = 'csm.updateCheck'
+  function populateUpdates() {
+    let on = true; try { on = localStorage.getItem(UPDATE_KEY) !== 'off' } catch {}
+    const box = $('set-update-check'); if (box) box.checked = on
+  }
+  function collectUpdates() {
+    const box = $('set-update-check'); if (!box) return
+    try { localStorage.setItem(UPDATE_KEY, box.checked ? 'on' : 'off') } catch {}
+  }
+  window.CSMSettings.register({ populate: populateUpdates, collect: collectUpdates })
+
   window.CSMSettings.register({
     populate: renderSpaceRows,
     collect: collectSpaces,
