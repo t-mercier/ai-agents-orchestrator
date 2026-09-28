@@ -135,8 +135,11 @@ Ids read from folder or file names are checked with `is_valid_session_id` before
 - CLI not found: the pty prints the shell's "command not found"; the Agent choice never
   offers a CLI that was not detected.
 - notes.md already exists at the predicted path: refused, as `/start-session` does.
-- Codex rollout not found yet: the card shows the session as busy with no id; the poll keeps
-  looking for 60 s, then stops and the card says "Codex session id not found".
+- Codex rollout not found yet: busy for the first 10 s, then **waiting** with "Codex is
+  asking something in its terminal". The poll keeps looking for as long as the terminal
+  lives. *(Round trip, 2026-09-29: in a folder it does not know, Codex 0.158.0 first asks
+  "Trust this folder?", then "Hooks need review" when the user has Codex hooks, and writes
+  its rollout only after both are answered.)*
 - Transcript unreadable: idle, no activity line; nothing breaks the poll.
 
 ## Testing

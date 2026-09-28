@@ -244,4 +244,20 @@ mod tests {
         assert_eq!(transcript_path(t.path(), ID), Some(old));
         assert_eq!(transcript_path(t.path(), "../../etc"), None);
     }
+
+    // Run by hand against a real Codex run: AO_PROBE_CWD=<launch dir> AO_PROBE_SINCE=<unix secs>
+    // cargo test --lib live_codex_rollout -- --ignored. It proves the match on what Codex
+    // actually wrote, not on a fixture.
+    #[test]
+    #[ignore]
+    fn live_codex_rollout() {
+        let cwd = std::env::var("AO_PROBE_CWD").unwrap();
+        let since: u64 = std::env::var("AO_PROBE_SINCE").unwrap().parse().unwrap();
+        let since = std::time::UNIX_EPOCH + std::time::Duration::from_secs(since);
+        let id = find_started(&home(), &cwd, since).unwrap().expect("the rollout of the run");
+        let path = transcript_path(&home(), &id).unwrap();
+        let f = fold(&std::fs::read_to_string(&path).unwrap());
+        eprintln!("id={id} busy={} last={:?}", f.busy, f.last_activity);
+        assert!(!f.busy, "the run finished its turn");
+    }
 }

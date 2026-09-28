@@ -800,10 +800,11 @@ fn follow_continued(sid: &str, next_of: impl Fn(&str) -> Option<String>) -> Stri
     cur
 }
 
-/// How long the poll keeps looking for the rollout of a Codex session it started. A
-/// session that has written none by then was not started (the CLI failed, or is waiting
-/// on a first-run prompt), and the walk stops costing anything.
-const CODEX_ID_SEARCH: std::time::Duration = std::time::Duration::from_secs(60);
+/// How long a Codex session the app started may go without a rollout before its card says
+/// it needs you. Codex writes nothing until the user has answered what it asks first — to
+/// trust a folder it does not know, to review hooks (both observed on 0.158.0) — so a
+/// session still without one after this is waiting on the user, not working.
+const CODEX_FIRST_WRITE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// A Codex or Copilot session running in an embedded terminal, shaped like a running
 /// Claude Code session plus `agent`. The homes are parameters so a test can point them
@@ -813,9 +814,9 @@ pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &
     let content = fs::read_to_string(&a.notes_path).unwrap_or_default();
     let fm = parse_frontmatter(&content);
     let mut sid = fm.get("session_id").cloned().unwrap_or_default();
-    let searching = sid.is_empty()
-        && a.agent == AgentId::Codex
-        && a.spawned_at.elapsed().is_ok_and(|e| e < CODEX_ID_SEARCH);
+    // Looked for as long as the terminal lives: the walk covers the two newest day
+    // folders only, and the user may take any time to answer Codex's first questions.
+    let searching = sid.is_empty() && a.agent == AgentId::Codex;
     if searching {
         if let Ok(Some(id)) = codex::find_started(codex_home, &a.cwd, a.spawned_at) {
             if crate::agents::session::record_id(&a.notes_path, &id).is_ok() {
@@ -833,12 +834,14 @@ pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &
         .and_then(|p| crate::agents::read_tail(p, 64 * 1024))
         .map(|t| if a.agent == AgentId::Codex { codex::fold(&t) } else { copilot::fold(&t) })
         .unwrap_or_default();
-    // A Codex session still starting has no rollout yet: it is busy, not idle.
-    let status = if fold.busy || (searching && sid.is_empty()) { "busy" } else { "idle" };
-    let last_activity = match (&fold.last_activity, sid.is_empty() && !searching && a.agent == AgentId::Codex) {
-        (Some(t), _) => Value::String(t.clone()),
-        (None, true) => Value::String("Codex session id not found".into()),
-        (None, false) => Value::Null,
+    // A Codex session with no rollout yet is starting (busy), then asking the user
+    // something before it starts (waiting).
+    let asking = searching && sid.is_empty() && a.spawned_at.elapsed().is_ok_and(|e| e >= CODEX_FIRST_WRITE);
+    let status = if asking { "waiting" } else if fold.busy || (searching && sid.is_empty()) { "busy" } else { "idle" };
+    let last_activity = match &fold.last_activity {
+        Some(t) => Value::String(t.clone()),
+        None if asking => Value::String("Codex is asking something in its terminal".into()),
+        None => Value::Null,
     };
     let NotesMeta { goal, next_steps, pr_links, tickets: tickets_fm, ticket_states, last_summary, start_in: _ } =
         read_notes_meta(&a.notes_path);
@@ -2801,6 +2804,13 @@ mod tests {
         let a = pty(AgentId::Codex, np.clone());
         let s = agent_session(&cfg, &a, &codex_home, &copilot_home);
         assert_eq!((s["sessionId"].as_str(), s["status"].as_str()), (Some(""), Some("busy")));
+        // Still no rollout after a while: Codex is asking something first (it asks to trust
+        // a new folder, and to review hooks, before it writes anything). That needs the
+        // user — and the search goes on, however long they take to answer.
+        let mut asking = a.clone();
+        asking.spawned_at = std::time::SystemTime::now() - std::time::Duration::from_secs(600);
+        let s = agent_session(&cfg, &asking, &codex_home, &copilot_home);
+        assert_eq!((s["sessionId"].as_str(), s["status"].as_str()), (Some(""), Some("waiting")));
         let xid = "01a0e9da-76d9-7c12-882e-57b7554edd81";
         let day = codex_home.join("sessions/2026/09/29");
         fs::create_dir_all(&day).unwrap();
