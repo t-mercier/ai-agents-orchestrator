@@ -1550,6 +1550,7 @@ pub fn run() {
             config::set_config,
             reader::get_sessions,
             reader::get_historical_sessions,
+            agents::agents_available,
             reader::get_historical_sessions_all,
             reader::discover_sessions_page,
             reader::preview_session,

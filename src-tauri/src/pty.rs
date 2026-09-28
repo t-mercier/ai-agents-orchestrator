@@ -181,7 +181,14 @@ pub fn pty_spawn(
     if !restart_slug.is_empty() && !crate::is_safe_slug(&restart_slug) {
         return Err("invalid slug".into());
     }
-    let agent = crate::agents::AgentId::parse(agent.as_deref())?;
+    // The notes are the record of which tool a session runs in; the renderer need only
+    // say which session. An explicit agent wins (none is sent today).
+    let notes_abs = notes_path.as_deref().map(str::trim).filter(|n| !n.is_empty()).and_then(|n| crate::notes_md_under_root(n).ok());
+    let recorded = notes_abs
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|c| crate::reader::parse_frontmatter(&c).get("agent").cloned());
+    let agent = crate::agents::AgentId::parse(agent.as_deref().or(recorded.as_deref()))?;
     let agent_notes = match (agent, notes_path.as_deref().map(str::trim)) {
         (crate::agents::AgentId::Claude, _) => None,
         (_, Some(n)) if !n.is_empty() => Some(crate::notes_md_under_root(n)?.to_string_lossy().into_owned()),

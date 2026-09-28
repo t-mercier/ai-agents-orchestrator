@@ -87,6 +87,37 @@ impl AgentId {
     }
 }
 
+/// Which agent CLIs this machine has, through a login shell (the app's own PATH, when
+/// launched from Finder, has none of them): `[{agent, found, version, supported, hint}]`.
+#[tauri::command(async)]
+pub fn agents_available() -> serde_json::Value {
+    let script = "for a in claude codex copilot; do p=$(command -v $a) || { echo \"$a|||\"; continue; }; \
+                  r=$(readlink -f \"$p\" 2>/dev/null || echo \"$p\"); \
+                  v=$($a --version 2>/dev/null | head -1); echo \"$a|$p|$r|$v\"; done";
+    let out = crate::prstatus::run_within(script, std::time::Duration::from_secs(20)).unwrap_or_default();
+    serde_json::Value::Array(out.lines().filter_map(availability).collect())
+}
+
+/// One line of `agents_available`'s probe, `agent|path|resolved path|version`.
+fn availability(line: &str) -> Option<serde_json::Value> {
+    let mut f = line.splitn(4, '|');
+    let (agent, path, resolved, version) = (f.next()?, f.next()?, f.next()?, f.next()?.trim());
+    let id = AgentId::parse(Some(agent)).ok()?;
+    let found = !path.is_empty();
+    let (supported, hint) = match id {
+        AgentId::Copilot if found => match copilot::parse_version(version) {
+            Some(v) if copilot::supported(v) => (true, String::new()),
+            _ => {
+                let how = if resolved.contains("/Cellar/") { "brew upgrade copilot-cli" } else { "npm i -g @github/copilot" };
+                (false, format!("Copilot CLI {} is too old for the app (it needs 1.0 or later). Update it with: {how}",
+                    if version.is_empty() { "?" } else { version }))
+            }
+        },
+        _ => (found, String::new()),
+    };
+    Some(serde_json::json!({ "agent": id.as_str(), "found": found, "version": version, "supported": supported, "hint": hint }))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Mode {
     /// A terminal the user types into.
@@ -258,6 +289,20 @@ mod tests {
             command(AgentId::Copilot, &launch(Some("4fa67fb9"), Some("/sync-refs /n.md"), "", Mode::Headless)),
             "AO_HEADLESS=1 copilot --resume='4fa67fb9' -p '/sync-refs /n.md' --allow-all-tools"
         );
+    }
+
+    #[test]
+    fn an_old_copilot_is_found_but_not_offered() {
+        let old = availability("copilot|/opt/homebrew/bin/copilot|/opt/homebrew/lib/node_modules/@github/copilot/index.js|0.0.369").unwrap();
+        assert_eq!((old["found"].as_bool(), old["supported"].as_bool()), (Some(true), Some(false)));
+        assert!(old["hint"].as_str().unwrap().contains("npm i -g @github/copilot"));
+        let brew = availability("copilot|/opt/homebrew/bin/copilot|/opt/homebrew/Cellar/copilot-cli/0.0.369/bin/copilot|0.0.369").unwrap();
+        assert!(brew["hint"].as_str().unwrap().contains("brew upgrade"));
+        let new = availability("copilot|/usr/local/bin/copilot|/usr/local/bin/copilot|GitHub Copilot CLI 1.0.89.").unwrap();
+        assert_eq!(new["supported"], true);
+        let none = availability("codex|||").unwrap();
+        assert_eq!((none["found"].as_bool(), none["supported"].as_bool()), (Some(false), Some(false)));
+        assert_eq!(availability("codex|/opt/homebrew/bin/codex|/x/codex|codex-cli 0.158.0").unwrap()["supported"], true);
     }
 
     #[test]
