@@ -44,6 +44,21 @@ struct Session {
     agent: Option<AgentPty>,
 }
 
+/// The notes of the Codex and Copilot sessions running in an embedded terminal, for the
+/// readers that have no PtyManager at hand (the Closed-tab scan, Brutus): they must not
+/// list a running session as closed. Refreshed on every poll and on every spawn and kill.
+static LIVE_AGENT_NOTES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+fn set_live_agent_notes(list: &[AgentPty]) {
+    if let Ok(mut v) = LIVE_AGENT_NOTES.lock() {
+        *v = list.iter().map(|a| a.notes_path.clone()).collect();
+    }
+}
+
+pub(crate) fn live_agent_notes() -> Vec<String> {
+    LIVE_AGENT_NOTES.lock().map(|v| v.clone()).unwrap_or_default()
+}
+
 /// A Codex or Copilot session running in an embedded terminal.
 #[derive(Clone, Debug)]
 pub(crate) struct AgentPty {
@@ -82,11 +97,15 @@ impl PtyManager {
 
     /// The Codex and Copilot sessions whose terminal is still running.
     pub(crate) fn agent_sessions(&self) -> Vec<AgentPty> {
-        self.sessions
+        let list: Vec<AgentPty> = self
+            .sessions
             .lock()
             .map(|m| m.values().filter_map(|s| s.agent.clone()).collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        set_live_agent_notes(&list);
+        list
     }
+
 
     /// Kill every embedded child. Called on app exit so the `claude` processes we
     /// spawned in embedded terminals don't orphan and keep the session "running"
@@ -306,6 +325,7 @@ pub fn pty_spawn(
         pid: child_pid,
     });
     sessions.insert(session_id, Session { master: pair.master, writer: Arc::new(Mutex::new(writer)), child, agent: agent_meta });
+    set_live_agent_notes(&sessions.values().filter_map(|s| s.agent.clone()).collect::<Vec<_>>());
     Ok(())
 }
 
@@ -351,7 +371,12 @@ pub fn pty_resize(state: tauri::State<PtyManager>, session_id: String, cols: u16
 pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
     // Take the session out (releasing the lock at the end of THIS statement — binding
     // to a local avoids holding the mutex across the blocking wait below).
-    let session = state.sessions.lock().unwrap().remove(&session_id);
+    let session = {
+        let mut map = state.sessions.lock().unwrap();
+        let s = map.remove(&session_id);
+        set_live_agent_notes(&map.values().filter_map(|s| s.agent.clone()).collect::<Vec<_>>());
+        s
+    };
     if let Some(mut s) = session {
         let _ = s.child.kill();
         // kill() only signals; wait() reaps it. Without this the SIGKILL'd shell

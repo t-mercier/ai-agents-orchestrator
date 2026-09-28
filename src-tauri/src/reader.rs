@@ -1700,6 +1700,8 @@ fn scan_historical() -> Vec<Value> {
     // Exclude sessions that are currently live (running tab owns them). Cheap scan —
     // no transcript/git work (was a full get_sessions() that duplicated the running poll).
     let (running_ids, active_notes) = running_session_ids();
+    // Codex and Copilot sessions running in the app's terminal, by canonical notes path.
+    let live_agent: HashSet<String> = crate::pty::live_agent_notes().into_iter().collect();
     // Parsed once for the whole scan; latest_resumable_sid needs it per stub notes.md.
     let active_registry = load_active_sessions();
 
@@ -1736,12 +1738,35 @@ fn scan_historical() -> Vec<Value> {
             // Gating the fallback on shape alone let a dead-but-well-formed id shadow the
             // registered ids that do have a transcript, so Resume was never offered for
             // that workspace again — only Restart, permanently.
-            let eff_sid = pick_resumable_sid(
-                fm.get("session_id").map(String::as_str),
-                |s| read_transcript(s).found,
-                || latest_resumable_sid(&notes_path, &active_registry),
-            );
-            let tr = eff_sid.as_deref().map(read_transcript);
+            // A Codex or Copilot session is resumed by its own CLI from its own transcript;
+            // an agent value the app does not know is listed but never offered Resume.
+            let agent = crate::agents::AgentId::parse(fm.get("agent").map(String::as_str));
+            if !live_agent.is_empty() {
+                let canon = fs::canonicalize(&notes).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                if live_agent.contains(&canon) || live_agent.contains(&notes_path) {
+                    continue;
+                }
+            }
+            let (eff_sid, agent_resumable) = match agent {
+                Ok(crate::agents::AgentId::Claude) => (
+                    pick_resumable_sid(
+                        fm.get("session_id").map(String::as_str),
+                        |s| read_transcript(s).found,
+                        || latest_resumable_sid(&notes_path, &active_registry),
+                    ),
+                    None,
+                ),
+                Ok(a) => {
+                    let sid = fm.get("session_id").filter(|s| is_resumable_sid(s)).cloned();
+                    let found = sid.as_deref().is_some_and(|s| match a {
+                        crate::agents::AgentId::Codex => crate::agents::codex::transcript_path(&crate::agents::codex::home(), s).is_some(),
+                        _ => crate::agents::copilot::transcript_path(&crate::agents::copilot::home(), s).is_some(),
+                    });
+                    (sid, Some(found))
+                }
+                Err(_) => (fm.get("session_id").cloned(), Some(false)),
+            };
+            let tr = if agent_resumable.is_some() { None } else { eff_sid.as_deref().map(read_transcript) };
             // A "closed" session whose transcript kept growing after the close was
             // reopened (resumed) + worked on without re-closing → surface it as stale
             // (open work) rather than closed. Resume/restart-session don't write the notes,
@@ -1794,7 +1819,7 @@ fn scan_historical() -> Vec<Value> {
                 .unwrap_or_default();
             // Resumable only if the transcript still exists (else --resume can't
             // find the conversation — the UI should offer Restart instead).
-            let resumable = tr.as_ref().map(|t| t.found).unwrap_or(false);
+            let resumable = agent_resumable.unwrap_or_else(|| tr.as_ref().map(|t| t.found).unwrap_or(false));
             // PR links: explicit frontmatter wins; else (REVIEW only) the PR URL pasted
             // into the transcript, disambiguated by the number in the session name.
             let pr_urls = tr.as_ref().map(|t| t.pr_urls.as_slice()).unwrap_or(&[]);
@@ -1821,6 +1846,7 @@ fn scan_historical() -> Vec<Value> {
             out.push(json!({
                 "notesPath": notes_path,
                 "sessionId": eff_sid.clone().map(Value::String).unwrap_or(Value::Null),
+                "agent": fm.get("agent").map(|a| a.trim()).filter(|a| !a.is_empty()).unwrap_or("claude"),
                 "cwd": cwd,
                 "resumable": resumable,
                 "category": cat,
