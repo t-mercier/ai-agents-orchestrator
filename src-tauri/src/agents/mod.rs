@@ -4,6 +4,18 @@
 
 use crate::pty::shell_quote;
 
+pub(crate) mod codex;
+pub(crate) mod copilot;
+
+/// What a transcript says about its session, whichever agent wrote it.
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct Fold {
+    pub busy: bool,
+    pub last_activity: Option<String>,
+    pub last_activity_at: Option<String>,
+    pub cwd: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AgentId {
     Claude,
@@ -13,12 +25,14 @@ pub(crate) enum AgentId {
 
 impl AgentId {
     /// A session with no recorded agent is a Claude Code session: every session the app
-    /// managed before Codex and Copilot existed has no `agent` field.
-    pub(crate) fn parse(raw: Option<&str>) -> Self {
+    /// managed before Codex and Copilot existed has no `agent` field. Any other value is
+    /// refused, so a typo never launches Claude Code on another tool's session id.
+    pub(crate) fn parse(raw: Option<&str>) -> Result<Self, String> {
         match raw.map(str::trim) {
-            Some("codex") => Self::Codex,
-            Some("copilot") => Self::Copilot,
-            _ => Self::Claude,
+            None | Some("") | Some("claude") => Ok(Self::Claude),
+            Some("codex") => Ok(Self::Codex),
+            Some("copilot") => Ok(Self::Copilot),
+            Some(other) => Err(format!("unknown agent: {other}")),
         }
     }
 
@@ -149,10 +163,18 @@ mod tests {
 
     #[test]
     fn a_session_without_an_agent_is_claude() {
-        assert_eq!(AgentId::parse(None), AgentId::Claude);
-        assert_eq!(AgentId::parse(Some("gemini")), AgentId::Claude);
-        assert_eq!(AgentId::parse(Some(" codex ")), AgentId::Codex);
-        assert_eq!(AgentId::parse(Some("copilot")), AgentId::Copilot);
+        assert_eq!(AgentId::parse(None), Ok(AgentId::Claude));
+        assert_eq!(AgentId::parse(Some("")), Ok(AgentId::Claude));
+        assert_eq!(AgentId::parse(Some("claude")), Ok(AgentId::Claude));
+        assert_eq!(AgentId::parse(Some(" codex ")), Ok(AgentId::Codex));
+        assert_eq!(AgentId::parse(Some("copilot")), Ok(AgentId::Copilot));
+    }
+
+    // `agent: codx` must not launch `claude --resume <a codex id>`.
+    #[test]
+    fn an_unknown_agent_is_refused_not_launched_as_claude() {
+        assert!(AgentId::parse(Some("codx")).is_err());
+        assert!(AgentId::parse(Some("gemini")).is_err());
     }
 
     #[test]
