@@ -16,6 +16,7 @@ mod doctor;
 mod secaudit;
 mod ctxbudget;
 mod updater;
+mod agents;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
