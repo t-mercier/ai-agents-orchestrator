@@ -12,7 +12,9 @@ use tauri_plugin_updater::UpdaterExt;
 /// The update feed, from `AO_UPDATER_ENDPOINT` when set, which is how a local end-to-end
 /// test points the app at a feed it serves itself. Only https, or plain http on the loopback
 /// interface, is accepted: the signature check already rejects a forged archive, and this
-/// keeps an update check from ever going to an arbitrary host in the clear.
+/// keeps an update check from ever going to an arbitrary host in the clear. The plugin
+/// itself still refuses plain http unless the build sets
+/// `plugins.updater.dangerousInsecureTransportProtocol`, which no release build does.
 pub(crate) fn endpoint_override(raw: Option<&str>) -> Option<url::Url> {
     let url = url::Url::parse(raw?.trim()).ok()?;
     let loopback = matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]"));
@@ -64,6 +66,17 @@ pub async fn app_update_install(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     app.restart();
+}
+
+/// Installs the newer release as soon as the app starts, so an unattended run proves the
+/// whole A → B cycle without anyone clicking the banner. Test builds only.
+#[cfg(feature = "updater-e2e")]
+pub(crate) fn install_on_launch(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = app_update_install(app).await {
+            eprintln!("[updater-e2e] install failed: {e}");
+        }
+    });
 }
 
 #[cfg(test)]

@@ -1466,6 +1466,8 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            #[cfg(feature = "updater-e2e")]
+            updater::install_on_launch(app.handle().clone());
             // Install the statusline wrapper (idempotent, best-effort).
             statusline::install_if_needed();
 

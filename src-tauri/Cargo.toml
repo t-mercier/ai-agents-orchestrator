@@ -10,6 +10,10 @@ rust-version = "1.82"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# Installs the newer release at launch, with no click, for the unattended A → B update test.
+updater-e2e = []
+
 [lib]
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
