@@ -89,6 +89,8 @@ fn build_config(path: &Path) -> Value {
 /// The assistant's four styles. A key, never free text: the backend turns it into prompt
 /// wording, so the renderer can choose a style without ever sending prompt text.
 pub(crate) const ASSISTANT_STYLES: [&str; 5] = ["concise", "friendly", "casual", "nerdy", "sarcastic"];
+/// The companions Brutus can show as (renderer/lib/pets.js draws them); the first is the default.
+pub(crate) const ASSISTANT_PETS: [&str; 9] = ["blob", "ghost", "bunny", "cloud", "star", "cat", "crab", "robot", "devil"];
 const ASSISTANT_NAME_MAX: usize = 24;
 
 /// A display name: control characters out, trimmed, at most 24 characters (not bytes —
@@ -113,7 +115,12 @@ fn assistant_of(user: &Value) -> Value {
         .unwrap_or("concise");
     // Only an explicit false turns him off: a config from before the setting keeps him.
     let enabled = a.and_then(|a| a.get("enabled")).and_then(Value::as_bool).unwrap_or(true);
-    json!({ "name": name, "style": style, "enabled": enabled })
+    let pet = a
+        .and_then(|a| a.get("pet"))
+        .and_then(Value::as_str)
+        .filter(|p| ASSISTANT_PETS.contains(p))
+        .unwrap_or(ASSISTANT_PETS[0]);
+    json!({ "name": name, "style": style, "enabled": enabled, "pet": pet })
 }
 
 /// Whether the user has Brutus turned on, read from a derived config.
@@ -319,6 +326,11 @@ fn validate(c: &Value) -> Result<(), String> {
     if let Some(style) = c.get("assistant").and_then(|a| a.get("style")).and_then(Value::as_str) {
         if !ASSISTANT_STYLES.contains(&style) {
             return Err(format!("unknown assistant style: {style}"));
+        }
+    }
+    if let Some(pet) = c.get("assistant").and_then(|a| a.get("pet")).and_then(Value::as_str) {
+        if !ASSISTANT_PETS.contains(&pet) {
+            return Err(format!("unknown companion: {pet}"));
         }
     }
     Ok(())
@@ -610,14 +622,14 @@ mod tests {
     #[test]
     fn assistant_defaults_to_brutus_concise_and_normalises_what_it_is_given() {
         let d = derive(&default_config());
-        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true }));
+        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true, "pet": "blob" }));
 
         let mut c = default_config();
         c["assistant"] = json!({ "name": "  Jarvis\u{7}  ", "style": "nerdy" });
-        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy", "enabled": true }));
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy", "enabled": true, "pet": "blob" }));
 
         c["assistant"] = json!({ "name": "", "style": "shouty" });
-        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true }),
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true, "pet": "blob" }),
             "an empty name and an unknown style fall back, never pass through");
     }
 
@@ -633,6 +645,20 @@ mod tests {
         assert!(assistant_enabled(&derive(&default_config())));
         c["assistant"]["enabled"] = json!(false);
         assert!(!assistant_enabled(&derive(&c)));
+    }
+
+    // Asked for on 2026-09-29: Brutus shows as a small companion the user picks.
+    #[test]
+    fn the_companion_defaults_to_the_blob_and_refuses_an_unknown_one() {
+        assert_eq!(derive(&default_config())["assistant"]["pet"], "blob");
+        let mut c = default_config();
+        c["assistant"] = json!({ "name": "B", "pet": "crab" });
+        assert_eq!(derive(&c)["assistant"]["pet"], "crab");
+        c["assistant"]["pet"] = json!("dragon");
+        assert_eq!(derive(&c)["assistant"]["pet"], "blob", "an unknown companion falls back");
+        assert!(validate(&c).is_err());
+        c["assistant"]["pet"] = json!("star");
+        assert!(validate(&c).is_ok());
     }
 
     #[test]

@@ -92,12 +92,21 @@
     bubble: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="16" cy="16" r="2.6" fill="currentColor"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
   }
-  const av = (cls = 'lg') => `<span class="bru-av ${cls}">${esc(M.initialOf(name()))}</span>`
+  // His face: the companion picked in Settings → Assistant, in the state he is in. The
+  // small avatars beside each answer stay still, so only the live one moves.
+  const pet = () => ((window.CSM_CONFIG || {}).assistant || {}).pet || 'blob'
+  const waiting = () => window._waitingCount || 0
+  const mood = () => state.running ? 'think' : (state.happyUntil > Date.now() ? 'happy' : (waiting() ? 'wait' : 'rest'))
+  // The number of sessions waiting shows once, on the bubble; elsewhere he only looks it.
+  const face = (still, badge = false) => window.CSMPets
+    ? window.CSMPets.svg(pet(), still ? 'rest' : mood(), { count: badge ? waiting() : 0, still })
+    : esc(M.initialOf(name()))
+  const av = (cls = 'lg', still = false, badge = false) => `<span class="bru-pet ${cls}">${face(still, badge)}</span>`
 
   function turnHTML(t) {
     if (t.role === 'user') return `<div class="bru-u">${esc(t.text)}</div>`
-    if (t.role === 'error') return `<div class="bru-b">${av()}<div class="bru-bt bru-err">${esc(t.text)}</div></div>`
-    return `<div class="bru-b">${av()}<div class="bru-bt">${t.steps ? `<div class="bru-steps">${I.eye}${esc(t.steps)}</div>` : ''}${M.renderAnswer(t.text, sessions())}</div></div>`
+    if (t.role === 'error') return `<div class="bru-b">${av('', true)}<div class="bru-bt bru-err">${esc(t.text)}</div></div>`
+    return `<div class="bru-b">${av('', true)}<div class="bru-bt">${t.steps ? `<div class="bru-steps">${I.eye}${esc(t.steps)}</div>` : ''}${M.renderAnswer(t.text, sessions())}</div></div>`
   }
   function liveHTML() {
     if (!state.running) return ''
@@ -137,7 +146,7 @@
     if (tb) {
       tb.hidden = state.home !== 'side'
       tb.classList.toggle('on', state.homeOpen)
-      tb.querySelector('.bru-av').textContent = M.initialOf(name())
+      const tbFace = tb.querySelector('.bru-pet'); if (tbFace) tbFace.innerHTML = face(false, true)
       tb.querySelector('.bru-tb-name').textContent = name()
     }
     document.body.classList.toggle('bru-docked', state.home === 'side' && state.homeOpen)
@@ -146,7 +155,7 @@
       fab.className = 'bru-fab'; fab.type = 'button'
       fab.title = `${name()} (${kbd()} to ask quickly) — right-click for options`
       fab.setAttribute('aria-label', name())
-      fab.innerHTML = av('xl')
+      fab.innerHTML = av('xl', false, true)
       fab.onclick = () => { state.homeOpen = !state.homeOpen; render() }
       fab.oncontextmenu = (e) => { e.preventDefault(); menu(e.clientX, e.clientY) }
       document.body.appendChild(fab)
@@ -216,6 +225,8 @@
   function finish(ev) {
     if (!state.running) return
     state.running = false; state.stopping = false
+    // A moment of joy when an answer lands, then back to rest.
+    if (ev.kind === 'done' && !ev.is_error) { state.happyUntil = Date.now() + 2400; setTimeout(render, 2500) }
     if (ev.kind === 'error' || (ev.kind === 'done' && ev.is_error)) {
       state.log.push({ role: 'error', text: ev.message || ev.result || 'Something went wrong.' })
     } else {

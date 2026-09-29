@@ -88,7 +88,8 @@ Ask **Brutus** anything about your sessions — *what's waiting on me?*, *brief 
 FEAT-1842*, *what did I decide last week?* — from the bubble in the corner, a panel docked on
 the right, or **⌘K** from anywhere in the app. He reads the dashboard and the sessions' notes,
 answers with the sessions as clickable chips, and keeps a memory of what you tell him, so he
-gets better the more you use him. Rename him and pick his style — concise, friendly, casual,
+gets better the more you use him. Rename him, pick his companion — a blob, a ghost, a mochi bunny, a cloud, a star, a cat, a crab, a
+robot or a little devil, each animated as he thinks and answers — and his style — concise, friendly, casual,
 nerdy or sarcastic — in **Settings → Assistant**, or turn him off there if you would rather not have an assistant. Ask him for a document — a brief, a summary to share — and he writes it and gives you a card to open it.
 
 He can read and remember, nothing else: every answer is a Claude Code run started with

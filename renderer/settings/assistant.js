@@ -12,25 +12,35 @@
   }
   const SAMPLE_SESSIONS = [{ name: 'checkout-redesign', status: 'waiting' }, { name: 'search-suggest', status: 'waiting' }]
   let style = 'concise'
+  let pet = 'blob'
 
   function paint() {
+    const pets = $('set-assistant-pets')
+    const P = window.CSMPets
+    if (pets && P) {
+      pets.innerHTML = P.NAMES.map(k =>
+        `<button type="button" role="radio" aria-checked="${k === pet}" data-pet="${k}" class="${k === pet ? 'on' : ''}" title="${P.LABELS[k]}">${P.svg(k, k === pet ? 'happy' : 'rest', { still: k !== pet })}<span>${P.LABELS[k]}</span></button>`).join('')
+    }
     const host = $('set-assistant-styles'); if (!host) return
     host.innerHTML = Object.entries(STYLES).map(([k, v]) =>
       `<button type="button" role="radio" aria-checked="${k === style}" data-style="${k}" class="${k === style ? 'on' : ''}">${v.label}</button>`).join('')
     const n = ($('set-assistant-name').value || '').trim() || 'Brutus'
-    $('set-assistant-sample').innerHTML = `<div class="bru-b"><span class="bru-av lg">${window.CSMFormatters.escapeHtml(window.CSMBrutus.initialOf(n))}</span><div class="bru-bt">${window.CSMBrutus.renderAnswer(STYLES[style].sample, SAMPLE_SESSIONS)}</div></div>`
+    const off = !$('set-assistant-enabled').checked
+    const faceHtml = P ? P.svg(pet, off ? 'sleep' : 'rest') : window.CSMFormatters.escapeHtml(window.CSMBrutus.initialOf(n))
+    $('set-assistant-sample').innerHTML = `<div class="bru-b"><span class="bru-pet lg">${faceHtml}</span><div class="bru-bt">${window.CSMBrutus.renderAnswer(STYLES[style].sample, SAMPLE_SESSIONS)}</div></div>`
   }
   function populate() {
     const a = (window.CSM_CONFIG || {}).assistant || {}
     $('set-assistant-enabled').checked = a.enabled !== false
     $('set-assistant-name').value = a.name || 'Brutus'
     style = STYLES[a.style] ? a.style : 'concise'
+    pet = window.CSMPets && window.CSMPets.NAMES.includes(a.pet) ? a.pet : 'blob'
     let home = 'bubble'; try { home = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}
     document.querySelectorAll('input[name="set-assistant-home"]').forEach(r => { r.checked = r.value === home })
     paint()
   }
   function collect(out) {
-    out.assistant = { name: ($('set-assistant-name').value || '').trim() || 'Brutus', style, enabled: $('set-assistant-enabled').checked }
+    out.assistant = { name: ($('set-assistant-name').value || '').trim() || 'Brutus', style, enabled: $('set-assistant-enabled').checked, pet }
     // Only on a real change: setHome opens him in his new home, which every Save must not do.
     const home = document.querySelector('input[name="set-assistant-home"]:checked')
     let was = 'bubble'; try { was = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}
@@ -39,6 +49,8 @@
   document.addEventListener('click', (e) => {
     const b = e.target.closest('#set-assistant-styles [data-style]')
     if (b) { style = b.dataset.style; paint() }
+    const pb = e.target.closest('#set-assistant-pets [data-pet]')
+    if (pb) { pet = pb.dataset.pet; paint() }
     if (e.target.closest('#set-assistant-memory')) openMemory()
   })
   async function openMemory() {
@@ -47,5 +59,7 @@
     if ((!r || !r.ok) && window.showSettingsError) window.showSettingsError(`Could not open his memory: ${(r && r.error) || 'unknown error'}`)
   }
   document.addEventListener('input', (e) => { if (e.target.id === 'set-assistant-name') paint() })
+  // Turning him off shows him asleep in the preview.
+  document.addEventListener('change', (e) => { if (e.target.id === 'set-assistant-enabled') paint() })
   window.CSMSettings.register({ populate, collect })
 })()
