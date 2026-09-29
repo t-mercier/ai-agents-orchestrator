@@ -4,7 +4,9 @@
 //! This file is the script of each mode and the prompts: given what the turns so far
 //! produced, what runs next. It runs nothing, so every rule is tested without an agent.
 
+pub(crate) mod engine;
 pub(crate) mod git;
+pub(crate) mod line;
 pub(crate) mod run;
 
 use crate::agents::AgentId;

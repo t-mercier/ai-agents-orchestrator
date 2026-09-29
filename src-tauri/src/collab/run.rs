@@ -32,7 +32,9 @@ pub(crate) struct TurnResult {
 /// Run `line` through a login shell in `dir` (a Finder-launched app has no agent CLI on its
 /// PATH), in its own process group so Stop and the timeout end the CLI and everything it
 /// started, not only the shell.
-pub(crate) fn run_turn(line: &str, dir: &str, limit: Duration, stop: &Arc<AtomicBool>) -> Result<TurnResult, String> {
+/// `on_spawn` gets the process group as soon as it exists, so the caller can record it for
+/// the app's quit and for a later launch after a crash.
+pub(crate) fn run_turn(line: &str, dir: &str, limit: Duration, stop: &Arc<AtomicBool>, on_spawn: &dyn Fn(i32)) -> Result<TurnResult, String> {
     use std::os::unix::process::CommandExt;
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let mut child = Command::new(&shell)
@@ -45,6 +47,7 @@ pub(crate) fn run_turn(line: &str, dir: &str, limit: Duration, stop: &Arc<Atomic
         .spawn()
         .map_err(|e| e.to_string())?;
     let pgid = child.id() as i32;
+    on_spawn(pgid);
     let drain = |mut r: Box<dyn Read + Send>| {
         std::thread::spawn(move || {
             let mut kept: Vec<u8> = Vec::new();
@@ -116,7 +119,7 @@ mod tests {
     use super::*;
 
     fn go(line: &str, limit_ms: u64) -> TurnResult {
-        run_turn(line, "/", Duration::from_millis(limit_ms), &Arc::new(AtomicBool::new(false))).unwrap()
+        run_turn(line, "/", Duration::from_millis(limit_ms), &Arc::new(AtomicBool::new(false)), &|_| {}).unwrap()
     }
 
     // The case run_within cannot survive: far more output than a pipe holds.
@@ -155,7 +158,9 @@ mod tests {
             std::thread::sleep(Duration::from_millis(400));
             s2.store(true, Ordering::SeqCst);
         });
-        let r = run_turn("sleep 30", "/", Duration::from_secs(60), &stop).unwrap();
+        let seen = std::sync::Mutex::new(0);
+        let r = run_turn("sleep 30", "/", Duration::from_secs(60), &stop, &|g| *seen.lock().unwrap() = g).unwrap();
+        assert!(*seen.lock().unwrap() > 0, "the group was handed over at spawn");
         assert_eq!(r.outcome, Outcome::Stopped);
     }
 
