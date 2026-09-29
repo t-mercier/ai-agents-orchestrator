@@ -82,8 +82,10 @@ jobs:
           releaseName: ${{ github.ref_name }}
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
-          # semver pre-releases carry a hyphen (e.g. v0.3.0-alpha) → mark as prerelease.
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Every -alpha version is released as a stable one, and the in-app updater reads
+          # releases/latest, which skips prereleases: a tag left a prerelease would never be
+          # offered, with no error anywhere. It used to be flipped by hand after each build.
+          prerelease: false
           # Update archives and their signatures are built for releases only: a local
           # `cargo tauri build` has no signing key and would fail with them on.
           args: ${{ matrix.args }} --config src-tauri/tauri.updater.conf.json

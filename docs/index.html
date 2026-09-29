@@ -692,8 +692,9 @@
   lb.addEventListener('click', closeLb);
 
   // Download buttons: link to the real assets of the newest release, resolved at load.
-  // Asset names carry the version, so nothing here is hardcoded; and `releases/latest`
-  // is unusable while every release is a prerelease (it 404s), hence the full listing.
+  // Asset names carry the version, so nothing here is hardcoded. The newest entry of the
+  // listing is used rather than `releases/latest`, which skips any release marked a
+  // prerelease.
   // Any failure leaves the buttons pointing at the releases page, which always works.
   (async () => {
     const pick = (assets, ...exts) =>
