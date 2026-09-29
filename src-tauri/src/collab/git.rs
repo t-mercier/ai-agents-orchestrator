@@ -79,6 +79,7 @@ pub(crate) fn changes_since(repo: &Path, base: &str, max: usize) -> Result<(Stri
 
 /// A branch or folder name made from the user's session name: lowercase letters, digits
 /// and `-` only, so it is valid to git and to the file system whatever was typed.
+#[allow(dead_code)] // Parallel mode (plan 3)
 pub(crate) fn slug(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars().flat_map(char::to_lowercase) {
@@ -92,12 +93,14 @@ pub(crate) fn slug(s: &str) -> String {
 }
 
 /// A worktree for one Parallel agent, on a new branch from `base`.
+#[allow(dead_code)] // Parallel mode (plan 3)
 pub(crate) fn add_worktree(repo: &Path, path: &Path, branch: &str, base: &str) -> Result<(), String> {
     let p = path.to_str().ok_or("path is not valid UTF-8")?;
     git(repo, &["worktree", "add", "-b", branch, p, base]).map(|_| ())
 }
 
 /// Remove a Parallel worktree, and its branch unless `keep_branch`.
+#[allow(dead_code)] // Parallel mode (plan 3)
 pub(crate) fn remove_worktree(repo: &Path, path: &Path, branch: &str, keep_branch: bool) -> Result<(), String> {
     let p = path.to_str().ok_or("path is not valid UTF-8")?;
     git(repo, &["worktree", "remove", "--force", p])?;

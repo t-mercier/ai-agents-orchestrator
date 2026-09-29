@@ -569,6 +569,107 @@ fn start_session(
     Ok(serde_json::json!({}))
 }
 
+/// Start a collab: several agents on one task in a git repository (see collab/). Validates
+/// everything the form sends, refuses a folder that is not a clean checkout or where work
+/// is already running, writes the session's notes, and runs the collab on its own thread.
+/// Returns `{ id, notesPath }` at once; the thread follows as `collab-event`s.
+#[tauri::command(async)]
+#[allow(clippy::too_many_arguments)] // tauri command: one param per form field
+fn collab_start(
+    app: tauri::AppHandle,
+    pty_state: tauri::State<pty::PtyManager>,
+    category: String,
+    name: String,
+    ticket: String,
+    root: String,
+    repo: String,
+    mode: String,
+    agents: Vec<String>,
+    task: String,
+) -> Result<serde_json::Value, String> {
+    let mode = collab::Mode::parse(&mode)?;
+    if mode != collab::Mode::CrossReview {
+        return Err("only cross-review is available for now".into());
+    }
+    let agents: Vec<agents::AgentId> = agents.iter().map(|a| agents::AgentId::parse(Some(a))).collect::<Result<_, _>>()?;
+    if agents.len() != 2 || agents[0] == agents[1] {
+        return Err("a cross-review needs two different agents: an author and a reviewer".into());
+    }
+    let task = task.trim().to_string();
+    if task.is_empty() {
+        return Err("describe the task".into());
+    }
+    let repo_abs = validate_launch_dir(repo.trim())?;
+    let repo_s = repo_abs.to_string_lossy().into_owned();
+    if !collab::git::is_repo(&repo_abs) {
+        return Err("a collab works in a git repository: pick a checkout".into());
+    }
+    if !collab::git::is_clean(&repo_abs)? {
+        return Err("this checkout has uncommitted changes: commit or stash them first, so the review is of the agents' work only".into());
+    }
+    let collabs: Vec<String> = collab::engine::live().into_iter().map(|l| l.repo).collect();
+    let terminals: Vec<String> = pty_state.agent_sessions().into_iter().map(|a| a.cwd).collect();
+    let claude = reader::live_claude_cwds();
+    if let Some(why) = collab::busy_reason(&repo_s, &collabs, &terminals, &claude) {
+        return Err(why);
+    }
+    let cfg = config::load();
+    let want_root = root.trim();
+    validate_root_override(&cfg, want_root)?;
+    let cat_def = cfg.get("categories").and_then(serde_json::Value::as_array).and_then(|arr| {
+        arr.iter().find(|c| {
+            c.get("name").and_then(serde_json::Value::as_str) == Some(&category)
+                && (want_root.is_empty() || c.get("root").and_then(serde_json::Value::as_str) == Some(want_root))
+        })
+    });
+    let cat_def = match cat_def {
+        Some(c) if is_safe_category(&category) => c,
+        _ => return Err("invalid category".into()),
+    };
+    let safe_name = sanitize_session_name(&name);
+    if safe_name.is_empty() {
+        return Err("title required".into());
+    }
+    let t = ticket.trim();
+    let safe_ticket = if is_ticket(t) { t.to_uppercase() } else { String::new() };
+    let notes_path = predicted_notes_path(&cfg, cat_def, &category, &safe_ticket, &safe_name)?;
+    let base = collab::git::head(&repo_abs)?;
+    let (date, time) = local_date_time().unwrap_or_default();
+    agents::session::create(std::path::Path::new(&notes_path), &collab::notes_text(&collab::CollabNotes {
+        mode, agents: &agents, repo: agents::session::one_line(&repo_s)?, base: &base, category: &category,
+        ticket: &safe_ticket, name: &safe_name, task: &task, started_at: &format!("{date} {time}"),
+    }))?;
+    let id = agents::session::uuid_v4()?;
+    let start = collab::engine::Start {
+        id: id.clone(), notes_path: notes_path.clone(), repo: repo_s, base, mode, agents, task,
+        scratch: config::config_dir().join("collab").join(&id),
+    };
+    std::thread::spawn(move || {
+        let emit = move |v: serde_json::Value| { let _ = app.emit("collab-event", v); };
+        collab::engine::drive(start, &collab::line::turn_line, &emit);
+    });
+    Ok(serde_json::json!({ "id": id, "notesPath": notes_path }))
+}
+
+#[tauri::command]
+fn collab_stop(id: String) -> bool {
+    collab::engine::stop(&id)
+}
+
+/// The running collabs: `[{ id, notesPath, repo, mode, agents, role, agent }]`, `role` and
+/// `agent` naming the turn running now.
+#[tauri::command]
+fn collab_list() -> serde_json::Value {
+    serde_json::Value::Array(collab::engine::live().iter().map(|l| {
+        let cur = *l.current.lock().unwrap();
+        serde_json::json!({
+            "id": l.id, "notesPath": l.notes_path, "repo": l.repo, "mode": format!("{:?}", l.mode),
+            "agents": l.agents.iter().map(|a| a.as_str()).collect::<Vec<_>>(),
+            "role": cur.map(|(r, _)| r.as_str()), "agent": cur.map(|(_, a)| a.as_str()),
+        })
+    }).collect())
+}
+
 /// Where a new session's notes.md goes: <category root>/<CATEGORY>/<folder>/notes.md,
 /// folder = ticket || slugify(name). It MUST match the /start-session skill's TARGET_DIR
 /// (aoconfig.py `dir`), which writes a Claude Code session's notes; slugify is
@@ -1502,6 +1603,8 @@ pub fn run() {
             updater::install_on_launch(app.handle().clone());
             // Install the statusline wrapper (idempotent, best-effort).
             statusline::install_if_needed();
+            // A collab turn left running by a crash is ended, and its session closed as stopped.
+            collab::engine::recover_after_crash();
 
             // v1 → v2 migration (idempotent, run-once at startup).
             match config::migrate_v1_if_needed() {
@@ -1552,6 +1655,9 @@ pub fn run() {
             reader::get_sessions,
             reader::get_historical_sessions,
             agents::agents_available,
+            collab_start,
+            collab_stop,
+            collab_list,
             reader::get_historical_sessions_all,
             reader::discover_sessions_page,
             reader::preview_session,
@@ -1614,6 +1720,7 @@ pub fn run() {
             // (which would keep the session "running" with no terminal after reopen).
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 app_handle.state::<pty::PtyManager>().kill_all();
+                collab::engine::kill_all();
             }
         });
 }

@@ -141,6 +141,57 @@ pub(crate) fn next(mode: Mode, agents: &[AgentId], done: &[Done]) -> Next {
     }
 }
 
+/// A folder a collab may not start in, and why: its repository already has a collab, an
+/// embedded terminal, or a Claude Code session working in it — the repository itself or a
+/// folder inside it (canonical paths). A session launched from a space root above the
+/// repository is not working in it: most sessions start there. Two writers on one working
+/// tree is what every mode exists to avoid.
+pub(crate) fn busy_reason(repo: &str, collabs: &[String], terminals: &[String], claude: &[String]) -> Option<String> {
+    let clash = |other: &str| {
+        let (a, b) = (repo.trim_end_matches('/'), other.trim_end_matches('/'));
+        !b.is_empty() && (a == b || b.starts_with(&format!("{a}/")))
+    };
+    if collabs.iter().any(|c| clash(c)) {
+        return Some("a collab is already running in this repository".into());
+    }
+    if terminals.iter().any(|c| clash(c)) {
+        return Some("a session runs in this repository in the app's terminal; close it first".into());
+    }
+    if claude.iter().any(|c| clash(c)) {
+        return Some("a Claude Code session is working in this repository; close it first".into());
+    }
+    None
+}
+
+pub(crate) struct CollabNotes<'a> {
+    pub mode: Mode,
+    pub agents: &'a [AgentId],
+    pub repo: &'a str,
+    pub base: &'a str,
+    pub category: &'a str,
+    pub ticket: &'a str,
+    pub name: &'a str,
+    pub task: &'a str,
+    pub started_at: &'a str,
+}
+
+/// The notes of a collab session: the frontmatter of any session, the collab's own keys,
+/// the task as its goal. No `agent:` — a collab is not one agent's session.
+pub(crate) fn notes_text(n: &CollabNotes) -> String {
+    let mode = match n.mode {
+        Mode::CrossReview => "cross-review",
+        Mode::Relay => "relay",
+        Mode::Parallel => "parallel",
+    };
+    let agents: Vec<&str> = n.agents.iter().map(|a| a.as_str()).collect();
+    let task_line = n.task.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+    format!(
+        "---\nsession_id: \ncollab_mode: {mode}\ncollab_agents: {}\ncollab_repo: {}\ncollab_base: {}\ncategory: {}\nticket: {}\nname: {}\nstarted_at: {}\n---\n\n\
+         # {}\n\n## Goal\n{task_line}\n\n## Task\n{}\n\n## Collab thread\n\n## Session history\n",
+        agents.join(","), n.repo, n.base, n.category, n.ticket, n.name, n.started_at, n.name, n.task.trim(),
+    )
+}
+
 /// The guard every prompt ends with.
 const GUARD: &str = "Work in this repository only. Do not commit, push, or change git configuration. \
 End your answer with a short summary of what you did.";
@@ -269,6 +320,33 @@ mod tests {
         assert!(prompt(Role::Implementer, "t", None, Some("step 1"), None).contains("step 1"));
         assert!(prompt(Role::Planner, "t", None, None, None).contains("Do not change code"));
         assert!(prompt(Role::Tester, "t", None, Some("p"), Some(("s", "d"))).contains("Change only tests"));
+    }
+
+    #[test]
+    fn a_repository_with_a_collab_a_terminal_or_a_claude_session_is_busy() {
+        let r = "/w/app";
+        assert_eq!(busy_reason(r, &[], &[], &[]), None);
+        assert!(busy_reason(r, &["/w/app".into()], &[], &[]).unwrap().contains("collab"));
+        assert!(busy_reason(r, &[], &["/w/app/src".into()], &[]).unwrap().contains("terminal"));
+        assert!(busy_reason(r, &[], &[], &["/w/app".into()]).unwrap().contains("Claude Code"));
+        assert_eq!(busy_reason(r, &[], &[], &["/w".into()]), None, "launched at the space root above it: not working in it");
+        assert_eq!(busy_reason(r, &[], &["/w".into()], &[]), None);
+        assert_eq!(busy_reason(r, &["/w/app-two".into()], &[], &[]), None, "a sibling with a common prefix is not a clash");
+    }
+
+    #[test]
+    fn collab_notes_read_like_any_session_and_carry_the_collab() {
+        let t = notes_text(&CollabNotes {
+            mode: Mode::CrossReview, agents: &[Claude, Codex], repo: "/w/app", base: "abc1234", category: "FEAT",
+            ticket: "", name: "retry", task: "Add a retry\nwith backoff", started_at: "2026-09-29 10:00",
+        });
+        let fm = crate::reader::parse_frontmatter(&t);
+        assert_eq!(fm.get("collab_mode").map(String::as_str), Some("cross-review"));
+        assert_eq!(fm.get("collab_agents").map(String::as_str), Some("claude,codex"));
+        assert_eq!(fm.get("category").map(String::as_str), Some("FEAT"));
+        assert!(!fm.contains_key("agent"));
+        assert!(t.contains("## Goal\nAdd a retry\n") && t.contains("## Collab thread") && t.contains("## Session history"));
+        assert_eq!(crate::reader::session_history_info(&t).0, "stale", "not closed until the collab ends");
     }
 
     #[test]
