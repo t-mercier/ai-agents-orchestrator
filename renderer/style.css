@@ -2390,17 +2390,13 @@ body.bru-resizing .layout { transition: none; }
 .pe-sleep .pe-body { animation: pe-breathe 5s ease-in-out infinite; filter: saturate(.55); }
 .pe-sleep .pe-zzz text { animation: pe-zz 3s infinite; } .pe-sleep .pe-zzz text:nth-child(2) { animation-delay: 1s; }
 .pe-sleep .pe-tail { animation: none !important; }
-/* the ghost floats, the cloud puffs, the star twinkles, the bunny flicks an ear */
+/* the ghost floats, the cloud puffs, the star twinkles */
 .pe-rest .pe-body.pe-float, .pe-wait .pe-body.pe-float { animation: pe-floaty 3s ease-in-out infinite; }
 @keyframes pe-floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .pe-think .pe-body.pe-puff { animation: pe-puff 1.1s ease-in-out infinite; }
 @keyframes pe-puff { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06, 1.04); } }
 .pe-happy .pe-body.pe-twinkle { animation: pe-spin 1.1s cubic-bezier(.3,.7,.4,1) infinite; }
 @keyframes pe-spin { 0% { transform: rotate(0) translateY(0); } 40% { transform: rotate(-10deg) translateY(-8px); } 100% { transform: rotate(0) translateY(0); } }
-.pe-ear { transform-box: fill-box; transform-origin: 50% 100%; }
-.pe-rest .pe-ear-r { animation: pe-flick 4s ease-in-out infinite; }
-.pe-think .pe-ear-l, .pe-think .pe-ear-r { transform: rotate(-8deg); }
-@keyframes pe-flick { 0%, 88%, 100% { transform: rotate(0); } 92% { transform: rotate(14deg); } }
 /* the crab's claws snap while it thinks; the robot's antenna blinks */
 .pe-claw { transform-box: fill-box; transform-origin: 50% 100%; }
 .pe-happy .pe-claw-l { transform: translateY(-5px) rotate(-10deg); } .pe-happy .pe-claw-r { transform: translateY(-5px) rotate(10deg); }

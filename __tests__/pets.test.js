@@ -33,6 +33,17 @@ describe('pets', () => {
     expect(P.svg('crab', 'wait', { count: '<img onerror=x>' })).not.toContain('<img')
   })
 
+  // Asked for on 2026-09-29: ears and horns grow out of the head, in the body's own
+  // gradient, instead of being separate shapes set on top of it.
+  test('the bunny, the cat and the devil are one silhouette in one gradient', () => {
+    for (const n of ['bunny', 'cat', 'devil']) {
+      const svg = P.svg(n)
+      expect(svg).toContain('gradientUnits="userSpaceOnUse"')
+      expect(svg).not.toContain('pe-ear')
+      expect(svg).not.toMatch(/<ellipse[^>]*fill="url\(#/)   // the head is no longer a bare ellipse
+    }
+  })
+
   test('a still drawing does not animate, for the avatars beside each answer', () => {
     expect(P.svg('ghost', 'rest', { still: true })).toContain('pe-still')
   })

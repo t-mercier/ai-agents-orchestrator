@@ -34,6 +34,9 @@ const extras = () => `
 const COLORS = { blob: ['#ffb3d9', '#8fb4ff'], ghost: ['#f7f4ff', '#cfc6f5'], bunny: ['#fff4f7', '#ffc2d4'], cloud: ['#eef8ff', '#9ccfff'], star: ['#ffe68f', '#ffb020'], cat: ['#ffc27a', '#ff8a5c'], crab: ['#ffa98a', '#ff6f61'], robot: ['#a9c3e6', '#5f86c2'], devil: ['#c7a4ff', '#8656ec'] }
 const GRAD = (id, pet) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${COLORS[pet][0]}"/><stop offset="1" stop-color="${COLORS[pet][1]}"/></linearGradient></defs>`
 
+// One gradient across the whole drawing, so ears, horns and tail share the body's colour.
+const GRADU = (id, pet) => `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="18" y1="8" x2="84" y2="90"><stop offset="0" stop-color="${COLORS[pet][0]}"/><stop offset="1" stop-color="${COLORS[pet][1]}"/></linearGradient></defs>`
+
 const PETS = {
   blob: () => { const g = 'pe-g' + (seq++); return GRAD(g, 'blob') + `<g class="pe-body">
     <path d="M47 19 C61 15 75 23 81 34 C89 46 92 59 85 71 C79 82 66 89 52 88 C44 87.5 40 91 32 88 C21 84 12 76 12 64 C12 55 18 50 20 42 C23 31 33 22 47 19Z" fill="url(#${g})"/>
@@ -48,15 +51,14 @@ const PETS = {
     ${CHEEKS(33, 67, 58)}
     ${EYES(40, 60, 47, 8)}
     <ellipse cx="50" cy="62" rx="3" ry="3.6" fill="#231c33"/></g>` + extras() },
-  bunny: () => { const g = 'pe-g' + (seq++); return GRAD(g, 'bunny') + `<g class="pe-body">
-    <g class="pe-ear pe-ear-l"><ellipse cx="37" cy="26" rx="8" ry="18" fill="${COLORS.bunny[1]}"/><ellipse cx="37" cy="27" rx="4" ry="12" fill="#ff9ab8" opacity=".55"/></g>
-    <g class="pe-ear pe-ear-r"><ellipse cx="63" cy="26" rx="8" ry="18" fill="${COLORS.bunny[1]}"/><ellipse cx="63" cy="27" rx="4" ry="12" fill="#ff9ab8" opacity=".55"/></g>
-    <ellipse cx="50" cy="64" rx="33" ry="25" fill="url(#${g})"/>
-    ${SHINE(34, 50, 8, 4)}
-    ${CHEEKS(29, 71, 69)}
-    ${EYES(39, 61, 60, 7.5)}
-    <path d="M48 67.5 L52 67.5 L50 69.8 Z" fill="#ff7fa3"/>
-    ${SMILE(50, 71)}</g>` + extras() },
+  bunny: () => { const g = 'pe-g' + (seq++); return GRADU(g, 'bunny') + `<g class="pe-body">
+    <path d="M50 89 C30 89 17 80 17 66 C17 55 23 47 31 43 C27 34 26 17 31 10.5 C35 5.5 42.5 8 43.5 16 C44.5 24 44.5 33 45.5 39 Q50 37.2 54.5 39 C55.5 33 55.5 24 56.5 16 C57.5 8 65 5.5 69 10.5 C74 17 73 34 69 43 C77 47 83 55 83 66 C83 80 70 89 50 89 Z" fill="url(#${g})"/>
+    <path d="M33.5 38 C31 30 31 19 34.5 14 C37 12 39.5 14 40 19 C40.5 26 40 33 39.5 38 Q36.5 39.5 33.5 38 Z M66.5 38 C69 30 69 19 65.5 14 C63 12 60.5 14 60 19 C59.5 26 60 33 60.5 38 Q63.5 39.5 66.5 38 Z" fill="#ff9ab8" opacity=".45"/>
+    ${SHINE(31, 52, 7, 3.6)}
+    ${CHEEKS(29, 71, 70)}
+    ${EYES(39, 61, 61, 7.5)}
+    <path d="M48 68.5 L52 68.5 L50 70.8 Z" fill="#ff7fa3"/>
+    ${SMILE(50, 72)}</g>` + extras() },
   cloud: () => { const g = 'pe-g' + (seq++); return GRAD(g, 'cloud') + `<g class="pe-body pe-puff">
     <path d="M27 80 C14 80 9 67 18 60 C14 47 27 38 38 43 C42 29 62 27 68 41 C80 38 91 49 86 61 C94 67 90 81 77 80 Z" fill="url(#${g})"/>
     ${SHINE(37, 48, 8, 4)}
@@ -69,13 +71,12 @@ const PETS = {
     ${CHEEKS(35, 65, 63)}
     ${EYES(42, 58, 54, 7.2)}
     ${SMILE(50, 64)}</g>` + extras() },
-  cat: () => { const g = 'pe-g' + (seq++); return GRAD(g, 'cat') + `
-    <path class="pe-tail" d="M74 80 C92 78 95 60 86 52" fill="none" stroke="${COLORS.cat[1]}" stroke-width="7" stroke-linecap="round"/>
+  cat: () => { const g = 'pe-g' + (seq++); return GRADU(g, 'cat') + `
+    <path class="pe-tail" d="M74 80 C92 78 95 60 86 52" fill="none" stroke="url(#${g})" stroke-width="8" stroke-linecap="round"/>
     <g class="pe-body">
-    <path d="M22 38 C22 24 26 16 30 14 C34 18 40 24 44 28 Z M78 38 C78 24 74 16 70 14 C66 18 60 24 56 28 Z" fill="${COLORS.cat[1]}" stroke="${COLORS.cat[1]}" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M28 22 L31 30 L37 26 Z M72 22 L69 30 L63 26 Z" fill="#ffd9c7"/>
-    <ellipse cx="50" cy="58" rx="33" ry="29" fill="url(#${g})"/>
-    ${SHINE(34, 40, 8, 4.5)}
+    <path d="M50 87 C30 87 17 76 17 58 C17 46 20.5 38 24 32.5 C22.5 25 23.5 17.5 27 12.5 C28.8 10.2 31.5 10 33.5 12 C37.5 16 41 22 43.5 29.3 Q50 27.8 56.5 29.3 C59 22 62.5 16 66.5 12 C68.5 10 71.2 10.2 73 12.5 C76.5 17.5 77.5 25 76 32.5 C79.5 38 83 46 83 58 C83 76 70 87 50 87 Z" fill="url(#${g})"/>
+    <path d="M28 19 C27.5 23 28 27 29.5 30 Q34 27.5 37.5 26 C35 22 32.5 19 30 17.5 Q28.5 17.2 28 19 Z M72 19 C72.5 23 72 27 70.5 30 Q66 27.5 62.5 26 C65 22 67.5 19 70 17.5 Q71.5 17.2 72 19 Z" fill="#ffd9c7" opacity=".8"/>
+    ${SHINE(33, 42, 8, 4.2)}
     ${CHEEKS(29, 71, 66)}
     ${EYES(38, 62, 54, 8.5)}
     <path d="M47.5 63 L52.5 63 L50 65.8 Z" fill="#ff6f91"/>
@@ -106,13 +107,12 @@ const PETS = {
     <ellipse cx="31" cy="59" rx="4.5" ry="2.6" fill="#ff7fae" opacity=".6"/><ellipse cx="69" cy="59" rx="4.5" ry="2.6" fill="#ff7fae" opacity=".6"/>
     <path d="M45 59 L55 59" stroke="#7cf2d4" stroke-width="2.5" stroke-linecap="round"/>
     <rect x="36" y="82" width="28" height="7" rx="3.5" fill="${COLORS.robot[1]}"/></g>` + extras() },
-  devil: () => { const g = 'pe-g' + (seq++); return GRAD(g, 'devil') + `
-    <path class="pe-tail" d="M72 80 C88 82 92 68 86 62" fill="none" stroke="${COLORS.devil[1]}" stroke-width="4" stroke-linecap="round"/>
-    <path class="pe-tail" d="M84 64 L93 57 L86 55 Z" fill="${COLORS.devil[1]}"/>
+  devil: () => { const g = 'pe-g' + (seq++); return GRADU(g, 'devil') + `
+    <path class="pe-tail" d="M72 80 C88 82 92 68 86 62" fill="none" stroke="url(#${g})" stroke-width="4.5" stroke-linecap="round"/>
+    <path class="pe-tail" d="M84 64.5 L92.5 57.5 L86 55.5 Z" fill="${COLORS.devil[1]}" stroke="${COLORS.devil[1]}" stroke-width="2" stroke-linejoin="round"/>
     <g class="pe-body">
-    <path d="M30 34 C27 24 30 16 35 14 C35 21 37 26 41 30 Z M70 34 C73 24 70 16 65 14 C65 21 63 26 59 30 Z" fill="${COLORS.devil[1]}" stroke="${COLORS.devil[1]}" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M50 24 C71 24 84 40 84 60 C84 78 70 87 50 87 C30 87 16 78 16 60 C16 40 29 24 50 24Z" fill="url(#${g})"/>
-    ${SHINE(34, 38, 8, 4.5)}
+    <path d="M50 87 C30 87 16 78 16 60 C16 46 22 36.5 29.5 30.5 C27.5 24.5 29.5 17.5 33.5 13 C34.6 11.8 36 12.4 36 14 C36 19.5 38 24 41.5 26.8 Q50 24.4 58.5 26.8 C62 24 64 19.5 64 14 C64 12.4 65.4 11.8 66.5 13 C70.5 17.5 72.5 24.5 70.5 30.5 C78 36.5 84 46 84 60 C84 78 70 87 50 87 Z" fill="url(#${g})"/>
+    ${SHINE(33, 40, 8, 4.2)}
     <path d="M30 45 L42 48 M70 45 L58 48" stroke="#3f2475" stroke-width="2.6" stroke-linecap="round"/>
     ${CHEEKS(29, 71, 67)}
     ${EYES(38, 62, 56, 8.5)}
