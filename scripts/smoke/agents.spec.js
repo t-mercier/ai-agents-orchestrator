@@ -60,7 +60,7 @@ test('+New offers the installed agents and says why Copilot is not one of them',
   await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
   await page.locator('#new-session-btn').click()
   await expect(page.locator('#ns-agent-field')).toBeVisible()
-  await expect(page.locator('#ns-agent option')).toHaveText(['Claude Code', 'Codex'])
+  await expect(page.locator('#ns-agent option')).toHaveText(['Claude Code', 'Codex', 'Collab — two agents review each other'])
   await expect(page.locator('#ns-agent-hint')).toContainText('npm i -g @github/copilot')
 
   await expect(page.locator('#ns-intro')).toContainText('Launches claude')
