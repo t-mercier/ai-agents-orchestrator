@@ -19,6 +19,13 @@ pub(crate) fn head(repo: &Path) -> Result<String, String> {
     git(repo, &["rev-parse", "HEAD"])
 }
 
+/// The top of the working tree `dir` is in, canonical: a collab's checks and diffs are of
+/// the whole tree, whatever folder inside it was picked.
+pub(crate) fn toplevel(dir: &Path) -> Result<String, String> {
+    let top = git(dir, &["rev-parse", "--show-toplevel"])?;
+    std::fs::canonicalize(&top).map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
 pub(crate) fn is_repo(dir: &Path) -> bool {
     git(dir, &["rev-parse", "--is-inside-work-tree"]).is_ok_and(|s| s == "true")
 }
@@ -115,6 +122,8 @@ mod tests {
     use super::*;
 
     fn repo(tag: &str) -> std::path::PathBuf {
+        // Test repositories ignore the developer's own git config (signing, hooks).
+        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
         let d = std::env::temp_dir().join(format!("ao-collab-git-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
@@ -146,6 +155,19 @@ mod tests {
         git(&d, &["add", "."]).unwrap();
         git(&d, &["commit", "-qm", "agent committed"]).unwrap();
         assert!(changes_since(&d, &base, 60_000).unwrap().1.contains("+two"), "a commit made anyway still shows");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Start in may name a folder inside the repository; every check and every diff must be
+    // of the whole working tree, or a session at its root and a collab in a subfolder are two
+    // writers on one tree, and new files outside the subfolder go unreviewed.
+    #[test]
+    fn the_repository_of_a_subfolder_is_its_top_level() {
+        let d = repo("top");
+        std::fs::create_dir_all(d.join("sub/deeper")).unwrap();
+        let top = toplevel(&d.join("sub/deeper")).unwrap();
+        assert_eq!(top, std::fs::canonicalize(&d).unwrap().to_string_lossy());
+        assert!(toplevel(Path::new("/")).is_err());
         let _ = std::fs::remove_dir_all(&d);
     }
 

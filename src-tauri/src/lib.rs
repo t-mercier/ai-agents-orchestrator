@@ -599,18 +599,20 @@ fn collab_start(
     if task.is_empty() {
         return Err("describe the task".into());
     }
-    let repo_abs = validate_launch_dir(repo.trim())?;
-    let repo_s = repo_abs.to_string_lossy().into_owned();
-    if !collab::git::is_repo(&repo_abs) {
+    let picked = validate_launch_dir(repo.trim())?;
+    if !collab::git::is_repo(&picked) {
         return Err("a collab works in a git repository: pick a checkout".into());
     }
+    // The whole working tree, whatever folder inside it was picked.
+    let repo_s = collab::git::toplevel(&picked)?;
+    let repo_abs = std::path::PathBuf::from(&repo_s);
     if !collab::git::is_clean(&repo_abs)? {
         return Err("this checkout has uncommitted changes: commit or stash them first, so the review is of the agents' work only".into());
     }
-    let collabs: Vec<String> = collab::engine::live().into_iter().map(|l| l.repo).collect();
     let terminals: Vec<String> = pty_state.agent_sessions().into_iter().map(|a| a.cwd).collect();
     let claude = reader::live_claude_cwds();
-    if let Some(why) = collab::busy_reason(&repo_s, &collabs, &terminals, &claude) {
+    // Checked before anything is written; checked again, atomically, at registration below.
+    if let Some(why) = collab::busy_reason(&repo_s, &collab::engine::live().into_iter().map(|l| l.repo).collect::<Vec<_>>(), &terminals, &claude) {
         return Err(why);
     }
     let cfg = config::load();
@@ -644,6 +646,14 @@ fn collab_start(
         id: id.clone(), notes_path: notes_path.clone(), repo: repo_s, base, mode, agents, task,
         scratch: config::config_dir().join("collab").join(&id),
     };
+    // Registered under the same lock as the check, so two starts at once cannot both pass.
+    let repo_for_check = start.repo.clone();
+    if let Err(why) = collab::engine::register(collab::engine::Live::new(&start), |collabs| {
+        collab::busy_reason(&repo_for_check, collabs, &terminals, &claude)
+    }) {
+        let _ = std::fs::remove_file(&notes_path);
+        return Err(why);
+    }
     std::thread::spawn(move || {
         let emit = move |v: serde_json::Value| { let _ = app.emit("collab-event", v); };
         collab::engine::drive(start, &collab::line::turn_line, &emit);
@@ -663,7 +673,7 @@ fn collab_list() -> serde_json::Value {
     serde_json::Value::Array(collab::engine::live().iter().map(|l| {
         let cur = *l.current.lock().unwrap();
         serde_json::json!({
-            "id": l.id, "notesPath": l.notes_path, "repo": l.repo, "mode": format!("{:?}", l.mode),
+            "id": l.id, "notesPath": l.notes_path, "repo": l.repo, "mode": l.mode.as_str(),
             "agents": l.agents.iter().map(|a| a.as_str()).collect::<Vec<_>>(),
             "role": cur.map(|(r, _)| r.as_str()), "agent": cur.map(|(_, a)| a.as_str()),
         })

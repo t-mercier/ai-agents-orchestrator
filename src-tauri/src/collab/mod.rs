@@ -19,6 +19,15 @@ pub(crate) enum Mode {
 }
 
 impl Mode {
+    /// As the form sends it and the notes record it.
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::CrossReview => "cross-review",
+            Self::Relay => "relay",
+            Self::Parallel => "parallel",
+        }
+    }
+
     pub(crate) fn parse(s: &str) -> Result<Self, String> {
         match s {
             "cross-review" => Ok(Self::CrossReview),
@@ -178,11 +187,7 @@ pub(crate) struct CollabNotes<'a> {
 /// The notes of a collab session: the frontmatter of any session, the collab's own keys,
 /// the task as its goal. No `agent:` — a collab is not one agent's session.
 pub(crate) fn notes_text(n: &CollabNotes) -> String {
-    let mode = match n.mode {
-        Mode::CrossReview => "cross-review",
-        Mode::Relay => "relay",
-        Mode::Parallel => "parallel",
-    };
+    let mode = n.mode.as_str();
     let agents: Vec<&str> = n.agents.iter().map(|a| a.as_str()).collect();
     let task_line = n.task.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
     format!(
@@ -355,5 +360,8 @@ mod tests {
         assert_eq!(Mode::parse("relay"), Ok(Mode::Relay));
         assert_eq!(Mode::parse("parallel"), Ok(Mode::Parallel));
         assert!(Mode::parse("team").is_err());
+        for m in [Mode::CrossReview, Mode::Relay, Mode::Parallel] {
+            assert_eq!(Mode::parse(m.as_str()), Ok(m), "named the same both ways");
+        }
     }
 }

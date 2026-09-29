@@ -146,5 +146,6 @@ mod tests {
         let path = transcript_path(&home, &id).expect("events.jsonl under the preset id");
         let f = fold(&std::fs::read_to_string(&path).unwrap());
         eprintln!("busy={} cwd={:?} last={:?}", f.busy, f.cwd, f.last_activity);
+        assert!(f.cwd.is_some(), "session.start carries the launch folder on 1.0 and later");
     }
 }

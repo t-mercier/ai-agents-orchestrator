@@ -29,10 +29,35 @@ pub(crate) struct Live {
     pub mode: Mode,
     pub agents: Vec<AgentId>,
     pub stop: Arc<AtomicBool>,
-    /// The process group of the turn running now.
+    /// The process group of the turn running now, and its leader's start time: the record a
+    /// later launch checks before it kills anything.
     pub pgid: Arc<Mutex<Option<i32>>>,
+    pub leader_start: Arc<Mutex<Option<String>>>,
     /// `(role, agent)` of the turn running now.
     pub current: Arc<Mutex<Option<(Role, AgentId)>>>,
+    /// Set once the session's notes carry the close line, so it is written once only
+    /// (the app's quit writes it before the loop can).
+    pub closed: Arc<AtomicBool>,
+    /// `HH:MM` the collab started, for its close line.
+    pub started: String,
+}
+
+impl Live {
+    pub(crate) fn new(s: &Start) -> Self {
+        Live {
+            id: s.id.clone(),
+            notes_path: s.notes_path.clone(),
+            repo: s.repo.clone(),
+            mode: s.mode,
+            agents: s.agents.clone(),
+            stop: Arc::new(AtomicBool::new(false)),
+            pgid: Arc::new(Mutex::new(None)),
+            leader_start: Arc::new(Mutex::new(None)),
+            current: Arc::new(Mutex::new(None)),
+            closed: Arc::new(AtomicBool::new(false)),
+            started: now_hm().1,
+        }
+    }
 }
 
 static LIVE: Mutex<Option<HashMap<String, Live>>> = Mutex::new(None);
@@ -46,6 +71,22 @@ pub(crate) fn live() -> Vec<Live> {
     with_live(|m| m.values().cloned().collect())
 }
 
+/// Register a collab unless `busy`, given the repositories of the collabs already running,
+/// names a reason to refuse. One lock covers both, so two starts at once on one repository
+/// cannot both pass.
+pub(crate) fn register(live: Live, busy: impl FnOnce(&[String]) -> Option<String>) -> Result<(), String> {
+    with_live(|m| {
+        let repos: Vec<String> = m.values().map(|l| l.repo.clone()).collect();
+        if let Some(why) = busy(&repos) {
+            return Err(why);
+        }
+        m.insert(live.id.clone(), live);
+        Ok(())
+    })?;
+    save_running();
+    Ok(())
+}
+
 /// The process groups of every running turn: a `claude -p` turn writes a pidfile, and its
 /// process is in one of these groups (it is not a session of its own).
 pub(crate) fn turn_groups() -> Vec<i32> {
@@ -57,59 +98,131 @@ pub(crate) fn stop(id: &str) -> bool {
     with_live(|m| m.get(id).map(|l| l.stop.store(true, Ordering::SeqCst)).is_some())
 }
 
-/// End every running turn now, for the app's quit: the runner's own check would come after
-/// the process is gone.
-pub(crate) fn kill_all() {
-    for l in live() {
-        l.stop.store(true, Ordering::SeqCst);
-        if let Some(g) = *l.pgid.lock().unwrap() {
-            // SAFETY: kill(2) on a group this app created.
-            unsafe { libc::kill(-g, libc::SIGKILL) };
-        }
+/// End one collab now, for the app's quit: kill its turn and write its close line, before
+/// the process is gone — the loop that would have written it does not get the time.
+fn quit_one(l: &Live, outcome: &str) {
+    l.stop.store(true, Ordering::SeqCst);
+    if let Some(g) = *l.pgid.lock().unwrap() {
+        // SAFETY: kill(2) on a group this app created.
+        unsafe { libc::kill(-g, libc::SIGKILL) };
     }
-    save_running(&[]);
+    if !l.closed.swap(true, Ordering::SeqCst) {
+        let _ = close_notes(&l.notes_path, outcome, Some(&l.started));
+    }
 }
 
-// ── The record of running groups, for the launch after a crash ──
+/// The app is quitting (or restarting into an update): every collab is ended and its
+/// session closed as stopped.
+pub(crate) fn kill_all() {
+    for l in live() {
+        quit_one(&l, "stopped when the app quit");
+    }
+    with_live(|m| m.clear());
+    save_running();
+}
 
+// ── The record of running collabs, for the launch after a crash ──
+
+#[cfg(not(test))]
 fn running_file() -> PathBuf {
     crate::config::config_dir().join("collab").join("running.json")
 }
 
-fn save_running(groups: &[(String, i32)]) {
-    let v: Vec<Value> = groups.iter().map(|(n, g)| json!({ "notes": n, "pgid": g })).collect();
+/// Tests write their own record: one in the app's folder could be left holding a process
+/// group that the next launch would kill.
+#[cfg(test)]
+fn running_file() -> PathBuf {
+    std::env::temp_dir().join(format!("ao-collab-running-{}.json", std::process::id()))
+}
+
+/// When process `pid` started, as `ps` reports it: with the pid, what tells a group this
+/// app recorded from a later process that reused the number.
+pub(crate) fn process_start(pid: i32) -> Option<String> {
+    let out = std::process::Command::new("ps").args(["-o", "lstart=", "-p", &pid.to_string()]).output().ok()?;
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !s.is_empty()).then_some(s)
+}
+
+fn alive(pid: i64) -> bool {
+    // SAFETY: kill(2) with signal 0 only checks that the process exists.
+    pid > 0 && (unsafe { libc::kill(pid as i32, 0) } == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
+}
+
+fn read_record(path: &Path) -> Result<Vec<Value>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(t) => serde_json::from_str(&t).map_err(|e| e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(vec![]),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Rewrite the record: this app's live collabs, and every entry of another running app
+/// (a dev build beside the installed one), which is that app's to settle.
+fn save_running() {
+    let me = std::process::id() as i64;
     let path = running_file();
+    let mut entries: Vec<Value> = read_record(&path)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.get("owner").and_then(Value::as_i64).is_some_and(|o| o != me && alive(o)))
+        .collect();
+    for l in live() {
+        entries.push(json!({
+            "notes": l.notes_path, "owner": me,
+            "pgid": *l.pgid.lock().unwrap(), "leaderStart": *l.leader_start.lock().unwrap(),
+        }));
+    }
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    let _ = crate::atomic_write(&path, &Value::Array(v).to_string());
+    if let Err(e) = crate::atomic_write(&path, &Value::Array(entries).to_string()) {
+        eprintln!("[collab] could not record the running collabs: {e}");
+    }
 }
 
-fn record_running() {
-    let groups: Vec<(String, i32)> = live()
-        .iter()
-        .filter_map(|l| l.pgid.lock().unwrap().map(|g| (l.notes_path.clone(), g)))
-        .collect();
-    save_running(&groups);
-}
-
-/// At launch: a group recorded by a run that did not end (the app crashed) is ended, and its
-/// thread says it stopped. Returns the notes it closed.
+/// At launch: a collab recorded by an app that is no longer running (it crashed) has its turn
+/// ended — only when the group's leader is still the process that was recorded — and its
+/// session closed as stopped. Entries of another app that is running are left to it.
+/// Returns the notes it closed.
 pub(crate) fn recover_after_crash() -> Vec<String> {
-    let Ok(text) = std::fs::read_to_string(running_file()) else { return vec![] };
-    let list: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
-    let mut closed = Vec::new();
+    recover_from(&running_file(), std::process::id() as i64)
+}
+
+pub(crate) fn recover_from(path: &Path, me: i64) -> Vec<String> {
+    let list = match read_record(path) {
+        Ok(l) => l,
+        Err(e) => {
+            // Kept for a look rather than overwritten: it is the only record of what ran.
+            eprintln!("[collab] {} is unreadable ({e}); set aside", path.display());
+            let _ = std::fs::rename(path, path.with_extension("json.unreadable"));
+            return vec![];
+        }
+    };
+    let (mut keep, mut closed) = (Vec::new(), Vec::new());
     for e in list {
-        if let Some(g) = e.get("pgid").and_then(Value::as_i64) {
-            // SAFETY: kill(2) on a group this app recorded as its own.
-            unsafe { libc::kill(-(g as i32), libc::SIGKILL) };
+        let owner = e.get("owner").and_then(Value::as_i64).unwrap_or(0);
+        if owner != me && alive(owner) {
+            keep.push(e);
+            continue;
+        }
+        let pgid = e.get("pgid").and_then(Value::as_i64);
+        let recorded = e.get("leaderStart").and_then(Value::as_str);
+        if let (Some(g), Some(at)) = (pgid, recorded) {
+            if process_start(g as i32).as_deref() == Some(at) {
+                // SAFETY: kill(2) on a group whose leader is the process this app recorded.
+                unsafe { libc::kill(-(g as i32), libc::SIGKILL) };
+            }
         }
         if let Some(n) = e.get("notes").and_then(Value::as_str) {
-            let _ = close_notes(n, "stopped: the app ended while it ran", None);
-            closed.push(n.to_string());
+            match close_notes(n, "stopped: the app ended while it ran", None) {
+                Ok(()) => closed.push(n.to_string()),
+                Err(err) => eprintln!("[collab] could not close {n}: {err}"),
+            }
         }
     }
-    save_running(&[]);
+    if let Err(err) = crate::atomic_write(path, &Value::Array(keep).to_string()) {
+        eprintln!("[collab] could not rewrite {}: {err}", path.display());
+    }
     closed
 }
 
@@ -169,10 +282,11 @@ fn thread_line(d: &Done, hm: &str) -> String {
 }
 
 /// Close the session in its notes: a history line in the time-range form the Closed tab
-/// reads as wrapped up, with the outcome as its summary.
+/// reads as wrapped up, with the outcome as its summary. Without a date the line would not
+/// read as a close at all, so that is an error, as it is for the dashboard's own Close.
 fn close_notes(notes: &str, outcome: &str, started: Option<&str>) -> Result<(), String> {
-    let (date, time) = now_hm();
-    let from = started.unwrap_or(&time);
+    let (date, time) = crate::local_date_time().ok_or("could not determine the current date")?;
+    let from = started.filter(|s| !s.is_empty()).unwrap_or(&time);
     let line = format!("- {date} {from} → {time} | collab | {outcome}");
     write_notes(notes, |c| append_to_section(c, "Session history", &line))
 }
@@ -194,21 +308,21 @@ pub(crate) struct Start {
 /// The line of one turn: `collab::line::turn_line` in the app, a fake CLI in tests.
 pub(crate) type LineFor = dyn Fn(AgentId, bool, &str, &str, &str) -> String + Send + Sync;
 
-/// Register the collab and run it to its end on the calling thread. `emit` receives every
-/// event. Returns the outcome written into the notes.
+/// Removes the collab from the live list however the loop ends — a panic included, which
+/// would otherwise leave a card busy for ever and its repository refused.
+struct Unregister(String);
+impl Drop for Unregister {
+    fn drop(&mut self) {
+        with_live(|m| m.remove(&self.0));
+        save_running();
+    }
+}
+
+/// Run a collab to its end on the calling thread, registering it first unless `register`
+/// already did. `emit` receives every event. Returns the outcome written into the notes.
 pub(crate) fn drive(s: Start, line_for: &LineFor, emit: &(dyn Fn(Value) + Send + Sync)) -> String {
-    let live = Live {
-        id: s.id.clone(),
-        notes_path: s.notes_path.clone(),
-        repo: s.repo.clone(),
-        mode: s.mode,
-        agents: s.agents.clone(),
-        stop: Arc::new(AtomicBool::new(false)),
-        pgid: Arc::new(Mutex::new(None)),
-        current: Arc::new(Mutex::new(None)),
-    };
-    with_live(|m| m.insert(s.id.clone(), live.clone()));
-    let started = now_hm().1;
+    let live = with_live(|m| m.entry(s.id.clone()).or_insert_with(|| Live::new(&s)).clone());
+    let _unregister = Unregister(s.id.clone());
     let _ = std::fs::create_dir_all(&s.scratch);
     let ev = |kind: &str, extra: Value| {
         let mut v = json!({ "id": s.id, "notesPath": s.notes_path, "kind": kind });
@@ -217,6 +331,7 @@ pub(crate) fn drive(s: Start, line_for: &LineFor, emit: &(dyn Fn(Value) + Send +
         }
         emit(v);
     };
+    let name = crate::agents::session::display_name;
     let mut done: Vec<Done> = Vec::new();
     let outcome = loop {
         if live.stop.load(Ordering::SeqCst) {
@@ -224,7 +339,7 @@ pub(crate) fn drive(s: Start, line_for: &LineFor, emit: &(dyn Fn(Value) + Send +
         }
         let (role, agent) = match next(s.mode, &s.agents, &done) {
             Next::Finished(why) => break why,
-            Next::Run(turns) if done.len() >= MAX_TURNS => break format!("stopped after {} turns", turns.len().max(MAX_TURNS)),
+            Next::Run(_) if done.len() >= MAX_TURNS => break format!("stopped after {} turns", done.len()),
             Next::Run(mut turns) => turns.remove(0),
         };
         let last_author = done.iter().rev().find(|d| d.role == Role::Author).map(|d| d.summary.clone());
@@ -248,43 +363,65 @@ pub(crate) fn drive(s: Start, line_for: &LineFor, emit: &(dyn Fn(Value) + Send +
         ev("turn_start", json!({ "role": role.as_str(), "agent": agent.as_str() }));
         let result = run_turn(&line, &s.repo, TURN_LIMIT, &live.stop, &|g| {
             *live.pgid.lock().unwrap() = Some(g);
-            record_running();
+            *live.leader_start.lock().unwrap() = process_start(g);
+            save_running();
         });
         *live.pgid.lock().unwrap() = None;
+        *live.leader_start.lock().unwrap() = None;
         *live.current.lock().unwrap() = None;
-        record_running();
+        save_running();
         let result = match result {
             Ok(r) => r,
-            Err(e) => break format!("{} could not start: {e}", crate::agents::session::display_name(agent)),
+            Err(e) => break format!("{} could not start: {e}", name(agent)),
         };
         match result.outcome {
             Outcome::Done => {}
             Outcome::Stopped => break "stopped".to_string(),
-            Outcome::TimedOut => break format!("{} timed out after 20 minutes", crate::agents::session::display_name(agent)),
+            Outcome::TimedOut => break format!("{} timed out after 20 minutes", name(agent)),
             Outcome::Failed(code) => {
                 let why = tail(format!("{}\n{}", result.stdout.trim(), result.stderr.trim()).trim(), 400).to_string();
-                break format!("{} failed (exit {code}): {why}", crate::agents::session::display_name(agent));
+                break format!("{} failed (exit {code}): {why}", name(agent));
             }
         }
+        // The answer is stdout (or Codex's -o file) — never the shell's own stderr notices.
         let answer = std::fs::read_to_string(&last_msg).ok().filter(|t| !t.trim().is_empty()).unwrap_or(result.stdout);
         let d = Done { role, agent, summary: tail(answer.trim(), SUMMARY_MAX).to_string() };
         let stat = if role == Role::Author {
-            super::git::changes_since(Path::new(&s.repo), &s.base, 0).map(|(st, _)| st).unwrap_or_default()
+            match super::git::changes_since(Path::new(&s.repo), &s.base, 0) {
+                // Nothing to review is not an approval: the author did not do the task.
+                Ok((st, _)) if st.trim().is_empty() => break format!("{} changed nothing: {}", name(agent), tail(d.summary.trim(), 300)),
+                Ok((st, _)) => st,
+                Err(e) => break format!("could not read the change: {e}"),
+            }
         } else {
             String::new()
         };
         let (_, hm) = now_hm();
-        let _ = write_notes(&s.notes_path, |c| append_to_section(c, "Collab thread", &thread_line(&d, &hm)));
+        let notes_error = write_notes(&s.notes_path, |c| append_to_section(c, "Collab thread", &thread_line(&d, &hm))).err();
+        if let Some(e) = &notes_error {
+            ev("notes_error", json!({ "error": format!("the thread could not be written to the notes: {e}") }));
+        }
+        let unreadable = role == Role::Reviewer && !approves(&d.summary) && findings(&d.summary).is_empty();
         ev("turn_end", json!({
             "role": role.as_str(), "agent": agent.as_str(), "summary": d.summary,
             "stat": stat, "findings": if role == Role::Reviewer { findings(&d.summary) } else { String::new() },
             "approved": role == Role::Reviewer && approves(&d.summary),
         }));
         done.push(d);
+        // A review that neither approves nor lists a `- file:line — problem` line gives the
+        // author nothing to fix; a fix turn on an empty list would be a guess.
+        if unreadable {
+            break format!("{}'s review could not be read: it neither answered LGTM nor listed a finding as `- file:line — problem`", name(agent));
+        }
     };
-    let _ = close_notes(&s.notes_path, &outcome, Some(&started));
-    with_live(|m| m.remove(&s.id));
-    record_running();
+    let close_error = if live.closed.swap(true, Ordering::SeqCst) {
+        None
+    } else {
+        close_notes(&s.notes_path, &outcome, Some(&live.started)).err()
+    };
+    if let Some(e) = close_error {
+        ev("notes_error", json!({ "error": format!("the session could not be closed in its notes: {e}") }));
+    }
     let kind = if outcome == "stopped" { "stopped" } else { "done" };
     ev(kind, json!({ "outcome": outcome }));
     outcome
@@ -294,8 +431,9 @@ pub(crate) fn drive(s: Start, line_for: &LineFor, emit: &(dyn Fn(Value) + Send +
 mod tests {
     use super::*;
 
+    /// Test repositories ignore the developer's own git config (signing, hooks).
     fn git(d: &Path, args: &[&str]) {
-        assert!(std::process::Command::new("git").arg("-C").arg(d).args(args).status().unwrap().success());
+        assert!(std::process::Command::new("git").env("GIT_CONFIG_GLOBAL", "/dev/null").arg("-C").arg(d).args(args).status().unwrap().success());
     }
 
     fn setup(tag: &str) -> (PathBuf, String, String) {
@@ -391,6 +529,176 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    fn sleeper_group() -> std::process::Child {
+        use std::os::unix::process::CommandExt;
+        std::process::Command::new("sleep").arg("60").process_group(0).spawn().unwrap()
+    }
+    fn dead_pid() -> i64 {
+        let mut c = std::process::Command::new("true").spawn().unwrap();
+        let id = c.id() as i64;
+        c.wait().unwrap();
+        id
+    }
+
+    #[test]
+    fn a_group_left_by_a_crash_is_ended_and_its_session_closed_as_stopped() {
+        let (d, _, notes) = setup("recover");
+        let mut g = sleeper_group();
+        let rec = d.join("running.json");
+        std::fs::write(&rec, json!([{ "notes": notes, "owner": dead_pid(), "pgid": g.id(), "leaderStart": process_start(g.id() as i32) }]).to_string()).unwrap();
+        assert_eq!(recover_from(&rec, std::process::id() as i64), vec![notes.clone()]);
+        let _ = g.wait();
+        assert!(std::fs::read_to_string(&notes).unwrap().contains("| collab | stopped: the app ended while it ran"));
+        assert_eq!(std::fs::read_to_string(&rec).unwrap(), "[]");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // The number was reused (a reboot, a long gap): the group is someone else's now.
+    #[test]
+    fn a_recorded_group_whose_leader_changed_is_not_killed() {
+        let (d, _, notes) = setup("reused");
+        let mut g = sleeper_group();
+        let rec = d.join("running.json");
+        std::fs::write(&rec, json!([{ "notes": notes, "owner": dead_pid(), "pgid": g.id(), "leaderStart": "Mon Jan  1 00:00:00 2001" }]).to_string()).unwrap();
+        recover_from(&rec, std::process::id() as i64);
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(g.try_wait().unwrap().is_none(), "not ours: left alive");
+        assert!(std::fs::read_to_string(&notes).unwrap().contains("stopped: the app ended while it ran"), "the session is still closed");
+        let _ = g.kill();
+        let _ = g.wait();
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // A dev build beside the installed app: the other app's running collab is its own.
+    #[test]
+    fn an_entry_of_another_running_app_is_left_to_it() {
+        let (d, _, notes) = setup("owner");
+        let mut other_app = sleeper_group();
+        let mut g = sleeper_group();
+        let rec = d.join("running.json");
+        std::fs::write(&rec, json!([{ "notes": notes, "owner": other_app.id(), "pgid": g.id(), "leaderStart": process_start(g.id() as i32) }]).to_string()).unwrap();
+        assert!(recover_from(&rec, std::process::id() as i64).is_empty());
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(g.try_wait().unwrap().is_none());
+        assert!(std::fs::read_to_string(&rec).unwrap().contains(&format!("\"owner\":{}", other_app.id())), "kept for its owner");
+        assert!(!std::fs::read_to_string(&notes).unwrap().contains("stopped"));
+        for c in [&mut g, &mut other_app] {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_unreadable_record_is_set_aside_not_overwritten() {
+        let d = std::env::temp_dir().join(format!("ao-collab-rec-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let rec = d.join("running.json");
+        std::fs::write(&rec, "{ not json").unwrap();
+        assert!(recover_from(&rec, 1).is_empty());
+        assert_eq!(std::fs::read_to_string(rec.with_extension("json.unreadable")).unwrap(), "{ not json");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Quitting mid-turn: the session is closed as stopped by the quit itself, once.
+    #[test]
+    fn quitting_mid_turn_closes_the_session_as_stopped_once() {
+        let (d, base, notes) = setup("quit");
+        let s = start(&d, &base, &notes, "quit");
+        let id = s.id.clone();
+        let slow = |_a: AgentId, _w: bool, _r: &str, _p: &str, _l: &str| "sleep 30".to_string();
+        let h = std::thread::spawn(move || drive(s, &slow, &|_| {}));
+        let l = loop {
+            if let Some(l) = live().into_iter().find(|l| l.id == id && l.pgid.lock().unwrap().is_some()) {
+                break l;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        quit_one(&l, "stopped when the app quit");
+        assert!(std::fs::read_to_string(&notes).unwrap().contains("| collab | stopped when the app quit"), "written by the quit itself");
+        assert_eq!(h.join().unwrap(), "stopped");
+        let text = std::fs::read_to_string(&notes).unwrap();
+        assert_eq!(text.matches("| collab |").count(), 1, "{text}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_second_collab_on_the_same_repository_is_refused_atomically() {
+        let (d, base, notes) = setup("twice");
+        let a = start(&d, &base, &notes, "twice-a");
+        let b = start(&d, &base, &notes, "twice-b");
+        let ra = a.repo.clone();
+        assert!(register(Live::new(&a), |c| super::super::busy_reason(&ra, c, &[], &[])).is_ok());
+        let rb = b.repo.clone();
+        assert!(register(Live::new(&b), |c| super::super::busy_reason(&rb, c, &[], &[])).unwrap_err().contains("already running"));
+        with_live(|m| m.remove("t-twice-a"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_collab_whose_loop_panics_leaves_the_live_list() {
+        let (d, base, notes) = setup("panic");
+        let boom = |_a: AgentId, _w: bool, _r: &str, _p: &str, _l: &str| -> String { panic!("boom") };
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drive(start(&d, &base, &notes, "panic"), &boom, &|_| {})));
+        assert!(r.is_err());
+        assert!(live().iter().all(|l| l.id != "t-panic"), "no phantom collab refusing the repository");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // An author that does nothing and a reviewer that approves an empty diff looked like a
+    // successful review.
+    #[test]
+    fn an_author_that_changes_nothing_ends_the_collab_without_a_review() {
+        let (d, base, notes) = setup("idle");
+        let lazy = |_a: AgentId, w: bool, _r: &str, _p: &str, _l: &str| if w { "echo 'I would start by reading the code.'".to_string() } else { "echo LGTM".to_string() };
+        let outcome = drive(start(&d, &base, &notes, "idle"), &lazy, &|_| {});
+        assert!(outcome.starts_with("Claude Code changed nothing"), "{outcome}");
+        assert!(!std::fs::read_to_string(&notes).unwrap().contains("(reviewer)"), "no review of nothing");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_review_with_no_finding_line_stops_instead_of_an_empty_fix() {
+        let (d, base, notes) = setup("numbered");
+        let f = |_a: AgentId, w: bool, repo: &str, _p: &str, _l: &str| {
+            if w { format!("cd '{repo}' && echo x >> net.rs && echo done") } else { "printf '1. net.rs:1 is wrong\\n2. no test\\n'".to_string() }
+        };
+        let outcome = drive(start(&d, &base, &notes, "numbered"), &f, &|_| {});
+        assert!(outcome.contains("review could not be read"), "{outcome}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // The shell's own notices go to stderr; they must not hide the reviewer's last line.
+    #[test]
+    fn an_lgtm_followed_by_stderr_noise_still_approves() {
+        let (d, base, notes) = setup("noise");
+        let f = |_a: AgentId, w: bool, repo: &str, _p: &str, _l: &str| {
+            if w { format!("cd '{repo}' && echo x >> net.rs && echo done") } else { "echo LGTM; echo 'N/A: version v20 is not yet installed' >&2".to_string() }
+        };
+        assert_eq!(drive(start(&d, &base, &notes, "noise"), &f, &|_| {}), "The reviewer found nothing blocking.");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_thread_that_cannot_be_written_is_reported() {
+        let (d, base, _) = setup("nonotes");
+        let missing = d.join("gone/notes.md").to_string_lossy().into_owned();
+        let events = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let e2 = events.clone();
+        let f = |_a: AgentId, w: bool, repo: &str, _p: &str, _l: &str| if w { format!("cd '{repo}' && echo x >> net.rs") } else { "echo LGTM".to_string() };
+        drive(start(&d, &base, &missing, "nonotes"), &f, &move |v| e2.lock().unwrap().push(v));
+        let errs: Vec<String> = events.lock().unwrap().iter().filter(|e| e["kind"] == "notes_error").map(|e| e["error"].as_str().unwrap().to_string()).collect();
+        assert!(errs.iter().any(|e| e.contains("thread could not be written")) && errs.iter().any(|e| e.contains("could not be closed")), "{errs:?}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // A test that wrote the app's real record could leave a process group there that the
+    // next launch would kill.
+    #[test]
+    fn tests_never_write_the_real_running_file() {
+        assert!(running_file().starts_with(std::env::temp_dir()), "{}", running_file().display());
+    }
+
     #[test]
     fn a_line_goes_at_the_end_of_its_section_which_is_created_when_missing() {
         let c = "# x\n\n## Goal\ng\n\n## Session history\n- old\n";
@@ -430,5 +738,7 @@ mod tests {
         let outcome = drive(s, &super::super::line::turn_line, &|v| eprintln!("EVENT {} {} {}", v["kind"], v["agent"], v["role"]));
         eprintln!("OUTCOME {outcome}");
         eprintln!("{}", std::fs::read_to_string(&notes).unwrap());
+        assert!(repo.join("greet.py").exists(), "the author wrote the file");
+        assert!(!outcome.contains("failed") && !outcome.contains("changed nothing"), "{outcome}");
     }
 }
