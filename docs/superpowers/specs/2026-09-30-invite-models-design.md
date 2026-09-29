@@ -113,7 +113,7 @@ runs for 0.21.0) plus the model and the session folder:
 
 | CLI | Line |
 |---|---|
-| Claude | `claude -p --permission-mode plan [--model M] --add-dir <session folder> <prompt>` |
+| Claude | `claude -p <prompt> --permission-mode plan [--model M] --add-dir <session folder>` — the prompt first: `--add-dir` takes several directories and swallowed a prompt placed after it (probed) |
 | Codex | `codex exec --skip-git-repo-check -c sandbox_mode="read-only" [-m M] -o <out.last> <prompt>` |
 | Copilot | `copilot -p <prompt> --allow-all-tools --deny-tool write --deny-tool shell --silent [--model M] --add-dir <session folder>` |
 
@@ -239,6 +239,19 @@ session: no Resume, no Restart (its refusal in `restart_refusal` is kept), and i
 One tiny read-only consultation each with Codex 0.158 and Copilot 1.0.89 (and Claude), to
 confirm: the lines run, `--model` is honoured, the invitee can read a file in the session
 folder, and the stuck-prompt patterns. No real session is touched.
+
+### Probed on 2026-09-30
+
+Each CLI was asked to read a file in a separate "session" folder and answer with the one word
+it held, from a git repo it was not allowed to write to:
+
+| CLI | Result |
+|---|---|
+| Claude 2.x, `-p <prompt> --permission-mode plan --add-dir <dir>` | answered, exit 0, 12 s, repo untouched |
+| Codex 0.158, `exec … sandbox_mode="read-only" -o <file>` | answered in `-o` and on stdout, exit 0, 12 s; stderr is its whole log (loaded instructions included), kept apart |
+| Copilot 1.0.89, `-p … --deny-tool write --deny-tool shell --silent --add-dir <dir>` | answered, exit 0, 9 s |
+| Copilot, `--model not-a-model-xyz` | exit 1 at once: `Model "not-a-model-xyz" from --model flag is not available.` |
+| Codex, `-m not-a-model-xyz` | exit 1 at once; the reason is the `message` of a JSON error on stderr, which `ao_ask` extracts |
 
 ## Out of scope for v1
 
