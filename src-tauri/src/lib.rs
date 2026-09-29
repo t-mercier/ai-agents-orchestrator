@@ -1337,7 +1337,7 @@ fn closed_since(content: &str, since_stamp: &str) -> bool {
 
 /// Local `YYYY-MM-DD HH:MM` of a Unix time, from `date` like local_date_time (so it
 /// matches the skills' stamps). `date -r <secs>` on macOS, `date -d @<secs>` elsewhere.
-fn local_stamp_at(secs: i64) -> Option<String> {
+pub(crate) fn local_stamp_at(secs: i64) -> Option<String> {
     let at = if cfg!(target_os = "macos") {
         ["-r".to_string(), secs.to_string()]
     } else {

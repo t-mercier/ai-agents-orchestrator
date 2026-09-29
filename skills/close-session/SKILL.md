@@ -234,3 +234,8 @@ say nothing when there is none.
 Print a short confirmation: frontmatter refresh result (PR link / ticket updated, or already set), which sections were updated, the Session history line
 added, and (if applicable) the vault note written. Remind the user they can resume
 later with `/restart-session <slug>` or start fresh.
+
+End with one line: "This session is closed. AI Agents Orchestrator ends this terminal in a
+few seconds; the session moves to Closed." The app ends a session's process once its notes
+carry a close written after the process started and the session is idle — that is what
+makes a close run from inside the session an actual close. Write nothing after this line.

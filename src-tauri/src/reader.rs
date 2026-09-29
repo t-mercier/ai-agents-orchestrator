@@ -820,6 +820,21 @@ fn follow_continued(sid: &str, next_of: impl Fn(&str) -> Option<String>) -> Stri
 /// Codex 0.158.0 and Copilot 1.0.89 — so a session still without one is waiting, not working.
 const FIRST_WRITE: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// A live Claude Code session whose notes it has itself closed: `/close-session` run in the
+/// session (an agent told "close when you are done" does that) writes the close line, and
+/// the process lives on, so the card would stay in Running. True only when the newest
+/// Session history entry is a close stamped (`YYYY-MM-DD HH:MM`) at or after the process
+/// started, the notes were written after it started — which leaves alone a closed session
+/// resumed later — and the session is idle with a still transcript, so the agent has
+/// finished printing its answer.
+pub(crate) fn closed_while_live(content: &str, notes_mtime_ms: f64, started_ms: f64, start_stamp: &str, status: &str, recently_active: bool) -> bool {
+    if status != "idle" || recently_active || notes_mtime_ms <= started_ms {
+        return false;
+    }
+    let (state, date) = session_history_info(content);
+    state == "closed" && date.is_some_and(|d| d.len() == 16 && d.as_str() >= start_stamp)
+}
+
 /// A running collab, shaped like a running session: busy, no terminal, the turn in
 /// progress as its activity line.
 pub(crate) fn collab_session(cfg: &Value, id: &str, notes_path: &str, repo: &str, current: Option<(&str, &str)>) -> Value {
@@ -1108,6 +1123,23 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
         let recently_active =
             active_mtime.and_then(|m| m.elapsed().ok()).is_some_and(|e| e.as_secs() < 10);
         let status = if status_raw == "idle" && recently_active { "busy" } else { status_raw };
+
+        // Closed by /close-session from inside the session: end the process, so the close
+        // is one (the terminal ends and the card moves to Closed). The dashboard's own
+        // Close button does this itself.
+        if let (Some(np), Some(started)) = (notes_path.as_deref(), data.get("startedAt").and_then(Value::as_f64)) {
+            let notes_mtime = fs::metadata(np).and_then(|m| m.modified()).ok()
+                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as f64).unwrap_or(0.0);
+            let start_stamp = crate::local_stamp_at((started / 1000.0) as i64).unwrap_or_default();
+            let content = fs::read_to_string(np).unwrap_or_default();
+            if !start_stamp.is_empty() && closed_while_live(&content, notes_mtime, started, &start_stamp, status, recently_active) {
+                // SAFETY: kill(2) on the pid `alive` has just identified as this Claude Code session.
+                unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+                eprintln!("[ai-agents-orchestrator] {sid} closed itself; ended its process {pid}");
+                continue;
+            }
+        }
 
         out.push(json!({
             "sessionId": sid,
@@ -2986,4 +3018,25 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
     }
 
+
+    // Asked for on 2026-09-29: an agent told "close the session when you are done" runs
+    // /close-session itself, which writes the close — and the process lives on, so the
+    // card stayed in Running. The app finishes such a close, and only such a one.
+    #[test]
+    fn only_a_session_closed_after_its_process_started_and_now_idle_is_ended() {
+        use super::closed_while_live;
+        let closed = "## Session history\n- 2026-09-29 10:00 | session=a | transcript=/t | Wrapped up\n";
+        let started = 1_000_000.0; // ms, with its local stamp:
+        let stamp = "2026-09-29 09:30";
+        assert!(closed_while_live(closed, started + 5.0, started, stamp, "idle", false));
+        assert!(!closed_while_live(closed, started + 5.0, started, stamp, "busy", false), "still printing its answer");
+        assert!(!closed_while_live(closed, started + 5.0, started, stamp, "idle", true), "transcript still moving");
+        // A closed session resumed later: its close predates this process.
+        assert!(!closed_while_live(closed, started - 5.0, started, stamp, "idle", false), "notes not written since the start");
+        assert!(!closed_while_live(closed, started + 5.0, started, "2026-09-29 10:01", "idle", false), "closed before it started");
+        let saved = "## Session history\n- 2026-09-29 10:00 (in progress) | session=a | transcript=/t | Checkpoint\n";
+        assert!(!closed_while_live(saved, started + 5.0, started, stamp, "idle", false), "a /save-session is not a close");
+        let marker = "## Session history\n- 2026-09-29 ?? → 10:00 | closed from the dashboard\n";
+        assert!(!closed_while_live(marker, started + 5.0, started, stamp, "idle", false), "the dashboard's own Close ends the terminal itself");
+    }
 }
