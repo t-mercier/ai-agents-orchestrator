@@ -741,10 +741,13 @@ type PidfileScan = (
 /// A pidfile is named for the pid that wrote it, so a dead one is residue from a session
 /// that ended without cleaning up — harmless, but it is what makes `~/.claude/sessions/`
 /// unreadable after a few months.
+/// `is_collab_turn`: a pid that belongs to a running collab turn (a `claude -p` it started),
+/// which writes a pidfile but is not a session.
 fn scan_pidfiles(
     dir: &Path,
     active: &Value,
     alive: impl Fn(i64) -> bool,
+    is_collab_turn: impl Fn(i64) -> bool,
 ) -> PidfileScan {
     let mut live: std::collections::HashMap<String, Vec<i64>> = std::collections::HashMap::new();
     let mut stale = Vec::new();
@@ -761,6 +764,9 @@ fn scan_pidfiles(
         let Ok(pid) = stem.parse::<i64>() else { continue };
         if !alive(pid) {
             stale.push(path.to_string_lossy().into_owned());
+            continue;
+        }
+        if is_collab_turn(pid) {
             continue;
         }
         // Alive: attribute it to the notes.md the registry has for its session id.
@@ -792,7 +798,11 @@ fn scan_pidfiles(
 /// Read the store and turn it into the facts [`findings`] classifies.
 pub fn snapshot() -> Snapshot {
     let active = crate::reader::load_active_sessions();
-    let (live_pids, stale_pidfiles, unregistered_live) = scan_pidfiles(&sessions_dir(), &active, crate::reader::alive);
+    let (live_pids, stale_pidfiles, unregistered_live) = scan_pidfiles(&sessions_dir(), &active, crate::reader::alive, |pid| {
+        let groups = crate::collab::engine::turn_groups();
+        // SAFETY: getpgid(2) only reads the process table.
+        !groups.is_empty() && groups.contains(&unsafe { libc::getpgid(pid as i32) })
+    });
 
     // One SessionFacts per notes.md, not per registry entry: several ids sharing a
     // notes.md is the Resume fallback, so the file — not the id — is the unit of repair.
@@ -1101,7 +1111,7 @@ mod pidfile_tests {
         write(&dir, me, json!({ "sessionId": "sid-a", "cwd": "/w" }));
         let active = json!({ "sid-a": { "notes_path": "/n/notes.md" } });
 
-        let (live, stale, orphaned) = scan_pidfiles(&dir, &active, test_alive);
+        let (live, stale, orphaned) = scan_pidfiles(&dir, &active, test_alive, |_| false);
         assert_eq!(live.get("/n/notes.md"), Some(&vec![me as i64]));
         assert!(stale.is_empty() && orphaned.is_empty());
     }
@@ -1112,9 +1122,20 @@ mod pidfile_tests {
         let me = std::process::id();
         write(&dir, me, json!({ "sessionId": "sid-gone", "cwd": "/some/repo" }));
 
-        let (live, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
+        let (live, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive, |_| false);
         assert!(live.is_empty());
         assert_eq!(orphaned, vec![(me as i64, "/some/repo".to_string())]);
+    }
+
+    // A collab's `claude -p` turn writes a pidfile like a session. Reported as running
+    // outside the registry, it came with "quit pid … first" — which kills the collab.
+    #[test]
+    fn a_collab_turn_is_not_reported_as_a_lost_session() {
+        let dir = tmp("collab-turn");
+        let me = std::process::id();
+        write(&dir, me, json!({ "sessionId": "turn", "cwd": "/w/app" }));
+        let (_, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive, |pid| pid == me as i64);
+        assert!(orphaned.is_empty(), "{orphaned:?}");
     }
 
     /// Background helpers are not sessions anyone navigates to; reporting them as
@@ -1123,7 +1144,7 @@ mod pidfile_tests {
     fn a_background_helper_is_not_reported() {
         let dir = tmp("background");
         write(&dir, std::process::id(), json!({ "sessionId": "x", "background": true, "cwd": "/w" }));
-        let (_, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
+        let (_, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive, |_| false);
         assert!(orphaned.is_empty());
     }
 
@@ -1132,7 +1153,7 @@ mod pidfile_tests {
         let dir = tmp("stale");
         // Above the pid_max any macOS or Linux kernel will hand out, so it cannot be live.
         write(&dir, 4_294_000_000, json!({ "sessionId": "sid-old", "cwd": "/w" }));
-        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
+        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive, |_| false);
         assert_eq!(stale.len(), 1);
         assert!(stale[0].ends_with("4294000000.json"));
         assert!(live.is_empty() && orphaned.is_empty());
@@ -1143,13 +1164,13 @@ mod pidfile_tests {
         let dir = tmp("junk");
         std::fs::write(dir.join("notes.txt"), "x").unwrap();
         std::fs::write(dir.join("not-a-pid.json"), "{}").unwrap();
-        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive);
+        let (live, stale, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive, |_| false);
         assert!(live.is_empty() && stale.is_empty() && orphaned.is_empty());
     }
 
     #[test]
     fn a_missing_sessions_dir_is_not_an_error() {
-        let (live, stale, orphaned) = scan_pidfiles(Path::new("/no/such/dir"), &json!({}), test_alive);
+        let (live, stale, orphaned) = scan_pidfiles(Path::new("/no/such/dir"), &json!({}), test_alive, |_| false);
         assert!(live.is_empty() && stale.is_empty() && orphaned.is_empty());
     }
 }
