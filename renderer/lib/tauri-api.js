@@ -241,9 +241,9 @@
     // to offer. On error → null too: this is a courtesy notice, and a failed check must
     // read as "nothing to say", never as a banner about an update that may not exist.
     checkoutUpdate: () => invoke('checkout_update').catch(() => null),
-    // A newer published release → { version, current, notes }, or null. On error → null: a
-    // failed check (offline, feed down) must read as "nothing to say", never as an error.
-    // null: checked, nothing newer. undefined: the check itself failed (offline).
+    // A newer published release → { version, current, notes }; null when checked and
+    // nothing is newer; undefined when the check itself failed (offline, feed down), which
+    // the banner treats as "nothing to say" and asks again at the next focus.
     appUpdateCheck: () => invoke('app_update_check').catch(() => undefined),
     // Download, verify the signature, install and restart. Resolves only on failure — on
     // success the app restarts into the new version before the promise settles.

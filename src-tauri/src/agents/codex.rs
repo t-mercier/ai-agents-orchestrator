@@ -165,6 +165,20 @@ pub(crate) fn find_started(root: &Path, cwd: &str, since: SystemTime, taken: &[S
 /// which may sit in an old day folder; without this each poll would walk every folder.
 static FOUND: std::sync::Mutex<Option<std::collections::HashMap<String, PathBuf>>> = std::sync::Mutex::new(None);
 
+/// Ids whose rollout was not found, and when: not searched for again for a minute.
+static MISSED: std::sync::Mutex<Option<std::collections::HashMap<String, std::time::Instant>>> = std::sync::Mutex::new(None);
+const MISS_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+fn recently_missed(id: &str) -> bool {
+    MISSED.lock().ok().and_then(|g| g.as_ref().and_then(|m| m.get(id).copied())).is_some_and(|t| t.elapsed() < MISS_TTL)
+}
+
+fn note_miss(id: &str) {
+    if let Ok(mut g) = MISSED.lock() {
+        g.get_or_insert_with(Default::default).insert(id.to_string(), std::time::Instant::now());
+    }
+}
+
 /// A remembered rollout that is still on disk; one that has gone is forgotten.
 fn cached_path(id: &str) -> Option<PathBuf> {
     let mut g = FOUND.lock().ok()?;
@@ -189,7 +203,15 @@ pub(crate) fn transcript_path(root: &Path, id: &str) -> Option<PathBuf> {
     if let Some(p) = cached_path(id).filter(|p| p.starts_with(root)) {
         return Some(p);
     }
+    // A rollout that is gone is not searched for again for a while: the poll and the Closed
+    // scan would otherwise walk every day folder for it every few seconds.
+    if recently_missed(id) {
+        return None;
+    }
     let found = walk_for(root, id);
+    if found.is_none() {
+        note_miss(id);
+    }
     if let (Some(p), Ok(mut g)) = (&found, FOUND.lock()) {
         g.get_or_insert_with(Default::default).insert(id.to_string(), p.clone());
     }
@@ -319,6 +341,16 @@ mod tests {
         std::fs::remove_file(&old).unwrap();
         assert_eq!(transcript_path(t.path(), id), None);
         assert!(cached_path(id).is_none(), "forgotten once the file is gone");
+    }
+
+    #[test]
+    fn a_missing_rollout_is_not_searched_for_again_at_once() {
+        let t = tmp("codex-miss");
+        let id = "01a0e9da-5555-7c12-882e-57b7554edd81";
+        assert_eq!(transcript_path(t.path(), id), None);
+        assert!(recently_missed(id));
+        write_rollout(t.path(), "2026/09/28", id, "/w/x");
+        assert_eq!(transcript_path(t.path(), id), None, "within the minute, the miss is remembered");
     }
 
     #[test]

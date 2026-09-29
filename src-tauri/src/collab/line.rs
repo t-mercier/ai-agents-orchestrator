@@ -24,6 +24,8 @@ pub(crate) fn turn_line(agent: AgentId, writes: bool, repo: &str, prompt: &str, 
             format!("copilot -p {p} --allow-all-tools --deny-tool 'shell(git push)' --deny-tool 'shell(git commit)' --silent")
         }
     };
+    // AO_HEADLESS keeps the app's hooks quiet in the turn; AO_COLLAB marks the process as a
+    // collab turn for anything that inspects its environment (nothing in the app does yet).
     format!("cd {} && exec env AO_HEADLESS=1 AO_COLLAB=1 {cli}", shell_quote(repo))
 }
 

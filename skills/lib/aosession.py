@@ -10,6 +10,9 @@ CLIs decides which variable is read. For Claude Code its pidfile
 
     aosession.py current                          -> "<agent> <session_id> <pid>", or nothing
     aosession.py register <notes_path> [<name>]   -> writes the live-session state file
+
+Staged for the plan that runs the app skills inside Codex and Copilot: no skill calls it
+yet, and nothing reads the state file it writes.
 """
 import json
 import os

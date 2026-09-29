@@ -467,8 +467,8 @@ pub fn brutus_status() -> Value {
 
 /// Open a document he wrote. An HTML one opens as a sealed copy (brutus_home::sealed_html):
 /// it was written from notes other people wrote, so it must not run a script or reach the
-/// network once in a browser.
-#[tauri::command]
+/// network once in a browser. Async: it reads, writes and spawns, off the window's thread.
+#[tauri::command(async)]
 pub fn brutus_open_doc(name: String) -> Result<(), String> {
     if !brutus_home::valid_doc_name(&name) {
         return Err(format!("not one of his documents: {name}"));
@@ -489,7 +489,12 @@ pub fn brutus_open_doc(name: String) -> Result<(), String> {
         path
     };
     let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-    Command::new(opener).arg(target).spawn().map(|_| ()).map_err(|e| e.to_string())
+    let mut child = Command::new(opener).arg(target).spawn().map_err(|e| e.to_string())?;
+    // Reaped once it returns, or each Open would leave a defunct process until the app quits.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
 
 #[tauri::command]

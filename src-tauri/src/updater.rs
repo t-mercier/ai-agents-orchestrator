@@ -100,11 +100,19 @@ pub(crate) fn install_on_launch(app: AppHandle) {
 mod tests {
     use super::{endpoint_override, feed_override};
 
+    // A release build must never honour the feed override. Run with `cargo test --release`.
+    #[cfg(all(not(debug_assertions), not(feature = "updater-e2e")))]
+    #[test]
+    fn a_release_build_disallows_the_override() {
+        assert!(!super::OVERRIDE_ALLOWED);
+    }
+
     #[test]
     fn a_test_feed_must_be_https_or_on_this_machine() {
         assert!(endpoint_override(Some("https://example.com/latest.json")).is_some());
         assert!(endpoint_override(Some("http://127.0.0.1:8123/latest.json")).is_some());
         assert!(endpoint_override(Some("http://localhost:8123/latest.json")).is_some());
+        assert!(endpoint_override(Some("http://[::1]:8123/latest.json")).is_some());
         assert!(endpoint_override(Some("http://example.com/latest.json")).is_none(), "plain http off the machine");
         assert!(endpoint_override(Some("file:///tmp/latest.json")).is_none());
         assert!(endpoint_override(Some("not a url")).is_none());

@@ -69,7 +69,7 @@ check "memory.md is writable"                       'grep -q probe "$W/brutus/me
 run "Write a file $W/brutus/docs/brief.md containing the single line probe-doc." >/dev/null
 check "a document in docs/ is writable"             'grep -q probe-doc "$W/brutus/docs/brief.md" 2>/dev/null'
 run "Write a file $W/brutus/beside.md containing the single line probe-beside." >/dev/null
-check "a file beside docs/ is not writable"         '[ ! -e "$W/brutus/beside.md" ]'
+check "a file beside docs/ is not writable"         'ran && [ ! -e "$W/brutus/beside.md" ]'
 # The injected line itself contains the word, so compare the whole file, not a grep. And
 # only a run that happened can prove anything: a failed one would leave the file intact.
 cp "$W/space/BUG/notes.md" "$W/notes.before"

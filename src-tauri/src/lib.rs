@@ -569,6 +569,23 @@ fn start_session(
     Ok(serde_json::json!({}))
 }
 
+/// The mode, agents and task of a collab request, or why it is refused.
+fn collab_request(mode: &str, agents: &[String], task: &str) -> Result<(collab::Mode, Vec<agents::AgentId>, String), String> {
+    let mode = collab::Mode::parse(mode)?;
+    if mode != collab::Mode::CrossReview {
+        return Err("only cross-review is available for now".into());
+    }
+    let agents: Vec<agents::AgentId> = agents.iter().map(|a| agents::AgentId::parse(Some(a))).collect::<Result<_, _>>()?;
+    if agents.len() != 2 || agents[0] == agents[1] {
+        return Err("a cross-review needs two different agents: an author and a reviewer".into());
+    }
+    let task = task.trim().to_string();
+    if task.is_empty() {
+        return Err("describe the task".into());
+    }
+    Ok((mode, agents, task))
+}
+
 /// Start a collab: several agents on one task in a git repository (see collab/). Validates
 /// everything the form sends, refuses a folder that is not a clean checkout or where work
 /// is already running, writes the session's notes, and runs the collab on its own thread.
@@ -587,18 +604,7 @@ fn collab_start(
     agents: Vec<String>,
     task: String,
 ) -> Result<serde_json::Value, String> {
-    let mode = collab::Mode::parse(&mode)?;
-    if mode != collab::Mode::CrossReview {
-        return Err("only cross-review is available for now".into());
-    }
-    let agents: Vec<agents::AgentId> = agents.iter().map(|a| agents::AgentId::parse(Some(a))).collect::<Result<_, _>>()?;
-    if agents.len() != 2 || agents[0] == agents[1] {
-        return Err("a cross-review needs two different agents: an author and a reviewer".into());
-    }
-    let task = task.trim().to_string();
-    if task.is_empty() {
-        return Err("describe the task".into());
-    }
+    let (mode, agents, task) = collab_request(&mode, &agents, &task)?;
     let picked = validate_launch_dir(repo.trim())?;
     if !collab::git::is_repo(&picked) {
         return Err("a collab works in a git repository: pick a checkout".into());
@@ -2345,6 +2351,18 @@ mod tests {
         assert!(restart_refusal("---\nagent: codex\n---\n").unwrap().contains("Codex"));
         assert!(restart_refusal("---\nagent: codx\n---\n").unwrap().contains("unknown agent"));
         assert!(restart_refusal("---\ncollab_mode: cross-review\n---\n").unwrap().contains("collab"));
+    }
+
+
+    #[test]
+    fn a_collab_request_needs_cross_review_two_different_agents_and_a_task() {
+        use super::collab_request;
+        assert!(collab_request("cross-review", &["claude".into(), "codex".into()], " add a retry ").is_ok());
+        assert!(collab_request("relay", &["claude".into(), "codex".into()], "x").unwrap_err().contains("only cross-review"));
+        assert!(collab_request("cross-review", &["codex".into(), "codex".into()], "x").unwrap_err().contains("two different agents"));
+        assert!(collab_request("cross-review", &["claude".into()], "x").unwrap_err().contains("two different agents"));
+        assert!(collab_request("cross-review", &["claude".into(), "gemini".into()], "x").unwrap_err().contains("unknown agent"));
+        assert!(collab_request("cross-review", &["claude".into(), "codex".into()], "   ").unwrap_err().contains("task"));
     }
 
 }
