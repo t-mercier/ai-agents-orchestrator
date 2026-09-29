@@ -32,6 +32,18 @@ test('the bubble is the chosen companion, not a letter', async ({ page }) => {
   await expect(fab).not.toContainText('B')
 })
 
+// Asked for on 2026-09-29: on a grey disc the blob was the colour of its own background.
+test('the bubble is the companion alone, floating, with no disc behind it', async ({ page }) => {
+  await open(page, 'blob')
+  const look = await page.locator('.bru-fab').evaluate((b) => {
+    const s = getComputedStyle(b)
+    return { bg: s.backgroundColor, shadow: s.boxShadow, pet: getComputedStyle(b.querySelector('svg.pet-svg')).filter }
+  })
+  expect(look.bg).toBe('rgba(0, 0, 0, 0)')
+  expect(look.shadow).toBe('none')
+  expect(look.pet).toContain('drop-shadow')
+})
+
 test('he thinks while an answer runs, then is happy', async ({ page }) => {
   await open(page, 'ghost')
   await page.evaluate(() => { try { localStorage.removeItem('csm.brutusLog') } catch {} ; window.CSMBrutusUI.open() })

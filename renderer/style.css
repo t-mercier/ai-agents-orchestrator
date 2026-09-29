@@ -2271,8 +2271,13 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .bru-flash { outline: 2px solid var(--accent) !important; outline-offset: 2px; border-radius: 8px; transition: outline-color .6s; }
 
 /* A — bubble */
-.bru-fab { position:fixed; right:20px; bottom:20px; z-index:901; border:0; padding:0; border-radius:50%; cursor:pointer;
-  box-shadow: 0 8px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(var(--tint),.1); }
+/* No disc: the companion floats on its own, lifted by a shadow that follows its outline. */
+.bru-fab { position:fixed; right:18px; bottom:36px; z-index:901; border:0; padding:0; background:transparent; cursor:pointer;
+  border-radius:50%; transition: transform .15s ease; }
+.bru-fab:hover { transform: translateY(-2px) scale(1.04); }
+.bru-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bru-fab .bru-pet.xl { width: 56px; height: 56px; }
+.bru-fab svg.pet-svg { filter: drop-shadow(0 5px 7px rgba(0,0,0,.4)); }
 .v-A { right:20px; bottom:80px; width:380px; height:min(560px, calc(100vh - 140px)); border-radius:16px; transform-origin:bottom right; animation:bru-pop .16s ease-out; }
 /* B — palette */
 .bru-scrim { position:fixed; inset:0; z-index:899; background:rgba(0,0,0,.32); backdrop-filter: blur(2px); }
