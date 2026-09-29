@@ -1,144 +1,136 @@
 # Collab sessions: several agents on one task
 
-Status: draft, 2026-09-29. Written by Claude under Timothée's mandate; reviewed by an
-independent agent before the plan. Nothing is pushed or released.
+Status: v2, 2026-09-29. Written by Claude under Timothée's mandate. v1 was reviewed by an
+independent agent: a running collab would never show under Running, the renderer would
+treat it as a Claude session, quitting the app would not stop its turns, the reviewer never
+saw new files, Parallel's Keep kept an empty branch, and writing agents fed another model's
+output had write and network access. v2 fixes those and cuts the first plan to
+**cross-review**; the relay and Parallel follow in their own plans (end of this file).
 
-Builds on `2026-09-28-multi-agent-parity-design.md` (Codex and Copilot beside Claude Code,
-`agents::command`). *(probe)* = observed on a real run; *(docs)* = read; *(assumed)* =
-neither, with the test that settles it.
+*(probe)* = observed on a real run, 2026-09-29; *(docs)* = read; *(assumed)* = neither.
 
-## What the user gets
+## What the user gets (plan 1)
 
-A **collab session** is a session where the app hands one task from agent to agent. The
-user picks it in **＋New → Collab**, with a mode, the agents, a repository folder and the task.
+**＋New → Collab**, next to the Agent choice: a *cross-review* of one task by two agents of
+different models, in a git repository.
 
-1. **Cross-review** — an *author* agent makes the change; a *reviewer* agent of another
-   model reads the diff and lists findings; the author fixes them. Up to two review rounds,
-   or fewer when the reviewer answers that nothing blocks.
-2. **Collab** — a relay of roles: a *planner* writes the plan, an *implementer* makes the
-   change, a *tester* writes and runs tests and reports. Each role gets what the previous
-   ones produced.
-3. **Parallel** — the same task goes to two or three agents at once, each in its own
-   throw-away git worktree on its own branch. The user compares the results and keeps one.
+1. The **author** makes the change in the working tree.
+2. The **reviewer** — read-only — reads the diff (new files included) and either lists the
+   problems as `- file:line — problem` or answers `LGTM`.
+3. The author fixes the listed problems; the reviewer looks again. At most two reviews.
 
-While it runs, the session's detail panel shows the **collab thread**: one entry per turn —
-who, which role, what it produced (its closing summary, the diff stat, the findings) — the
-turn in progress with a spinner, and a **Stop** button. The thread is also written into the
-session's `notes.md`, so a collab that ends (or an app that restarts) keeps its history, and
-the next conversation in that folder can read it.
+While it runs, the session's detail panel shows the **collab thread**: one entry per turn
+(who, which role, its closing summary, the files changed, the findings), the turn in
+progress, and **Stop**. The thread is also written into the session's `notes.md`.
+
+The card carries a **Collab** chip, sits under **Running** while it runs, then under
+**Closed**. It has no terminal: no Resume, no Restart, no pinned skills.
 
 ## Rulings
 
-Decisions taken for her, each with its cost if wrong.
+1. **One engine, scripts per mode** (`collab::next`, built). Plan 1 exposes cross-review.
+2. **Every turn is a headless run** in the repository, with flags per role, all probed:
 
-1. **One engine, three scripts.** A collab is a list of turns `{agent, role, prompt}` run
-   one after another, except Parallel, whose turns run at once. Cross-review and Collab are
-   the same engine with different scripts. *Cost if wrong:* none; a mode is data.
-2. **Every turn is a headless run** of the agent CLI in the repository folder, with the
-   agent's existing headless line from `agents::command`: Claude Code
-   `-p --permission-mode acceptEdits`, Codex `exec` in its workspace-write sandbox with the
-   network on, Copilot `-p --allow-all-tools --silent`. The app never adds a flag that lifts
-   a sandbox further. *Cost if wrong:* a Claude turn that needs a shell command the user has
-   not allowed cannot run it; the turn says so in its summary.
-3. **Copilot runs with every tool allowed** in a collab turn: it has no mode between asking
-   and allowing all *(docs; `--allow-tool` is per tool)*. The Collab form says it under the
-   agent choice: "Copilot runs every tool without asking in a collab."
-4. **A collab needs a git repository.** The review works on `git diff`; Parallel needs
-   branches. The form refuses a folder that is not a checkout. *Cost if wrong:* no collab on
-   a plain folder.
-5. **Nothing is committed or pushed by the app.** Cross-review and Collab leave their change
-   in the working tree; each prompt tells the agents not to commit or push. Parallel leaves
-   one branch per agent. *Cost if wrong:* an agent that commits anyway leaves a commit; the
-   thread shows the diff against the starting commit either way.
-6. **Worktrees in Parallel only** (her decision, 2026-09-29). Each agent gets
-   `git worktree add <app data>/collab/<id>/<agent> -b ao/collab/<slug>-<agent>` from the
-   current HEAD. **Keep** removes the other worktrees and their branches, and leaves the kept
-   branch for the user to merge; **Discard all** removes every one. The app never merges.
-7. **The reviewer ends with `LGTM` when nothing blocks.** Its answer is read for a line that
-   is exactly `LGTM`; any other answer is a list of findings sent back to the author. At most
-   two review rounds, then the collab stops and says what is still open.
-8. **Output is bounded.** Each turn's output is read as it arrives (never through a full
-   pipe) and kept up to 256 KiB; the summary shown is its last 4 KiB. The diff given to a
-   reviewer is capped at 60 KiB, with the diff stat always included.
-9. **Turn timeout: 20 minutes**, Stop at any time. Stop kills the running turn's process
-   group; the thread records it as stopped.
-10. **One collab at a time per repository folder**, and the app refuses a collab in a folder
-    where one of its terminals already runs a session: two writers on one working tree is
-    the failure the three modes exist to avoid.
+   | | Reviewer (read-only) | Author (writes) |
+   |---|---|---|
+   | Claude Code | `-p --permission-mode plan` — refuses writes *(probe)* | `-p --permission-mode acceptEdits` — writes files; a shell command runs only if the user's own allow rules permit it *(probe: `auto` was unreliable, running a command once and refusing it the next time)* |
+   | Codex | `exec -c sandbox_mode="read-only"` — refuses writes *(probe)* | `exec`, workspace-write sandbox, **network off** |
+   | Copilot ≥ 1.0 | `-p --allow-all-tools --deny-tool write --deny-tool shell --silent` — refuses both *(probe)* | `-p --allow-all-tools --deny-tool 'shell(git push)' --deny-tool 'shell(git commit)' --silent` |
+
+   The reviewer writes nothing, so another model's output never reaches an agent that can
+   both write and read the network. *Cost if wrong:* a Claude author cannot build or run
+   tests unless the user's settings allow the commands; the form says so.
+3. **What one agent wrote reaches the other quoted as material**, never as instructions
+   (built). From a review, only the finding lines (`- …`) go to the author, capped at 8 KiB.
+4. **LGTM** only when the review's last non-empty line is `LGTM` and it lists no finding
+   line. Anything else is findings.
+5. **A clean git repository is required.** The form refuses a folder that is not a checkout,
+   and a checkout with uncommitted changes: the review would otherwise include the user's
+   own work, and the author would "fix" it. The collab's diffs are taken against the commit
+   it started from (`base`, recorded in the notes).
+6. **The diff includes new files** without touching the user's index: tracked changes from
+   `git diff --no-ext-diff --no-textconv <base>`, and each untracked file (listed by
+   `git ls-files --others --exclude-standard`) through `git diff --no-index /dev/null
+   <file>`. Capped at 60 KiB with the stat always complete.
+7. **Nothing is committed or pushed by the app**, and the prompts tell the agents not to.
+8. **Turns: 20 minutes each, five at most** (author, review, fix, review, and the stop).
+   Stop, the timeout and the app quitting end the whole process group (built, tested with a
+   background child). The group of each running turn is also recorded in
+   `<app config>/collab/running.json`; at the next launch, a group left by a crash is ended
+   and its thread marked stopped.
+9. **One collab per folder, and never beside a live session.** The form refuses a repository
+   (canonical path) where a collab runs, an embedded terminal runs, or a Claude Code session's
+   pidfile says it works.
+10. **A collab turn is not a session.** A `claude -p` turn writes a pidfile *(probe:
+    `entrypoint: sdk-cli`)*; `get_sessions` skips a pidfile whose process belongs to a running
+    collab turn's group.
 
 ## Design
 
-### Units
+### Units (plan 1)
 
-- `src-tauri/src/collab/mod.rs` — `Mode`, `Role`, `Turn`, `Plan` (the script for a mode), and
-  the prompts. Pure: given the task, the mode, the agents and the previous turns' results,
-  it returns the next turns. Unit-tested without running anything.
-- `src-tauri/src/collab/run.rs` — runs one turn: spawns the headless line in a login shell,
-  reads stdout as it arrives, enforces the timeout and Stop, returns `{output, ok}`.
-- `src-tauri/src/collab/git.rs` — diff and diff stat against the starting commit, worktree
-  add/remove, branch delete. Every call is `git` with separate arguments, never a shell line.
-- `src-tauri/src/collab/engine.rs` — the loop: run the plan's turns, feed each result into
-  the next prompt, stop on LGTM / max rounds / Stop / error, emit `collab-event`s, append the
-  thread to notes.md.
-- Commands: `collab_start {notesPath?, repo, mode, agents, task}`, `collab_stop {id}`,
-  `collab_keep {id, agent}`, `collab_discard {id}`, `collab_status {id}`.
-- Renderer: `＋New → Collab` form; `renderer/collab.js` for the thread in the detail panel;
-  a "Collab" chip on the card.
+- `collab/mod.rs` — scripts and prompts *(built)*, plus `approves` per ruling 4 and
+  `findings(review) -> String` per ruling 3.
+- `collab/run.rs` — one turn *(built)*: login shell, process group, bounded draining, Stop.
+- `collab/git.rs` — `head`, `is_repo`, `is_clean`, `changes_since` per ruling 6 (the current
+  version uses intent-to-add and must change), `slug`, worktree helpers (plan 3).
+- `collab/line.rs` — the headless line per agent and role (ruling 2), through
+  `pty::shell_quote`, starting `cd <repo> && exec env AO_HEADLESS=1 AO_COLLAB=1`.
+- `collab/engine.rs` — `CollabManager` (Tauri state): live collabs `{id, notes_path, repo,
+  mode, agents, base, stop flag, pgid, thread}`; the loop on a thread; events; notes writes;
+  `running.json`; `kill_all` for quit; `live_notes()` for the readers.
+- Commands: `collab_start {category, name, ticket, root, repo, mode, agents, task}` (creates
+  the notes like a Codex +New does), `collab_stop {id}`, `collab_list`.
+- `reader.rs` — `get_sessions` appends live collabs (before any early return) and skips
+  pidfiles of collab turns; `scan_historical` excludes live collabs and reports `collab:
+  <mode>` for a collab session.
+- `lib.rs` — `ExitRequested` also ends collab turns.
+- Renderer — Collab form in ＋New; `renderer/collab.js` draws the thread from `collab-event`
+  and from notes for a finished one; the chip; no Resume/Restart/terminal/pins for
+  `s.collab`.
 
-### Prompts (all end with the same guard)
+### Notes
 
-> Work in this repository only. Do not commit, push, or change git configuration. End your
-> answer with a short summary of what you did.
-
-- Author, first turn: the task.
-- Reviewer: the task, the author's summary, the diff stat and the diff, then: "Review this
-  change. List each problem that should be fixed as `- file:line — problem`. If nothing
-  should block it, answer with the single line LGTM."
-- Author, fix turn: the reviewer's findings, then "Address these findings."
-- Planner: the task, then "Write a plan: the files to change and the steps. Do not change
-  code."
-- Implementer: the task and the plan.
-- Tester: the task, the plan, the diff, then "Write or update tests for this change, run
-  them, and report what passes and fails. Fix only the tests."
-- Parallel: the task, identical for every agent.
-
-### Session and notes
-
-A collab session is a normal managed session: the app writes its `notes.md` (as for Codex and
-Copilot sessions) with `agent: collab` and a `collab:` frontmatter block:
-`mode`, `agents` (role → agent), `repo`, `base` (the starting commit). The thread goes under
-`## Collab thread`, one `- HH:MM <Agent> (<role>): <summary first line>` per turn, with the
-findings indented under a review. It shows under **Running** while it runs, then like any
-session. A collab session has no terminal; Resume is not offered, Restart re-runs the collab.
+The app writes the notes like a Codex +New, without `agent:` and with
+`collab_mode: cross-review`, `collab_agents: claude,codex`, `collab_repo: <path>`,
+`collab_base: <commit>`. The thread goes under `## Collab thread`, one line per turn:
+`- HH:MM <Agent> (<role>): <first line of its summary>`, a review's findings indented under
+it. When the collab ends, a `## Session history` line in the form the Closed tab already
+reads marks it closed, with the outcome as its summary. Every write re-reads the file and
+goes through `atomic_write`, under one lock per notes file.
 
 ### Events
 
-`collab-event` `{id, kind: turn_start | turn_end | done | error | stopped, turn, agent, role,
-summary, diffstat, findings, ok}`; the renderer redraws the thread from them.
+`collab-event {id, notesPath, kind: turn_start | turn_end | done | stopped | error, agent,
+role, summary, stat, findings}`.
 
 ## Error handling
 
-- CLI missing or its turn fails (non-zero exit): the thread shows the turn failed with its
-  last output; the collab stops. The working tree stays as it is.
-- Timeout: as Stop, reason "timed out after 20 minutes".
-- Worktree add fails (dirty index, branch exists): Parallel refuses before any agent runs.
-- The app quits mid-collab: the running turn is killed with the app's other children; the
-  thread in notes.md ends at the last finished turn, and the session reads as stopped.
+- A turn fails (non-zero exit) or times out: the thread says so with its last output; the
+  collab stops; the working tree stays as it is.
+- The form's refusals (not a checkout, not clean, busy folder, same agent twice, Copilot < 1.0)
+  are shown in the form, before anything runs.
+- The app quits: turns are ended (ruling 8); the thread ends at the last finished turn and the
+  history line says "stopped when the app quit".
 
 ## Testing
 
-- `collab::mod` unit tests: each mode's script, the LGTM rule, max rounds, prompt contents,
-  bounds.
-- `collab::run` tests with a fake CLI (a shell script) that prints 1 MiB (the pipe case),
-  sleeps (timeout and Stop), and fails.
-- `collab::git` tests on a temp repository: diff against base, worktree add/keep/discard.
-- Playwright: the Collab form (agents per mode, git-folder refusal, Copilot note), the thread
-  rendering from scripted events, Stop.
-- One real cross-review (Claude Code author, Codex reviewer) on a throw-away repository,
-  recorded in the plan's ledger.
+- Unit: scripts, `approves`, `findings`, lines per agent × role (exact argv), `changes_since`
+  with new files and an untouched index, `is_clean`, busy-folder check, the pidfile filter.
+- Engine with a fake CLI (a script that edits a file as author and prints LGTM as reviewer):
+  a whole cross-review on a temp repository, Stop mid-turn, a failing turn, `running.json`
+  recovery.
+- Playwright: the form's refusals and the Copilot/Claude notes; the thread from scripted
+  events; Stop; the card has no Resume/Restart.
+- One real cross-review (Claude Code author, Codex reviewer) on a throw-away repository.
 
-## Not in this first version
+## Later plans
 
-- Choosing a model per agent (each CLI's default model is used).
-- Letting the user reply inside the thread between turns.
-- Brutus as coordinator, and a "judge" agent for Parallel.
+- **Plan 2 — relay** (planner → implementer → tester). Open: how a tester runs tests when
+  headless Claude cannot run commands reliably (probe `--allowedTools` patterns per project).
+- **Plan 3 — Parallel** (her decision: a throw-away worktree per agent). **Keep** commits the
+  kept worktree's changes once on its branch — the one exception to ruling 7, stated in the
+  button — then removes every worktree; the user merges the branch. Worktree folders are named
+  by collab id, branches pass `is_safe_branch`, git runs with `-c core.hooksPath=/dev/null`
+  and `--` before paths. The form says a worktree starts from the last commit, without
+  uncommitted edits or ignored files such as `.env` and installed dependencies.

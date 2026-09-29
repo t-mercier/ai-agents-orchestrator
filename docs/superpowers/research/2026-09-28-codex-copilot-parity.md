@@ -48,3 +48,18 @@ and the event name to a scratch file.
 - These variables are inherited by nested tools. A Copilot launched from inside Claude Code saw
   `CLAUDE_CODE_SESSION_ID` set to a value that matched neither session. So a skill must first
   find which tool is its nearest ancestor process, then read that tool's variable only.
+
+## Headless permission probes (2026-09-29, for collab turns)
+
+- `claude -p --permission-mode auto`: ran `python3 -c 'print(6*7)'` once, refused a file write
+  (`ls > listing.txt`, and the Write tool), and in a later run wrote with `--allowedTools
+  Write,Edit` but then refused the same `python3` command. Not reliable for commands.
+- `claude -p --permission-mode acceptEdits`: refused the `python3` command ("needs your
+  permission"). Writes files.
+- `claude -p --permission-mode plan`: refused to create a file.
+- A `claude -p` run writes `~/.claude/sessions/<pid>.json` with `kind: interactive`,
+  `entrypoint: sdk-cli`, `cwd` = the run's folder.
+- `codex exec -c sandbox_mode="read-only"`: "Couldn't create codex.txt: the filesystem is
+  read-only".
+- `copilot -p --allow-all-tools --deny-tool write --deny-tool shell --silent` (1.0.89):
+  created neither file; `--silent` printed the answer only, without the `Resume` trailer.
