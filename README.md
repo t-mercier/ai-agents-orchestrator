@@ -170,9 +170,9 @@ piping a script into a shell makes you uneasy. That is a reasonable instinct, an
 version below does the same thing.
 
 > [!NOTE]
-> **Why the quarantine step exists.** The alpha builds are not signed with an Apple Developer
-> ID, so Gatekeeper refuses them and reports the app as "damaged". It is not damaged — it is
-> unsigned. By hand: move the app to `/Applications`, then clear the flag once (right-click →
+> **Why the quarantine step exists.** The builds are not signed with an Apple Developer ID, so
+> Gatekeeper refuses them, reporting the app as "damaged" or saying Apple "could not verify" it
+> is free of malware. It is neither — it is unsigned. By hand: move the app to `/Applications`, then clear the flag once (right-click →
 > **Open** no longer does this on recent macOS):
 > ```bash
 > xattr -cr "/Applications/AI Agents Orchestrator.app"
