@@ -1,0 +1,19 @@
+#!/bin/sh
+# A stand-in for claude / codex / copilot in the ao_ask tests. Logs its argv (one per
+# line) to $AO_FAKE_LOG, then behaves as $AO_FAKE_MODE says.
+name=$(basename "$0")
+[ -n "$AO_FAKE_LOG" ] && { echo "$name"; for a in "$@"; do printf '%s\n' "$a"; done; echo "--env AO_ADVISOR=$AO_ADVISOR AO_HEADLESS=$AO_HEADLESS"; } > "$AO_FAKE_LOG"
+last=""
+prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && last="$a"; prev="$a"; done
+answer() { if [ -n "$last" ]; then printf '%s\n' "$1" > "$last"; fi; printf '%s\n' "$1"; }
+case "$AO_FAKE_MODE" in
+  answer) echo "starting up" >&2; sleep 1; answer "PAPAYA" ;;
+  slow)   sleep "${AO_FAKE_SLEEP:-6}"; answer "SLOW PAPAYA" ;;
+  fail)   echo 'Error: Model "x" from --model flag is not available.' >&2; exit 1 ;;
+  codexjson) echo 'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The '"'"'x'"'"' model is not supported."}}' >&2; exit 1 ;;
+  nonet)  echo 'error sending request: dns error: nodename nor servname provided, or not known' >&2; exit 1 ;;
+  stdin)  got=$(cat); answer "STDIN=[$got]" ;;
+  escape) answer "$(printf 'plain \033[31mred\033[0m text')" ;;
+  *)      answer "OK" ;;
+esac

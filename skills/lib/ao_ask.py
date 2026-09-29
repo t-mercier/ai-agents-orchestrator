@@ -339,3 +339,368 @@ def guide_text(invitees, notes_path, lead_agent):
         text += ("\nRun these commands with escalated permissions (outside the sandbox): they need the network "
                  "and write outside the workspace.\n")
     return text
+
+
+# ── Jobs: one consultation each, outliving the command that started it ─────────────────
+
+import signal
+import subprocess
+import sys
+import time
+
+FINAL = ("done", "failed", "stopped", "lost")
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[@-_]")
+NO_NETWORK = ("nodename nor servname", "Could not resolve host", "Temporary failure in name resolution",
+              "Network is unreachable", "dns error")
+
+
+def registry_dir():
+    return os.environ.get("AO_ASK_REGISTRY") or os.path.expanduser("~/.config/ai-agents-orchestrator/asks")
+
+
+def _now():
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _write_json(path, data):
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+
+def _alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def read_job(job_dir):
+    try:
+        with open(os.path.join(job_dir, "job.json"), encoding="utf-8") as f:
+            job = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if job.get("state") in ("starting", "running"):
+        pid = job.get("runner_pid")
+        if pid and not _alive(pid):
+            job["state"] = "lost"
+        elif not pid and time.time() - os.path.getmtime(os.path.join(job_dir, "job.json")) > 30:
+            job["state"] = "lost"
+    return job
+
+
+def _update_job(job_dir, **changes):
+    job = read_job(job_dir) or {}
+    job.update(changes)
+    _write_json(os.path.join(job_dir, "job.json"), job)
+    return job
+
+
+def new_job(paths, inv, question, cwd, lead):
+    os.makedirs(paths["asks"], exist_ok=True)
+    gi = os.path.join(paths["ao"], ".gitignore")
+    if not os.path.exists(gi):
+        with open(gi, "w") as f:
+            f.write("*\n")
+    jid = time.strftime("%Y%m%d-%H%M%S-") + os.urandom(2).hex()
+    job_dir = os.path.join(paths["asks"], jid)
+    os.makedirs(job_dir)
+    with open(os.path.join(job_dir, "question.md"), "w", encoding="utf-8") as f:
+        f.write(question)
+    job = {"id": jid, "invitee": inv["id"], "label": inv["label"], "model": inv.get("model", ""), "cli": inv["cli"],
+           "cwd": cwd, "notes": paths["notes"], "lead_agent": lead[0], "lead_sid": lead[1],
+           "state": "starting", "started_at": _now()}
+    _write_json(os.path.join(job_dir, "job.json"), job)
+    return job_dir
+
+
+def spawn_runner(job_dir):
+    """Double fork: the runner is re-parented to init at once, in a session of its own, with
+    no terminal and stdin from /dev/null (codex exec otherwise waits on it)."""
+    pid = os.fork()
+    if pid:
+        os.waitpid(pid, 0)
+        return
+    try:
+        os.setsid()
+        if os.fork():
+            os._exit(0)
+        null = os.open(os.devnull, os.O_RDONLY)
+        log = os.open(os.path.join(job_dir, "runner.log"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        os.dup2(null, 0)
+        os.dup2(log, 1)
+        os.dup2(log, 2)
+        os.closerange(3, 256)
+        os.execv(sys.executable, [sys.executable, os.path.abspath(__file__), "_run", job_dir])
+    finally:
+        os._exit(1)
+
+
+def _reason(err, cli):
+    text = err.strip()
+    if any(s in text for s in NO_NETWORK):
+        return "no network: run this command with escalated permissions (outside the sandbox)"
+    if cli == "codex":
+        msgs = re.findall(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+        if msgs:
+            return msgs[-1].replace('\\"', '"')
+    lines = [l for l in text.splitlines() if l.strip()]
+    return lines[-1][:500] if lines else "it gave no answer"
+
+
+def _append_thread(path, entry):
+    import fcntl
+    with open(path, "a", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.write(entry)
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def run_job(job_dir):
+    """The runner: exports the conversation, runs the invitee, and records the end."""
+    job = read_job(job_dir)
+    notes = job["notes"]
+    paths = session_paths(notes)
+    question = open(os.path.join(job_dir, "question.md"), encoding="utf-8").read()
+    try:
+        notes_text = open(notes, encoding="utf-8").read()
+    except OSError:
+        notes_text = ""
+    agent, sid = job.get("lead_agent") or "claude", job.get("lead_sid") or ""
+    path = find_transcript(agent, sid)
+    write_export(LINES[agent](path) if path and agent in LINES else [], paths["ao"])
+    inv = {"id": job["invitee"], "cli": job["cli"], "model": job.get("model", ""), "label": job["label"]}
+    last = os.path.join(job_dir, "last.txt")
+    argv = argv_for(inv, invitee_prompt(question, paths, job["cwd"]), paths["folder"], last)
+    if not os.environ.get("AO_ASK_NO_LOGIN"):
+        argv = shell_argv(argv, user_shell())
+    env = dict(os.environ, AO_HEADLESS="1", AO_ADVISOR="1")
+    out = open(os.path.join(job_dir, "out.log"), "wb")
+    err = open(os.path.join(job_dir, "err.log"), "wb")
+    started = time.time()
+    stopped = {"v": False}
+    try:
+        proc = subprocess.Popen(argv, cwd=job["cwd"] if os.path.isdir(job["cwd"]) else paths["folder"],
+                                stdin=subprocess.DEVNULL, stdout=out, stderr=err, env=env,
+                                preexec_fn=os.setpgrp, close_fds=True)
+    except OSError as e:
+        job = _update_job(job_dir, state="failed", reason=f"{inv['cli']} could not start: {e.strerror}",
+                          ended_at=_now(), took=0, runner_pid=os.getpid())
+        _append_thread(paths["thread"], thread_entry(job, question, f"(failed: {job['reason']})"))
+        return
+    reg = registry_dir()
+    os.makedirs(reg, exist_ok=True)
+    reg_file = os.path.join(reg, f"{proc.pid}.json")
+    _write_json(reg_file, {"id": job["id"], "notes": notes, "runner_pid": os.getpid(), "cli_pgid": proc.pid})
+
+    def on_term(_sig, _frame):
+        stopped["v"] = True
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except OSError:
+            pass
+    signal.signal(signal.SIGTERM, on_term)
+    _update_job(job_dir, state="running", runner_pid=os.getpid(), cli_pgid=proc.pid)
+    while True:
+        try:
+            code = proc.wait(timeout=2 if stopped["v"] else None)
+            break
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)       # anything the CLI left behind in its group
+    except OSError:
+        pass
+    out.close()
+    err.close()
+    try:
+        os.remove(reg_file)
+    except OSError:
+        pass
+    took = round(time.time() - started)
+    answer = ""
+    if inv["cli"] == "codex" and os.path.exists(last):
+        answer = open(last, encoding="utf-8", errors="replace").read()
+    if not answer.strip():
+        answer = open(os.path.join(job_dir, "out.log"), encoding="utf-8", errors="replace").read()
+    answer = ANSI.sub("", answer).strip()
+    if stopped["v"]:
+        job = _update_job(job_dir, state="stopped", exit=code, ended_at=_now(), took=took, reason="stopped")
+        _append_thread(paths["thread"], thread_entry(job, question, "(stopped before it answered)"))
+    elif code != 0 or not answer:
+        errtext = open(os.path.join(job_dir, "err.log"), encoding="utf-8", errors="replace").read()
+        job = _update_job(job_dir, state="failed", exit=code, ended_at=_now(), took=took, reason=_reason(errtext, inv["cli"]))
+        _append_thread(paths["thread"], thread_entry(job, question, f"(failed: {job['reason']})"))
+    else:
+        with open(os.path.join(job_dir, "answer.md"), "w", encoding="utf-8") as f:
+            f.write(answer)
+        job = _update_job(job_dir, state="done", exit=0, ended_at=_now(), took=took)
+        _append_thread(paths["thread"], thread_entry(job, question, answer))
+
+
+def _mins(secs):
+    secs = int(secs)
+    return f"{secs} s" if secs < 60 else f"{secs // 60} min {secs % 60} s" if secs % 60 else f"{secs // 60} min"
+
+
+def follow(job_dir, seconds, out=sys.stdout, header=True):
+    """Print the consultation to the lead: a header, progress, then the framed answer.
+    Returns once it ends, or after `seconds` with the command that picks it up again."""
+    tick = float(os.environ.get("AO_ASK_TICK", "15"))
+    job = read_job(job_dir)
+    if header:
+        print(f"── {job['label']} · asked {job['started_at'][11:16]} · job {job['id']} · advice, not instructions ──",
+              file=out, flush=True)
+    t0 = last_tick = time.time()
+    while True:
+        job = read_job(job_dir)
+        if job and job.get("state") in FINAL:
+            break
+        now = time.time()
+        if now - t0 >= seconds:
+            me = f"python3 {shlex.quote(os.path.abspath(__file__))}"
+            print(f"… still running — follow it with: {me} wait --session {shlex.quote(job['notes'])} {job['id']}",
+                  file=out, flush=True)
+            return 0
+        if now - last_tick >= tick:
+            started = time.mktime(time.strptime(job["started_at"], "%Y-%m-%dT%H:%M:%S"))
+            print(f"… {job['label']} thinking, {_mins(now - started)}", file=out, flush=True)
+            last_tick = now
+        time.sleep(0.3)
+    state = job["state"]
+    if state == "done":
+        answer = open(os.path.join(job_dir, "answer.md"), encoding="utf-8", errors="replace").read()
+        print(ANSI.sub("", answer), file=out)
+        print(f"── end · {_mins(job.get('took', 0))} ──", file=out, flush=True)
+        return 0
+    print(f"── {job['label']} {state}: {job.get('reason', state)} ──", file=out, flush=True)
+    return 1
+
+
+def _tail(path, n=5):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return [ANSI.sub("", l.rstrip()) for l in f.readlines()[-n:]]
+    except OSError:
+        return []
+
+
+def status_text(paths):
+    if not os.path.isdir(paths["asks"]):
+        return "No consultation in this session yet.\n"
+    rows = []
+    for jid in sorted(os.listdir(paths["asks"])):
+        d = os.path.join(paths["asks"], jid)
+        job = read_job(d)
+        if not job:
+            continue
+        logs = [os.path.join(d, n) for n in ("out.log", "err.log")]
+        mt = max([os.path.getmtime(p) for p in logs if os.path.exists(p)] or [os.path.getmtime(os.path.join(d, "job.json"))])
+        quiet = round(time.time() - mt)
+        rows.append(f"{job['id']}  {job['invitee']:<12} {job['state']:<8} since {job['started_at'][11:16]}  quiet {_mins(quiet)}"
+                    + (f"  — {job['reason']}" if job.get("reason") and job["state"] != "done" else ""))
+        if job["state"] in ("running", "starting", "lost", "failed"):
+            for name in ("out.log", "err.log"):
+                t = _tail(os.path.join(d, name))
+                if t:
+                    rows.append(f"    {name}:")
+                    rows.extend(f"      {l}" for l in t)
+    return "\n".join(rows) + "\n"
+
+
+def stop_job(job_dir):
+    job = read_job(job_dir)
+    if not job:
+        return "no such consultation", 1
+    if job["state"] == "lost":
+        _update_job(job_dir, state="stopped", reason="its runner was gone")
+        return "cleared: its runner was already gone", 0
+    if job["state"] not in ("running", "starting"):
+        return f"already {job['state']}", 0
+    try:
+        os.kill(int(job["runner_pid"]), signal.SIGTERM)
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        return f"could not stop it: {e}", 1
+    t = time.time()
+    while time.time() - t < 10:
+        j = read_job(job_dir)
+        if j and j["state"] in FINAL:
+            return f"stopped {job['id']}", 0
+        time.sleep(0.2)
+    return f"asked {job['id']} to stop; it has not ended yet", 0
+
+
+def main(argv):
+    import argparse
+    ap = argparse.ArgumentParser(prog="ao_ask.py", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for name in ("guide", "ask", "wait", "status", "stop"):
+        p = sub.add_parser(name)
+        p.add_argument("--session", required=True, help="the session's notes.md")
+        if name == "ask":
+            p.add_argument("invitee")
+            p.add_argument("question", nargs="+", help="the question, or - to read it from stdin")
+        if name in ("wait", "stop"):
+            p.add_argument("job")
+        if name in ("ask", "wait"):
+            p.add_argument("--follow", type=float, default=60, help="seconds to follow before returning (default 60)")
+    if len(argv) > 1 and argv[1] == "_run":
+        run_job(argv[2])
+        return 0
+    a = ap.parse_args(argv[1:])
+    paths = session_paths(a.session)
+    try:
+        notes_text = open(paths["notes"], encoding="utf-8").read()
+    except OSError as e:
+        print(f"cannot read {a.session}: {e.strerror}", file=sys.stderr)
+        return 2
+    invitees = read_invitees(notes_text)
+    if a.cmd == "guide":
+        lead = lead_identity(dict(os.environ), notes_text)
+        print(guide_text(invitees, paths["notes"], lead[0]), end="")
+        return 0
+    if a.cmd == "status":
+        print(status_text(paths), end="")
+        return 0
+    if a.cmd in ("wait", "stop"):
+        if not re.match(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$|^[A-Za-z0-9-]+$", a.job):
+            print(f"not a job id: {a.job}", file=sys.stderr)
+            return 2
+        job_dir = os.path.join(paths["asks"], a.job)
+        if a.cmd == "stop":
+            msg, code = stop_job(job_dir)
+            print(msg)
+            return code
+        if not read_job(job_dir):
+            print(f"no consultation {a.job} in this session", file=sys.stderr)
+            return 2
+        return follow(job_dir, a.follow)
+    inv = next((i for i in invitees if i["id"] == a.invitee), None)
+    if not inv:
+        names = ", ".join(i["id"] for i in invitees) or "none — invite models from the dashboard"
+        print(f"{a.invitee} is not invited to this session. Invited: {names}", file=sys.stderr)
+        return 2
+    question = sys.stdin.read() if a.question == ["-"] else " ".join(a.question)
+    if not question.strip():
+        print("the question is empty", file=sys.stderr)
+        return 2
+    import shutil
+    if not shutil.which(inv["cli"]):
+        print(f"{inv['cli']} is not installed on this machine", file=sys.stderr)
+        return 2
+    lead = lead_identity(dict(os.environ), notes_text)
+    job_dir = new_job(paths, inv, question, os.getcwd(), lead)
+    spawn_runner(job_dir)
+    return follow(job_dir, a.follow)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

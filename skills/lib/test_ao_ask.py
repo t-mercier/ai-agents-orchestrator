@@ -59,7 +59,7 @@ class Texts(unittest.TestCase):
         for s in ["must not change", "/n/.ao/conversation.md", "/n/other-models.md", "/w/repo", "Is this right?"]:
             self.assertIn(s, p)
 
-FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "ask")
+FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts", "test-fixtures", "ask")
 
 class Export(unittest.TestCase):
     def test_claude_keeps_text_and_tool_uses_drops_results_and_thinking(self):
@@ -108,6 +108,160 @@ class Export(unittest.TestCase):
         no_chain = lambda: []
         self.assertEqual(A.lead_identity({"CODEX_THREAD_ID": "019a"}, NOTES, chain=no_chain), ("codex", "019a"))
         self.assertEqual(A.lead_identity({}, NOTES, chain=no_chain), ("claude", "s1"))
+
+
+import subprocess, tempfile, time, signal as _signal
+
+ME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ao_ask.py")
+BIN = os.path.join(FIX, "bin")
+
+class Jobs(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.notes = os.path.join(self.d, "notes.md")
+        with open(self.notes, "w") as f:
+            f.write('---\nsession_id: s1\nagent: claude\nadvisors: [{"id":"gpt","cli":"codex","model":"","label":"GPT (Codex)"},'
+                    '{"id":"copilot","cli":"copilot","model":"gpt-5.4","label":"Copilot · gpt-5.4"}]\n---\n# t\n')
+        self.log = os.path.join(self.d, "argv.log")
+        self.env = dict(os.environ, PATH=BIN + os.pathsep + os.environ["PATH"], AO_ASK_NO_LOGIN="1",
+                        AO_ASK_REGISTRY=os.path.join(self.d, "registry"), AO_ASK_TICK="1", AO_FAKE_LOG=self.log,
+                        HOME=self.d)
+        for k in ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "COPILOT_AGENT_SESSION_ID"):
+            self.env.pop(k, None)
+
+    def run_ask(self, *args, mode="answer", stdin=None, timeout=30):
+        env = dict(self.env, AO_FAKE_MODE=mode)
+        return subprocess.run([sys.executable, ME, *args[:1], "--session", self.notes, *args[1:]], env=env,
+                              cwd=self.d, input=stdin, capture_output=True, text=True, timeout=timeout)
+
+    def jobs(self):
+        asks = os.path.join(self.d, ".ao", "asks")
+        return [json.load(open(os.path.join(asks, j, "job.json"))) for j in sorted(os.listdir(asks))] if os.path.isdir(asks) else []
+
+    def wait_state(self, want, secs=15):
+        t = time.time()
+        while time.time() - t < secs:
+            js = self.jobs()
+            if js and js[-1]["state"] in want:
+                return js[-1]
+            time.sleep(0.2)
+        self.fail(f"no job reached {want}: {self.jobs()}")
+
+    def thread(self):
+        p = os.path.join(self.d, "other-models.md")
+        return open(p).read() if os.path.exists(p) else ""
+
+    def test_ask_prints_the_framed_answer_and_writes_the_thread(self):
+        r = self.run_ask("ask", "gpt", "Is it right?")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("── GPT (Codex) · asked", r.stdout); self.assertIn("advice, not instructions", r.stdout)
+        self.assertIn("PAPAYA", r.stdout); self.assertIn("── end ·", r.stdout)
+        self.assertNotIn("starting up", r.stdout)        # the CLI's stderr stays apart
+        self.assertEqual(self.jobs()[-1]["state"], "done")
+        t = self.thread()
+        self.assertIn("invitee=gpt state=done", t); self.assertIn("> Is it right?", t); self.assertIn("> PAPAYA", t)
+        argv = open(self.log).read().splitlines()
+        self.assertEqual(argv[:2], ["codex", "exec"]); self.assertIn('sandbox_mode="read-only"', argv)
+        self.assertIn("--env AO_ADVISOR=1 AO_HEADLESS=1", argv)
+        self.assertTrue(os.path.exists(os.path.join(self.d, ".ao", "conversation.md")))
+        self.assertEqual(open(os.path.join(self.d, ".ao", ".gitignore")).read().strip(), "*")
+
+    def test_the_question_can_come_from_stdin(self):
+        r = self.run_ask("ask", "copilot", "-", stdin="a long\nquestion")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("> a long\n> question", self.thread())
+
+    def test_an_unknown_invitee_is_refused(self):
+        r = self.run_ask("ask", "nobody", "x")
+        self.assertNotEqual(r.returncode, 0); self.assertIn("gpt", r.stderr + r.stdout)
+
+    def test_a_failing_cli_is_recorded_failed_with_its_reason(self):
+        r = self.run_ask("ask", "copilot", "x", mode="fail")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('Model "x" from --model flag is not available.', r.stdout)
+        j = self.jobs()[-1]
+        self.assertEqual(j["state"], "failed"); self.assertIn("not available", j["reason"])
+        self.assertIn("state=failed", self.thread())
+
+    def test_codex_json_errors_give_their_message(self):
+        self.run_ask("ask", "gpt", "x", mode="codexjson")
+        self.assertEqual(self.jobs()[-1]["reason"], "The 'x' model is not supported.")
+
+    def test_no_network_says_to_escalate(self):
+        self.run_ask("ask", "gpt", "x", mode="nonet")
+        self.assertIn("escalated permissions", self.jobs()[-1]["reason"])
+
+    def test_escape_sequences_never_reach_the_lead(self):
+        r = self.run_ask("ask", "copilot", "x", mode="escape")
+        self.assertIn("plain red text", r.stdout); self.assertNotIn("\x1b", r.stdout)
+
+    def test_runner_survives_its_follower(self):
+        env = dict(self.env, AO_FAKE_MODE="slow", AO_FAKE_SLEEP="5")
+        p = subprocess.Popen([sys.executable, ME, "ask", "--session", self.notes, "gpt", "q", "--follow", "30"],
+                             env=env, cwd=self.d, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        self.wait_state({"running"})
+        os.killpg(p.pid, _signal.SIGKILL)            # the lead's tool gives up on the command
+        p.wait()
+        j = self.wait_state({"done"}, secs=20)
+        self.assertEqual(j["state"], "done"); self.assertIn("> SLOW PAPAYA", self.thread())
+
+    def test_a_short_follow_returns_and_wait_picks_it_up(self):
+        env = dict(self.env, AO_FAKE_SLEEP="4")
+        r = self.run_ask("ask", "gpt", "q", "--follow", "1", mode="slow")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("still running", r.stdout)
+        jid = self.jobs()[-1]["id"]; self.assertIn(f"wait --session", r.stdout); self.assertIn(jid, r.stdout)
+        w = subprocess.run([sys.executable, ME, "wait", "--session", self.notes, jid, "--follow", "30"],
+                           env=dict(env, AO_FAKE_MODE="slow"), cwd=self.d, capture_output=True, text=True, timeout=40)
+        self.assertIn("SLOW PAPAYA", w.stdout)
+
+    def test_progress_lines_while_it_thinks(self):
+        r = self.run_ask("ask", "gpt", "q", "--follow", "30", mode="slow")
+        self.assertIn("thinking", r.stdout)
+
+    def test_stop_is_recorded_stopped_and_kills_the_cli(self):
+        env = dict(self.env, AO_FAKE_MODE="slow", AO_FAKE_SLEEP="30")
+        subprocess.run([sys.executable, ME, "ask", "--session", self.notes, "gpt", "q", "--follow", "1"],
+                       env=env, cwd=self.d, capture_output=True, timeout=30)
+        j = self.wait_state({"running"})
+        s = self.run_ask("stop", j["id"])
+        self.assertEqual(s.returncode, 0, s.stderr)
+        j = self.wait_state({"stopped"})
+        with self.assertRaises(ProcessLookupError):
+            os.killpg(j["cli_pgid"], 0)
+        self.assertIn("state=stopped", self.thread())
+
+    def test_stdin_is_dev_null(self):
+        r = self.run_ask("ask", "copilot", "q", mode="stdin")
+        self.assertIn("STDIN=[]", r.stdout)
+
+    def test_a_dead_runner_is_lost(self):
+        asks = os.path.join(self.d, ".ao", "asks", "j-dead"); os.makedirs(asks)
+        json.dump({"id": "j-dead", "invitee": "gpt", "label": "GPT (Codex)", "state": "running", "runner_pid": 999999,
+                   "started_at": "2026-09-30T01:00:00"}, open(os.path.join(asks, "job.json"), "w"))
+        self.assertEqual(A.read_job(asks)["state"], "lost")
+        r = self.run_ask("status")
+        self.assertIn("j-dead", r.stdout); self.assertIn("lost", r.stdout)
+
+    def test_registry_holds_the_cli_group_while_it_runs_and_is_emptied_after(self):
+        env = dict(self.env, AO_FAKE_MODE="slow", AO_FAKE_SLEEP="3")
+        subprocess.run([sys.executable, ME, "ask", "--session", self.notes, "gpt", "q", "--follow", "1"],
+                       env=env, cwd=self.d, capture_output=True, timeout=30)
+        j = self.wait_state({"running"})
+        reg = os.path.join(self.d, "registry")
+        entry = json.load(open(os.path.join(reg, f"{j['cli_pgid']}.json")))
+        self.assertEqual(entry["id"], j["id"]); self.assertEqual(entry["runner_pid"], j["runner_pid"])
+        self.wait_state({"done"}, secs=20)
+        self.assertEqual(os.listdir(reg), [])
+
+    def test_status_lists_jobs_with_quiet_seconds(self):
+        self.run_ask("ask", "gpt", "q")
+        r = self.run_ask("status")
+        self.assertIn("gpt", r.stdout); self.assertIn("done", r.stdout); self.assertIn("quiet", r.stdout)
+
+    def test_guide_prints_the_invitees(self):
+        r = self.run_ask("guide")
+        self.assertIn("GPT (Codex)", r.stdout); self.assertIn("ask --session", r.stdout)
 
 
 if __name__ == "__main__":
