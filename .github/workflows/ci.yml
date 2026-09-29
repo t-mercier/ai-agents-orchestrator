@@ -61,6 +61,7 @@ jobs:
         with:
           workspaces: src-tauri
       - name: Clippy (warnings = errors)
-        run: cargo clippy --all-targets -- -D warnings
+        # --all-features also builds the updater-e2e test feature, which nothing else compiles.
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Tests
         run: cargo test

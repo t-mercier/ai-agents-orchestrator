@@ -74,7 +74,7 @@ jobs:
           # Signs the in-app update archives and lets tauri-action publish latest.json.
           # Our own key (tauri signer generate), not an Apple certificate; the public half
           # is in tauri.conf.json. Without this secret the bundle step fails, because
-          # createUpdaterArtifacts is on.
+          # this build turns createUpdaterArtifacts on (tauri.updater.conf.json, below).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -84,4 +84,6 @@ jobs:
           releaseDraft: false
           # semver pre-releases carry a hyphen (e.g. v0.3.0-alpha) → mark as prerelease.
           prerelease: ${{ contains(github.ref_name, '-') }}
-          args: ${{ matrix.args }}
+          # Update archives and their signatures are built for releases only: a local
+          # `cargo tauri build` has no signing key and would fail with them on.
+          args: ${{ matrix.args }} --config src-tauri/tauri.updater.conf.json

@@ -64,14 +64,20 @@ pub async fn app_update_check(app: AppHandle) -> Result<Value, String> {
     })
 }
 
+/// How long the download of a release may take: the archive is a few megabytes.
+const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 /// Download the newer release, verify its signature, install it, and restart into it.
 #[tauri::command(async)]
 pub async fn app_update_install(app: AppHandle) -> Result<(), String> {
-    let update = updater(&app)?
+    let mut update = updater(&app)?
         .check()
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "no newer version is available".to_string())?;
+    // The check's timeout does not carry over to the download: without one, a stalled
+    // download left "Installing…" spinning for ever.
+    update.timeout = Some(DOWNLOAD_TIMEOUT);
     update
         .download_and_install(|_, _| {}, || {})
         .await

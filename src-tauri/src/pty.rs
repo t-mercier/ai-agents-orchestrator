@@ -180,7 +180,7 @@ fn resolve_agent(
 ) -> Result<(crate::agents::AgentId, Option<String>), String> {
     use crate::agents::AgentId;
     let notes = notes_path.map(str::trim).filter(|n| !n.is_empty());
-    let verified = notes.map(|n| verify(n));
+    let verified = notes.map(verify);
     // Notes that cannot be confirmed (outside the roots: its space was moved) are still read
     // for their agent — only to refuse launching another tool's session as Claude Code,
     // which is what taking "no notes" to mean Claude used to do.
