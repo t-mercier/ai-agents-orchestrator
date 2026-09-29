@@ -401,4 +401,34 @@ mod tests {
         let c = append_to_section(&c, "Session history", "- new");
         assert!(c.trim_end().ends_with("- old\n- new"), "{c}");
     }
+
+    // Run by hand: a real cross-review, Claude Code author and Codex reviewer, with the
+    // app's own command lines, in a throw-away repository.
+    //   AO_LIVE_DIR=<empty folder> cargo test --lib live_cross_review -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn live_cross_review() {
+        let d = PathBuf::from(std::env::var("AO_LIVE_DIR").unwrap());
+        let repo = d.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q"]);
+        git(&repo, &["config", "user.email", "t@example.com"]);
+        git(&repo, &["config", "user.name", "t"]);
+        std::fs::write(repo.join("README.md"), "# greet\n").unwrap();
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-qm", "base"]);
+        let base = super::super::git::head(&repo).unwrap();
+        let notes = d.join("FEAT/greet/notes.md");
+        std::fs::create_dir_all(notes.parent().unwrap()).unwrap();
+        std::fs::write(&notes, "---\nname: greet\ncollab_mode: cross-review\n---\n\n# greet\n\n## Collab thread\n\n## Session history\n").unwrap();
+        let s = Start {
+            id: "live".into(), notes_path: notes.to_string_lossy().into_owned(), repo: repo.to_string_lossy().into_owned(),
+            base, mode: Mode::CrossReview, agents: vec![AgentId::Claude, AgentId::Codex],
+            task: "Create greet.py with a function greet(name) that returns 'Hello, <name>!' and rejects an empty name with ValueError.".into(),
+            scratch: d.join("scratch"),
+        };
+        let outcome = drive(s, &super::super::line::turn_line, &|v| eprintln!("EVENT {} {} {}", v["kind"], v["agent"], v["role"]));
+        eprintln!("OUTCOME {outcome}");
+        eprintln!("{}", std::fs::read_to_string(&notes).unwrap());
+    }
 }
