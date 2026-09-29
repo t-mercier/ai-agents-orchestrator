@@ -10,6 +10,46 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Updates install from inside the app.** When a new release is out, a banner offers it;
+  the download is checked against the project's own signing key before it replaces the
+  app, and a restart that would end running sessions asks first. The check runs at launch
+  and every 6 hours, and Settings → General turns it off.
+- **Codex and Copilot sessions, next to Claude Code ones.** ＋New gains an Agent choice
+  when either CLI is installed. Their sessions show in the list with their status (busy,
+  waiting on you, idle), write the same `notes.md`, close without a summary, and resume
+  with their own CLI. Copilot needs 1.0 or later; an older one is flagged with the command
+  that updates it.
+- **Collab: two agents review each other.** Pick Collab in ＋New, an author and a
+  reviewer: the author makes the change, the reviewer lists what to fix without writing
+  anything, and they alternate until the reviewer approves. The thread shows as a session,
+  and a collab stops when you quit the app.
+- **Brutus writes the documents you ask him for**, into his own `docs/` folder, and gives
+  you a card to open each one.
+- **Brutus can be turned off** in Settings → AI Companion: no bubble, no titlebar button,
+  no ⌘K, and he never runs. His memory is kept.
+- **Brutus shows as a companion you pick**: nine animated characters (Wobble, Wisp, Mochi,
+  Nimbus, Nova, Biscuit, Pinch, Bleep, Scamp) that think while he answers, hop when he is
+  done, and show a badge when sessions are waiting on you.
+- **Your own shortcuts, on any action.** Settings → Shortcuts lists the app's actions and
+  those of the selected session; record a combination with ⌘, Ctrl or ⌥. One the system or
+  another action already uses is refused, with its owner named.
+- **A new app icon** in the site's colours replaces the Tauri logo.
+
+### Changed
+
+- **Settings → Assistant is now Settings → AI Companion.**
+- **Tagged releases are published as stable**, so the in-app updater offers them.
+
+### Fixed
+
+- **A session closed from inside ends.** When the agent itself ran `/close-session`, the
+  card stayed in Running with its terminal open; the app now ends the terminal and moves
+  the card to Closed.
+- **A click in a session's panel scrolls the list to its card**, centred, when it was out
+  of view.
+
 ## [0.20.4-alpha] - 2026-09-25
 
 ### Fixed
