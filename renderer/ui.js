@@ -707,30 +707,10 @@ function positionPopover(el, anchor, gap = 6) {
   el.style.left = `${Math.round(left)}px`
 }
 
-// Embedded terminal — the primary action, moved out of the header into Actions.
-// Keeps the .terminal-toggle-btn class (its handler) and NO .pill class (so the
-// .pill[data-cwd] "external terminal" handler doesn't also match it).
 // The session folder slug (for /restart), derived from notesPath.
 function slugOf(s) {
   if (!s.notesPath) return ''
   return s.notesPath.replace(/\/notes\.md$/, '').split('/').pop() || ''
-}
-
-function embeddedTerminalAction(s) {
-  if (s.collab) return ''   // a collab has no terminal
-  const glyph = svgIcon('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')
-  if (canResume(s)) {
-    return `<button class="act act-primary terminal-toggle-btn" aria-label="Open integrated terminal" data-tip="Open integrated terminal"
-             data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}">${glyph}</button>`
-  }
-  // Transcript gone → can't --resume, but we can /restart from notes in the embedded
-  // terminal (data-restart-slug switches the pty command). Needs a notes slug.
-  const slug = slugOf(s)
-  if (slug) {
-    return `<button class="act act-primary terminal-toggle-btn" aria-label="Restart in integrated terminal" data-tip="Restart in integrated terminal (from notes)"
-             data-session="${escapeHtml(s.sessionId || slug)}" data-cwd="${escapeHtml(s.cwd || '')}" data-restart-slug="${escapeHtml(slug)}" data-notes="${escapeHtml(s.notesPath || '')}">${glyph}</button>`
-  }
-  return ''
 }
 
 // Tracker-neutral tag glyph (currentColor → adapts to theme). Works for any
@@ -918,15 +898,6 @@ function isResumable(sessionId) {
 // (always live → resumable). When false, only Restart (rebuild from notes) works.
 function canResume(s) {
   return isResumable(s.sessionId) && s.resumable !== false
-}
-
-// External terminal — resume in the user's terminal app (set in Settings). Keeps
-// .pill + data-cwd so the existing handler fires; the ❯_-in-a-box arrow reads as
-// "open in a full external window".
-function itermPill(s) {
-  if (!canResume(s)) return ''
-  return `<button class="act pill" aria-label="Resume in your terminal" data-tip="Resume in your terminal (new window)"
-           data-cwd="${escapeHtml(s.cwd || '')}" data-session="${escapeHtml(s.sessionId)}" data-notes="${escapeHtml(s.notesPath || '')}">${svgIcon('<path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/>')}</button>`
 }
 
 function notesPill(notesPath) {
@@ -1175,16 +1146,6 @@ function openBoardMenu(anchor, key) {
     document.addEventListener('click', boardMenuOutside, true)
     document.addEventListener('keydown', boardMenuEsc, true)
   }, 0)
-}
-
-// Restart a closed/archived session via the /restart skill: reloads its notes
-// summary into a fresh session and re-registers it as active. (Distinct from
-// "Resume", which reloads the full raw transcript and needs a live sessionId.)
-function restartPill(s) {
-  const slug = slugOf(s)
-  if (!slug) return ''
-  return `<button class="act pill" aria-label="Restart in your terminal" data-tip="Restart from notes, in your terminal"
-           data-restore-slug="${escapeHtml(slug)}" data-restore-sid="${escapeHtml(s.sessionId || '')}">${svgIcon('<path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/>')}</button>`
 }
 
 // ── Open actions (Option A): destination toggle + Resume/Restart verbs ──
@@ -1513,7 +1474,11 @@ function sessionMenuRows(s) {
   const rows = []
 
   // Where the work happens
-  if (canResume(s)) {
+  if (s.collab) {
+    // Its agents run headless: nothing to resume, restart, open or pause in a terminal.
+    const why = 'A collab has no terminal: its agents run headless'
+    rows.push(row('', '', 'Resume in terminal', why), row('', '', 'Open in external terminal', why), row('', '', 'Pause', why))
+  } else if (canResume(s)) {
     rows.push(row('terminal-toggle-btn',
       `data-session="${escapeHtml(s.sessionId)}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}"`,
       'Resume in terminal'))
@@ -1525,20 +1490,30 @@ function sessionMenuRows(s) {
           'Restart from notes')
       : row('', '', 'Resume in terminal', 'No transcript and no notes folder to restart from'))
   }
-  rows.push(s.cwd
-    ? row('pill', `data-cwd="${escapeHtml(s.cwd)}"`, 'Open in external terminal')
-    : row('', '', 'Open in external terminal', 'This session has no working directory'))
-  rows.push(canPause(s)
-    ? row('pause-btn', `data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"`, 'Pause')
-    : row('', '', 'Pause', 'Nothing to pause — no terminal is open for this session'))
+  if (!s.collab) {
+    // The external terminal runs `claude --resume`: only a resumable Claude Code session.
+    rows.push(agentOf(s)
+      ? row('', '', 'Open in external terminal', `${AGENT_NAMES[agentOf(s)]} sessions run in the app's terminal`)
+      : !s.cwd
+        ? row('', '', 'Open in external terminal', 'This session has no working directory')
+        : canResume(s)
+          ? row('pill', `data-cwd="${escapeHtml(s.cwd)}" data-session="${escapeHtml(s.sessionId)}" data-notes="${escapeHtml(s.notesPath || '')}"`, 'Open in external terminal')
+          : row('', '', 'Open in external terminal', 'No conversation to resume in a terminal'))
+    rows.push(canPause(s)
+      ? row('pause-btn', `data-pause-sid="${escapeHtml(s.sessionId || '')}" data-pause-notes="${escapeHtml(s.notesPath || '')}"`, 'Pause')
+      : row('', '', 'Pause', 'Nothing to pause — no terminal is open for this session'))
+  }
 
   // Its references and its place in the list
   rows.push(sep)
   const prs = prLinksOf(s)
-  rows.push((prs.length || ticketsOf(s).length)
-    ? row('', `data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}"`,
-        'Sync tickets and pull requests')
-    : row('', '', 'Sync tickets and pull requests', 'This session has no ticket and no pull request'))
+  rows.push(s.collab && s.collabId
+    // Sync rewrites the notes the running collab writes its thread into.
+    ? row('', '', 'Sync tickets and pull requests', 'Sync once the collab has ended')
+    : (prs.length || ticketsOf(s).length)
+      ? row('', `data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}"`,
+          'Sync tickets and pull requests')
+      : row('', '', 'Sync tickets and pull requests', 'This session has no ticket and no pull request'))
   rows.push(row('', `data-open-board="${escapeHtml(sessionKey(s))}"`, 'Add to board…'))
   rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
     isPinnedSession(s) ? 'Unpin from the top' : 'Pin to the top'))

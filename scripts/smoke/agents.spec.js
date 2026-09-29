@@ -127,3 +127,41 @@ test('Close on a Codex session says it closes without a summary', async ({ page 
   await expect.poll(() => page.evaluate(() => window.__CALLS__.map(c => c.cmd))).toContain('close_session')
   expect(await page.evaluate(() => window.__CALLS__.some(c => c.cmd === 'wrap_session'))).toBe(false)
 })
+
+test('a Codex session cannot be opened in an external terminal, and says why', async ({ page }) => {
+  await stub(page, ALL)
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.locator('.list-card', { hasText: 'try codex' }).click({ button: 'right' })
+  const row = page.locator('.board-menu button', { hasText: 'Open in external terminal' })
+  await expect(row).toBeDisabled()
+  await expect(row).toHaveAttribute('title', /app's terminal/)
+})
+
+test('a failed agent probe says so in +New instead of hiding the agents', async ({ page }) => {
+  await page.addInitScript(() => {
+    let t
+    Object.defineProperty(window, '__TAURI__', { configurable: true, get() { return t }, set(v) {
+      const orig = v.core.invoke
+      v.core.invoke = (cmd, args) => cmd === 'agents_available' ? Promise.reject('could not detect the agent CLIs (timed out)') : orig(cmd, args)
+      t = v
+    } })
+  })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.locator('#new-session-btn').click()
+  await expect(page.locator('#ns-agent-hint')).toContainText('could not detect the agent CLIs')
+})
+
+test('without Claude Code, Collab pairs the two agents that are installed', async ({ page }) => {
+  await stub(page, [
+    { agent: 'claude', found: false, version: '', supported: false, hint: '' },
+    { agent: 'codex', found: true, version: 'codex-cli 0.158.0', supported: true, hint: '' },
+    { agent: 'copilot', found: true, version: '1.0.89', supported: true, hint: '' },
+  ])
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.locator('#new-session-btn').click()
+  await page.locator('#ns-agent').selectOption('collab')
+  await expect(page.locator('#ns-collab-author option')).toHaveText(['Codex', 'Copilot'])
+})

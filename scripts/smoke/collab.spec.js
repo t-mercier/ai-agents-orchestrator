@@ -84,3 +84,40 @@ test('a running collab shows its thread and Stop, and no terminal, Resume or Res
   await panel.locator('[data-collab-stop="c-1"]').click()
   await expect.poll(() => page.evaluate(() => (window.__CALLS__.find(c => c.cmd === 'collab_stop') || {}).args?.id)).toBe('c-1')
 })
+
+// Review finding: the right-click menu offered "Restart from notes" on a collab, which
+// started Claude /restart-session in the repository the author is writing in.
+test('the right-click menu of a collab offers no terminal, resume or pause', async ({ page }) => {
+  await stub(page)
+  const card = page.locator('.list-card', { hasText: 'retry collab' })
+  await card.click({ button: 'right' })
+  const menu = page.locator('.board-menu')
+  await expect(menu).toBeVisible()
+  await expect(menu.locator('.terminal-toggle-btn, .pill, .pause-btn')).toHaveCount(0)
+  await expect(menu.locator('button[disabled]', { hasText: 'Resume in terminal' })).toHaveAttribute('title', /no terminal/)
+})
+
+test('the board shows the Collab chip', async ({ page }) => {
+  await stub(page)
+  await page.evaluate(() => window.setViewMode('board'))
+  await page.waitForSelector('#board-view .kb-col')
+  await page.waitForFunction(() => window._boardIndex && window._boardIndex['/w/FEAT/retry-collab/notes.md'])
+  await page.evaluate(() => {
+    let st = CSMBoard.emptyState()
+    st = CSMBoard.placeSession(st, '/w/FEAT/retry-collab/notes.md', st.columns[0].id)
+    window.applyBoard(st)
+  })
+  await expect(page.locator('.kb-card', { hasText: 'retry collab' }).locator('.agent-chip.collab')).toHaveText('Collab')
+})
+
+test('a collab started from the Closed tab is shown under Running', async ({ page }) => {
+  await stub(page)
+  await page.locator('.tab-btn[data-tab="closed"]').click()
+  await page.locator('#new-session-btn').click()
+  await page.locator('#ns-agent').selectOption('collab')
+  await page.locator('#ns-name').fill('from closed')
+  await page.locator('#ns-startin').fill('/w/app')
+  await page.locator('#ns-collab-task').fill('Add a retry')
+  await page.locator('#new-session-form').evaluate((f) => f.requestSubmit())
+  await expect(page.locator('.tab-btn[data-tab="running"]')).toHaveClass(/active/)
+})

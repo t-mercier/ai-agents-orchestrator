@@ -79,6 +79,8 @@
     // No per-card space chip on the board — the shared ⚲ Filter popover (Spaces
     // section) scopes it instead.
     const chips = [
+      // Which agent runs it (none for Claude Code), as on the list card.
+      window.agentChip ? window.agentChip(s) : '',
       s.category ? chip(s.category, { cat: true }) : '',
       ticketChip,
     ].filter(Boolean).join('')

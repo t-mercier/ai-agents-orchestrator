@@ -898,7 +898,15 @@ async function fillAgentChoice() {
   if (!field || !sel || !window.api.agentsAvailable) return
   if (!agentsKnown) {
     const got = await window.api.agentsAvailable()
-    if (!got || !got.length) return   // a failed probe is asked again at the next +New
+    if (got && got.error) {
+      // Said, not hidden: an empty list would read as "only Claude Code is installed".
+      field.hidden = false
+      sel.innerHTML = '<option value="claude">Claude Code</option>'
+      hint.textContent = `${got.error}. Only Claude Code is offered; open ＋New again to retry.`
+      hint.hidden = false
+      return
+    }
+    if (!got || !got.length) return   // asked again at the next +New
     agentsKnown = got
   }
   const names = { claude: 'Claude Code', codex: 'Codex', copilot: 'Copilot' }
@@ -909,9 +917,10 @@ async function fillAgentChoice() {
   const last = (() => { try { return localStorage.getItem('csm.nsAgent') } catch { return null } })()
   const list = usable.includes('claude') ? usable : ['claude', ...usable]
   // A collab needs two different agents: offered only when this machine has two.
-  const collab = list.length >= 2 ? '<option value="collab"' + (last === 'collab' ? ' selected' : '') + '>Collab — two agents review each other</option>' : ''
-  sel.innerHTML = list.map(a => `<option value="${a}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('') + collab
-  const opts = (pick) => list.map((a, i) => `<option value="${a}"${i === pick ? ' selected' : ''}>${names[a]}</option>`).join('')
+  const collab = usable.length >= 2 ? '<option value="collab"' + (last === 'collab' ? ' selected' : '') + '>Collab — two agents review each other</option>' : ''
+  sel.innerHTML = list.map(a => `<option value="${escapeAttr(a)}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('') + collab
+  // A collab pairs agents that are installed: Claude Code only when it is.
+  const opts = (pick) => usable.map((a, i) => `<option value="${escapeAttr(a)}"${i === pick ? ' selected' : ''}>${names[a]}</option>`).join('')
   document.getElementById('ns-collab-author').innerHTML = opts(0)
   document.getElementById('ns-collab-reviewer').innerHTML = opts(1)
   hint.textContent = notes.join(' ')
@@ -1013,6 +1022,8 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
     if (!r || !r.ok) { showNsError('Could not start: ' + ((r && r.error) || 'unknown error')); return }
     newSessionModal.close()
     if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')
+    // A running collab is listed under Running; started from another tab, show it there.
+    if (activeTab !== 'running') switchTab('running')
     selectedKey = r.notesPath
     window._lastSelectedKey = r.notesPath
     if (window.refreshSessions) window.refreshSessions()
@@ -1341,12 +1352,16 @@ async function maybeOfferAppUpdate(el) {
   el.hidden = false
   const install = el.querySelector('.sb-install')
   install.addEventListener('click', async () => {
-    // The restart ends every session running in an embedded terminal.
+    // The restart ends every session running in an embedded terminal, and every collab.
     const live = window.liveTerminalCount ? window.liveTerminalCount() : 0
-    if (live > 0) {
+    const collabs = window.api.collabList ? (await window.api.collabList()).length : 0
+    if (live > 0 || collabs > 0) {
+      const parts = []
+      if (live) parts.push(`${live} session${live > 1 ? 's' : ''} running in the app, which can be resumed afterwards`)
+      if (collabs) parts.push(`${collabs} collab${collabs > 1 ? 's' : ''}, which will be closed as stopped`)
       const choice = await window.confirmAction({
         title: 'Restart to update?',
-        body: `${live} session${live > 1 ? 's are' : ' is'} running in the app. Restarting stops ${live > 1 ? 'them' : 'it'}; ${live > 1 ? 'they' : 'it'} can be resumed afterwards.`,
+        body: `Restarting stops ${parts.join(', and ')}.`,
         confirmLabel: 'Install and restart',
       })
       if (choice !== 'confirm') return

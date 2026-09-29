@@ -57,7 +57,10 @@
     ptySpawn: (sessionId, cwd, cols, rows, restartSlug, command, notesPath, agent) =>
       invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '', notesPath: notesPath || null, agent: agent || null }),
     // [{ agent, found, version, supported, hint }] for claude, codex, copilot.
-    agentsAvailable: () => invoke('agents_available').catch(() => []),
+    // A failed probe resolves { error }: the form says so rather than offering Claude alone.
+    agentsAvailable: () => invoke('agents_available').catch((e) => ({ error: String(e) })),
+    // The running collabs; [] when they cannot be listed (the restart warning then omits them).
+    collabList: () => invoke('collab_list').catch(() => []),
     // A collab: { ok, id, notesPath } at once; its turns follow as collab-event.
     collabStart: ({ category, name, ticket, root, repo, mode, agents, task } = {}) =>
       invoke('collab_start', { category: category || '', name: name || '', ticket: ticket || '', root: root || '', repo: repo || '', mode, agents, task: task || '' })

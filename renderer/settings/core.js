@@ -49,6 +49,8 @@
       // Brutus moves as soon as the Assistant tab's collect runs, which is before a Save
       // can still be refused, so his home reverts with the rest.
       brutusHome: brutusHome(),
+      // Written by General's collect, which runs before a Save can still be refused.
+      updateCheck: (() => { try { return localStorage.getItem('csm.updateCheck') } catch { return null } })(),
     }
   }
   function brutusHome() {
@@ -65,6 +67,10 @@
     if (s.terminal && window.setTerminalPrefs) window.setTerminalPrefs(s.terminal)
     if (s.board && window.CSMBoard) { window.CSMBoard.save(s.board); refreshBoardIfOpen() }
     if (s.brutusHome && s.brutusHome !== brutusHome() && window.CSMBrutusUI) window.CSMBrutusUI.setHome(s.brutusHome)
+    try {
+      if (s.updateCheck === null) localStorage.removeItem('csm.updateCheck')
+      else if (s.updateCheck !== undefined) localStorage.setItem('csm.updateCheck', s.updateCheck)
+    } catch {}
   }
 
   // Registry: each tab registers populate/collect/validate hooks.

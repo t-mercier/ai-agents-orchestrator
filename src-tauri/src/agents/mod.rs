@@ -87,15 +87,24 @@ impl AgentId {
     }
 }
 
-/// Which agent CLIs this machine has, through a login shell (the app's own PATH, when
-/// launched from Finder, has none of them): `[{agent, found, version, supported, hint}]`.
-#[tauri::command(async)]
-pub fn agents_available() -> serde_json::Value {
+/// The probe, as the login shell runs it. The login shell provides the PATH (the app's own,
+/// when launched from Finder, has none of the CLIs); the probe itself runs in /bin/sh, so a
+/// fish user's shell never has to parse POSIX syntax. Each `--version` gets eight seconds
+/// (`perl alarm`: macOS has no `timeout`), so one slow CLI cannot empty the whole list.
+fn probe_line() -> String {
     let script = "for a in claude codex copilot; do p=$(command -v $a) || { echo \"$a|||\"; continue; }; \
                   r=$(readlink -f \"$p\" 2>/dev/null || echo \"$p\"); \
-                  v=$($a --version 2>/dev/null | head -1); echo \"$a|$p|$r|$v\"; done";
-    let out = crate::prstatus::run_within(script, std::time::Duration::from_secs(20)).unwrap_or_default();
-    serde_json::Value::Array(out.lines().filter_map(availability).collect())
+                  v=$(perl -e 'alarm 8; exec @ARGV' \"$a\" --version 2>/dev/null | head -1); echo \"$a|$p|$r|$v\"; done";
+    format!("exec /bin/sh -c {}", shell_quote(script))
+}
+
+/// Which agent CLIs this machine has: `[{agent, found, version, supported, hint}]`. A probe
+/// that fails is an error, not an empty list: an empty list reads as "only Claude Code".
+#[tauri::command(async)]
+pub fn agents_available() -> Result<serde_json::Value, String> {
+    let out = crate::prstatus::run_within(&probe_line(), std::time::Duration::from_secs(40))
+        .map_err(|e| format!("could not detect the agent CLIs ({e})"))?;
+    Ok(serde_json::Value::Array(out.lines().filter_map(availability).collect()))
 }
 
 /// One line of `agents_available`'s probe, `agent|path|resolved path|version`.
@@ -289,6 +298,19 @@ mod tests {
             command(AgentId::Copilot, &launch(Some("4fa67fb9"), Some("/sync-refs /n.md"), "", Mode::Headless)),
             "AO_HEADLESS=1 copilot --resume='4fa67fb9' -p '/sync-refs /n.md' --allow-all-tools"
         );
+    }
+
+    // The login shell only provides the PATH; the probe itself runs in /bin/sh, so a fish
+    // user's shell does not have to parse POSIX syntax. Each CLI's --version has its own
+    // limit, so one slow CLI cannot empty the whole list.
+    #[test]
+    fn the_probe_runs_in_sh_whatever_the_login_shell() {
+        let line = probe_line();
+        assert!(line.starts_with("exec /bin/sh -c "), "{line}");
+        assert!(line.contains("for a in claude codex copilot"));
+        let out = std::process::Command::new("/bin/sh").args(["-c", &line]).env("PATH", "/usr/bin:/bin").output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(text.lines().count(), 3, "one line per CLI, found or not: {text}");
     }
 
     #[test]
