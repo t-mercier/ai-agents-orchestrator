@@ -262,11 +262,11 @@ pub(crate) fn drive(s: Start, line_for: &LineFor, emit: &(dyn Fn(Value) + Send +
             Outcome::Stopped => break "stopped".to_string(),
             Outcome::TimedOut => break format!("{} timed out after 20 minutes", crate::agents::session::display_name(agent)),
             Outcome::Failed(code) => {
-                let why = tail(result.output.trim(), 400).to_string();
+                let why = tail(format!("{}\n{}", result.stdout.trim(), result.stderr.trim()).trim(), 400).to_string();
                 break format!("{} failed (exit {code}): {why}", crate::agents::session::display_name(agent));
             }
         }
-        let answer = std::fs::read_to_string(&last_msg).ok().filter(|t| !t.trim().is_empty()).unwrap_or(result.output);
+        let answer = std::fs::read_to_string(&last_msg).ok().filter(|t| !t.trim().is_empty()).unwrap_or(result.stdout);
         let d = Done { role, agent, summary: tail(answer.trim(), SUMMARY_MAX).to_string() };
         let stat = if role == Role::Author {
             super::git::changes_since(Path::new(&s.repo), &s.base, 0).map(|(st, _)| st).unwrap_or_default()
