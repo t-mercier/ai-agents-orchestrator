@@ -62,6 +62,23 @@
         <small class="field-hint" id="ns-agent-hint" hidden></small>
       </label>
 
+      <!-- Collab (a cross-review by two agents): shown when "Collab" is the Agent. -->
+      <div id="ns-collab-field" hidden>
+        <label class="modal-field">
+          <span>Author <em>— makes the change</em></span>
+          <select id="ns-collab-author"></select>
+        </label>
+        <label class="modal-field">
+          <span>Reviewer <em>— reads the change and writes nothing</em></span>
+          <select id="ns-collab-reviewer"></select>
+        </label>
+        <label class="modal-field">
+          <span>Task</span>
+          <textarea id="ns-collab-task" rows="4" placeholder="What the author should do" spellcheck="false"></textarea>
+          <small class="field-hint">Runs in the <strong>Start in</strong> folder, which must be a git checkout with nothing uncommitted. The author makes the change, the reviewer lists what to fix, the author fixes it — up to two reviews. Nothing is committed. A Claude Code author runs only the commands your Claude Code settings allow; a Copilot author runs every tool except <code>git commit</code> and <code>git push</code> without asking.</small>
+        </label>
+      </div>
+
       <label class="modal-field">
         <span>Category</span>
         <!-- Options are populated from config at boot (populateNewSessionCategories) -->
@@ -88,7 +105,7 @@
         </div>
       </label>
 
-      <label class="modal-field">
+      <label class="modal-field" id="ns-branch-field">
         <span>Branch <em>(optional — needs a git checkout above)</em></span>
         <input id="ns-branch" type="text" placeholder="feat/my-branch" autocomplete="off" spellcheck="false">
         <span class="field-hint field-warn">Starting <strong>inside a repo</strong> also runs <code>git fetch</code> and <strong>rebases the branch onto <code>origin</code></strong> — with Branch blank it uses the branch you are already on. Pick a folder outside any repo, or leave <strong>Start in</strong> blank, to skip git entirely.</span>
@@ -102,7 +119,7 @@
 
       <!-- Open destination: Embedded (in-app terminal) vs external Terminal. Shares the
            same sticky pref (csm.openIn) as Resume/Restart; populated on open in app.js. -->
-      <div class="modal-field">
+      <div class="modal-field" id="ns-dest-field">
         <span>Open in</span>
         <div id="ns-dest"></div>
       </div>

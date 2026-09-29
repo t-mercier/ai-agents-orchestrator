@@ -2336,6 +2336,7 @@ body.bru-resizing .layout { transition: none; }
 }
 .agent-chip.codex { color: var(--agent-codex); background: rgba(var(--agent-codex-rgb), 0.14); }
 .agent-chip.copilot { color: var(--agent-copilot); background: rgba(var(--agent-copilot-rgb), 0.14); }
+.agent-chip.collab { color: var(--accent); background: rgba(var(--accent-rgb), 0.14); }
 
 /* A document Brutus wrote, in his answer: its name and an Open button. */
 .bru-doc { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; margin: 2px 0;
@@ -2344,3 +2345,13 @@ body.bru-resizing .layout { transition: none; }
 .bru-doc-open { font: 600 11px var(--font); color: var(--on-accent); background: var(--accent); border: none;
   border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 .bru-doc-open:hover { filter: brightness(1.08); }
+
+/* A collab's thread in the detail panel: one row per turn, a review's findings under it. */
+.collab-thread { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.collab-turn { font-size: 12px; line-height: 1.5; color: var(--text-primary); padding: 6px 10px; border-radius: 8px;
+  background: rgba(var(--tint), 0.04); border: 1px solid var(--card-border); overflow-wrap: anywhere; }
+.collab-findings { margin: 4px 0 0; padding-left: 16px; color: var(--text-secondary); }
+.collab-now { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+.collab-spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(var(--accent-rgb), 0.3);
+  border-top-color: var(--accent); animation: collab-spin 0.9s linear infinite; flex: none; }
+@keyframes collab-spin { to { transform: rotate(360deg); } }

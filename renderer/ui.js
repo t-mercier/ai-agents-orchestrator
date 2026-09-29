@@ -333,6 +333,7 @@ function agentFor(sid, notesPath) {
 window.agentFor = agentFor
 // Claude Code sessions stay unbadged, so today's cards look exactly as they did.
 function agentChip(s) {
+  if (s && s.collab) return `<span class="agent-chip collab" title="Two agents on one task: ${escapeHtml(s.collab)}">Collab</span>`
   const a = agentOf(s)
   return a ? `<span class="agent-chip ${a}" title="Runs in ${AGENT_NAMES[a]}">${AGENT_NAMES[a]}</span>` : ''
 }
@@ -716,6 +717,7 @@ function slugOf(s) {
 }
 
 function embeddedTerminalAction(s) {
+  if (s.collab) return ''   // a collab has no terminal
   const glyph = svgIcon('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')
   if (canResume(s)) {
     return `<button class="act act-primary terminal-toggle-btn" aria-label="Open integrated terminal" data-tip="Open integrated terminal"
@@ -1215,11 +1217,31 @@ function closeVerb(s) {
 }
 
 function restartBtn(s) {
-  if (canResume(s)) return ''
+  if (canResume(s) || s.collab) return ''
   const slug = slugOf(s)
   if (!slug) return ''
   return `<button class="act-verb" data-open-restart data-restore-slug="${escapeHtml(slug)}" data-restore-sid="${escapeHtml(s.sessionId || '')}" data-cwd="${escapeHtml(s.cwd || '')}" data-notes="${escapeHtml(s.notesPath || '')}"
            data-tip="Restart from notes">${svgIcon('<path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/>')}Restart</button>`
+}
+
+// A collab's thread: one entry per finished turn (a review's findings under it), the turn
+// in progress, and Stop while it runs. Written from the session's notes, so a finished
+// collab shows the same thread.
+function collabSection(s) {
+  if (!s.collab) return ''
+  const items = []
+  for (const line of String(s.collabThread || '').split('\n')) {
+    const top = /^- (.*)$/.exec(line)
+    const sub = /^\s+- (.*)$/.exec(line)
+    if (top) items.push({ text: top[1], findings: [] })
+    else if (sub && items.length) items[items.length - 1].findings.push(sub[1])
+  }
+  const running = s.state === 'active' && s.collabId
+  const rows = items.map(it => `<li class="collab-turn"><div>${escapeHtml(it.text)}</div>${it.findings.length ? `<ul class="collab-findings">${it.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : ''}</li>`).join('')
+  const now = running ? `<li class="collab-turn collab-now"><span class="collab-spin"></span>${escapeHtml(s.lastActivity || 'Starting…')}</li>` : ''
+  const stop = running ? `<button type="button" class="act-verb" data-collab-stop="${escapeHtml(s.collabId)}" data-tip="Stop the collab; the change stays in the working tree">Stop</button>` : ''
+  const empty = !rows && !now ? '<div class="detail-activity">No turn has finished yet.</div>' : ''
+  return detailSection('Collab thread', `${empty}<ol class="collab-thread">${rows}${now}</ol>${stop}`)
 }
 
 function renderDetailPanel(s, tab = 'running') {
@@ -1311,13 +1333,14 @@ function renderDetailPanel(s, tab = 'running') {
   // reach this row, so dropping them from the toolbar simply lost the shortcut.
   const refs = [ticketPill(s), prPill(s), sync, notesPill(s.notesPath), boardPill(s), editBtn].filter(Boolean).join('')
   // The pinned set closes the row: the user's own skills, after the app's fixed verbs.
-  const pins = pinSlotsHtml('session', pinCtxFor(s))
+  const pins = s.collab ? '' : pinSlotsHtml('session', pinCtxFor(s))
   const actions = launch + (launch && refs ? '<span class="act-sep"></span>' : '') + refs +
     (pins ? '<span class="act-sep"></span>' + pins : '')
 
   setHtml(infoEl, `
     ${metaRows ? `<div class="detail-meta">${metaRows}</div>` : ''}
     ${goalSection}
+    ${collabSection(s)}
     ${activitySection}
     ${nextStepsSection}
     ${actions ? detailSection('Actions', `<div class="acts">${actions}</div>`) : ''}
@@ -1392,6 +1415,7 @@ async function runPinnedSkill(btn) {
   const name = btn.dataset.pinSkill
   if (!name) return openSkillPicker(scope, Number(btn.dataset.pinIndex))
   const s = scope === 'session' ? sessionByKey(window._lastSelectedKey) : null
+  if (s && s.collab) { if (window.showBanner) window.showBanner('Pinned skills run in a session with a terminal; a collab has none.'); return }
   if (agentOf(s)) { if (window.showBanner) window.showBanner(`Pinned skills run in Claude Code sessions only for now — this one runs in ${AGENT_NAMES[agentOf(s)]}.`); return }
   const ctx = scope === 'session' ? (s ? pinCtxFor(s) : {}) : {}
   const d = L.decide(name, ctx)
@@ -1831,6 +1855,7 @@ function routeRestart(slug, sid, cwd, notesPath) {
 // Pick the right verb for a session (Resume when possible, else Restart from notes)
 // and route per the destination pref. Used by Enter + hover quick-actions.
 function openSessionDefault(s) {
+  if (s.collab) return false
   if (canResume(s)) { routeResume(s.sessionId, s.cwd || '', s.notesPath || ''); return true }
   const slug = slugOf(s)
   if (slug) { routeRestart(slug, s.sessionId || '', s.cwd || '', s.notesPath || ''); return true }
@@ -1963,6 +1988,13 @@ function installDelegatedHandlers() {
       if (live) {
         warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — you likely have it open in a terminal. Resuming opens a second instance on the same session, which can clash.`, open)
       } else { open() }
+      return
+    }
+
+    const collabStop = e.target.closest('[data-collab-stop]')
+    if (collabStop) {
+      collabStop.disabled = true
+      window.api.collabStop(collabStop.dataset.collabStop).then(() => window.refreshSessions && window.refreshSessions())
       return
     }
 

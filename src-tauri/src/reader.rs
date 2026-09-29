@@ -808,7 +808,7 @@ const FIRST_WRITE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// A running collab, shaped like a running session: busy, no terminal, the turn in
 /// progress as its activity line.
-pub(crate) fn collab_session(cfg: &Value, notes_path: &str, repo: &str, current: Option<(&str, &str)>) -> Value {
+pub(crate) fn collab_session(cfg: &Value, id: &str, notes_path: &str, repo: &str, current: Option<(&str, &str)>) -> Value {
     let content = fs::read_to_string(notes_path).unwrap_or_default();
     let fm = parse_frontmatter(&content);
     let doing = current.map(|(role, agent)| {
@@ -820,6 +820,8 @@ pub(crate) fn collab_session(cfg: &Value, notes_path: &str, repo: &str, current:
     });
     json!({
         "sessionId": "",
+        "collabId": id,
+        "collabThread": extract_section(&content, "Collab thread").map(Value::String).unwrap_or(Value::Null),
         "collab": fm.get("collab_mode").cloned().unwrap_or_else(|| "cross-review".into()),
         "collabAgents": fm.get("collab_agents").cloned().unwrap_or_default(),
         "name": fm.get("name").cloned().unwrap_or_default(),
@@ -980,7 +982,7 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
     }
     for c in crate::collab::engine::live() {
         let cur = *c.current.lock().unwrap();
-        out.push(collab_session(&cfg, &c.notes_path, &c.repo, cur.map(|(r, a)| (r.as_str(), a.as_str()))));
+        out.push(collab_session(&cfg, &c.id, &c.notes_path, &c.repo, cur.map(|(r, a)| (r.as_str(), a.as_str()))));
     }
     // A `claude -p` collab turn writes a pidfile like a session; it is a turn, not one.
     let collab_groups = crate::collab::engine::turn_groups();
@@ -1933,6 +1935,7 @@ fn scan_historical() -> Vec<Value> {
                 "agent": fm.get("agent").map(|a| a.trim()).filter(|a| !a.is_empty()).unwrap_or("claude"),
                 // A collab session: no terminal, so no Resume, Restart or pinned skills.
                 "collab": fm.get("collab_mode").cloned().map(Value::String).unwrap_or(Value::Null),
+                "collabThread": fm.get("collab_mode").and_then(|_| extract_section(&content, "Collab thread")).map(Value::String).unwrap_or(Value::Null),
                 "cwd": cwd,
                 "resumable": resumable,
                 "category": cat,
@@ -2923,7 +2926,8 @@ mod tests {
             repo: "/w/app", base: "abc1234", category: "FEAT", ticket: "", name: "retry", task: "Add a retry",
             started_at: "2026-09-29 10:00",
         })).unwrap();
-        let s = collab_session(&serde_json::json!({}), notes.to_str().unwrap(), "/w/app", Some(("reviewer", "codex")));
+        let s = collab_session(&serde_json::json!({}), "c1", notes.to_str().unwrap(), "/w/app", Some(("reviewer", "codex")));
+        assert_eq!(s["collabId"], "c1");
         assert_eq!((s["collab"].as_str(), s["status"].as_str(), s["state"].as_str()), (Some("cross-review"), Some("busy"), Some("active")));
         assert_eq!(s["lastActivity"], "Codex is reviewing the change");
         assert_eq!((s["name"].as_str(), s["category"].as_str(), s["goal"].as_str()), (Some("retry"), Some("FEAT"), Some("Add a retry")));

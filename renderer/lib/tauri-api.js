@@ -58,6 +58,12 @@
       invoke('pty_spawn', { sessionId, cwd, cols: cols || 0, rows: rows || 0, restartSlug: restartSlug || '', command: command || '', notesPath: notesPath || null, agent: agent || null }),
     // [{ agent, found, version, supported, hint }] for claude, codex, copilot.
     agentsAvailable: () => invoke('agents_available').catch(() => []),
+    // A collab: { ok, id, notesPath } at once; its turns follow as collab-event.
+    collabStart: ({ category, name, ticket, root, repo, mode, agents, task } = {}) =>
+      invoke('collab_start', { category: category || '', name: name || '', ticket: ticket || '', root: root || '', repo: repo || '', mode, agents, task: task || '' })
+        .then((r) => ({ ok: true, ...(r || {}) }))
+        .catch((e) => ({ ok: false, error: String(e) })),
+    collabStop: (id) => invoke('collab_stop', { id }).catch(() => false),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
     listSkills: () => invoke('list_skills'),
     runSkill: (skill, cwd, resume) => invoke('run_skill', { skill, cwd, resume }),
