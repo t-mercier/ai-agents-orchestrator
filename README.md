@@ -89,7 +89,7 @@ FEAT-1842*, *what did I decide last week?* — from the bubble in the corner, a 
 the right, or **⌘K** from anywhere in the app. He reads the dashboard and the sessions' notes,
 answers with the sessions as clickable chips, and keeps a memory of what you tell him, so he
 gets better the more you use him. Rename him and pick his style — concise, friendly, casual,
-nerdy or sarcastic — in **Settings → Assistant**, or turn him off there if you would rather not have an assistant.
+nerdy or sarcastic — in **Settings → Assistant**, or turn him off there if you would rather not have an assistant. Ask him for a document — a brief, a summary to share — and he writes it and gives you a card to open it.
 
 He can read and remember, nothing else: every answer is a Claude Code run started with
 `--restricted`, no MCP servers and five file tools, reading only your category and knowledge
@@ -431,7 +431,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 
 ## Security
 
-- **Brutus is sandboxed by flags, not by his prompt** — `--restricted` confines his reads to your category and knowledge folders (never a space root, never your home folder), `--strict-mcp-config` removes every MCP server, and his only allowed write is his own `memory.md`. `scripts/probe-brutus-sandbox.sh` checks all of it against your installed Claude Code, judging each check on the tool's result, not the model's answer.
+- **Brutus is sandboxed by flags, not by his prompt** — `--restricted` confines his reads to your category and knowledge folders (never a space root, never your home folder), `--strict-mcp-config` removes every MCP server, and he may write only his own `memory.md` and the documents he writes for you in his `docs/` folder. An HTML document opens with scripts and network requests blocked, whatever it contains. `scripts/probe-brutus-sandbox.sh` checks all of it against your installed Claude Code, judging each check on the tool's result, not the model's answer.
 - **Every shell interpolation is quoted** — `claude` runs through a login shell, because a Finder-launched app has no `claude` on its PATH; each value interpolated into that command line is POSIX single-quote escaped first. `open`, `osascript` and `git` are spawned with separate args, and AppleScript uses the `on run argv` pattern.
 - Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
 - The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.

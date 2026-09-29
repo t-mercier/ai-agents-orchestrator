@@ -465,6 +465,33 @@ pub fn brutus_status() -> Value {
     })
 }
 
+/// Open a document he wrote. An HTML one opens as a sealed copy (brutus_home::sealed_html):
+/// it was written from notes other people wrote, so it must not run a script or reach the
+/// network once in a browser.
+#[tauri::command]
+pub fn brutus_open_doc(name: String) -> Result<(), String> {
+    if !brutus_home::valid_doc_name(&name) {
+        return Err(format!("not one of his documents: {name}"));
+    }
+    let dir = brutus_home::ensure()?;
+    let path = dir.join("docs").join(&name);
+    if !path.is_file() {
+        return Err(format!("{name} is not in his docs folder"));
+    }
+    let target = if name.ends_with(".html") {
+        let sealed = dir.join("docs").join(".open");
+        std::fs::create_dir_all(&sealed).map_err(|e| e.to_string())?;
+        let html = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let copy = sealed.join(&name);
+        crate::atomic_write(&copy, &brutus_home::sealed_html(&html))?;
+        copy
+    } else {
+        path
+    };
+    let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    Command::new(opener).arg(target).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn brutus_open_memory() -> Result<(), String> {
     let dir = brutus_home::ensure()?;

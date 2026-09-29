@@ -27,6 +27,15 @@
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\[\[session:([^\]]+?)\]\]/g, (_, n) => chipFor(n.trim(), sessions))
+      .replace(/\[\[doc:([^\]]+?)\]\]/g, (all, n) => docCard(n.trim()) || all)
+  }
+
+  // A document he wrote into his docs folder: one plain .md or .html file, the same rule
+  // the backend applies before opening it. Anything else stays text.
+  const DOC_NAME = /^(?!\.)[A-Za-z0-9._-]+\.(md|html)$/
+  function docCard(name) {
+    if (!DOC_NAME.test(name)) return ''
+    return `<span class="bru-doc"><span class="bru-doc-name">📄 ${name}</span><button type="button" class="bru-doc-open" data-bru-doc="${name}">Open</button></span>`
   }
 
   function renderAnswer(text, sessions) {
@@ -56,6 +65,7 @@
 
   function stepLabel(step, sessions) {
     const t = step.target || ''
+    if ((step.tool === 'Edit' || step.tool === 'Write') && /\/docs\/[^/]+$/.test(t)) return `Writing ${base(t)}`
     if (step.tool === 'Edit' || step.tool === 'Write') return 'Writing to his memory'
     if (step.tool === 'Grep' || step.tool === 'Glob') return `Searching for "${t}"`
     if (base(t) === 'dashboard.md') return 'Reading the dashboard'

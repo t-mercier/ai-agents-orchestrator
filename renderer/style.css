@@ -2336,3 +2336,11 @@ body.bru-resizing .layout { transition: none; }
 }
 .agent-chip.codex { color: var(--agent-codex); background: rgba(var(--agent-codex-rgb), 0.14); }
 .agent-chip.copilot { color: var(--agent-copilot); background: rgba(var(--agent-copilot-rgb), 0.14); }
+
+/* A document Brutus wrote, in his answer: its name and an Open button. */
+.bru-doc { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; margin: 2px 0;
+  border-radius: 8px; background: rgba(var(--tint), 0.06); border: 1px solid var(--card-border); }
+.bru-doc-name { font: 600 12px var(--font); color: var(--text-primary); }
+.bru-doc-open { font: 600 11px var(--font); color: var(--on-accent); background: var(--accent); border: none;
+  border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.bru-doc-open:hover { filter: brightness(1.08); }

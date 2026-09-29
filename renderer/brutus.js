@@ -118,7 +118,7 @@
     return lead + turns.map(turnHTML).join('') + liveHTML()
   }
   const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
-  const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his own memory</span></div></div>`
+  const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his memory and his docs</span></div></div>`
 
   function render() {
     // A panel already on screen is re-rendered in place: only a panel that is opening
@@ -179,6 +179,11 @@
   function onClick(e) {
     const chip = e.target.closest('[data-brutus-session]')
     if (chip) return flash(chip.dataset.brutusSession)
+    const doc = e.target.closest('[data-bru-doc]')
+    if (doc) {
+      window.api.brutusOpenDoc(doc.dataset.bruDoc).then(r => { if (r && !r.ok) say(`Could not open ${doc.dataset.bruDoc}: ${r.error}`) })
+      return
+    }
     const sugg = e.target.closest('.bru-sugg button')
     if (sugg) return send(sugg.textContent)
     const a = e.target.closest('[data-bru]'); if (!a) return

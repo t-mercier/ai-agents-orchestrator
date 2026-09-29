@@ -65,3 +65,31 @@ test('turning him off stops the run in progress', async ({ page }) => {
   await setEnabled(page, false)
   await expect.poll(() => page.evaluate(() => window.__CALLS__.includes('brutus_cancel'))).toBe(true)
 })
+
+// A document he wrote shows as a card; Open asks the backend for that file by name.
+test('a document in his answer opens from its card', async ({ page }) => {
+  await page.addInitScript(() => {
+    let t
+    Object.defineProperty(window, '__TAURI__', {
+      configurable: true,
+      get() { return t },
+      set(v) {
+        const orig = v.core.invoke
+        window.__CALLS__ = []
+        v.core.invoke = (cmd, args) => { window.__CALLS__.push({ cmd, args }); return orig(cmd, args) }
+        t = v
+      },
+    })
+  })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.evaluate(() => {
+    window.__BRUTUS_SCRIPT__ = { reads: [], text: 'Done: [[doc:perf-brief.html]]' }
+    try { localStorage.removeItem('csm.brutusLog') } catch {}
+    window.CSMBrutusUI.open()
+  })
+  await page.locator('.bru-panel input').fill('write me a brief')
+  await page.locator('.bru-panel input').press('Enter')
+  await page.locator('.bru-panel [data-bru-doc="perf-brief.html"]').click()
+  await expect.poll(() => page.evaluate(() => (window.__CALLS__.find(c => c.cmd === 'brutus_open_doc') || {}).args?.name)).toBe('perf-brief.html')
+})

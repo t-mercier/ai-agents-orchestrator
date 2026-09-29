@@ -75,6 +75,7 @@
     brutusReset: () => invoke('brutus_reset').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     // A status read that fails reads as "nothing known", never as an error banner.
     brutusStatus: () => invoke('brutus_status').catch(() => ({ memoryCount: 0, running: false, hasConversation: false })),
+    brutusOpenDoc: (name) => invoke('brutus_open_doc', { name }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     brutusOpenMemory: () => invoke('brutus_open_memory').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     onEvent: (name, cb) => window.__TAURI__.event.listen(name, (e) => cb(e.payload)),
 

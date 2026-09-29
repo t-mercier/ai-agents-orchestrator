@@ -6,6 +6,16 @@ const sessions = [
 ]
 
 describe('renderAnswer', () => {
+  test('a document he wrote becomes a card with an Open button', () => {
+    const html = B.renderAnswer('Here it is: [[doc:perf-brief.html]]', sessions)
+    expect(html).toContain('data-bru-doc="perf-brief.html"')
+    expect(html).toContain('perf-brief.html')
+  })
+  test('a doc name that is not one plain file stays text', () => {
+    for (const bad of ['../memory.md', 'a/b.md', 'x.sh', '.x.md']) {
+      expect(B.renderAnswer(`[[doc:${bad}]]`, sessions)).not.toContain('data-bru-doc')
+    }
+  })
   test('escapes HTML before any formatting — model output is untrusted', () => {
     const html = B.renderAnswer('<img src=x onerror=alert(1)> **ok**', sessions)
     expect(html).not.toContain('<img')

@@ -1599,6 +1599,7 @@ pub fn run() {
             brutus::brutus_cancel,
             brutus::brutus_reset,
             brutus::brutus_status,
+            brutus::brutus_open_doc,
             brutus::brutus_open_memory,
             pty::pty_spawn,
             pty::pty_input,
