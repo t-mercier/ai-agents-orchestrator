@@ -77,7 +77,7 @@ Four things you shouldn't have to do twice — each one something you already wo
 - **Lifecycle tabs** — Running · Closed · Archived, with live **search** and a **⚲ Filter** popover (category checkboxes, one control across every view).
 - **Spaces** — group categories under multiple named spaces (e.g. *Work*, *Perso*, a client). The **List** organises into collapsible **space sections** → category groups; the **Board** gets its own space filter next to its search. Pinned and ⚡ waiting cards float above every space section — they're your shortlist, so they stay at the top of the column. A single space configured ⇒ no space chrome at all.
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
-- **Updates from inside the app** — when a new version is out, a notice offers to install it and restart.
+- **Updates from inside the app** — when a new version is out, a notice offers to install it and restart. The `xattr` step is needed only for the very first install.
 - **Codex and Copilot too** *(preview)* — start a **Codex** or **GitHub Copilot** session from **＋New**, next to your Claude Code ones. It runs in the built-in terminal, keeps its memory in the same `notes.md`, and its card shows when it is busy, idle or waiting on you. The session skills (`/save-session`, `/learn`, `/route`…) run in Claude Code only for now, and Copilot needs version 1.0 or later.
 
 ### Brutus, the one you ask
