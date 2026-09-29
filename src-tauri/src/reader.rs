@@ -975,6 +975,12 @@ pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &
 
 #[tauri::command(async)]
 pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
+    let mut out = sessions_now(&pty);
+    crate::advisors::annotate(&mut out);
+    out
+}
+
+fn sessions_now(pty: &crate::pty::PtyManager) -> Vec<Value> {
     // Reap first: an embedded child that exited since the last poll is still a zombie
     // until waited on, and a zombie answers `kill(pid, 0)` — it would be listed as a
     // running session with no terminal behind it.
@@ -1022,6 +1028,8 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
     }
     // A `claude -p` collab turn writes a pidfile like a session; it is a turn, not one.
     let collab_groups = crate::collab::engine::turn_groups();
+    // An invited model's `claude -p` writes one too (advisors.rs keeps their groups).
+    let advisor_groups = crate::advisors::registered_groups();
     let entries = match fs::read_dir(claude.join("sessions")) {
         Ok(e) => e,
         Err(_) => return out,
@@ -1052,6 +1060,9 @@ pub fn get_sessions(pty: tauri::State<crate::pty::PtyManager>) -> Vec<Value> {
         }
         // SAFETY: getpgid(2) only reads the process table.
         if !collab_groups.is_empty() && collab_groups.contains(&unsafe { libc::getpgid(pid as i32) }) {
+            continue;
+        }
+        if crate::advisors::is_advisor_pid(&advisor_groups, pid) {
             continue;
         }
         let launch_cwd = data.get("cwd").and_then(Value::as_str).unwrap_or("");
@@ -2019,7 +2030,7 @@ fn scan_historical() -> Vec<Value> {
 /// filtered — used when a single tab is visited.
 #[tauri::command(async)]
 pub fn get_historical_sessions(status: String) -> Vec<Value> {
-    scan_historical()
+    annotated(scan_historical())
         .into_iter()
         .filter(|s| s.get("historyStatus").and_then(Value::as_str) == Some(status.as_str()))
         .collect()
@@ -2030,7 +2041,12 @@ pub fn get_historical_sessions(status: String) -> Vec<Value> {
 /// three separate full directory scans with one.
 #[tauri::command(async)]
 pub fn get_historical_sessions_all() -> Value {
-    bucket_by_status(scan_historical())
+    bucket_by_status(annotated(scan_historical()))
+}
+
+fn annotated(mut v: Vec<Value>) -> Vec<Value> {
+    crate::advisors::annotate(&mut v);
+    v
 }
 
 /// Partition tagged historical sessions into `{ stale, closed, archived }`. Pure (no

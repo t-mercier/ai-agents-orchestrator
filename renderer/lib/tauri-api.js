@@ -67,6 +67,11 @@
         .then((r) => ({ ok: true, ...(r || {}) }))
         .catch((e) => ({ ok: false, error: String(e) })),
     collabStop: (id) => invoke('collab_stop', { id }).catch(() => false),
+    // Invited models: write who is invited (an empty list dismisses them all), read the thread
+    // of consultations, stop one. { ok, error } so the dialog can say why it was refused.
+    advisorsSet: (notesPath, advisors) => invoke('advisors_set', { notesPath, advisors }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    otherModels: (notesPath) => invoke('other_models', { notesPath }).catch(() => ({ entries: [], jobs: [] })),
+    advisorStop: (notesPath, id) => invoke('advisor_stop', { notesPath, id }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     ptyInput: (sessionId, data) => invoke('pty_input', { sessionId, data }),
     listSkills: () => invoke('list_skills'),
     runSkill: (skill, cwd, resume) => invoke('run_skill', { skill, cwd, resume }),

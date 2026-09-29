@@ -425,6 +425,18 @@ fn install_into(dst: &Path, force: bool, epoch: i64) -> std::io::Result<(Vec<Str
     Ok((installed, skipped))
 }
 
+/// Make sure the shared helper `lib/` is in `~/.claude/skills`, refreshed to this bundle.
+/// Inviting models needs its `ao_ask.py` even on a machine whose session skills were
+/// never installed (a skills sync only runs once they are).
+pub(crate) fn ensure_lib() -> Result<(), String> {
+    ensure_lib_in(&config::home().join(".claude").join("skills"))
+}
+
+fn ensure_lib_in(dst: &Path) -> Result<(), String> {
+    let lib = SKILLS.get_dir(SHARED_LIB).ok_or("the app has no shared lib to install")?;
+    extract_into(lib, &dst.join(SHARED_LIB)).map_err(|e| e.to_string())
+}
+
 /// Install (or, with `force`, refresh) the bundled skills into `~/.claude/skills`,
 /// seed a default config if none exists, and pre-create the category folders.
 #[tauri::command]
@@ -607,6 +619,16 @@ pub fn sync_skills(manual: bool) -> Result<SyncReport, String> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn ensure_lib_installs_ao_ask_without_the_session_skills() {
+        let dst = std::env::temp_dir().join(format!("ao-ensure-lib-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dst);
+        ensure_lib_in(&dst).unwrap();
+        assert!(dst.join("lib").join("ao_ask.py").exists());
+        assert!(!dst.join("start-session").exists(), "only lib/ is installed");
+        ensure_lib_in(&dst).unwrap();   // a second time over the read-only copies works
+    }
     use super::*;
 
     fn tmp(tag: &str) -> std::path::PathBuf {

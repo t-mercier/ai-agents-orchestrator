@@ -801,7 +801,9 @@ pub fn snapshot() -> Snapshot {
     let (live_pids, stale_pidfiles, unregistered_live) = scan_pidfiles(&sessions_dir(), &active, crate::reader::alive, |pid| {
         let groups = crate::collab::engine::turn_groups();
         // SAFETY: getpgid(2) only reads the process table.
-        !groups.is_empty() && groups.contains(&unsafe { libc::getpgid(pid as i32) })
+        (!groups.is_empty() && groups.contains(&unsafe { libc::getpgid(pid as i32) }))
+            // An invited model's `claude -p` is a consultation, not a lost session.
+            || crate::advisors::is_advisor_pid(&crate::advisors::registered_groups(), pid)
     });
 
     // One SessionFacts per notes.md, not per registry entry: several ids sharing a

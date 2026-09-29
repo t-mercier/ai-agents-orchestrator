@@ -19,6 +19,7 @@ mod updater;
 mod agents;
 mod collab;
 mod shell;
+mod advisors;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
@@ -1694,6 +1695,9 @@ pub fn run() {
             reader::get_sessions,
             reader::get_historical_sessions,
             agents::agents_available,
+            advisors::advisors_set,
+            advisors::other_models,
+            advisors::advisor_stop,
             collab_start,
             collab_stop,
             collab_list,
