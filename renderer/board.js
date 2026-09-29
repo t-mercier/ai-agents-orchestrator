@@ -81,6 +81,7 @@
     const chips = [
       // Which agent runs it (none for Claude Code), as on the list card.
       window.agentChip ? window.agentChip(s) : '',
+      window.omChip ? window.omChip(s) : '',
       s.category ? chip(s.category, { cat: true }) : '',
       ticketChip,
     ].filter(Boolean).join('')

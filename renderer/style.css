@@ -180,7 +180,9 @@ html, body {
 .modal-field input,
 .modal-field textarea,
 .onb-edit-row input[type="text"],
-.onb-edit-row select {
+.onb-edit-row select,
+.om-row input[type="text"],
+.om-row select {
   font-family: var(--font);
   font-size: 13px;
   color: var(--text-primary);
@@ -201,7 +203,8 @@ html, body {
 }
 /* Unify all <select> dropdowns: drop the OS chrome + draw our own chevron, so every
    selection control reads the same on-brand way across the app (was native/inconsistent). */
-.modal-field select {
+.modal-field select,
+.om-row select {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
@@ -2433,3 +2436,39 @@ body.bru-resizing .layout { transition: none; }
 .bru-pets button:hover { background: rgba(var(--tint), .07); }
 .bru-pets button.on { border-color: rgba(var(--accent-rgb), .7); background: rgba(var(--accent-rgb), .12); color: var(--text-primary); }
 .bru-pets button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Other models (invited into a session) ── */
+.om-chip { display: inline-flex; align-items: center; font: 600 10px var(--font); letter-spacing: .02em; padding: 1px 6px; border-radius: 999px;
+  color: var(--accent); background: rgba(var(--accent-rgb), 0.14); white-space: nowrap; }
+.om-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.om-who-chip { font: 600 11px var(--font); padding: 2px 8px; border-radius: 999px; color: var(--text-primary); background: rgba(var(--tint), 0.08);
+  border: 0.5px solid var(--card-border); }
+.om-dismiss { margin-left: auto; }
+.om-thread { display: flex; flex-direction: column; gap: 8px; }
+.om-entry { border: 0.5px solid var(--card-border); border-radius: 10px; padding: 8px 12px; background: rgba(var(--tint), 0.03); }
+.om-entry summary { cursor: pointer; font: 600 12px var(--font); color: var(--text-secondary); }
+.om-entry[open] summary { margin-bottom: 6px; }
+.om-q, .om-a { font-size: 12.5px; line-height: 1.5; color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+.om-q ol, .om-q ul, .om-a ol, .om-a ul { padding-left: 20px; margin: 4px 0; }
+.om-q { color: var(--text-secondary); margin-bottom: 6px; }
+.om-tag { display: block; font: 600 10px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 2px; }
+.om-job { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
+.om-job em { color: var(--text-tertiary); font-style: normal; }
+.om-job.lost { color: var(--text-tertiary); }
+.om-job .act-verb { margin-left: auto; }
+.om-job .collab-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; animation: om-pulse 1.4s ease-in-out infinite; }
+@keyframes om-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .om-job .collab-dot { animation: none; } }
+.om-form { max-width: 520px; }
+.om-rows { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 12px; }
+.om-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.om-row .field-hint { grid-column: 1 / -1; margin: -2px 0 0; }
+.om-pick { display: flex; align-items: center; gap: 8px; font: 500 13px var(--font); color: var(--text-primary); }
+.om-row input[type="text"], .om-row select { width: 100%; }
+.om-more { border: 0.5px solid var(--card-border); background: transparent; color: var(--text-secondary); border-radius: 6px; width: 24px; height: 24px; cursor: pointer; }
+.om-more:hover { color: var(--text-primary); }
+.om-more-gap { width: 24px; }
+.om-notice { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 8px; }
+.om-error { color: var(--danger); font-size: 12.5px; margin: 0 0 8px; }
+.om-external pre.om-line { white-space: pre-wrap; word-break: break-all; font: 12px var(--mono, ui-monospace, Menlo, monospace); padding: 8px; border-radius: 8px;
+  background: rgba(var(--tint), 0.06); }

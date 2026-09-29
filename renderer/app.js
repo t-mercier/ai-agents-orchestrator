@@ -225,6 +225,8 @@ window.SHORTCUT_ACTIONS = [
   { id: 'revealNotes', label: 'Reveal the notes folder', session: ['Reveal the notes folder'] },
   { id: 'close', label: 'Close session', session: ['Close session'] },
   { id: 'archive', label: 'Archive', session: ['Archive'] },
+  { id: 'inviteModels', label: 'Invite models…', session: ['Invite models…'] },
+  { id: 'dismissModels', label: 'Dismiss models', session: ['Dismiss models'] },
 ]
 window.getShortcuts = () => {
   try { return window.CSMKeymap.clean(JSON.parse(localStorage.getItem('csm.shortcuts') || '{}')) } catch { return {} }

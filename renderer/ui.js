@@ -346,7 +346,7 @@ function cardIcons(s) {
   // Ticket as a number label (consistent with the board); PR + notes stay as icons.
   // (No space label anywhere — the list groups into space sections, PINNED floats
   // above them all, and the board filters by space.)
-  const icons = [agentChip(s), ticketChip(s), prPill(s), notesPill(s.notesPath)].filter(Boolean).join('')
+  const icons = [agentChip(s), omChip(s), ticketChip(s), prPill(s), notesPill(s.notesPath)].filter(Boolean).join('')
   return icons ? `<div class="card-icons">${icons}</div>` : ''
 }
 
@@ -1291,7 +1291,11 @@ function renderDetailPanel(s, tab = 'running') {
   // The ticket / PR icons belong here even though the meta rows list the same links:
   // those rows sit at the top of a pane you have usually scrolled past by the time you
   // reach this row, so dropping them from the toolbar simply lost the shortcut.
-  const refs = [ticketPill(s), prPill(s), sync, notesPill(s.notesPath), boardPill(s), editBtn].filter(Boolean).join('')
+  const iv = inviteVerdict(s)
+  const invite = s.collab ? '' : iv.why
+    ? `<button type="button" class="act-verb" disabled data-tip="${escapeHtml(iv.why)}">Invite models</button>`
+    : `<button type="button" class="act-verb" data-invite-models="${escapeHtml(s.notesPath)}" data-tip="Let other models read this session and advise its agent">Invite models</button>`
+  const refs = [ticketPill(s), prPill(s), sync, notesPill(s.notesPath), boardPill(s), editBtn, invite].filter(Boolean).join('')
   // The pinned set closes the row: the user's own skills, after the app's fixed verbs.
   const pins = s.collab ? '' : pinSlotsHtml('session', pinCtxFor(s))
   const actions = launch + (launch && refs ? '<span class="act-sep"></span>' : '') + refs +
@@ -1300,11 +1304,13 @@ function renderDetailPanel(s, tab = 'running') {
   setHtml(infoEl, `
     ${metaRows ? `<div class="detail-meta">${metaRows}</div>` : ''}
     ${goalSection}
+    ${otherModelsSection(s)}
     ${collabSection(s)}
     ${activitySection}
     ${nextStepsSection}
     ${actions ? detailSection('Actions', `<div class="acts">${actions}</div>`) : ''}
   `)
+  fillOtherModels(s)
 }
 
 // ── Pinned skills ────────────────────────────────────────────────────────────────
@@ -1513,6 +1519,9 @@ function sessionMenuRows(s) {
   rows.push(row('', `data-open-board="${escapeHtml(sessionKey(s))}"`, 'Add to board…'))
   rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
     isPinnedSession(s) ? 'Unpin from the top' : 'Pin to the top'))
+  const iv = inviteVerdict(s)
+  rows.push(iv.why ? row('', '', 'Invite models…', iv.why) : row('', `data-invite-models="${escapeHtml(s.notesPath)}"`, 'Invite models…'))
+  if (advisorsOf(s).length) rows.push(row('', `data-dismiss-models="${escapeHtml(s.notesPath)}"`, 'Dismiss models'))
 
   // Where its files are
   rows.push(sep)
@@ -1536,6 +1545,186 @@ function sessionMenuRows(s) {
         'Delete — move to Trash')
     : row('', '', 'Delete — move to Trash', 'Only an archived session can be deleted'))
   return rows.join('')
+}
+
+// ── Other models (docs/superpowers/specs/2026-09-30-invite-models-design.md) ─────────────
+// A session's agent consults invited models read-only through ao_ask.py. The app writes who
+// is invited (advisors_set), types the invitation into the session's terminal, and shows
+// the thread of consultations (other_models).
+const OM = () => window.CSMOtherModels
+function advisorsOf(s) { return (s && Array.isArray(s.advisors)) ? s.advisors : [] }
+function omChip(s) {
+  const list = advisorsOf(s)
+  const t = OM() ? OM().chip(list) : ''
+  return t ? `<span class="om-chip" title="Other models invited: ${escapeHtml(list.map(a => a.label).join(', '))}">${escapeHtml(t)}</span>` : ''
+}
+window.omChip = omChip
+
+// Whether the invitation can be typed into the session's terminal now: `{ key }` (its
+// embedded terminal), `{ external: true }` (a terminal the app cannot type into), or
+// `{ why }`. The same verdict pinned skills get: never type into a turn or an answer.
+function inviteVerdict(s) {
+  if (!s || !s.notesPath) return { why: 'This session has no notes yet' }
+  if (s.collab) return { why: 'This session has no agent to consult them' }
+  const key = pinTerminalKey(s)
+  if (key) {
+    const d = window.CSMSkillLaunch.decide('invite', { hasTerminal: true, status: s.state === 'active' ? (s.status || 'idle') : '' })
+    return d.mode === 'blocked' ? { why: d.reason } : { key }
+  }
+  if (s.state === 'active') return { external: true }
+  return { why: 'Open the session first: its agent is the one that consults them' }
+}
+
+function sessionByNotes(notesPath) {
+  return (window._lastSessions || []).find(x => x.notesPath === notesPath) || null
+}
+
+// Type `text` into a session's terminal as a paste, then Enter in a second write.
+function typeIntoTerminal(key, text) {
+  const [paste, enter] = OM().pasteThenEnter(text)
+  window.api.ptyInput(key, paste)
+  setTimeout(() => window.api.ptyInput(key, enter), 200)
+}
+
+const OM_SUGGEST = 'csm.inviteModels'
+function omSuggestions() { try { return JSON.parse(localStorage.getItem(OM_SUGGEST) || '{}') || {} } catch { return {} } }
+function omRemember(list) {
+  const seen = omSuggestions()
+  for (const i of list) {
+    if (!i.model || i.cli === 'claude') continue
+    seen[i.cli] = [i.model, ...(seen[i.cli] || []).filter(m => m !== i.model)].slice(0, 8)
+  }
+  try { localStorage.setItem(OM_SUGGEST, JSON.stringify(seen)) } catch { /* ignore */ }
+}
+
+function omRowHtml(cli, avail, n) {
+  const names = { claude: 'Claude', codex: 'GPT (Codex)', copilot: 'Copilot' }
+  const usable = avail && avail.found && avail.supported
+  const hint = avail && avail.found && !avail.supported ? avail.hint : (!avail || !avail.found ? `${cli} is not installed` : '')
+  let model
+  if (cli === 'claude') {
+    const opts = (window.CLAUDE_MODELS || []).map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label || 'Default model')}</option>`).join('')
+    model = `<select aria-label="Claude model" ${usable ? '' : 'disabled'}>${opts}</select>`
+  } else {
+    const list = `om-suggest-${cli}`
+    const sug = (omSuggestions()[cli] || []).map(m => `<option value="${escapeHtml(m)}"></option>`).join('')
+    model = `<input type="text" aria-label="${names[cli]} model" placeholder="${cli === 'copilot' ? 'auto' : 'default model'}" list="${list}" spellcheck="false" autocomplete="off" ${usable ? '' : 'disabled'}><datalist id="${list}">${sug}</datalist>`
+  }
+  return `<div class="om-row" data-om-row="${cli}" data-om-n="${n}">
+    <label class="om-pick"><input type="checkbox" ${usable ? '' : 'disabled'}> ${names[cli]}${n > 1 ? ' (2)' : ''}</label>
+    ${model}
+    ${usable && n === 1 && cli !== 'claude' ? `<button type="button" class="om-more" data-om-more="${cli}" title="Invite ${names[cli]} a second time, with another model">+</button>` : '<span class="om-more-gap"></span>'}
+    ${hint ? `<small class="field-hint">${escapeHtml(hint)}</small>` : ''}
+  </div>`
+}
+
+async function openInviteDialog(s) {
+  const v = inviteVerdict(s)
+  if (v.why) { if (window.showBanner) window.showBanner(v.why); return }
+  let dlg = document.getElementById('invite-models-modal')
+  if (!dlg) {
+    dlg = document.createElement('dialog')
+    dlg.id = 'invite-models-modal'
+    dlg.className = 'modal'
+    document.body.appendChild(dlg)
+  }
+  const got = await window.api.agentsAvailable()
+  const avail = Array.isArray(got) ? got : []
+  const by = (cli) => avail.find(a => a.agent === cli)
+  dlg.innerHTML = `<form method="dialog" class="modal-form om-form">
+    <h2 class="modal-title">Invite models</h2>
+    <p class="modal-hint">Invited models read this session and advise its agent, who consults them when a second opinion helps or when you ask. They never write.</p>
+    <div class="om-rows">${['claude', 'codex', 'copilot'].map(c => omRowHtml(c, by(c), 1)).join('')}</div>
+    <p class="om-notice">The invited models read this session's whole conversation, its folder and the code, and what they read is sent to their provider (OpenAI for Codex, GitHub for Copilot, Anthropic for Claude). Their answers come back to this session's agent as advice.</p>
+    <p class="om-error" role="alert" hidden></p>
+    <div class="om-external" hidden></div>
+    <div class="modal-actions">
+      <button type="button" class="modal-btn" data-om-cancel>Cancel</button>
+      <button type="button" class="modal-btn primary" data-om-invite>Invite</button>
+    </div>
+  </form>`
+  const err = (t) => { const e = dlg.querySelector('.om-error'); e.textContent = t; e.hidden = !t }
+  dlg.querySelector('[data-om-cancel]').onclick = () => dlg.close()
+  dlg.querySelectorAll('[data-om-more]').forEach(b => { b.onclick = () => {
+    const cli = b.dataset.omMore
+    b.closest('.om-row').insertAdjacentHTML('afterend', omRowHtml(cli, by(cli), 2))
+    b.remove()
+  } })
+  dlg.querySelector('[data-om-invite]').onclick = async () => {
+    const rows = [...dlg.querySelectorAll('.om-row')].filter(r => r.querySelector('input[type="checkbox"]').checked)
+      .map(r => ({ cli: r.dataset.omRow, model: (r.querySelector('select, input[type="text"]') || {}).value || '' }))
+    if (!rows.length) { err('Pick at least one model to invite.'); return }
+    const bad = rows.find(r => !OM().validModel(String(r.model).trim()))
+    if (bad) { err(`"${bad.model}" is not a model name: letters, digits and . _ : / [ ] - only, starting with a letter or digit.`); return }
+    const list = OM().withIds(rows, window.CLAUDE_MODELS)
+    const res = await window.api.advisorsSet(s.notesPath, list)
+    if (!res || !res.ok) { err('Could not invite them: ' + ((res && res.error) || 'unknown error')); return }
+    omRemember(list)
+    const line = OM().inviteLine(list, s.notesPath)
+    const now = inviteVerdict(sessionByNotes(s.notesPath) || s)
+    if (now.key) {
+      typeIntoTerminal(now.key, line)
+      dlg.close()
+      if (window.showBanner) window.showBanner(`Invited ${list.map(i => i.label).join(', ')}: the invitation is in ${s.name || 'the session'}'s terminal.`)
+    } else {
+      // A terminal the app cannot type into: the line to paste there.
+      const box = dlg.querySelector('.om-external')
+      box.hidden = false
+      box.innerHTML = `<p>Invited. This session runs in a terminal the app cannot type into: paste this line there.</p><pre class="om-line"></pre><button type="button" class="modal-btn" data-om-copy>Copy</button>`
+      box.querySelector('.om-line').textContent = line
+      box.querySelector('[data-om-copy]').onclick = () => navigator.clipboard.writeText(line).catch(() => {})
+      dlg.querySelector('[data-om-invite]').hidden = true
+      dlg.querySelector('[data-om-cancel]').textContent = 'Done'
+    }
+    if (window.refreshSessions) window.refreshSessions()
+  }
+  if (!dlg.open) dlg.showModal()
+}
+
+async function dismissModels(s) {
+  if (!s || !s.notesPath) return
+  const res = await window.api.advisorsSet(s.notesPath, [])
+  if (!res || !res.ok) { if (window.showBanner) window.showBanner('Could not dismiss them: ' + ((res && res.error) || 'unknown error')); return }
+  const t = await window.api.otherModels(s.notesPath)
+  for (const j of (t && t.jobs) || []) if (j.state === 'running' || j.state === 'starting') window.api.advisorStop(s.notesPath, j.id)
+  const v = inviteVerdict(s)
+  if (v.key) typeIntoTerminal(v.key, OM().dismissLine())
+  if (window.showBanner) window.showBanner('The other models are dismissed.')
+  if (window.refreshSessions) window.refreshSessions()
+}
+
+function otherModelsSection(s) {
+  const list = advisorsOf(s)
+  if (!list.length && !s.advisorsUnreadable) return ''
+  const who = list.map(a => `<span class="om-who-chip">${escapeHtml(a.label)}</span>`).join('')
+  const unreadable = s.advisorsUnreadable ? '<div class="detail-activity">The invited models of this session could not be read from its notes.</div>' : ''
+  return `<div class="om-section">${detailSection('Other models', `${unreadable}<div class="om-who">${who}
+    <button type="button" class="act-verb om-dismiss" data-dismiss-models="${escapeHtml(s.notesPath)}">Dismiss</button></div>
+    <div class="om-thread" data-om-thread="${escapeHtml(s.notesPath)}"><div class="detail-activity">No consultation yet.</div></div>`)}</div>`
+}
+
+const omRendered = new Map()   // notesPath → the thread html last drawn, so a poll does not flicker
+function fillOtherModels(s) {
+  if (!advisorsOf(s).length || !OM()) return
+  const notes = s.notesPath
+  window.api.otherModels(notes).then(t => {
+    const el = document.querySelector(`[data-om-thread="${CSS.escape(notes)}"]`)
+    if (!el) return
+    const entries = OM().entriesForDisplay(t)
+    const rows = entries.map(e => `<details class="om-entry${e.folded ? ' folded' : ''}"${e.folded ? '' : ' open'}>
+        <summary>${escapeHtml(e.heading || e.invitee)}${e.state && e.state !== 'done' ? ` · ${escapeHtml(e.state)}` : ''}</summary>
+        <div class="om-q"><span class="om-tag">Asked</span>${renderMarkdown(e.question || '')}</div>
+        <div class="om-a"><span class="om-tag">Answer</span>${renderMarkdown(e.answer || '')}</div></details>`).join('')
+    const jobs = ((t && t.jobs) || []).map(j => j.state === 'lost'
+      ? `<div class="om-job lost">${escapeHtml(j.label || j.invitee)} — stopped without answering (its process is gone)</div>`
+      : `<div class="om-job"><span class="collab-dot"></span>${escapeHtml(j.label || j.invitee)} thinking…${j.quietSecs > 300 ? ` <em>quiet for ${Math.round(j.quietSecs / 60)} min</em>` : ''}
+          <button type="button" class="act-verb" data-om-stop="${escapeHtml(j.id)}" data-om-notes="${escapeHtml(notes)}">Stop</button></div>`).join('')
+    const html = rows || jobs ? rows + jobs : '<div class="detail-activity">No consultation yet.</div>'
+    if (omRendered.get(notes) === html && el.dataset.drawn === '1') return
+    omRendered.set(notes, html)
+    el.innerHTML = html
+    el.dataset.drawn = '1'
+  })
 }
 
 // A keyboard shortcut for one of these rows (app.js, SHORTCUT_ACTIONS): the row is built
@@ -1981,6 +2170,20 @@ function installDelegatedHandlers() {
       if (live) {
         warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — you likely have it open in a terminal. Resuming opens a second instance on the same session, which can clash.`, open)
       } else { open() }
+      return
+    }
+
+    const invite = e.target.closest('[data-invite-models]')
+    if (invite) { openInviteDialog(sessionByNotes(invite.dataset.inviteModels)); return }
+    const dismiss = e.target.closest('[data-dismiss-models]')
+    if (dismiss) { dismissModels(sessionByNotes(dismiss.dataset.dismissModels)); return }
+    const omStop = e.target.closest('[data-om-stop]')
+    if (omStop) {
+      omStop.disabled = true
+      window.api.advisorStop(omStop.dataset.omNotes, omStop.dataset.omStop).then(r => {
+        if (r && !r.ok && window.showBanner) window.showBanner('Could not stop it: ' + r.error)
+        fillOtherModels(sessionByNotes(omStop.dataset.omNotes) || {})
+      })
       return
     }
 
