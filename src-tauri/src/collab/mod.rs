@@ -197,6 +197,10 @@ pub(crate) fn notes_text(n: &CollabNotes) -> String {
     )
 }
 
+/// The sentence every collab prompt carries. Only the app writes it, so a transcript that
+/// opens with it is a collab turn, not a session to import.
+pub(crate) const TURN_MARK: &str = "Work in this repository only. Do not commit, push, or change git configuration.";
+
 /// The guard every prompt ends with.
 const GUARD: &str = "Work in this repository only. Do not commit, push, or change git configuration. \
 End your answer with a short summary of what you did.";

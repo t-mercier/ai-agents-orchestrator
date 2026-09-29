@@ -425,6 +425,10 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
                 if texts.iter().any(|t| t.contains("<command-name>") || t.contains("<command-message>")) {
                     opened_by_command = true;
                 }
+                // A collab turn the app ran headless (`claude -p`), not a session.
+                if texts.iter().any(|t| t.contains(crate::collab::TURN_MARK)) {
+                    skip = true;
+                }
             }
             if title.is_none() {
                 if let Some(t) = texts.into_iter().map(str::trim).find(|t| !is_title_noise(t)) {
@@ -2473,6 +2477,14 @@ mod tests {
         let (status, date) = session_history_info(content);
         assert_eq!(status, "closed");
         assert_eq!(date.as_deref(), Some("2026-06-20 00:03"));
+    }
+
+    #[test]
+    fn a_collab_turn_is_not_offered_for_import() {
+        let prompt = crate::collab::prompt(crate::collab::Role::Author, "add a retry", None, None, None);
+        let line = serde_json::json!({ "type": "user", "cwd": "/w/app", "message": { "content": prompt } }).to_string();
+        let (_, _, skip) = discover_meta_lines(vec![line].into_iter());
+        assert!(skip, "a turn the app ran is not a session to import");
     }
 
     #[test]
