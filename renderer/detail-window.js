@@ -27,6 +27,10 @@ async function refresh() {
     if (window.api.getPrStatus) window._prStatus = (await window.api.getPrStatus()) || {}
     const { session, tab } = await findSession()
     if (session) {
+      // The lists the main window keeps, as ui.js and terminal.js read them: without this,
+      // a Codex or Copilot session looked like Claude Code here (agentFor), and Close
+      // could not find the notes of a terminal keyed by its session id.
+      window._lastSessions = [session]
       document.getElementById('win-title').textContent = session.name || 'Session'
       window.renderDetailPanel(session, tab)
       window.attachDetailEventListeners()

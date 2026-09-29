@@ -49,6 +49,16 @@ test('the detached window finds a stale session', async ({ page }) => {
   expect(errors).toEqual([])
 })
 
+// The detached window knows its session's agent: without it, Close typed /close-session
+// into a Codex or Copilot terminal and waited 75 s for a close that could not come.
+test('the detached window knows a Codex session is not Claude Code', async ({ page }) => {
+  const codex = { ...DETACHED, agent: 'codex', sessionId: '01a0e9da-76d9' }
+  const errors = await openDetached(page, { active: [codex] })
+  await expect(page.locator('#win-title')).toHaveText(DETACHED.name)
+  expect(await page.evaluate(() => window.agentFor('01a0e9da-76d9', '/x/notes.md'))).toBe('codex')
+  expect(errors).toEqual([])
+})
+
 // ── The main window ──
 
 async function boot(page) {
