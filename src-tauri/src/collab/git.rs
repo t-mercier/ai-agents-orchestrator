@@ -23,29 +23,49 @@ pub(crate) fn is_repo(dir: &Path) -> bool {
     git(dir, &["rev-parse", "--is-inside-work-tree"]).is_ok_and(|s| s == "true")
 }
 
+/// No uncommitted change and no untracked file: a collab starts from a known commit, so its
+/// review is of the agents' work and not of the user's.
+pub(crate) fn is_clean(repo: &Path) -> Result<bool, String> {
+    git(repo, &["status", "--porcelain", "--untracked-files=normal"]).map(|s| s.is_empty())
+}
+
+/// `git diff --no-index` exits 1 when the files differ, which is the answer, not a failure.
+fn diff_new_file(repo: &Path, file: &str) -> Result<String, String> {
+    let out = Command::new("git")
+        .arg("-C").arg(repo)
+        .args(["diff", "--no-ext-diff", "--no-textconv", "--no-index", "--", "/dev/null", file])
+        .output()
+        .map_err(|e| e.to_string())?;
+    match out.status.code() {
+        Some(0) | Some(1) => Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string()),
+        _ => Err(String::from_utf8_lossy(&out.stderr).trim().to_string()),
+    }
+}
+
 /// Everything that changed since `base`, committed or not, new files included: an agent
 /// told not to commit may still do it, and a new file is invisible to a plain `git diff`.
-/// Returns `(stat, diff)`, the diff cut at `max` bytes with a note saying so.
+/// The index is never written — the new files are diffed against nothing, one by one — and
+/// no diff driver of the repository runs. Returns `(stat, diff)`, the diff cut at `max`
+/// bytes with a note saying so; the stat always lists every file.
 pub(crate) fn changes_since(repo: &Path, base: &str, max: usize) -> Result<(String, String), String> {
     if !base.bytes().all(|b| b.is_ascii_hexdigit()) || base.len() < 7 {
         return Err(format!("not a commit: {base}"));
     }
-    // Stage nothing: intent-to-add makes new files show in the diff, and is undone after.
+    let mut stat = git(repo, &["diff", "--no-ext-diff", "--no-textconv", "--stat", base, "--"])?;
+    let mut diff = git(repo, &["diff", "--no-ext-diff", "--no-textconv", base, "--"])?;
     let untracked = git(repo, &["ls-files", "--others", "--exclude-standard"])?;
-    let new: Vec<&str> = untracked.lines().filter(|l| !l.is_empty()).collect();
-    if !new.is_empty() {
-        let mut args = vec!["add", "--intent-to-add", "--"];
-        args.extend(new.iter().copied());
-        git(repo, &args)?;
+    for file in untracked.lines().filter(|l| !l.is_empty()) {
+        stat.push_str(&format!("\n {file} (new)"));
+        if diff.len() < max {
+            let d = diff_new_file(repo, file)?;
+            if !d.is_empty() {
+                if !diff.is_empty() {
+                    diff.push('\n');
+                }
+                diff.push_str(&d);
+            }
+        }
     }
-    let stat = git(repo, &["diff", "--stat", base]);
-    let diff = git(repo, &["diff", base]);
-    if !new.is_empty() {
-        let mut args = vec!["reset", "--quiet", "--"];
-        args.extend(new.iter().copied());
-        let _ = git(repo, &args);
-    }
-    let (stat, mut diff) = (stat?, diff?);
     if diff.len() > max {
         let mut cut = max;
         while !diff.is_char_boundary(cut) {
@@ -54,7 +74,7 @@ pub(crate) fn changes_since(repo: &Path, base: &str, max: usize) -> Result<(Stri
         diff.truncate(cut);
         diff.push_str("\n[… diff cut here: it is longer than the review can take; the stat above lists every file]");
     }
-    Ok((stat, diff))
+    Ok((stat.trim_start_matches('\n').to_string(), diff))
 }
 
 /// A branch or folder name made from the user's session name: lowercase letters, digits
@@ -114,9 +134,24 @@ mod tests {
         assert!(stat.contains("a.txt") && stat.contains("new.txt"), "{stat}");
         assert!(diff.contains("+two") && diff.contains("+fresh"));
         assert!(git(&d, &["diff", "--cached", "--name-only"]).unwrap().is_empty(), "nothing left staged");
+        assert!(!d.join(".git/index.lock").exists());
+        // The index is never written, not even for a moment: its bytes are unchanged.
+        let before = std::fs::read(d.join(".git/index")).unwrap();
+        changes_since(&d, &base, 60_000).unwrap();
+        assert_eq!(std::fs::read(d.join(".git/index")).unwrap(), before);
+        assert!(!is_clean(&d).unwrap(), "edits and a new file");
         git(&d, &["add", "."]).unwrap();
         git(&d, &["commit", "-qm", "agent committed"]).unwrap();
         assert!(changes_since(&d, &base, 60_000).unwrap().1.contains("+two"), "a commit made anyway still shows");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_fresh_checkout_is_clean() {
+        let d = repo("clean");
+        assert!(is_clean(&d).unwrap());
+        std::fs::write(d.join("untracked.txt"), "x").unwrap();
+        assert!(!is_clean(&d).unwrap());
         let _ = std::fs::remove_dir_all(&d);
     }
 
