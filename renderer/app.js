@@ -1007,7 +1007,13 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   // from its historical always-iTerm behaviour. The modal toggle shows the current pick.
   // 'terminal' = external iTerm tab (the old behaviour).
   // The agent list may still be arriving (a login shell per CLI); the choice waits for it.
+  // If it appears only now, the person has not seen it: let them pick before starting.
+  const choiceWasShown = !document.getElementById('ns-agent-field').hidden
   await agentChoiceReady
+  if (!choiceWasShown && !document.getElementById('ns-agent-field').hidden) {
+    showNsError('Pick the agent for this session, then Start again.')
+    return
+  }
   const agentSel = document.getElementById('ns-agent')
   const agent = agentSel && !document.getElementById('ns-agent-field').hidden ? agentSel.value : 'claude'
   try { localStorage.setItem('csm.nsAgent', agent) } catch {}

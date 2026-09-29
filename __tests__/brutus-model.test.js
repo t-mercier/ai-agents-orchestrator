@@ -42,6 +42,10 @@ describe('renderAnswer', () => {
 })
 
 describe('stepsLine', () => {
+  test('a document he writes is named as a document, not as his memory', () => {
+    const steps = [{ tool: 'Write', target: '/cfg/brutus/docs/perf-brief.html' }]
+    expect(B.stepsLine(steps, sessions)).toBe('wrote perf-brief.html')
+  })
   test('summarises what was read in plain words', () => {
     const steps = [
       { tool: 'Read', target: '/cfg/brutus/dashboard.md' },

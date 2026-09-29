@@ -79,9 +79,11 @@
     let notes = 0
     const searched = []
     let dash = false, mem = false, other = 0
+    const docs = []
     for (const st of steps || []) {
       const b = base(st.target)
       if (st.tool === 'Grep' || st.tool === 'Glob') searched.push(`searched "${st.target}"`)
+      else if ((st.tool === 'Edit' || st.tool === 'Write') && /\/docs\/[^/]+$/.test(st.target || '')) { if (!docs.includes(b)) docs.push(b) }
       else if (st.tool === 'Edit' || st.tool === 'Write') mem = true
       else if (b === 'dashboard.md') dash = true
       else if (b === 'memory.md') mem = true
@@ -93,6 +95,7 @@
     if (other) parts.push(`${other} other file${other > 1 ? 's' : ''}`)
     parts.push(...searched)
     if (mem) parts.push('his memory')
+    parts.push(...docs.map(d => `wrote ${d}`))
     return parts.join(' · ')
   }
 

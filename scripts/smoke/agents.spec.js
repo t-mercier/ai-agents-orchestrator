@@ -165,3 +165,53 @@ test('without Claude Code, Collab pairs the two agents that are installed', asyn
   await page.locator('#ns-agent').selectOption('collab')
   await expect(page.locator('#ns-collab-author option')).toHaveText(['Codex', 'Copilot'])
 })
+
+// Collabs and new Codex sessions have no session id yet; ranking by it gave them all one
+// slot, so their order was whatever the list happened to be.
+test('sessions without an id are still ordered by their last activity', async ({ page }) => {
+  await page.addInitScript(() => {
+    let t
+    Object.defineProperty(window, '__TAURI__', { configurable: true, get() { return t }, set(v) {
+      const orig = v.core.invoke
+      const mk = (name, at) => ({ sessionId: '', agent: 'codex', name, cwd: '/w', pid: 1, status: 'idle', state: 'active',
+        notesPath: `/w/FEAT/${name}/notes.md`, root: 'Work', category: 'FEAT', updatedAt: at, lastActivityAt: null,
+        ticketStates: [], goal: null, nextSteps: null, lastSummary: null, prLink: null, prLinks: null, ticket: null, tickets: null })
+      v.core.invoke = (cmd, args) => cmd === 'get_sessions'
+        ? orig(cmd, args).then(l => [...(l || []), mk('older-codex', 1000), mk('newer-codex', 9e12)])
+        : orig(cmd, args)
+      t = v
+    } })
+  })
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  const names = await page.locator('.list-card-name').allTextContents()
+  expect(names.indexOf('newer-codex')).toBeLessThan(names.indexOf('older-codex'))
+})
+
+// The first probe opens a login shell per CLI. A Start pressed meanwhile must not act on an
+// Agent choice that appeared (preselected) after the person pressed it.
+test('Start pressed before the agent choice appears waits for the person to pick', async ({ page }) => {
+  await page.addInitScript((all) => {
+    let t
+    Object.defineProperty(window, '__TAURI__', { configurable: true, get() { return t }, set(v) {
+      const orig = v.core.invoke
+      window.__CALLS__ = []
+      v.core.invoke = (cmd, args) => {
+        window.__CALLS__.push(cmd)
+        if (cmd === 'agents_available') return new Promise(r => setTimeout(() => r(all), 600))
+        if (cmd === 'start_session') return Promise.resolve({ command: '', notesPath: '' })
+        return orig(cmd, args)
+      }
+      t = v
+    } })
+    try { localStorage.setItem('csm.nsAgent', 'codex') } catch {}
+  }, ALL)
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await page.locator('#new-session-btn').click()
+  await page.locator('#ns-name').fill('quick')
+  await page.locator('#new-session-form').evaluate((f) => f.requestSubmit())
+  await expect(page.locator('#ns-agent-field')).toBeVisible()
+  await expect(page.locator('#ns-error')).toContainText('Pick the agent')
+  expect(await page.evaluate(() => window.__CALLS__.includes('start_session'))).toBe(false)
+})

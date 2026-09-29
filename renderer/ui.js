@@ -21,7 +21,7 @@ const collapsedSpaces = new Set()
 
 // Frozen sort order: rebuilt only on tab switch / search / manual refresh,
 // NOT on the 5s poll — so the list never reorders under the user's cursor.
-let sortRank = new Map()        // sessionId → rank (lower = higher in list)
+let sortRank = new Map()        // sessionKey → rank (lower = higher in list)
 // Activity timestamps seen on the previous render — used to flash changed cards.
 let prevActivity = new Map()    // sessionId → epoch ms
 
@@ -32,13 +32,16 @@ const { truncate, escapeHtml, statusLabel, sessionTime, formatTimestamp, formatD
 window.firstNextStep = firstNextStep
 const { renderMarkdown } = window.CSMMarkdown
 
+// Keyed by sessionKey, not sessionId: a collab or a Codex session not yet matched to its
+// rollout has an empty id, and every one of them would share one rank.
 function rebuildSortRank(sessions) {
   const sorted = [...sessions].sort((a, b) => sessionTime(b) - sessionTime(a))
-  sortRank = new Map(sorted.map((s, i) => [s.sessionId, i]))
+  sortRank = new Map(sorted.map((s, i) => [sessionKey(s), i]))
 }
 
 function rankOf(s) {
-  return sortRank.has(s.sessionId) ? sortRank.get(s.sessionId) : Number.MAX_SAFE_INTEGER
+  const k = sessionKey(s)
+  return sortRank.has(k) ? sortRank.get(k) : Number.MAX_SAFE_INTEGER
 }
 
 // Stable unique identity: sessionId can be null or duplicated across historical
