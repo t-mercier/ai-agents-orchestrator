@@ -1,0 +1,6 @@
+{"type": "session.start", "data": {"sessionId": "c1"}}
+{"type": "user.message", "data": {"content": "Add a flag", "transformedContent": "<current_datetime>2026</current_datetime> Add a flag"}}
+{"type": "assistant.message", "data": {"content": "", "toolRequests": [{"name": "view"}]}}
+{"type": "tool.execution_start", "data": {"toolName": "view", "arguments": {"path": "/w/cli.js"}}}
+{"type": "tool.execution_complete", "data": {"result": {"content": "FILE-BODY"}}}
+{"type": "assistant.message", "data": {"content": "Flag added as --dry-run."}}

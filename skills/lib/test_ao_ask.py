@@ -59,5 +59,56 @@ class Texts(unittest.TestCase):
         for s in ["must not change", "/n/.ao/conversation.md", "/n/other-models.md", "/w/repo", "Is this right?"]:
             self.assertIn(s, p)
 
+FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "ask")
+
+class Export(unittest.TestCase):
+    def test_claude_keeps_text_and_tool_uses_drops_results_and_thinking(self):
+        out = "\n".join(A.lines_claude(os.path.join(FIX, "claude.jsonl")))
+        for s in ["**You:** Fix the retry bug", "**Agent:** Looking at it.", '→ Read: {"file_path": "/a/retry.py"}',
+                  "**You:** Also check the tests", "**Agent:** Done: two fixes."]:
+            self.assertIn(s, out)
+        self.assertNotIn("SECRET-THOUGHT", out); self.assertNotIn("TOOL-OUTPUT-BODY", out)
+
+    def test_codex_drops_harness_injections_and_reasoning(self):
+        out = "\n".join(A.lines_codex(os.path.join(FIX, "codex.jsonl")))
+        for s in ["**You:** Refactor the parser", "**Agent:** Parser split in two.", "→ shell:", "→ apply_patch:"]:
+            self.assertIn(s, out)
+        for s in ["DEV-PROMPT", "INJECTED", "ENV", "REASONING", "CALL-OUTPUT"]:
+            self.assertNotIn(s, out)
+
+    def test_copilot_uses_content_not_transformed_and_skips_empty_assistant(self):
+        rows = A.lines_copilot(os.path.join(FIX, "copilot.jsonl"))
+        out = "\n".join(rows)
+        self.assertIn("**You:** Add a flag", out); self.assertNotIn("current_datetime", out)
+        self.assertIn('→ view: {"path": "/w/cli.js"}', out); self.assertIn("**Agent:** Flag added as --dry-run.", out)
+        self.assertNotIn("FILE-BODY", out)
+        self.assertFalse(any(r.strip() == "**Agent:**" for r in rows))
+
+    def test_export_is_newest_first_split_and_capped(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        entries = [f"**You:** message {i:03d} " + "x" * 2000 for i in range(400)]
+        paths = A.write_export(entries, d)
+        sizes = [os.path.getsize(p) for p in paths]
+        self.assertTrue(all(s <= 100_000 for s in sizes), sizes)
+        self.assertLessEqual(sum(sizes), 400_000)
+        first = open(paths[0]).read()
+        self.assertTrue(first.startswith("# Conversation — newest first."))
+        self.assertIn("of 400 messages included", first.splitlines()[0])
+        self.assertLess(first.index("message 399"), first.index("message 398"))
+        self.assertEqual(os.path.basename(paths[0]), "conversation.md")
+        self.assertEqual(os.path.basename(paths[1]), "conversation-2.md")
+
+    def test_an_empty_conversation_says_so(self):
+        import tempfile
+        paths = A.write_export([], tempfile.mkdtemp())
+        self.assertIn("could not be found", open(paths[0]).read())
+
+    def test_lead_identity_falls_back_to_env_then_frontmatter(self):
+        no_chain = lambda: []
+        self.assertEqual(A.lead_identity({"CODEX_THREAD_ID": "019a"}, NOTES, chain=no_chain), ("codex", "019a"))
+        self.assertEqual(A.lead_identity({}, NOTES, chain=no_chain), ("claude", "s1"))
+
+
 if __name__ == "__main__":
     unittest.main()

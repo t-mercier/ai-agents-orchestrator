@@ -137,6 +137,186 @@ def thread_entry(job, question, answer):
             f"**Answer**\n\n{_quote_block(answer)}\n\n")
 
 
+# ── The lead's conversation, exported for the invitees ──────────────────────────────────
+
+TEXT_CAP = 8000        # one message, at most, in the export
+TOOL_CAP = 200         # a tool use's input
+# What Codex puts in a user turn that the person never typed.
+CODEX_INJECTED = ("# AGENTS.md", "<environment_context>", "<user_instructions>")
+
+
+def _jsonl(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    yield json.loads(line)
+                except ValueError:
+                    continue
+    except OSError:
+        return
+
+
+def _you(text):
+    return f"**You:** {text.strip()[:TEXT_CAP]}"
+
+
+def _agent(text):
+    return f"**Agent:** {text.strip()[:TEXT_CAP]}"
+
+
+def _tool(name, value):
+    shown = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return f"→ {name}: {shown[:TOOL_CAP]}"
+
+
+def lines_claude(path):
+    out = []
+    for d in _jsonl(path):
+        role = d.get("type")
+        content = (d.get("message") or {}).get("content")
+        if role not in ("user", "assistant") or content is None:
+            continue
+        blocks = [{"type": "text", "text": content}] if isinstance(content, str) else content
+        for b in blocks if isinstance(blocks, list) else []:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "text" and (b.get("text") or "").strip():
+                out.append(_you(b["text"]) if role == "user" else _agent(b["text"]))
+            elif b.get("type") == "tool_use":
+                out.append(_tool(b.get("name", "?"), b.get("input", {})))
+    return out
+
+
+def lines_codex(path):
+    out = []
+    for d in _jsonl(path):
+        if d.get("type") != "response_item":
+            continue
+        p = d.get("payload") or {}
+        kind = p.get("type")
+        if kind == "message" and p.get("role") in ("user", "assistant"):
+            for c in p.get("content") or []:
+                text = (c or {}).get("text") or ""
+                if not text.strip():
+                    continue
+                if p["role"] == "user":
+                    if not text.lstrip().startswith(CODEX_INJECTED):
+                        out.append(_you(text))
+                else:
+                    out.append(_agent(text))
+        elif kind == "function_call":
+            out.append(_tool(p.get("name", "?"), p.get("arguments", "")))
+        elif kind == "custom_tool_call":
+            out.append(_tool(p.get("name", "?"), p.get("input", "")))
+    return out
+
+
+def lines_copilot(path):
+    out = []
+    for d in _jsonl(path):
+        t, data = d.get("type"), d.get("data") or {}
+        if t == "user.message" and (data.get("content") or "").strip():
+            out.append(_you(data["content"]))
+        elif t == "assistant.message" and (data.get("content") or "").strip():
+            out.append(_agent(data["content"]))
+        elif t == "tool.execution_start":
+            out.append(_tool(data.get("toolName", "?"), data.get("arguments", {})))
+    return out
+
+
+LINES = {"claude": lines_claude, "codex": lines_codex, "copilot": lines_copilot}
+
+
+def find_transcript(agent, sid, home=None):
+    import glob
+    home = home or os.path.expanduser("~")
+    if not sid or not re.match(r"^[A-Za-z0-9_-]+$", sid):
+        return None
+    if agent == "claude":
+        hits = glob.glob(os.path.join(home, ".claude", "projects", "*", f"{sid}.jsonl"))
+    elif agent == "codex":
+        hits = glob.glob(os.path.join(home, ".codex", "sessions", "*", "*", "*", f"rollout-*-{sid}.jsonl"))
+    elif agent == "copilot":
+        p = os.path.join(home, ".copilot", "session-state", sid, "events.jsonl")
+        hits = [p] if os.path.exists(p) else []
+    else:
+        hits = []
+    return max(hits, key=os.path.getmtime) if hits else None
+
+
+def _frontmatter_value(notes_text, key):
+    for line in _frontmatter(notes_text).splitlines():
+        k, sep, v = line.partition(":")
+        if sep and k.strip() == key:
+            return v.strip().strip("\"'")
+    return ""
+
+
+def lead_identity(env, notes_text, chain=None):
+    """(agent, session id) of the session running this command. The process tree first (a
+    CLI started from inside another inherits its variable); then each agent's variable, for a
+    sandbox where `ps` is refused; then the notes."""
+    import aosession
+    chain = chain or aosession.ancestry
+    try:
+        agent, sid, _ = aosession.current(env, chain(), aosession.pidfile_session)
+    except Exception:
+        agent, sid = None, ""
+    if agent and sid:
+        return agent, sid
+    for a in aosession.AGENTS:
+        v = env.get(aosession.ENV_VAR[a], "")
+        if v:
+            return a, v
+    return (_frontmatter_value(notes_text, "agent") or "claude"), _frontmatter_value(notes_text, "session_id")
+
+
+def write_export(entries, ao_dir, part_bytes=100_000, total_bytes=400_000):
+    """The conversation, newest first, in files of at most `part_bytes` (an invitee's file
+    tool reads a bounded amount at once), `total_bytes` in all. Returns the paths written."""
+    os.makedirs(ao_dir, exist_ok=True)
+    for old in os.listdir(ao_dir):
+        if re.match(r"^conversation(-\d+)?\.md$", old):
+            os.remove(os.path.join(ao_dir, old))
+    if not entries:
+        path = os.path.join(ao_dir, "conversation.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("# Conversation\n\nThe session's conversation could not be found. Read its notes and "
+                    "documents in the session folder instead.\n")
+        return [path]
+    kept, used = [], 0
+    for e in reversed(entries):
+        size = len(e.encode("utf-8")) + 2
+        if used + size > total_bytes - 200 * (1 + total_bytes // part_bytes):
+            break
+        kept.append(e)
+        used += size
+    header = (f"# Conversation — newest first. {len(kept)} of {len(entries)} messages included"
+              f"{', the oldest left out' if len(kept) < len(entries) else ''}.\n\n")
+    parts, cur = [], header
+    for e in kept:
+        block = e + "\n\n"
+        if len((cur + block).encode("utf-8")) > part_bytes and cur.strip():
+            parts.append(cur)
+            cur = f"# Conversation, part {len(parts) + 1} — older messages.\n\n"
+        cur += block
+    parts.append(cur)
+    paths = []
+    for n, body in enumerate(parts, 1):
+        path = os.path.join(ao_dir, "conversation.md" if n == 1 else f"conversation-{n}.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(body)
+        paths.append(path)
+    return paths
+
+
+def export_conversation(env, notes_text, ao_dir):
+    agent, sid = lead_identity(env, notes_text)
+    path = find_transcript(agent, sid)
+    return write_export(LINES[agent](path) if path and agent in LINES else [], ao_dir)
+
+
 def guide_text(invitees, notes_path, lead_agent):
     me = f"python3 {shlex.quote(os.path.join(HERE, 'ao_ask.py'))}"
     s = f"--session {shlex.quote(notes_path)}"

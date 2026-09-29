@@ -1,0 +1,10 @@
+{"type": "session_meta", "payload": {"id": "019a", "cwd": "/w"}}
+{"type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "DEV-PROMPT"}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "# AGENTS.md instructions for /w\nINJECTED"}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "<environment_context>ENV</environment_context>"}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Refactor the parser"}]}}
+{"type": "response_item", "payload": {"type": "reasoning", "summary": [], "encrypted_content": "REASONING"}}
+{"type": "response_item", "payload": {"type": "function_call", "name": "shell", "arguments": "{\"cmd\": [\"rg\", \"parse\"]}"}}
+{"type": "response_item", "payload": {"type": "function_call_output", "output": "CALL-OUTPUT"}}
+{"type": "response_item", "payload": {"type": "custom_tool_call", "name": "apply_patch", "input": "*** Begin Patch"}}
+{"type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Parser split in two."}]}}
