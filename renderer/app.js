@@ -499,6 +499,30 @@ function selectSession(key) {
   if (window.refreshUsage) window.refreshUsage()
 }
 
+// Reveal the selected card in the list, the way an editor reveals the open file: its
+// collapsed group opens, and the card is centred when it is out of view — a card already
+// visible is left where it is, so a click never makes the list jump.
+function revealSelected() {
+  if (!selectedKey || (window.viewMode && window.viewMode !== 'list')) return
+  const find = () => document.querySelector(`#panel-list .list-card[data-key="${CSS.escape(selectedKey)}"]`)
+  let card = find()
+  if (!card) return
+  const folded = card.closest('.list-group-body.collapsed')
+  if (folded) {
+    const head = folded.parentElement && folded.parentElement.querySelector('.list-group-head[data-group-collapse]')
+    if (head) head.click()
+    card = find()
+    if (!card) return
+  }
+  const list = document.getElementById('panel-list')
+  const l = list.getBoundingClientRect(), c = card.getBoundingClientRect()
+  if (c.top >= l.top && c.bottom <= l.bottom) return
+  card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+window.revealSelected = revealSelected
+// A click anywhere in the session's panel — its details or its terminal — reveals it.
+document.getElementById('panel-detail')?.addEventListener('mousedown', () => revealSelected())
+
 // From the board → reveal a session in the List view: switch to its tab (Running /
 // Closed / Archived), load it, then select + scroll to it. The tab is inferred from
 // the session shape (running sessions carry a live `status`; historical ones a
@@ -516,8 +540,7 @@ window.goToSession = async (key) => {
   setViewMode('list')
   selectedKey = null   // selectSession toggles — clear first so this always selects
   selectSession(key)
-  const el = document.querySelector(`.list-card[data-key="${CSS.escape(key)}"]`)
-  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  revealSelected()
 }
 
 function switchTab(tab) {
