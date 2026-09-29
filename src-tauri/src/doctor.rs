@@ -741,13 +741,13 @@ type PidfileScan = (
 /// A pidfile is named for the pid that wrote it, so a dead one is residue from a session
 /// that ended without cleaning up — harmless, but it is what makes `~/.claude/sessions/`
 /// unreadable after a few months.
-/// `is_collab_turn`: a pid that belongs to a running collab turn (a `claude -p` it started),
-/// which writes a pidfile but is not a session.
+/// `is_advisor_turn`: a pid that belongs to an invited model's `claude -p`, which writes a
+/// pidfile but is not a session.
 fn scan_pidfiles(
     dir: &Path,
     active: &Value,
     alive: impl Fn(i64) -> bool,
-    is_collab_turn: impl Fn(i64) -> bool,
+    is_advisor_turn: impl Fn(i64) -> bool,
 ) -> PidfileScan {
     let mut live: std::collections::HashMap<String, Vec<i64>> = std::collections::HashMap::new();
     let mut stale = Vec::new();
@@ -766,7 +766,7 @@ fn scan_pidfiles(
             stale.push(path.to_string_lossy().into_owned());
             continue;
         }
-        if is_collab_turn(pid) {
+        if is_advisor_turn(pid) {
             continue;
         }
         // Alive: attribute it to the notes.md the registry has for its session id.
@@ -799,11 +799,8 @@ fn scan_pidfiles(
 pub fn snapshot() -> Snapshot {
     let active = crate::reader::load_active_sessions();
     let (live_pids, stale_pidfiles, unregistered_live) = scan_pidfiles(&sessions_dir(), &active, crate::reader::alive, |pid| {
-        let groups = crate::collab::engine::turn_groups();
-        // SAFETY: getpgid(2) only reads the process table.
-        (!groups.is_empty() && groups.contains(&unsafe { libc::getpgid(pid as i32) }))
-            // An invited model's `claude -p` is a consultation, not a lost session.
-            || crate::advisors::is_advisor_pid(&crate::advisors::registered_groups(), pid)
+        // An invited model's `claude -p` is a consultation, not a lost session.
+        crate::advisors::is_advisor_pid(&crate::advisors::registered_groups(), pid)
     });
 
     // One SessionFacts per notes.md, not per registry entry: several ids sharing a
@@ -1129,11 +1126,11 @@ mod pidfile_tests {
         assert_eq!(orphaned, vec![(me as i64, "/some/repo".to_string())]);
     }
 
-    // A collab's `claude -p` turn writes a pidfile like a session. Reported as running
-    // outside the registry, it came with "quit pid … first" — which kills the collab.
+    // An invited model's `claude -p` writes a pidfile like a session. Reported as running
+    // outside the registry, it would come with "quit pid … first" — which kills the answer.
     #[test]
-    fn a_collab_turn_is_not_reported_as_a_lost_session() {
-        let dir = tmp("collab-turn");
+    fn a_registered_advisor_turn_is_not_reported_as_a_lost_session() {
+        let dir = tmp("advisor-turn");
         let me = std::process::id();
         write(&dir, me, json!({ "sessionId": "turn", "cwd": "/w/app" }));
         let (_, _, orphaned) = scan_pidfiles(&dir, &json!({}), test_alive, |pid| pid == me as i64);

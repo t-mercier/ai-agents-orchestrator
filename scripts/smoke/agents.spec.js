@@ -60,7 +60,7 @@ test('+New offers the installed agents and says why Copilot is not one of them',
   await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
   await page.locator('#new-session-btn').click()
   await expect(page.locator('#ns-agent-field')).toBeVisible()
-  await expect(page.locator('#ns-agent option')).toHaveText(['Claude Code', 'Codex', 'Collab — two agents review each other'])
+  await expect(page.locator('#ns-agent option')).toHaveText(['Claude Code', 'Codex'])
   await expect(page.locator('#ns-agent-hint')).toContainText('npm i -g @github/copilot')
 
   await expect(page.locator('#ns-intro')).toContainText('Launches claude')
@@ -151,19 +151,6 @@ test('a failed agent probe says so in +New instead of hiding the agents', async 
   await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
   await page.locator('#new-session-btn').click()
   await expect(page.locator('#ns-agent-hint')).toContainText('could not detect the agent CLIs')
-})
-
-test('without Claude Code, Collab pairs the two agents that are installed', async ({ page }) => {
-  await stub(page, [
-    { agent: 'claude', found: false, version: '', supported: false, hint: '' },
-    { agent: 'codex', found: true, version: 'codex-cli 0.158.0', supported: true, hint: '' },
-    { agent: 'copilot', found: true, version: '1.0.89', supported: true, hint: '' },
-  ])
-  await page.goto('/index.html')
-  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
-  await page.locator('#new-session-btn').click()
-  await page.locator('#ns-agent').selectOption('collab')
-  await expect(page.locator('#ns-collab-author option')).toHaveText(['Codex', 'Copilot'])
 })
 
 // Collabs and new Codex sessions have no session id yet; ranking by it gave them all one

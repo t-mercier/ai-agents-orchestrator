@@ -1002,13 +1002,7 @@ async function fillAgentChoice() {
   field.hidden = !others.length && !notes.length
   const last = (() => { try { return localStorage.getItem('csm.nsAgent') } catch { return null } })()
   const list = usable.includes('claude') ? usable : ['claude', ...usable]
-  // A collab needs two different agents: offered only when this machine has two.
-  const collab = usable.length >= 2 ? '<option value="collab"' + (last === 'collab' ? ' selected' : '') + '>Collab — two agents review each other</option>' : ''
-  sel.innerHTML = list.map(a => `<option value="${escapeAttr(a)}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('') + collab
-  // A collab pairs agents that are installed: Claude Code only when it is.
-  const opts = (pick) => usable.map((a, i) => `<option value="${escapeAttr(a)}"${i === pick ? ' selected' : ''}>${names[a]}</option>`).join('')
-  document.getElementById('ns-collab-author').innerHTML = opts(0)
-  document.getElementById('ns-collab-reviewer').innerHTML = opts(1)
+  sel.innerHTML = list.map(a => `<option value="${escapeAttr(a)}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('')
   hint.textContent = notes.join(' ')
   hint.hidden = !notes.length
   describeAgent()
@@ -1021,16 +1015,9 @@ function describeAgent() {
   if (!intro) return
   const a = sel && !document.getElementById('ns-agent-field').hidden ? sel.value : 'claude'
   const name = { codex: 'Codex', copilot: 'Copilot' }[a]
-  const collab = a === 'collab'
-  // A collab has no terminal and no branch to check out: those fields do not apply.
-  document.getElementById('ns-collab-field').hidden = !collab
-  document.getElementById('ns-branch-field').hidden = collab
-  document.getElementById('ns-dest-field').hidden = collab
-  intro.innerHTML = collab
-    ? 'Two agents work on one task in a repository, one after the other: the author makes the change, the reviewer checks it. You follow it in the session\'s thread.'
-    : name
-      ? `Starts <code>${a}</code> in the app's terminal. The app writes the session's <code>notes.md</code>, and ${name} is asked to keep it current.`
-      : NS_INTRO_CLAUDE
+  intro.innerHTML = name
+    ? `Starts <code>${a}</code> in the app's terminal. The app writes the session's <code>notes.md</code>, and ${name} is asked to keep it current.`
+    : NS_INTRO_CLAUDE
 }
 document.getElementById('ns-agent')?.addEventListener('change', describeAgent)
 
@@ -1103,24 +1090,6 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   const agentSel = document.getElementById('ns-agent')
   const agent = agentSel && !document.getElementById('ns-agent-field').hidden ? agentSel.value : 'claude'
   try { localStorage.setItem('csm.nsAgent', agent) } catch {}
-  if (agent === 'collab') {
-    const author = document.getElementById('ns-collab-author').value
-    const reviewer = document.getElementById('ns-collab-reviewer').value
-    const task = document.getElementById('ns-collab-task').value.trim()
-    if (author === reviewer) { showNsError('Pick two different agents: a review by the same model misses what it missed.'); return }
-    if (!startIn) { showNsError('Pick the repository the collab works in (Start in).'); return }
-    if (!task) { showNsError('Describe the task.'); return }
-    const r = await window.api.collabStart({ category, name, ticket, root, repo: startIn, mode: 'cross-review', agents: [author, reviewer], task })
-    if (!r || !r.ok) { showNsError('Could not start: ' + ((r && r.error) || 'unknown error')); return }
-    newSessionModal.close()
-    if (window.setViewMode && window.viewMode !== 'list') window.setViewMode('list')
-    // A running collab is listed under Running; started from another tab, show it there.
-    if (activeTab !== 'running') switchTab('running')
-    selectedKey = r.notesPath
-    window._lastSelectedKey = r.notesPath
-    if (window.refreshSessions) window.refreshSessions()
-    return
-  }
   // Codex and Copilot sessions run in the app's terminal: it is where the app sees them.
   const embedded = agent !== 'claude' || !!(window.getOpenIn && window.getOpenIn() === 'embedded')
   const res = await window.api.startSession({ category, name, ticket, startIn, branch, prLink, root, embedded, agent: agent === 'claude' ? null : agent })
@@ -1444,16 +1413,12 @@ async function maybeOfferAppUpdate(el) {
   el.hidden = false
   const install = el.querySelector('.sb-install')
   install.addEventListener('click', async () => {
-    // The restart ends every session running in an embedded terminal, and every collab.
+    // The restart ends every session running in an embedded terminal.
     const live = window.liveTerminalCount ? window.liveTerminalCount() : 0
-    const collabs = window.api.collabList ? (await window.api.collabList()).length : 0
-    if (live > 0 || collabs > 0) {
-      const parts = []
-      if (live) parts.push(`${live} session${live > 1 ? 's' : ''} running in the app, which can be resumed afterwards`)
-      if (collabs) parts.push(`${collabs} collab${collabs > 1 ? 's' : ''}, which will be closed as stopped`)
+    if (live > 0) {
       const choice = await window.confirmAction({
         title: 'Restart to update?',
-        body: `Restarting stops ${parts.join(', and ')}.`,
+        body: `Restarting stops ${live} session${live > 1 ? 's' : ''} running in the app, which can be resumed afterwards.`,
         confirmLabel: 'Install and restart',
       })
       if (choice !== 'confirm') return
@@ -1766,15 +1731,6 @@ window.reloadConfig = async () => {           // called by Settings after save
   fetchAndRender(true)   // refreshes the active tab + its badge
   seedTabCounts()        // re-seed ALL tab badges — roots/categories may have changed
   if (window.CSMBrutusUI) window.CSMBrutusUI.refresh()   // he may have been turned on or off
-}
-
-// A collab's turns start and end on their own: redraw its card and thread when they do.
-if (window.api && window.api.onEvent) {
-  let pending = null
-  window.api.onEvent('collab-event', () => {
-    if (pending) return
-    pending = setTimeout(() => { pending = null; if (window.refreshSessions) window.refreshSessions() }, 250)
-  })
 }
 
 // v1 → v2 migration notification (emitted by Rust on startup).

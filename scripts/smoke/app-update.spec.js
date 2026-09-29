@@ -16,7 +16,6 @@ async function stubInvoke(page) {
           window.__CALLS__.push(cmd)
           if (cmd === 'app_update_check') return Promise.resolve({ version: '0.21.0', current: '0.20.4', notes: '' })
           if (cmd === 'app_update_install') return new Promise(() => {})   // a real install restarts
-          if (cmd === 'collab_list') return Promise.resolve(window.__COLLABS__ || [])
           return orig(cmd, args)
         }
         t = v
@@ -80,17 +79,6 @@ test('Settings → General turns update checks off and on', async ({ page }) => 
   await page.locator('#set-update-check').uncheck()
   await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
   await expect.poll(() => page.evaluate(() => localStorage.getItem('csm.updateCheck'))).toBe('off')
-})
-
-// Restarting into an update ends running collabs too.
-test('Install counts running collabs before it restarts', async ({ page }) => {
-  await stubInvoke(page)
-  await page.addInitScript(() => { window.__COLLABS__ = [{ id: 'c-1', notesPath: '/w/n.md', repo: '/w/app' }] })
-  await page.goto('/index.html')
-  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
-  await page.evaluate(() => { window.liveTerminalCount = () => 0 })
-  await page.locator('#skills-banner .sb-install').click()
-  await expect(page.locator('#confirm-body')).toContainText('1 collab')
 })
 
 test('Cancel leaves the update switch as it was', async ({ page }) => {

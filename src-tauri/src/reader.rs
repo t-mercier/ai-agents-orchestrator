@@ -435,8 +435,8 @@ fn discover_meta_lines<I: Iterator<Item = String>>(lines: I) -> (Option<String>,
                 if texts.iter().any(|t| t.contains("<command-name>") || t.contains("<command-message>")) {
                     opened_by_command = true;
                 }
-                // A collab turn the app ran headless (`claude -p`), not a session.
-                if texts.iter().any(|t| t.contains(crate::collab::TURN_MARK)) {
+                // A turn 0.21.0's headless collab ran (`claude -p`), not a session.
+                if texts.iter().any(|t| t.contains(LEGACY_COLLAB_TURN_MARK)) {
                     skip = true;
                 }
             }
@@ -835,56 +835,6 @@ pub(crate) fn closed_while_live(content: &str, notes_mtime_ms: f64, started_ms: 
     state == "closed" && date.is_some_and(|d| d.len() == 16 && d.as_str() >= start_stamp)
 }
 
-/// A running collab, shaped like a running session: busy, no terminal, the turn in
-/// progress as its activity line.
-pub(crate) fn collab_session(cfg: &Value, id: &str, notes_path: &str, repo: &str, current: Option<(&str, &str)>) -> Value {
-    let content = fs::read_to_string(notes_path).unwrap_or_default();
-    let fm = parse_frontmatter(&content);
-    let doing = current.map(|(role, agent)| {
-        let who = crate::agents::AgentId::parse(Some(agent)).map(crate::agents::session::display_name).unwrap_or("An agent");
-        match role {
-            "reviewer" => format!("{who} is reviewing the change"),
-            _ => format!("{who} is working on the change"),
-        }
-    });
-    json!({
-        "sessionId": "",
-        "collabId": id,
-        "collabThread": extract_section(&content, "Collab thread").map(Value::String).unwrap_or(Value::Null),
-        "collab": fm.get("collab_mode").cloned().unwrap_or_else(|| "cross-review".into()),
-        "collabAgents": fm.get("collab_agents").cloned().unwrap_or_default(),
-        "name": fm.get("name").cloned().unwrap_or_default(),
-        "cwd": repo,
-        "pid": 0,
-        "status": "busy",
-        "state": "active",
-        "notesPath": notes_path,
-        "root": root_for_notes_path(cfg, notes_path),
-        "category": fm.get("category").cloned().map(Value::String).unwrap_or(Value::Null),
-        "ticket": fm.get("ticket").cloned().filter(|t| !t.is_empty()).map(Value::String).unwrap_or(Value::Null),
-        "goal": extract_section(&content, "Goal").map(Value::String).unwrap_or(Value::Null),
-        "lastActivity": doing.map(Value::String).unwrap_or(Value::Null),
-        "gitBranch": Value::Null, "prLink": Value::Null, "prLinks": Value::Null, "tickets": Value::Null,
-        "ticketStates": [], "nextSteps": Value::Null, "lastSummary": Value::Null, "entrypoint": "",
-        "continuedIn": Value::Null, "updatedAt": Value::Null, "lastActivityAt": Value::Null, "worktree": Value::Null,
-    })
-}
-
-/// Where the live Claude Code sessions work: their pidfiles' cwd, canonical. A collab may
-/// not start in a repository one of them works in.
-pub(crate) fn live_claude_cwds() -> Vec<String> {
-    fs::read_dir(home().join(".claude").join("sessions"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| fs::read_to_string(e.path()).ok())
-        .filter_map(|t| serde_json::from_str::<Value>(&t).ok())
-        .filter(|d| d.get("kind").and_then(Value::as_str) != Some("bg"))
-        .filter(|d| alive(d.get("pid").and_then(Value::as_i64).unwrap_or(0)))
-        .filter_map(|d| d.get("cwd").and_then(Value::as_str).map(|c| fs::canonicalize(c).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| c.to_string())))
-        .collect()
-}
-
 /// A Codex or Copilot session running in an embedded terminal, shaped like a running
 /// Claude Code session plus `agent`. The homes are parameters so a test can point them
 /// at a folder of its own.
@@ -1022,13 +972,8 @@ fn sessions_now(pty: &crate::pty::PtyManager) -> Vec<Value> {
         }
         out.push(s);
     }
-    for c in crate::collab::engine::live() {
-        let cur = *c.current.lock().unwrap();
-        out.push(collab_session(&cfg, &c.id, &c.notes_path, &c.repo, cur.map(|(r, a)| (r.as_str(), a.as_str()))));
-    }
-    // A `claude -p` collab turn writes a pidfile like a session; it is a turn, not one.
-    let collab_groups = crate::collab::engine::turn_groups();
-    // An invited model's `claude -p` writes one too (advisors.rs keeps their groups).
+    // An invited model's `claude -p` writes a pidfile like a session; it is a consultation,
+    // not one (advisors.rs keeps their process groups).
     let advisor_groups = crate::advisors::registered_groups();
     let entries = match fs::read_dir(claude.join("sessions")) {
         Ok(e) => e,
@@ -1056,10 +1001,6 @@ fn sessions_now(pty: &crate::pty::PtyManager) -> Vec<Value> {
         }
         let pid = data.get("pid").and_then(Value::as_i64).unwrap_or(0);
         if !alive(pid) {
-            continue;
-        }
-        // SAFETY: getpgid(2) only reads the process table.
-        if !collab_groups.is_empty() && collab_groups.contains(&unsafe { libc::getpgid(pid as i32) }) {
             continue;
         }
         if crate::advisors::is_advisor_pid(&advisor_groups, pid) {
@@ -1473,6 +1414,10 @@ pub(crate) fn frontmatter_block(content: &str) -> Option<&str> {
     Some(&stripped[..end])
 }
 
+/// The line 0.21.0's headless collab put in every turn's prompt. Its transcripts are still
+/// on disk; this keeps them out of Import.
+const LEGACY_COLLAB_TURN_MARK: &str = "Work in this repository only. Do not commit, push, or change git configuration.";
+
 /// Parse the leading `---\n…\n---` YAML-ish frontmatter into key→value pairs
 /// (stripping surrounding quotes; empty values are dropped = treated as absent).
 /// Block-list item lines (`  - value`) are skipped — they belong to the list key
@@ -1849,9 +1794,7 @@ fn scan_historical() -> Vec<Value> {
     // no transcript/git work (was a full get_sessions() that duplicated the running poll).
     let (running_ids, active_notes) = running_session_ids();
     // Codex and Copilot sessions running in the app's terminal, by canonical notes path.
-    let mut live_agent: HashSet<String> = crate::pty::live_agent_notes().into_iter().collect();
-    // A running collab belongs to Running, like a live terminal.
-    live_agent.extend(crate::collab::engine::live().into_iter().map(|c| c.notes_path));
+    let live_agent: HashSet<String> = crate::pty::live_agent_notes().into_iter().collect();
     // Parsed once for the whole scan; latest_resumable_sid needs it per stub notes.md.
     let active_registry = load_active_sessions();
 
@@ -2538,8 +2481,9 @@ mod tests {
     }
 
     #[test]
-    fn a_collab_turn_is_not_offered_for_import() {
-        let prompt = crate::collab::prompt(crate::collab::Role::Author, "add a retry", None, None, None);
+    fn a_legacy_collab_turn_is_not_offered_for_import() {
+        use super::LEGACY_COLLAB_TURN_MARK;
+        let prompt = format!("You are the author in a collab.\n{LEGACY_COLLAB_TURN_MARK}\nadd a retry");
         let line = serde_json::json!({ "type": "user", "cwd": "/w/app", "message": { "content": prompt } }).to_string();
         let (_, _, skip) = discover_meta_lines(vec![line].into_iter());
         assert!(skip, "a turn the app ran is not a session to import");
@@ -3008,30 +2952,6 @@ mod tests {
         assert_eq!((s["sessionId"].as_str(), s["status"].as_str()), (Some(xid), Some("idle")));
         assert_eq!(parse_frontmatter(&fs::read_to_string(&np).unwrap()).get("session_id").map(String::as_str), Some(xid));
         let _ = fs::remove_dir_all(&t);
-    }
-
-
-    // A running collab is a Running session with no terminal: busy, the turn in progress
-    // as its activity, and the collab named so the renderer offers no Resume or terminal.
-    #[test]
-    fn a_running_collab_is_a_busy_session_without_a_terminal() {
-        use super::{collab_session, fs};
-        let d = std::env::temp_dir().join(format!("ao-collab-session-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        let notes = d.join("FEAT/retry/notes.md");
-        fs::create_dir_all(notes.parent().unwrap()).unwrap();
-        fs::write(&notes, crate::collab::notes_text(&crate::collab::CollabNotes {
-            mode: crate::collab::Mode::CrossReview, agents: &[crate::agents::AgentId::Claude, crate::agents::AgentId::Codex],
-            repo: "/w/app", base: "abc1234", category: "FEAT", ticket: "", name: "retry", task: "Add a retry",
-            started_at: "2026-09-29 10:00",
-        })).unwrap();
-        let s = collab_session(&serde_json::json!({}), "c1", notes.to_str().unwrap(), "/w/app", Some(("reviewer", "codex")));
-        assert_eq!(s["collabId"], "c1");
-        assert_eq!((s["collab"].as_str(), s["status"].as_str(), s["state"].as_str()), (Some("cross-review"), Some("busy"), Some("active")));
-        assert_eq!(s["lastActivity"], "Codex is reviewing the change");
-        assert_eq!((s["name"].as_str(), s["category"].as_str(), s["goal"].as_str()), (Some("retry"), Some("FEAT"), Some("Add a retry")));
-        assert_eq!(s["sessionId"], "", "nothing to resume");
-        let _ = fs::remove_dir_all(&d);
     }
 
 

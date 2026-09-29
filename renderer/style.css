@@ -2361,10 +2361,6 @@ body.bru-resizing .layout { transition: none; }
 .collab-turn { font-size: 12px; line-height: 1.5; color: var(--text-primary); padding: 6px 10px; border-radius: 8px;
   background: rgba(var(--tint), 0.04); border: 1px solid var(--card-border); overflow-wrap: anywhere; }
 .collab-findings { margin: 4px 0 0; padding-left: 16px; color: var(--text-secondary); }
-.collab-now { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
-.collab-spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(var(--accent-rgb), 0.3);
-  border-top-color: var(--accent); animation: collab-spin 0.9s linear infinite; flex: none; }
-@keyframes collab-spin { to { transform: rotate(360deg); } }
 
 /* ── Brutus's companion (renderer/lib/pets.js) ── the state class on the svg drives it. */
 .pet-svg { overflow: visible; display: block; }

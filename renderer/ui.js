@@ -1188,9 +1188,8 @@ function restartBtn(s) {
            data-tip="Restart from notes">${svgIcon('<path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/>')}Restart</button>`
 }
 
-// A collab's thread: one entry per finished turn (a review's findings under it), the turn
-// in progress, and Stop while it runs. Written from the session's notes, so a finished
-// collab shows the same thread.
+// The thread of a collab 0.21.0 ran (the headless collab is gone): one entry per turn, a
+// review's findings under it. Read-only; these sessions are all closed.
 function collabSection(s) {
   if (!s.collab) return ''
   const items = []
@@ -1200,12 +1199,9 @@ function collabSection(s) {
     if (top) items.push({ text: top[1], findings: [] })
     else if (sub && items.length) items[items.length - 1].findings.push(sub[1])
   }
-  const running = s.state === 'active' && s.collabId
   const rows = items.map(it => `<li class="collab-turn"><div>${escapeHtml(it.text)}</div>${it.findings.length ? `<ul class="collab-findings">${it.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : ''}</li>`).join('')
-  const now = running ? `<li class="collab-turn collab-now"><span class="collab-spin"></span>${escapeHtml(s.lastActivity || 'Starting…')}</li>` : ''
-  const stop = running ? `<button type="button" class="act-verb" data-collab-stop="${escapeHtml(s.collabId)}" data-tip="Stop the collab; the change stays in the working tree">Stop</button>` : ''
-  const empty = !rows && !now ? '<div class="detail-activity">No turn has finished yet.</div>' : ''
-  return detailSection('Collab thread', `${empty}<ol class="collab-thread">${rows}${now}</ol>${stop}`)
+  const empty = !rows ? '<div class="detail-activity">No turn was recorded.</div>' : ''
+  return detailSection('Collab thread', `${empty}<ol class="collab-thread">${rows}</ol>`)
 }
 
 function renderDetailPanel(s, tab = 'running') {
@@ -1510,13 +1506,10 @@ function sessionMenuRows(s) {
   // Its references and its place in the list
   rows.push(sep)
   const prs = prLinksOf(s)
-  rows.push(s.collab && s.collabId
-    // Sync rewrites the notes the running collab writes its thread into.
-    ? row('', '', 'Sync tickets and pull requests', 'Sync once the collab has ended')
-    : (prs.length || ticketsOf(s).length)
-      ? row('', `data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}"`,
-          'Sync tickets and pull requests')
-      : row('', '', 'Sync tickets and pull requests', 'This session has no ticket and no pull request'))
+  rows.push((prs.length || ticketsOf(s).length)
+    ? row('', `data-sync-prs="${escapeHtml(prs.join(' '))}" data-sync-notes="${escapeHtml(s.notesPath || '')}" data-sync-cwd="${escapeHtml(s.cwd || '')}"`,
+        'Sync tickets and pull requests')
+    : row('', '', 'Sync tickets and pull requests', 'This session has no ticket and no pull request'))
   rows.push(row('', `data-open-board="${escapeHtml(sessionKey(s))}"`, 'Add to board…'))
   rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
     isPinnedSession(s) ? 'Unpin from the top' : 'Pin to the top'))
@@ -1988,13 +1981,6 @@ function installDelegatedHandlers() {
       if (live) {
         warnAlreadyRunning(sid, `"${window.sessionNameFor(sid)}" is already running — you likely have it open in a terminal. Resuming opens a second instance on the same session, which can clash.`, open)
       } else { open() }
-      return
-    }
-
-    const collabStop = e.target.closest('[data-collab-stop]')
-    if (collabStop) {
-      collabStop.disabled = true
-      window.api.collabStop(collabStop.dataset.collabStop).then(() => window.refreshSessions && window.refreshSessions())
       return
     }
 

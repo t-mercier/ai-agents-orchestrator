@@ -59,14 +59,6 @@
     // [{ agent, found, version, supported, hint }] for claude, codex, copilot.
     // A failed probe resolves { error }: the form says so rather than offering Claude alone.
     agentsAvailable: () => invoke('agents_available').catch((e) => ({ error: String(e) })),
-    // The running collabs; [] when they cannot be listed (the restart warning then omits them).
-    collabList: () => invoke('collab_list').catch(() => []),
-    // A collab: { ok, id, notesPath } at once; its turns follow as collab-event.
-    collabStart: ({ category, name, ticket, root, repo, mode, agents, task } = {}) =>
-      invoke('collab_start', { category: category || '', name: name || '', ticket: ticket || '', root: root || '', repo: repo || '', mode, agents, task: task || '' })
-        .then((r) => ({ ok: true, ...(r || {}) }))
-        .catch((e) => ({ ok: false, error: String(e) })),
-    collabStop: (id) => invoke('collab_stop', { id }).catch(() => false),
     // Invited models: write who is invited (an empty list dismisses them all), read the thread
     // of consultations, stop one. { ok, error } so the dialog can say why it was refused.
     advisorsSet: (notesPath, advisors) => invoke('advisors_set', { notesPath, advisors }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
