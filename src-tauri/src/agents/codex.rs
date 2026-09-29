@@ -62,6 +62,15 @@ pub(crate) fn meta(first_line: &str) -> Option<(String, String, String)> {
     Some((id, cwd, started))
 }
 
+/// Is this rollout a `codex exec` run (an invited model consulted headless, `originator:
+/// "codex_exec"`) rather than an interactive session (`codex-tui`, `Codex Desktop`)?
+pub(crate) fn is_exec_rollout(first_line: &str) -> bool {
+    serde_json::from_str::<Value>(first_line)
+        .ok()
+        .and_then(|d| d.get("payload")?.get("originator")?.as_str().map(|o| o == "codex_exec"))
+        .unwrap_or(false)
+}
+
 /// A time as Codex writes it in `session_meta`: UTC, millisecond precision, `Z`. Two
 /// timestamps in this form compare correctly as strings.
 pub(crate) fn utc_rfc3339(t: SystemTime) -> String {
@@ -146,7 +155,11 @@ pub(crate) fn find_started(root: &Path, cwd: &str, since: SystemTime, taken: &[S
             if !fresh {
                 continue;
             }
-            if let Some((id, c, started)) = first_line(&p).as_deref().and_then(meta) {
+            let line = first_line(&p);
+            if line.as_deref().is_some_and(is_exec_rollout) {
+                continue;
+            }
+            if let Some((id, c, started)) = line.as_deref().and_then(meta) {
                 let new_enough = started.as_str() >= floor_utc.as_str();
                 if c == cwd && new_enough && crate::is_valid_session_id(&id) && !taken.contains(&id) && !found.contains(&id) {
                     found.push(id);
@@ -293,6 +306,21 @@ mod tests {
         let p = dir.join(format!("rollout-2026-09-28T23-10-04-{id}.jsonl"));
         std::fs::write(&p, format!("{}\n{STARTED}\n", meta_line(id, cwd))).unwrap();
         p
+    }
+
+    // An invited model's `codex exec` writes a rollout in the lead's folder too (its
+    // originator is `codex_exec`, probed 2026-09-30); it is a consultation, not the session.
+    #[test]
+    fn a_codex_exec_rollout_is_never_the_session() {
+        let t = tmp("codex-exec");
+        let since = SystemTime::now() - std::time::Duration::from_secs(1);
+        let dir = t.path().join("sessions").join("2026/09/30");
+        std::fs::create_dir_all(&dir).unwrap();
+        let exec = meta_line("019a0000-0000-7000-8000-00000000e0e0", "/w/x").replace(r#""payload":{"#, r#""payload":{"originator":"codex_exec","#);
+        std::fs::write(dir.join("rollout-2026-09-30T01-00-00-019a0000-0000-7000-8000-00000000e0e0.jsonl"), format!("{exec}\n{STARTED}\n")).unwrap();
+        assert_eq!(find_started(t.path(), "/w/x", since, &[]).unwrap(), None);
+        write_rollout(t.path(), "2026/09/30", ID, "/w/x");
+        assert_eq!(find_started(t.path(), "/w/x", since, &[]).unwrap().as_deref(), Some(ID));
     }
 
     #[test]

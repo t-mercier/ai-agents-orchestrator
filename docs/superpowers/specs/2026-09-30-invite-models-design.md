@@ -309,14 +309,17 @@ it held, from a git repo it was not allowed to write to:
 | Codex, `-m not-a-model-xyz` | exit 1 at once; the reason is the `message` of a JSON error on stderr |
 | `codex sandbox` (workspace-write, her config) | no network (`nodename nor servname`), cannot write `~/.claude`, `ps` not permitted |
 | A `start_new_session` child, its parent's group then SIGKILLed | the child ran to its end |
+| `ao_ask.py ask`, from a Claude Code lead, to Claude Haiku, Codex and Copilot with the hardened argv | all three answered (9 s, 24 s, 16 s), each read the session's `notes.md` and the repo's `retry.py` and cited them; the repo stayed clean; the registry was empty afterwards |
+| Claude plan mode, a question needing two reads | a text answer, no ExitPlanMode stop |
+| A Claude invitee while it runs | it writes a pidfile (`kind: interactive`, `entrypoint: sdk-cli`, so no field tells it from a session); its group is in the registry, which is what keeps it out of Running |
+| `--no-session-persistence` | no transcript under `~/.claude/projects` holds the question |
+| Codex rollouts' `originator` | `codex_exec` for `exec` runs, `codex-tui` for the app's terminal, `Codex Desktop` for the desktop app; `find_started` now skips `codex_exec` |
 
-### To probe during implementation
+### Not probed yet
 
-The hardened argv of each CLI (`--restricted --tools …` for Claude, `--deny-tool url
---disable-builtin-mcps` for Copilot) still answers the PAPAYA question; a question needing
-several reads gets a text answer from Claude's plan mode (not an ExitPlanMode stop); a Codex
-lead with escalation runs a consultation; the invite line pasted into each TUI is submitted
-intact; the stuck-prompt patterns; the `originator` of an `exec` rollout.
+A Codex lead running a consultation with escalated permissions; the invite line pasted into
+each TUI and submitted by the separate Enter (the Playwright tests check the two writes, not a
+real TUI); the stuck-prompt patterns (none is matched until one is probed).
 
 ## Review of v1
 
