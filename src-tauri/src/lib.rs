@@ -751,6 +751,22 @@ pub(crate) fn category_root_dir(cfg: &serde_json::Value, cat_def: &serde_json::V
 /// (un-archiving it). Launcher only — the app writes nothing (ADR-001/ADR-012).
 /// Distinct from resume: `/restart-session` reloads the notes summary, not the raw transcript,
 /// so it works for sessions with no recorded sessionId (e.g. "to fill").
+/// Why a session cannot be restarted with Claude Code's `/restart-session`, or None. The
+/// skill points the notes at a new Claude Code session; on a Codex or Copilot session that
+/// left `agent:` naming the other tool while `session_id` names a Claude conversation. A
+/// collab has no terminal to restart in.
+fn restart_refusal(content: &str) -> Option<String> {
+    let fm = reader::parse_frontmatter(content);
+    if fm.contains_key("collab_mode") {
+        return Some("a collab has no terminal to restart in".into());
+    }
+    match agents::AgentId::parse(fm.get("agent").map(String::as_str)) {
+        Ok(agents::AgentId::Claude) => None,
+        Ok(a) => Some(format!("this session runs in {}: restart it from the dashboard, which opens it in the app's terminal", agents::session::display_name(a))),
+        Err(e) => Some(e),
+    }
+}
+
 #[tauri::command(async)]
 fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     // Slug is a folder name (allows '.') — validate at the boundary before it
@@ -760,6 +776,12 @@ fn restore_session(slug: String, session_id: String) -> Result<(), String> {
     }
     if !session_id.is_empty() && !is_valid_session_id(&session_id) {
         return Err("invalid sessionId".into());
+    }
+    if let Some(why) = reader::notes_for_slug(&slug)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|c| restart_refusal(&c))
+    {
+        return Err(why);
     }
     // cd into the session's launch dir so /restart-session lands in the right place.
     // Prefer the transcript's launch cwd; for closed/archived sessions (no transcript)
@@ -2311,4 +2333,18 @@ mod tests {
         assert!(branch_preflight(&clone, "feat/missing").is_err());
         std::fs::remove_dir_all(&tmp).ok();
     }
+
+    // /restart-session rewrites session_id with a Claude Code id; on a Codex notes that left
+    // `agent: codex` pointing at a Claude conversation, and the next Resume ran
+    // `codex resume <claude id>`.
+    #[test]
+    fn restart_from_notes_is_refused_for_another_agent_or_a_collab() {
+        use super::restart_refusal;
+        assert_eq!(restart_refusal("---\nsession_id: c4c7\n---\n"), None);
+        assert_eq!(restart_refusal("---\nagent: claude\n---\n"), None);
+        assert!(restart_refusal("---\nagent: codex\n---\n").unwrap().contains("Codex"));
+        assert!(restart_refusal("---\nagent: codx\n---\n").unwrap().contains("unknown agent"));
+        assert!(restart_refusal("---\ncollab_mode: cross-review\n---\n").unwrap().contains("collab"));
+    }
+
 }

@@ -331,6 +331,12 @@ pub fn resolve_session_cwd(sid: &str) -> Option<String> {
 /// scanDir and return that SPACE's root — the scanDir base's parent, i.e. `<space>` in
 /// `<space>/<CATEGORY>/<slug>`. So a Work session restarts in Work, not in $HOME.
 pub fn resolve_slug_cwd(slug: &str) -> Option<String> {
+    let (notes, base) = slug_notes(slug)?;
+    restart_dir(&notes, &base)
+}
+
+/// The notes.md of the session folder `slug` under a configured category, and that base.
+fn slug_notes(slug: &str) -> Option<(PathBuf, PathBuf)> {
     if !is_safe_slug(slug) {
         return None;
     }
@@ -343,10 +349,14 @@ pub fn resolve_slug_cwd(slug: &str) -> Option<String> {
         };
         let notes = std::path::Path::new(base).join(slug).join("notes.md");
         if notes.is_file() {
-            return restart_dir(&notes, std::path::Path::new(base));
+            return Some((notes, PathBuf::from(base)));
         }
     }
     None
+}
+
+pub(crate) fn notes_for_slug(slug: &str) -> Option<PathBuf> {
+    slug_notes(slug).map(|(n, _)| n)
 }
 
 /// Where a session restarted from its notes opens: the Start-in folder they record, else

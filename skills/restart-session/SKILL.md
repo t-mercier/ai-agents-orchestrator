@@ -82,6 +82,13 @@ Read `$NOTES_PATH`. Parse frontmatter (`session_id`, `category`, `ticket`, `name
 `branch`, `started_at`) and the body sections (Goal, Open questions, Next steps,
 Session history).
 
+**Stop here** when the frontmatter has `agent:` set to anything other than `claude`, or
+has `collab_mode:`. Say, in one line: "This session runs in <Codex|Copilot> — restart it
+from the dashboard, which opens it in the app's terminal" (or "This is a collab: it has no
+terminal to restart in"). Continuing would point `session_id` at this Claude Code session
+while `agent:` still names the other tool, and the next Resume would open the wrong
+conversation.
+
 ### Step 3 — Resolve current session ID
 
 ```bash
