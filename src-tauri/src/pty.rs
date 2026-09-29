@@ -168,6 +168,42 @@ pub fn decode_chunk(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     }
 }
 
+/// Which tool runs the session, and its notes (canonical) when it is not Claude Code.
+///
+/// The notes are the record of which tool a session runs in; the renderer need only say
+/// which session. An explicit agent wins: +New sends it for a session whose notes may not
+/// exist yet. `verify` confines the notes to the configured roots.
+fn resolve_agent(
+    explicit: Option<&str>,
+    notes_path: Option<&str>,
+    verify: impl Fn(&str) -> Result<std::path::PathBuf, String>,
+) -> Result<(crate::agents::AgentId, Option<String>), String> {
+    use crate::agents::AgentId;
+    let notes = notes_path.map(str::trim).filter(|n| !n.is_empty());
+    let verified = notes.map(|n| verify(n));
+    // Notes that cannot be confirmed (outside the roots: its space was moved) are still read
+    // for their agent — only to refuse launching another tool's session as Claude Code,
+    // which is what taking "no notes" to mean Claude used to do.
+    let readable = match (&verified, notes) {
+        (Some(Ok(p)), _) => Some(p.clone()),
+        (Some(Err(_)), Some(n)) => Some(std::path::PathBuf::from(n)),
+        _ => None,
+    };
+    let recorded = readable
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|c| crate::reader::parse_frontmatter(&c).get("agent").cloned());
+    let agent = AgentId::parse(explicit.or(recorded.as_deref()))?;
+    match (agent, verified) {
+        (AgentId::Claude, _) => Ok((AgentId::Claude, None)),
+        (_, Some(Ok(p))) => Ok((agent, Some(p.to_string_lossy().into_owned()))),
+        (_, Some(Err(e))) => Err(format!(
+            "this {} session's notes cannot be confirmed ({e}), so it is not opened: open it again from its space",
+            crate::agents::session::display_name(agent)
+        )),
+        (_, None) => Err(format!("a {} session needs its notes path", agent.as_str())),
+    }
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // pty knobs: size + the three launch variants
 pub fn pty_spawn(
@@ -195,19 +231,7 @@ pub fn pty_spawn(
     if !restart_slug.is_empty() && !crate::is_safe_slug(&restart_slug) {
         return Err("invalid slug".into());
     }
-    // The notes are the record of which tool a session runs in; the renderer need only
-    // say which session. An explicit agent wins (none is sent today).
-    let notes_abs = notes_path.as_deref().map(str::trim).filter(|n| !n.is_empty()).and_then(|n| crate::notes_md_under_root(n).ok());
-    let recorded = notes_abs
-        .as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|c| crate::reader::parse_frontmatter(&c).get("agent").cloned());
-    let agent = crate::agents::AgentId::parse(agent.as_deref().or(recorded.as_deref()))?;
-    let agent_notes = match (agent, notes_path.as_deref().map(str::trim)) {
-        (crate::agents::AgentId::Claude, _) => None,
-        (_, Some(n)) if !n.is_empty() => Some(crate::notes_md_under_root(n)?.to_string_lossy().into_owned()),
-        _ => return Err(format!("a {} session needs its notes path", agent.as_str())),
-    };
+    let (agent, agent_notes) = resolve_agent(agent.as_deref(), notes_path.as_deref(), crate::notes_md_under_root)?;
     let mut sessions = state.sessions.lock().unwrap();
     if let Some(existing) = sessions.get_mut(&session_id) {
         // A pty whose child already exited (user typed `exit`, or claude quit) still has
@@ -423,6 +447,33 @@ pub fn pty_kill(state: tauri::State<PtyManager>, session_id: String) {
 
 #[cfg(test)]
 mod tests {
+    use super::resolve_agent;
+
+    // A session whose notes can no longer be confirmed (its space was moved) must never be
+    // launched as Claude Code when those notes say another tool runs it.
+    #[test]
+    fn a_codex_session_is_never_launched_as_claude() {
+        use crate::agents::AgentId;
+        let d = std::env::temp_dir().join(format!("ao-pty-agent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let codex = d.join("codex.md");
+        std::fs::write(&codex, "---\nagent: codex\nsession_id: 01a0\n---\n").unwrap();
+        let claude = d.join("claude.md");
+        std::fs::write(&claude, "---\nsession_id: c4c7\n---\n").unwrap();
+        let ok = |p: &str| Ok(std::path::PathBuf::from(p));
+        let refused = |_: &str| Err("notes.md is outside the configured roots".to_string());
+        let c = codex.to_str().unwrap();
+        assert_eq!(resolve_agent(None, Some(c), ok).unwrap(), (AgentId::Codex, Some(c.to_string())));
+        let e = resolve_agent(None, Some(c), refused).unwrap_err();
+        assert!(e.contains("Codex") && e.contains("outside the configured roots"), "{e}");
+        assert_eq!(resolve_agent(None, Some(claude.to_str().unwrap()), refused).unwrap(), (AgentId::Claude, None), "a Claude session is unchanged");
+        assert_eq!(resolve_agent(None, Some("/no/such/notes.md"), refused).unwrap(), (AgentId::Claude, None));
+        assert_eq!(resolve_agent(Some("claude"), Some(c), ok).unwrap(), (AgentId::Claude, None), "an explicit agent wins: a +New at that path");
+        assert!(resolve_agent(Some("codx"), None, ok).is_err());
+        assert!(resolve_agent(Some("codex"), None, ok).unwrap_err().contains("needs its notes path"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
     use super::model_flag_from;
     use serde_json::json;
 
