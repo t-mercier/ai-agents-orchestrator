@@ -92,7 +92,7 @@
     bubble: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="16" cy="16" r="2.6" fill="currentColor"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
   }
-  // His face: the companion picked in Settings → Assistant, in the state he is in. The
+  // His face: the companion picked in Settings → AI Companion, in the state he is in. The
   // small avatars beside each answer stay still, so only the live one moves.
   const pet = () => ((window.CSM_CONFIG || {}).assistant || {}).pet || 'blob'
   const waiting = () => window._waitingCount || 0

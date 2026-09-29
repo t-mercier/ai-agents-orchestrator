@@ -1,5 +1,5 @@
 // Brutus's companions: nine small animated characters drawn as inline SVG, one of which the
-// user picks in Settings → Assistant. UMD like the other lib/ models: window.CSMPets in the
+// user picks in Settings → AI Companion. UMD like the other lib/ models: window.CSMPets in the
 // renderer, require() in jest. Pure, no DOM. The drawings were chosen on a design page
 // (2026-09-29); each keeps its own colours whatever the theme. The state class on the svg
 // drives the animations in style.css (.pe-rest / .pe-think / .pe-happy / .pe-wait / .pe-sleep).
@@ -9,7 +9,8 @@
   else root.CSMPets = api
 })(typeof self !== 'undefined' ? self : this, function () {
   const NAMES = ['blob', 'ghost', 'bunny', 'cloud', 'star', 'cat', 'crab', 'robot', 'devil']
-  const LABELS = { blob: 'Blob', ghost: 'Ghost', bunny: 'Mochi bunny', cloud: 'Cloud', star: 'Star', cat: 'Cat', crab: 'Crab', robot: 'Robot', devil: 'Little devil' }
+  // Each has a name of its own (picked on 2026-09-29); the ids stay the species, since config.json stores them.
+  const LABELS = { blob: 'Wobble', ghost: 'Wisp', bunny: 'Mochi', cloud: 'Nimbus', star: 'Nova', cat: 'Biscuit', crab: 'Pinch', robot: 'Bleep', devil: 'Scamp' }
   const STATES = ['rest', 'think', 'happy', 'wait', 'sleep']
   let seq = 0
   let BADGE = ''

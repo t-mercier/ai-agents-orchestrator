@@ -90,7 +90,7 @@ the right, or **⌘K** from anywhere in the app. He reads the dashboard and the 
 answers with the sessions as clickable chips, and keeps a memory of what you tell him, so he
 gets better the more you use him. Rename him, pick his companion — a blob, a ghost, a mochi bunny, a cloud, a star, a cat, a crab, a
 robot or a little devil, each animated as he thinks and answers — and his style — concise, friendly, casual,
-nerdy or sarcastic — in **Settings → Assistant**, or turn him off there if you would rather not have an assistant. Ask him for a document — a brief, a summary to share — and he writes it and gives you a card to open it.
+nerdy or sarcastic — in **Settings → AI Companion**, or turn him off there if you would rather not have an assistant. Ask him for a document — a brief, a summary to share — and he writes it and gives you a card to open it.
 
 He can read and remember, nothing else: every answer is a Claude Code run started with
 `--restricted`, no MCP servers and five file tools, reading only your category and knowledge
@@ -453,7 +453,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 > [!NOTE]
 > ## What's new
 >
-> - 💬 **Brutus, the one you ask** — *what's waiting on me?*, *brief me on FEAT-1842*, *what did I decide last week?* From the bubble, a docked panel or **⌘K**. He answers with the sessions as clickable chips, remembers what you tell him, and can read and remember nothing else. Name him and pick his style in **Settings → Assistant**.
+> - 💬 **Brutus, the one you ask** — *what's waiting on me?*, *brief me on FEAT-1842*, *what did I decide last week?* From the bubble, a docked panel or **⌘K**. He answers with the sessions as clickable chips, remembers what you tell him, and can read and remember nothing else. Name him and pick his style in **Settings → AI Companion**.
 > - ↕ **Order, group and sort every tab** — groups and drag-to-order now work on Closed and Archived too, and **Sort** orders each category by last update or ticket number.
 > - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. **Sync all**, in the titlebar, does it for every open session at once — one `gh` batch, then the agents one at a time. Nothing runs in the background.
 > - 🔀 **Pull requests carry their state** — open, merged, closed or draft, on the card and spelled out with each PR's title in the detail panel.

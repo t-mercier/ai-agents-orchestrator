@@ -46,7 +46,7 @@
       board: window.CSMBoard ? clone(window.CSMBoard.load()) : null,
       // The active look (accent + surface tint) applies live, so capture it to revert.
       look: window.getLook ? window.getLook() : null,
-      // Brutus moves as soon as the Assistant tab's collect runs, which is before a Save
+      // Brutus moves as soon as the AI Companion tab's collect runs, which is before a Save
       // can still be refused, so his home reverts with the rest.
       brutusHome: brutusHome(),
       // Written by General's collect, which runs before a Save can still be refused.

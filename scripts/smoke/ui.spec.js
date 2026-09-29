@@ -439,7 +439,7 @@ test.describe('Brutus', () => {
     await expect(page.locator('.bru-panel input')).toBeEnabled()
   })
 
-  test('Settings → Assistant saves the name and style, and his menu opens it', async ({ page }) => {
+  test('Settings → AI Companion saves the name and style, and his menu opens it', async ({ page }) => {
     await page.locator('.bru-fab').click({ button: 'right' })
     await page.locator('.bru-menu [data-a=set]').click()
     await expect(page.locator('[data-settings-panel="assistant"]')).toBeVisible()

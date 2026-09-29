@@ -63,12 +63,16 @@ test('he thinks while an answer runs, then is happy', async ({ page }) => {
   await expect(page.locator('.bru-panel .bru-head svg.pet-svg')).toHaveClass(/pe-happy/)
 })
 
-test('Settings → Assistant saves the companion picked', async ({ page }) => {
+test('Settings → AI Companion saves the companion picked', async ({ page }) => {
   await open(page, null)
   await page.evaluate(() => window.openSettingsTab('assistant'))
   const picker = page.locator('#set-assistant-pets')
   await expect(picker.locator('button[data-pet]')).toHaveCount(9)
   await expect(picker.locator('button[data-pet="blob"]')).toHaveAttribute('aria-checked', 'true')
+  // Named on 2026-09-29: the tab is "AI Companion", and each companion has a name of its own.
+  await expect(page.locator('.settings-tab[data-settings-tab="assistant"]')).toHaveText('AI Companion')
+  await expect(picker.locator('button[data-pet="blob"]')).toContainText('Wobble')
+  await expect(picker.locator('button[data-pet="devil"]')).toContainText('Scamp')
   await picker.locator('button[data-pet="star"]').click()
   await expect(page.locator('#set-assistant-sample svg.pet-svg')).toBeVisible()
   await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())

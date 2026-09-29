@@ -1,4 +1,4 @@
-// Settings: Assistant — whether Brutus is on, his name and style (config.json: the backend composes his
+// Settings: AI Companion — whether Brutus is on, his name and style (config.json: the backend composes his
 // prompt from them) and where he appears (localStorage: how the app looks to you).
 ;(function () {
   if (!window.CSMSettings) return

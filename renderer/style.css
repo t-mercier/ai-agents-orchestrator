@@ -2332,7 +2332,7 @@ body.bru-resizing .layout { transition: none; }
 .bru-panel code { font-size: 11.5px; background: rgba(var(--tint), 0.08); border-radius: 4px; padding: 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .bru-chip { max-width: 100%; }
 .bru-tb[hidden] { display: none; }
-/* The chosen style in Settings → Assistant reads as chosen, not as hovered. */
+/* The chosen style in Settings → AI Companion reads as chosen, not as hovered. */
 .bru-sugg button.on { color: var(--text-primary); border-color: rgba(var(--accent-rgb), 0.7); background: rgba(var(--accent-rgb), 0.18); }
 /* The tab badges toggle `hidden` in place (ui.js updateTabBadges); keep it effective
    whatever display the badge rules set. */
@@ -2428,7 +2428,7 @@ body.bru-resizing .layout { transition: none; }
 .bru-pet svg { width: 100%; height: 100%; }
 .bru-tb .bru-pet { width: 18px; height: 18px; }
 
-/* Settings → Assistant: the companions to pick from. */
+/* Settings → AI Companion: the companions to pick from. */
 .bru-pets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .bru-pets button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px;
   border-radius: 10px; border: 1px solid rgba(var(--tint), .10); background: rgba(var(--tint), .03); cursor: pointer;

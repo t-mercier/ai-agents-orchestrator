@@ -1,4 +1,4 @@
-// Brutus can be turned off in Settings → Assistant (asked for on 2026-09-28: not everyone
+// Brutus can be turned off in Settings → AI Companion (asked for on 2026-09-28: not everyone
 // wants an assistant). Off means every way to reach him is gone — the bubble, the titlebar
 // button and ⌘K — and turning him back on brings them back.
 const { test, expect } = require('@playwright/test')
