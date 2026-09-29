@@ -466,6 +466,8 @@ async function fetchAndRender(resort = false) {
     if (tab !== activeTab) return
     sessions = fetched
     window._lastSessions = sessions
+    // ＋New's invitation of other models goes out once the new session is up and idle.
+    if (tab === 'running' && window.CSMInvite) window.CSMInvite.flushPending(sessions)
     window._lastSelectedKey = selectedKey
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"
     if (tab === 'running') window._waitingCount = sessions.filter(s => s.status === 'waiting').length
@@ -1023,12 +1025,28 @@ function describeAgent() {
 }
 document.getElementById('ns-agent')?.addEventListener('change', describeAgent)
 
+// ＋New's optional Invite models rows: the same rows as the session dialog, filled on demand.
+document.getElementById('ns-om-toggle')?.addEventListener('click', async (e) => {
+  const rows = document.getElementById('ns-om-rows')
+  const open = rows.hidden
+  rows.hidden = !open
+  e.currentTarget.setAttribute('aria-expanded', String(open))
+  if (open && !rows.innerHTML && window.CSMInvite) {
+    const got = await window.api.agentsAvailable()
+    const avail = Array.isArray(got) ? got : []
+    rows.innerHTML = window.CSMInvite.rowsHtml(avail)
+    window.CSMInvite.wireMore(rows, avail)
+  }
+})
+
 let agentChoiceReady = Promise.resolve()
 document.getElementById('new-session-btn').addEventListener('click', () => {
   agentChoiceReady = fillAgentChoice()
   for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
     document.getElementById(id).value = ''
   }
+  const omRows = document.getElementById('ns-om-rows')
+  if (omRows) { omRows.hidden = true; omRows.innerHTML = ''; document.getElementById('ns-om-toggle').setAttribute('aria-expanded', 'false') }
   hideNsError()
   populateNewSessionCategories()   // refresh (scope toggle + config may have changed)
   // Render the Embedded/Terminal destination toggle reflecting the current pref.
@@ -1092,12 +1110,22 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   const agentSel = document.getElementById('ns-agent')
   const agent = agentSel && !document.getElementById('ns-agent-field').hidden ? agentSel.value : 'claude'
   try { localStorage.setItem('csm.nsAgent', agent) } catch {}
+  const omRows = document.getElementById('ns-om-rows')
+  const invite = omRows && !omRows.hidden && window.CSMInvite ? window.CSMInvite.collect(omRows) : { list: [] }
+  if (invite.error) { showNsError(invite.error); return }
   // Codex and Copilot sessions run in the app's terminal: it is where the app sees them.
   const embedded = agent !== 'claude' || !!(window.getOpenIn && window.getOpenIn() === 'embedded')
   const res = await window.api.startSession({ category, name, ticket, startIn, branch, prLink, root, embedded, agent: agent === 'claude' ? null : agent })
   if (!res || !res.ok) {
     showNsError('Could not start: ' + ((res && res.error) || 'unknown error'))
     return
+  }
+  if (invite.list.length && res.notesPath) {
+    window.CSMInvite.keepPending(res.notesPath, invite.list)
+    window.CSMInvite.remember(invite.list)
+  } else if (invite.list.length && window.showBanner) {
+    // An external terminal: the app cannot type the invitation into it.
+    window.showBanner('The session opens in your terminal app: invite the models from its menu once it is listed.')
   }
   newSessionModal.close()
   if (embedded && res.command && res.notesPath && window.openTerminalPane) {

@@ -1618,6 +1618,56 @@ function omRowHtml(cli, avail, n) {
   </div>`
 }
 
+// The picked rows of a list built by omRowHtml, as invitees, or `{ error }`.
+function omCollect(container) {
+  const rows = [...container.querySelectorAll('.om-row')].filter(r => r.querySelector('input[type="checkbox"]').checked)
+    .map(r => ({ cli: r.dataset.omRow, model: String((r.querySelector('select, input[type="text"]') || {}).value || '').trim() }))
+  if (!rows.length) return { list: [] }
+  const bad = rows.find(r => !OM().validModel(r.model))
+  if (bad) return { error: `"${bad.model}" is not a model name: letters, digits and . _ : / [ ] - only, starting with a letter or digit.` }
+  return { list: OM().withIds(rows, window.CLAUDE_MODELS) }
+}
+
+function omRowsHtml(avail) {
+  const by = (cli) => (avail || []).find(a => a.agent === cli)
+  return ['claude', 'codex', 'copilot'].map(c => omRowHtml(c, by(c), 1)).join('')
+}
+
+function omWireMore(container, avail) {
+  const by = (cli) => (avail || []).find(a => a.agent === cli)
+  container.querySelectorAll('[data-om-more]').forEach(b => { b.onclick = () => {
+    const cli = b.dataset.omMore
+    b.closest('.om-row').insertAdjacentHTML('afterend', omRowHtml(cli, by(cli), 2))
+    b.replaceWith(Object.assign(document.createElement('span'), { className: 'om-more-gap' }))
+  } })
+}
+
+// ＋New's invitation: kept per notes path in sessionStorage (a reload does not lose it)
+// until the new session is listed, idle, with its terminal; then invited and typed once.
+const OM_PENDING = 'csm.pendingInvite:'
+function omKeepPending(notesPath, list) {
+  try { sessionStorage.setItem(OM_PENDING + notesPath, JSON.stringify(list)) } catch { /* ignore */ }
+}
+async function omFlushPending(sessions) {
+  let keys = []
+  try { keys = Object.keys(sessionStorage).filter(k => k.startsWith(OM_PENDING)) } catch { return }
+  for (const k of keys) {
+    const notesPath = k.slice(OM_PENDING.length)
+    const s = (sessions || []).find(x => x.notesPath === notesPath && x.state === 'active')
+    if (!s) continue
+    const v = inviteVerdict(s)
+    if (!v.key) continue            // still busy with /start-session, or waiting: next poll
+    let list = []
+    try { list = JSON.parse(sessionStorage.getItem(k) || '[]') } catch { /* ignore */ }
+    try { sessionStorage.removeItem(k) } catch { /* ignore */ }
+    if (!list.length) continue
+    const res = await window.api.advisorsSet(notesPath, list)
+    if (!res || !res.ok) { if (window.showBanner) window.showBanner('Could not invite the models: ' + ((res && res.error) || 'unknown error')); continue }
+    typeIntoTerminal(v.key, OM().inviteLine(list, notesPath))
+  }
+}
+window.CSMInvite = { rowsHtml: omRowsHtml, wireMore: omWireMore, collect: omCollect, keepPending: omKeepPending, flushPending: omFlushPending, remember: (l) => omRemember(l) }
+
 async function openInviteDialog(s) {
   const v = inviteVerdict(s)
   if (v.why) { if (window.showBanner) window.showBanner(v.why); return }
@@ -1630,11 +1680,10 @@ async function openInviteDialog(s) {
   }
   const got = await window.api.agentsAvailable()
   const avail = Array.isArray(got) ? got : []
-  const by = (cli) => avail.find(a => a.agent === cli)
   dlg.innerHTML = `<form method="dialog" class="modal-form om-form">
     <h2 class="modal-title">Invite models</h2>
     <p class="modal-hint">Invited models read this session and advise its agent, who consults them when a second opinion helps or when you ask. They never write.</p>
-    <div class="om-rows">${['claude', 'codex', 'copilot'].map(c => omRowHtml(c, by(c), 1)).join('')}</div>
+    <div class="om-rows">${omRowsHtml(avail)}</div>
     <p class="om-notice">The invited models read this session's whole conversation, its folder and the code, and what they read is sent to their provider (OpenAI for Codex, GitHub for Copilot, Anthropic for Claude). Their answers come back to this session's agent as advice.</p>
     <p class="om-error" role="alert" hidden></p>
     <div class="om-external" hidden></div>
@@ -1645,18 +1694,12 @@ async function openInviteDialog(s) {
   </form>`
   const err = (t) => { const e = dlg.querySelector('.om-error'); e.textContent = t; e.hidden = !t }
   dlg.querySelector('[data-om-cancel]').onclick = () => dlg.close()
-  dlg.querySelectorAll('[data-om-more]').forEach(b => { b.onclick = () => {
-    const cli = b.dataset.omMore
-    b.closest('.om-row').insertAdjacentHTML('afterend', omRowHtml(cli, by(cli), 2))
-    b.remove()
-  } })
+  omWireMore(dlg, avail)
   dlg.querySelector('[data-om-invite]').onclick = async () => {
-    const rows = [...dlg.querySelectorAll('.om-row')].filter(r => r.querySelector('input[type="checkbox"]').checked)
-      .map(r => ({ cli: r.dataset.omRow, model: (r.querySelector('select, input[type="text"]') || {}).value || '' }))
-    if (!rows.length) { err('Pick at least one model to invite.'); return }
-    const bad = rows.find(r => !OM().validModel(String(r.model).trim()))
-    if (bad) { err(`"${bad.model}" is not a model name: letters, digits and . _ : / [ ] - only, starting with a letter or digit.`); return }
-    const list = OM().withIds(rows, window.CLAUDE_MODELS)
+    const got = omCollect(dlg)
+    if (got.error) { err(got.error); return }
+    if (!got.list.length) { err('Pick at least one model to invite.'); return }
+    const list = got.list
     const res = await window.api.advisorsSet(s.notesPath, list)
     if (!res || !res.ok) { err('Could not invite them: ' + ((res && res.error) || 'unknown error')); return }
     omRemember(list)
