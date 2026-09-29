@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-29
+
 ### Added
 
 - **Updates install from inside the app.** When a new release is out, a banner offers it;
@@ -49,6 +51,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   the card to Closed.
 - **A click in a session's panel scrolls the list to its card**, centred, when it was out
   of view.
+- **Commands run on a Linux machine without zsh.** When `$SHELL` was unset, the terminal,
+  Brutus, Sync and collab turns fell back to `/bin/zsh`; they now use the first of zsh, bash
+  and sh that exists.
 
 ## [0.20.4-alpha] - 2026-09-25
 
