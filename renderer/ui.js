@@ -1545,6 +1545,28 @@ function sessionMenuRows(s) {
   return rows.join('')
 }
 
+// A keyboard shortcut for one of these rows (app.js, SHORTCUT_ACTIONS): the row is built
+// exactly as the menu builds it and clicked, so the delegated handler runs it with the
+// same guards. `labels`: the texts the row may have. { ok } or { ok: false, why }.
+function runSessionAction(s, labels) {
+  const host = document.createElement('div')
+  host.hidden = true
+  host.innerHTML = sessionMenuRows(s) || ''
+  const item = [...host.querySelectorAll('.board-menu-item')].find(b => labels.includes(b.textContent.trim()))
+  if (!item) return { ok: false, why: 'not available for this session' }
+  if (item.disabled) return { ok: false, why: item.title || 'not available right now' }
+  if (item.dataset.openBoard) {
+    // Its second menu anchors to the card, as it does from the right-click menu.
+    const card = document.querySelector(`#panel-list .list-card[data-key="${CSS.escape(item.dataset.openBoard)}"]`)
+    openBoardMenu(card || document.getElementById('detail-info-pane') || document.body, item.dataset.openBoard)
+    return { ok: true }
+  }
+  document.body.appendChild(host)
+  try { item.click() } finally { setTimeout(() => host.remove(), 0) }
+  return { ok: true }
+}
+window.runSessionAction = runSessionAction
+
 function openSessionMenu(card, s, x, y) {
   closeSessionMenu()
   const rows = sessionMenuRows(s)

@@ -436,6 +436,14 @@
               <div id="set-keys" class="keys-list"></div>
               <button type="button" class="modal-btn" id="set-keys-reset">Reset to defaults</button>
             </div>
+            <!-- Your own shortcuts, on any action (lib/keymap.js, app.js SHORTCUT_ACTIONS). -->
+            <div class="settings-section">
+              <span class="modal-label">Actions</span>
+              <p class="modal-hint">Click <strong>—</strong>, then press a combination with ⌘, Ctrl or ⌥. The session ones act on the selected session. Esc cancels.</p>
+              <p class="field-hint shortcuts-why" id="set-shortcuts-why" aria-live="polite"></p>
+              <div id="set-shortcuts" class="keys-list"></div>
+              <button type="button" class="modal-btn" id="set-shortcuts-reset">Clear all</button>
+            </div>
           </section>
 
           <!-- Terminal: external launcher app (config) + embedded-terminal appearance
@@ -738,6 +746,7 @@
   <script src="lib/search-model.js"></script>
   <script src="lib/brutus-model.js"></script>
   <script src="lib/pets.js"></script>
+  <script src="lib/keymap.js"></script>
   <script src="lib/onboarding-model.js"></script>
   <script src="looks.js"></script>
   <script src="prstate.js"></script>

@@ -1173,6 +1173,11 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
 .key-label { font-size: 12px; color: var(--text-secondary); }
 .key-cap { min-width: 46px; text-align: center; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600; color: var(--text-primary); background: rgba(var(--tint), 0.08); border: 0.5px solid var(--card-border); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: border-color 0.12s, color 0.12s; }
 .key-cap:hover { border-color: rgba(var(--tint), 0.25); }
+.key-ctl { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.key-scope { font-style: normal; font-size: 10.5px; color: var(--text-tertiary); margin-left: 6px; }
+.key-clear { border: 0; background: transparent; color: var(--text-tertiary); font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+.key-clear:hover { color: var(--text-primary); background: rgba(var(--tint), 0.08); }
+.shortcuts-why { min-height: 1.2em; color: var(--danger); margin: 0 0 4px; }
 .key-cap.capturing { border-color: var(--accent); color: var(--accent); background: rgba(var(--accent-rgb), 0.1); }
 
 .density-preview-col { display: flex; flex-direction: column; gap: 8px; }

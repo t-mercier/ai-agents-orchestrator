@@ -202,6 +202,69 @@ window.setKey = (action, key) => {
 window.setKeys = (map) => { try { localStorage.setItem('csm.keys', JSON.stringify(map || {})) } catch { /* ignore */ } }
 window.resetKeys = () => { try { localStorage.removeItem('csm.keys') } catch { /* ignore */ } }
 
+// Shortcuts the user records on any of these actions (Settings → Shortcuts), stored as
+// { action: combo } in localStorage.csm.shortcuts; none is set by default. A session
+// action runs on the selected session through its right-click menu row (ui.js,
+// runSessionAction), so it is refused for the same reasons the menu greys it out.
+const IS_MAC_KEYS = /Mac/.test(navigator.platform || navigator.userAgent || '')
+const clickEl = (id) => () => { const el = document.getElementById(id); if (el && !el.disabled) el.click() }
+window.SHORTCUT_ACTIONS = [
+  { id: 'newSession', label: 'New session', run: clickEl('new-session-btn') },
+  { id: 'syncAll', label: 'Sync all', run: clickEl('sync-all-btn') },
+  { id: 'settings', label: 'Settings', run: clickEl('settings-btn') },
+  { id: 'assistant', label: 'Open the assistant', run: () => window.CSMBrutusUI && window.CSMBrutusUI.open() },
+  { id: 'listView', label: 'List view', run: () => setViewMode('list') },
+  { id: 'boardView', label: 'Board view', run: () => setViewMode('board') },
+  { id: 'resume', label: 'Resume in terminal', session: ['Resume in terminal', 'Restart from notes'] },
+  { id: 'external', label: 'Open in external terminal', session: ['Open in external terminal'] },
+  { id: 'pause', label: 'Pause', session: ['Pause'] },
+  { id: 'sync', label: 'Sync tickets and pull requests', session: ['Sync tickets and pull requests'] },
+  { id: 'addToBoard', label: 'Add to board…', session: ['Add to board…'] },
+  { id: 'pin', label: 'Pin / unpin', session: ['Pin to the top', 'Unpin from the top'] },
+  { id: 'revealCode', label: 'Reveal the code folder', session: ['Reveal the code folder'] },
+  { id: 'revealNotes', label: 'Reveal the notes folder', session: ['Reveal the notes folder'] },
+  { id: 'close', label: 'Close session', session: ['Close session'] },
+  { id: 'archive', label: 'Archive', session: ['Archive'] },
+]
+window.getShortcuts = () => {
+  try { return window.CSMKeymap.clean(JSON.parse(localStorage.getItem('csm.shortcuts') || '{}')) } catch { return {} }
+}
+window.setShortcut = (action, combo) => {
+  const next = { ...window.getShortcuts() }
+  if (combo) next[action] = combo; else delete next[action]
+  try { localStorage.setItem('csm.shortcuts', JSON.stringify(next)) } catch { /* ignore */ }
+}
+window.resetShortcuts = () => { try { localStorage.removeItem('csm.shortcuts') } catch { /* ignore */ } }
+
+function shortcutNote(text) {
+  document.querySelector('.shortcut-note')?.remove()
+  const t = document.createElement('div')
+  t.className = 'bru-toast shortcut-note'; t.setAttribute('role', 'status')
+  t.textContent = text
+  document.body.appendChild(t)
+  setTimeout(() => t.remove(), 3500)
+}
+
+// Capture phase, so a combo reaches its action before the terminal or a text field takes it.
+document.addEventListener('keydown', (e) => {
+  if (e.repeat || !window.CSMKeymap) return
+  const combo = window.CSMKeymap.fromEvent(e, IS_MAC_KEYS)
+  if (!combo) return
+  const map = window.getShortcuts()
+  const action = window.SHORTCUT_ACTIONS.find(a => map[a.id] === combo)
+  if (!action) return
+  // Settings records shortcuts; any other dialog is in charge of the keyboard.
+  if (document.querySelector('dialog[open]')) return
+  // Ctrl and ⌥ combos belong to the shell in the embedded terminal; only ⌘ ones are ours there.
+  if (!combo.startsWith('Mod+') && e.target && e.target.closest && e.target.closest('.xterm')) return
+  e.preventDefault(); e.stopPropagation()
+  if (!action.session) { action.run(); return }
+  const s = selectedKey && sessions.find(x => sessionKey(x) === selectedKey)
+  if (!s) { shortcutNote(`${action.label}: select a session first`); return }
+  const r = window.runSessionAction ? window.runSessionAction(s, action.session) : { ok: false, why: '' }
+  if (!r.ok) shortcutNote(`${action.label}: ${r.why || 'not available for this session'}`)
+}, true)
+
 // Does a session match a free-text query across its name/ticket/category/goal/path/branch?
 // Delegated to the tested model: this used to read `s.ticket` only — the primary — and
 // nothing about pull requests, so a session's PR was unsearchable and its second ticket

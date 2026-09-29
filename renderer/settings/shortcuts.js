@@ -27,10 +27,57 @@
       </div>`).join('')
   }
 
+  // Your own shortcuts, on any action: none by default, one combo per action.
+  const why = (text) => { const el = $('set-shortcuts-why'); if (el) el.textContent = text || '' }
+  function renderShortcuts() {
+    const host = $('set-shortcuts')
+    if (!host || !window.SHORTCUT_ACTIONS || !window.CSMKeymap) return
+    const map = window.getShortcuts()
+    const row = (a) => `
+      <div class="key-row" data-shortcut="${a.id}">
+        <span class="key-label">${escKey(a.label)}${a.session ? ' <em class="key-scope">selected session</em>' : ''}</span>
+        <span class="key-ctl">
+          <button type="button" class="key-cap" data-shortcut-action="${a.id}">${escKey(map[a.id] ? window.CSMKeymap.label(map[a.id], IS_MAC) : '—')}</button>
+          ${map[a.id] ? `<button type="button" class="key-clear" data-clear="${a.id}" aria-label="Remove the shortcut for ${escKey(a.label)}" title="Remove">×</button>` : ''}
+        </span>
+      </div>`
+    host.innerHTML = window.SHORTCUT_ACTIONS.map(row).join('')
+  }
+
   // Register populate only (live-only tab).
   window.CSMSettings.register({
-    populate: renderKeys,
+    populate: () => { renderKeys(); renderShortcuts(); why('') },
   })
+
+  let capturingShortcut = null
+  const scHost = $('set-shortcuts')
+  if (scHost) scHost.addEventListener('click', (e) => {
+    const clear = e.target.closest('[data-clear]')
+    if (clear) { window.setShortcut(clear.dataset.clear, null); why(''); renderShortcuts(); return }
+    const btn = e.target.closest('.key-cap'); if (!btn) return
+    renderShortcuts()
+    const armed = scHost.querySelector(`.key-cap[data-shortcut-action="${btn.dataset.shortcutAction}"]`)
+    armed.classList.add('capturing'); armed.textContent = '…'
+    capturingShortcut = btn.dataset.shortcutAction
+    why('')
+  })
+  document.addEventListener('keydown', (e) => {
+    if (!capturingShortcut) return
+    e.preventDefault(); e.stopPropagation()
+    if (e.key === 'Escape') { capturingShortcut = null; renderShortcuts(); return }
+    const combo = window.CSMKeymap.fromEvent(e, IS_MAC)
+    if (!combo) return   // a modifier on its own: wait for the key
+    const r = window.CSMKeymap.check(combo, window.getShortcuts(), capturingShortcut)
+    const shown = window.CSMKeymap.label(combo, IS_MAC)
+    if (r.ok) { window.setShortcut(capturingShortcut, combo); why('') }
+    else if (r.taken) {
+      const owner = (window.SHORTCUT_ACTIONS.find(a => a.id === r.taken) || {}).label || r.taken
+      why(`${shown} is already used by ${owner}. Remove it there first.`)
+    } else why(`${shown}: ${r.why}.`)
+    capturingShortcut = null
+    renderShortcuts()
+  }, true)
+  if ($('set-shortcuts-reset')) $('set-shortcuts-reset').addEventListener('click', () => { window.resetShortcuts(); why(''); renderShortcuts() })
 
   let capturingKey = null
   const keysHost = $('set-keys')
@@ -48,6 +95,6 @@
     if (e.key.length === 1) { if (window.setKey) window.setKey(capturingKey, e.key); capturingKey = null; renderKeys() }
   }, true)
   // A remap armed when the dialog closes would take the next key typed anywhere.
-  modal.addEventListener('close', () => { capturingKey = null })
+  modal.addEventListener('close', () => { capturingKey = null; capturingShortcut = null })
   if ($('set-keys-reset')) $('set-keys-reset').addEventListener('click', () => { if (window.resetKeys) window.resetKeys(); renderKeys() })
 })()
