@@ -263,7 +263,7 @@ pub fn pty_spawn(
     // (sourced only for interactive shells), not ~/.zprofile. A plain login shell (`-lc`)
     // skips ~/.zshrc, so a Finder-launched app (which inherits only a minimal PATH) then
     // can't find `claude`. `-ilc` sources both, matching a real terminal tab.
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let shell = crate::shell::user_shell();
     let command = command.trim().to_string();
     // Where a Codex or Copilot session starts, and its id when known at launch: the poll
     // matches a new Codex rollout against the first, and never overwrites the second.

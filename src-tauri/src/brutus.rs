@@ -305,7 +305,7 @@ pub(crate) fn prepare(live: Vec<Value>, with_history: bool) -> Result<Plan, Stri
 /// and an `error` event when the stream ends without a result. Returns true, having
 /// emitted nothing for it, when the conversation it resumed no longer exists.
 pub(crate) fn run(plan: &Plan, message: &str, on_event: impl FnMut(Value)) -> Result<bool, String> {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let shell = crate::shell::user_shell();
     run_in(&shell, plan, message, on_event)
 }
 

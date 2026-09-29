@@ -18,6 +18,7 @@ mod ctxbudget;
 mod updater;
 mod agents;
 mod collab;
+mod shell;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
@@ -1430,7 +1431,7 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
         pty::model_flag(),
         pty::shell_quote(&format!("/wrap-session {} {}", abs.display(), session_id)),
     );
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let shell = crate::shell::user_shell();
     let mut child = match std::process::Command::new(&shell)
         .args(["-ilc", &inner])
         .stdout(std::process::Stdio::piped())

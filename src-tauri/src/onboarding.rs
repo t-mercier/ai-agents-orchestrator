@@ -151,7 +151,7 @@ pub fn import_session_headless(
         pty::model_flag(),
         pty::shell_quote(&prompt),
     );
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let shell = crate::shell::user_shell();
     let mut child = std::process::Command::new(&shell)
         .args(["-ilc", &inner])
         .stdout(std::process::Stdio::null())

@@ -42,18 +42,8 @@ pub(crate) struct TurnResult {
 /// `on_spawn` gets the process group as soon as it exists, so the caller can record it for
 /// the app's quit and for a later launch after a crash.
 pub(crate) fn run_turn(line: &str, dir: &str, limit: Duration, stop: &Arc<AtomicBool>, on_spawn: &dyn Fn(i32)) -> Result<TurnResult, String> {
-    let shell = std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(fallback_shell);
+    let shell = crate::shell::user_shell();
     run_turn_with(&shell, line, dir, limit, stop, on_spawn)
-}
-
-/// The shell used when `$SHELL` is unset: the first of zsh, bash and sh this machine has.
-/// zsh is not installed everywhere; a Linux machine often has only bash.
-pub(crate) fn fallback_shell() -> String {
-    first_existing(&["/bin/zsh", "/bin/bash", "/bin/sh"], |p| std::path::Path::new(p).exists())
-}
-
-fn first_existing(candidates: &[&str], exists: impl Fn(&str) -> bool) -> String {
-    candidates.iter().find(|p| exists(p)).unwrap_or(&"/bin/sh").to_string()
 }
 
 /// How long the output readers get once the turn has ended and its group is killed. A
@@ -173,13 +163,7 @@ mod tests {
         run_turn_with(shell, line, "/", Duration::from_millis(limit_ms), &Arc::new(AtomicBool::new(false)), &|_| {}).unwrap()
     }
     fn go(line: &str, limit_ms: u64) -> TurnResult {
-        go_with(&fallback_shell(), line, limit_ms)
-    }
-
-    #[test]
-    fn with_no_shell_set_the_first_installed_one_is_used() {
-        assert_eq!(first_existing(&["/bin/zsh", "/bin/bash", "/bin/sh"], |p| p != "/bin/zsh"), "/bin/bash");
-        assert_eq!(first_existing(&["/bin/zsh", "/bin/bash"], |_| false), "/bin/sh");
+        go_with(&crate::shell::fallback_shell(), line, limit_ms)
     }
 
     // The case run_within cannot survive: far more output than a pipe holds.
@@ -248,7 +232,7 @@ mod tests {
             s2.store(true, Ordering::SeqCst);
         });
         let seen = std::sync::Mutex::new(0);
-        let r = run_turn_with(&fallback_shell(), "sleep 30", "/", Duration::from_secs(60), &stop, &|g| *seen.lock().unwrap() = g).unwrap();
+        let r = run_turn_with(&crate::shell::fallback_shell(), "sleep 30", "/", Duration::from_secs(60), &stop, &|g| *seen.lock().unwrap() = g).unwrap();
         assert!(*seen.lock().unwrap() > 0, "the group was handed over at spawn");
         assert_eq!(r.outcome, Outcome::Stopped);
     }
@@ -257,7 +241,7 @@ mod tests {
     fn a_process_killed_from_outside_while_stopping_is_stopped() {
         let stop = Arc::new(AtomicBool::new(false));
         let s2 = stop.clone();
-        let r = run_turn_with(&fallback_shell(), "sleep 30", "/", Duration::from_secs(60), &stop, &move |g| {
+        let r = run_turn_with(&crate::shell::fallback_shell(), "sleep 30", "/", Duration::from_secs(60), &stop, &move |g| {
             let s3 = s2.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(300));
