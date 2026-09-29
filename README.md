@@ -79,6 +79,7 @@ Four things you shouldn't have to do twice — each one something you already wo
 - **Backup** — export / import all your settings to a file (handy before a reinstall).
 - **Updates from inside the app** — when a new version is out, a notice offers to install it and restart. The `xattr` step is needed only for the very first install.
 - **Codex and Copilot too** *(preview)* — start a **Codex** or **GitHub Copilot** session from **＋New**, next to your Claude Code ones. It runs in the built-in terminal, keeps its memory in the same `notes.md`, and its card shows when it is busy, idle or waiting on you. The session skills (`/save-session`, `/learn`, `/route`…) run in Claude Code only for now, and Copilot needs version 1.0 or later.
+- **A second opinion from other models** — on a running session, **Invite models…** lets GPT (through Codex), Copilot or another Claude model read the session — its conversation, notes and code — and advise its agent, who consults them when a review or another view helps, or when you ask. They never write. Each answer shows in the session's terminal and in its **Other models** thread.
 
 ### Brutus, the one you ask
 

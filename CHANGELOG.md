@@ -10,6 +10,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Other models advise a live session.** On a running session, **Invite models…** (its
+  actions, its menu, a shortcut, or a row in ＋New) invites GPT through Codex, Copilot with a
+  model of your choice, or another Claude model. The session's agent consults them read-only
+  through `ao_ask.py`: they read its conversation, its folder and the code, and never write.
+  Each answer shows in the agent's terminal and in the session's **Other models** thread; a
+  consultation has no time limit and can be stopped from the panel. What they read is sent to
+  their provider, which the dialog says before you invite them.
+
+### Removed
+
+- **The headless collab** of 0.21.0, where an author and a reviewer took turns in the
+  background: inviting models into a session you talk to replaces it. Sessions it created
+  stay readable in Closed.
+
 ## [0.21.0] - 2026-09-29
 
 ### Added

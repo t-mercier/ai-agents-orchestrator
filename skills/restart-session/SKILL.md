@@ -80,7 +80,11 @@ count=$(printf '%s' "$matches" | grep -c .)
 
 Read `$NOTES_PATH`. Parse frontmatter (`session_id`, `category`, `ticket`, `name`,
 `branch`, `started_at`) and the body sections (Goal, Open questions, Next steps,
-Session history).
+Other models, Session history).
+
+When `## Other models` is present, other models are invited to this session: run the
+`guide` command it names (`python3 ~/.claude/skills/lib/ao_ask.py guide --session …`) and
+follow it for the rest of the session. They read this session and advise; you decide.
 
 **Stop here** when the frontmatter has `agent:` set to anything other than `claude`, or
 has `collab_mode:`. Say, in one line: "This session runs in <Codex|Copilot> — restart it
@@ -337,6 +341,7 @@ Loaded <SLUG> from <NOTES_PATH>.
 **Branch:** <BRANCH> (synced)
 **Open questions:** <list>
 **Next steps:** <list>
+**Other models:** <the invited models, only when `## Other models` is present>
 
 Last session: <last Session history entry>
 
