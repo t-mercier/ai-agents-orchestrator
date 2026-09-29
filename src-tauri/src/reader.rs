@@ -868,13 +868,19 @@ pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &
     let noted = fm.get("session_id").cloned().filter(|s| crate::is_valid_session_id(s));
     let mut sid = a.session_id.clone().or(noted.clone()).unwrap_or_default();
     let mut found = None;
+    let mut unmatched = None;
     // Looked for as long as the terminal lives: the walk covers the two newest day
     // folders only, and the user may take any time to answer Codex's first questions.
     let searching = sid.is_empty() && a.agent == AgentId::Codex;
     if searching {
-        if let Ok(Some(id)) = codex::find_started(codex_home, &a.cwd, a.spawned_at, taken) {
-            sid = id.clone();
-            found = Some(id);
+        match codex::find_started(codex_home, &a.cwd, a.spawned_at, taken) {
+            Ok(Some(id)) => {
+                sid = id.clone();
+                found = Some(id);
+            }
+            Ok(None) => {}
+            // Two sessions started in one folder at once: say so, the card cannot guess.
+            Err(e) => unmatched = Some(e),
         }
     }
     // The terminal's id is the truth while it runs; the notes get it back if the agent's
@@ -897,10 +903,11 @@ pub(crate) fn agent_session(cfg: &Value, a: &crate::pty::AgentPty, codex_home: &
     let starting = transcript.is_none();
     let asking = starting && a.spawned_at.elapsed().is_ok_and(|e| e >= FIRST_WRITE);
     let status = if asking || fold.waiting { "waiting" } else if fold.busy || starting { "busy" } else { "idle" };
-    let last_activity = match &fold.last_activity {
-        Some(t) => Value::String(t.clone()),
-        None if asking => Value::String(format!("{} is asking something in its terminal", crate::agents::session::display_name(a.agent))),
-        None => Value::Null,
+    let last_activity = match (&fold.last_activity, &unmatched) {
+        (Some(t), _) => Value::String(t.clone()),
+        (None, Some(e)) => Value::String(format!("Its conversation cannot be told apart: {e}. It will not be resumable once this terminal closes.")),
+        (None, None) if asking => Value::String(format!("{} is asking something in its terminal", crate::agents::session::display_name(a.agent))),
+        (None, None) => Value::Null,
     };
     let NotesMeta { goal, next_steps, pr_links, tickets: tickets_fm, ticket_states, last_summary, start_in: _ } =
         read_notes_meta(&a.notes_path);
@@ -2883,6 +2890,13 @@ mod tests {
         assert_eq!(s["lastActivity"], "reading the notes");
         assert_eq!((s["name"].as_str(), s["category"].as_str(), s["ticket"].as_str()), (Some("try it"), Some("FEAT"), Some("ABC-1")));
         assert_eq!(s["state"], "active");
+        // Asking permission, as Copilot does before an edit: the card says it needs you.
+        fs::write(events.join("events.jsonl"), concat!(
+            r#"{"type":"assistant.turn_start","data":{"turnId":"1"}}"#, "\n",
+            r#"{"type":"tool.execution_start","data":{}}"#, "\n",
+            r#"{"type":"permission.requested","data":{}}"#, "\n")).unwrap();
+        let (s, _) = agent_session(&cfg, &pty(AgentId::Copilot, notes("cp-ask", AgentId::Copilot, cid)), &codex_home, &copilot_home, &[]);
+        assert_eq!(s["status"], "waiting");
 
         // Codex: starting, no rollout yet → busy with no id; then its rollout appears and
         // the id is found and written into the notes.
@@ -2890,6 +2904,21 @@ mod tests {
         let a = pty(AgentId::Codex, np.clone());
         let (s, _) = agent_session(&cfg, &a, &codex_home, &copilot_home, &[]);
         assert_eq!((s["sessionId"].as_str(), s["status"].as_str()), (Some(""), Some("busy")));
+        // Two new Codex sessions in one folder at once cannot be told apart: the card says
+        // so, instead of claiming Codex is asking something.
+        let work2 = t.join("work2");
+        fs::create_dir_all(&work2).unwrap();
+        let mut twin = pty(AgentId::Codex, notes("cx2", AgentId::Codex, ""));
+        twin.cwd = work2.to_string_lossy().into_owned();
+        let day2 = codex_home.join("sessions/2026/09/29");
+        fs::create_dir_all(&day2).unwrap();
+        for id in ["01a0e9da-aaaa-7c12-882e-57b7554edd81", "01a0e9da-bbbb-7c12-882e-57b7554edd81"] {
+            fs::write(day2.join(format!("rollout-x-{id}.jsonl")), format!(concat!(
+                r#"{{"type":"session_meta","payload":{{"id":"{}","cwd":"{}","timestamp":"{}"}}}}"#, "\n"),
+                id, work2.display(), crate::agents::codex::utc_rfc3339(std::time::SystemTime::now()))).unwrap();
+        }
+        let (s, _) = agent_session(&cfg, &twin, &codex_home, &copilot_home, &[]);
+        assert!(s["lastActivity"].as_str().unwrap_or("").contains("two Codex sessions"), "{}", s["lastActivity"]);
         // Still no rollout after a while: Codex is asking something first (it asks to trust
         // a new folder, and to review hooks, before it writes anything). That needs the
         // user — and the search goes on, however long they take to answer.
