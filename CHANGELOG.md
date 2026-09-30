@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-10-01
+
 ### Security
 
 - **A model invited through Codex no longer gets your personal Codex instructions.** Even
