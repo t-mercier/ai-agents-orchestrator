@@ -21,6 +21,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   your home folder, not `/tmp`. Checked on macOS with a real invitee: a file outside the session
   is refused, the session's files are read. Claude and Copilot invitees were already confined.
 
+### Fixed
+
+- **A question half typed to Brutus stays.** Folding his bubble, or anything that redraws
+  his panel, emptied the input; the draft is now kept, across a restart too, until you send it.
+
 ## [0.22.0] - 2026-09-30
 
 ### Added

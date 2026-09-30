@@ -6,6 +6,8 @@
   const M = window.CSMBrutus
   const HOME_KEY = 'csm.brutusHome'
   const LOG_KEY = 'csm.brutusLog'
+  // A question typed and not sent: kept across a fold, a re-render and a restart.
+  const DRAFT_KEY = 'csm.brutusDraft'
   const store = {
     get(k, d) { try { return localStorage.getItem(k) ?? d } catch { return d } },
     set(k, v) { try { localStorage.setItem(k, v) } catch {} },
@@ -182,7 +184,12 @@
     const b = p.querySelector('.bru-body'); if (b) b.scrollTop = b.scrollHeight
     p.addEventListener('click', onClick)
     const inp = p.querySelector('input')
-    if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); send(inp.value) } })
+    if (inp) {
+      // Every render rebuilds the input, so it takes back what was typed.
+      inp.value = store.get(DRAFT_KEY, '')
+      inp.addEventListener('input', () => store.set(DRAFT_KEY, inp.value))
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); send(inp.value) } })
+    }
     return p
   }
   function onClick(e) {
@@ -209,6 +216,8 @@
   async function send(text) {
     const t = String(text || '').trim()
     if (!t || state.running) return
+    // A suggestion clicked while a question was half typed leaves that question in place.
+    if (store.get(DRAFT_KEY, '').trim() === t) store.set(DRAFT_KEY, '')
     state.log.push({ role: 'user', text: t }); saveLog()
     state.running = true; state.stopping = false; state.steps = []; state.pendingText = ''
     render()
