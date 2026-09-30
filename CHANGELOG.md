@@ -18,6 +18,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   Each invitee now runs on a Codex home of its own, holding only a link to your login, removed
   once it has answered. Claude and Copilot invitees load none of yours (checked).
 
+### Changed
+
+- **Faster launch and tab switches.** The app no longer reads every conversation file again
+  at each launch: what it learnt from them is kept between launches. Measured here, the list's
+  data is ready in 0.3 s instead of 1.8 s.
+- **A busy session no longer costs a full re-read every five seconds.** A conversation file
+  that grows is now read from where the app stopped: for a 300 MB conversation, 0.2 ms instead
+  of 0.7 s on every refresh.
+
+### Added
+
+- **⌥⌘P measures how smoothly the app scrolls:** ten seconds of frame timings, shown in one
+  line and copied, to paste into a report.
+
 ## [0.22.1] - 2026-09-30
 
 ### Security

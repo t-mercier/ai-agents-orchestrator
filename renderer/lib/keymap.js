@@ -25,6 +25,7 @@
     'Mod+C': 'copies', 'Mod+V': 'pastes', 'Mod+X': 'cuts', 'Mod+A': 'selects all', 'Mod+Z': 'undoes', 'Mod+Shift+Z': 'redoes',
     'Mod+Space': 'opens Spotlight', 'Mod+Tab': 'switches apps',
     'Mod+K': 'asks the assistant',
+    'Mod+Alt+P': 'measures how smoothly the app scrolls',
   }
 
   function keyOf(code) {

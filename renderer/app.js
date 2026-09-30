@@ -256,6 +256,23 @@ function shortcutNote(text) {
 }
 
 // Capture phase, so a combo reaches its action before the terminal or a text field takes it.
+// ⌥⌘P: ten seconds of frame timings while you scroll, said in one line and copied, for a
+// report on smoothness measured in the real app (lib/frame-probe.js).
+let frameProbeRunning = false
+document.addEventListener('keydown', async (e) => {
+  if (e.repeat || !window.CSMKeymap || !window.CSMFrameProbe) return
+  if (window.CSMKeymap.fromEvent(e, IS_MAC_KEYS) !== 'Mod+Alt+P' || frameProbeRunning) return
+  e.preventDefault(); e.stopPropagation()
+  frameProbeRunning = true
+  shortcutNote('Measuring for 10 s — scroll now')
+  const F = window.CSMFrameProbe
+  const times = await F.record(10000)
+  frameProbeRunning = false
+  const line = F.summary(F.stats(times), { terminals: document.querySelectorAll('.terminal-session-div').length })
+  try { await navigator.clipboard.writeText(line) } catch { /* the line is still shown */ }
+  shortcutNote(line + ' (copied)')
+}, true)
+
 document.addEventListener('keydown', (e) => {
   if (e.repeat || !window.CSMKeymap) return
   const combo = window.CSMKeymap.fromEvent(e, IS_MAC_KEYS)
