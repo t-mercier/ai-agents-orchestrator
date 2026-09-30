@@ -1585,6 +1585,7 @@ pub fn run() {
             reader::get_sessions,
             reader::get_historical_sessions,
             agents::agents_available,
+            agents::catalog::agent_catalog,
             advisors::advisors_set,
             advisors::other_models,
             advisors::advisor_stop,

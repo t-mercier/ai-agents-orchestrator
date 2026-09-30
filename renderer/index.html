@@ -304,6 +304,7 @@
       <div class="settings-tabs">
         <nav class="settings-nav">
           <button type="button" class="settings-tab active" data-settings-tab="general">General</button>
+          <button type="button" class="settings-tab" data-settings-tab="models">Models</button>
           <button type="button" class="settings-tab" data-settings-tab="appearance">Appearance</button>
           <button type="button" class="settings-tab" data-settings-tab="shortcuts">Shortcuts</button>
           <button type="button" class="settings-tab" data-settings-tab="terminal">Terminal</button>
@@ -368,6 +369,49 @@
                   <button type="button" class="modal-btn" id="set-install-skills">Sync skills to this version</button>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <!-- Models: the main agent and the model each agent runs on (config keys, Save-gated).
+               The Codex and Copilot lists come from the CLIs themselves (agent_catalog). -->
+          <section class="settings-panel" data-settings-panel="models">
+            <div class="settings-section">
+              <label class="modal-field inline-field">
+                <span>Main agent</span>
+                <select id="set-main-agent">
+                  <option value="claude">Claude Code</option>
+                  <option value="codex">Codex</option>
+                  <option value="copilot">Copilot</option>
+                </select>
+              </label>
+              <p class="modal-hint">The agent <strong>＋ New</strong> starts with. You can still pick another one for a session.</p>
+            </div>
+            <div class="settings-section">
+              <label class="modal-field inline-field">
+                <span>Claude Code</span>
+                <!-- Blank sends no --model, so `claude` uses ~/.claude/settings.json.
+                     Options are filled from window.CLAUDE_MODELS (app.js). -->
+                <select id="set-model"></select>
+              </label>
+              <p class="modal-hint agent-status" id="set-claude-status"></p>
+              <label class="modal-field inline-field">
+                <span>Codex</span>
+                <select id="set-codex-model-pick"></select>
+              </label>
+              <label class="modal-field inline-field model-typed" hidden>
+                <span>Model name</span>
+                <input id="set-codex-model" type="text" placeholder="e.g. gpt-6-sol" spellcheck="false" autocomplete="off">
+              </label>
+              <p class="modal-hint agent-status" id="set-codex-status"></p>
+              <label class="modal-field inline-field">
+                <span>Copilot</span>
+                <select id="set-copilot-model-pick"></select>
+              </label>
+              <label class="modal-field inline-field model-typed" hidden>
+                <span>Model name</span>
+                <input id="set-copilot-model" type="text" placeholder="e.g. claude-opus-5.5" spellcheck="false" autocomplete="off">
+              </label>
+              <p class="modal-hint agent-status" id="set-copilot-status"></p>
             </div>
           </section>
 
@@ -447,31 +491,6 @@
                 </select>
               </label>
               <p class="modal-hint">Which app “Resume” / ＋ New / Restart open into. The settings below style the in-app embedded terminal.</p>
-              <label class="modal-field inline-field">
-                <span>Main agent</span>
-                <select id="set-main-agent">
-                  <option value="claude">Claude Code</option>
-                  <option value="codex">Codex</option>
-                  <option value="copilot">Copilot</option>
-                </select>
-              </label>
-              <p class="modal-hint">The agent <strong>＋ New</strong> starts with. You can still pick another one for a session.</p>
-              <label class="modal-field inline-field">
-                <span>Claude model</span>
-                <!-- Blank sends no --model, so `claude` uses ~/.claude/settings.json.
-                     Options are filled from window.CLAUDE_MODELS (app.js). -->
-                <select id="set-model"></select>
-              </label>
-              <p class="modal-hint">For the sessions this app opens. <strong>Follow my Claude Code setting</strong> sends no <code>--model</code> at all, so your own <code>settings.json</code> decides; pick one to override it here.</p>
-              <label class="modal-field inline-field">
-                <span>Codex model</span>
-                <input id="set-codex-model" type="text" placeholder="Codex default" spellcheck="false" autocomplete="off">
-              </label>
-              <label class="modal-field inline-field">
-                <span>Copilot model</span>
-                <input id="set-copilot-model" type="text" placeholder="Copilot default, e.g. claude-opus-5" spellcheck="false" autocomplete="off">
-              </label>
-              <p class="modal-hint">Left empty, the agent uses its own default model.</p>
             </div>
             <div class="settings-section">
               <label class="modal-field inline-field">
@@ -776,6 +795,7 @@
   <script src="settings/general.js"></script>
   <script src="settings/appearance.js"></script>
   <script src="settings/shortcuts.js"></script>
+  <script src="settings/models.js"></script>
   <script src="settings/terminal.js"></script>
   <script src="settings/board.js"></script>
   <script src="settings/categories.js"></script>

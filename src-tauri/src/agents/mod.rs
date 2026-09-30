@@ -4,6 +4,7 @@
 
 use crate::pty::shell_quote;
 
+pub(crate) mod catalog;
 pub(crate) mod codex;
 pub(crate) mod copilot;
 pub(crate) mod session;

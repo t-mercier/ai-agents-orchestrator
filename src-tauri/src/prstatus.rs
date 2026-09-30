@@ -96,12 +96,20 @@ pub(crate) fn run_within(inner: &str, limit: Duration) -> Result<String, String>
         .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
+    // Read stdout while the command runs: a pipe holds 64 KiB, and a command that prints more
+    // blocks on its write until someone reads, so waiting for its exit first never ends.
+    let mut stdout = child.stdout.take().ok_or("no stdout")?;
+    let reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut stdout, &mut buf);
+        buf
+    });
     let start = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let out = child.wait_with_output().map_err(|e| e.to_string())?;
-                let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let out = reader.join().unwrap_or_default();
+                let text = String::from_utf8_lossy(&out).trim().to_string();
                 return if status.success() {
                     Ok(text)
                 } else {
@@ -174,6 +182,14 @@ pub fn sync_pr_status(urls: Vec<String>) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    // A command that prints more than a pipe holds (64 KiB on macOS) used to block on its
+    // write while the runner waited for it to exit, and every such call timed out.
+    #[test]
+    fn a_command_with_a_large_output_finishes() {
+        let out = super::run_within("head -c 300000 /dev/zero | tr '\\0' x", std::time::Duration::from_secs(10)).unwrap();
+        assert_eq!(out.len(), 300000);
+    }
+
     use super::*;
 
     #[test]

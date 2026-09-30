@@ -59,6 +59,8 @@
     // [{ agent, found, version, supported, hint }] for claude, codex, copilot.
     // A failed probe resolves { error }: the form says so rather than offering Claude alone.
     agentsAvailable: () => invoke('agents_available').catch((e) => ({ error: String(e) })),
+    // Models and sign-in, asked of each CLI (Settings → Models).
+    agentCatalog: () => invoke('agent_catalog').catch((e) => ({ error: String(e) })),
     // Invited models: write who is invited (an empty list dismisses them all), read the thread
     // of consultations, stop one. { ok, error } so the dialog can say why it was refused.
     advisorsSet: (notesPath, advisors) => invoke('advisors_set', { notesPath, advisors }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),

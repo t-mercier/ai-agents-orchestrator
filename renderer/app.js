@@ -174,13 +174,19 @@ window.getCompactChrome = () => { try { return localStorage.getItem('csm.compact
 // The models the app offers for the sessions it launches, and for Claude Code's own
 // /advisor. '' is not "no model" — it means send no --model / leave the key alone, so the
 // user's own settings.json decides. Kept here so Settings and first-run setup share one list.
+// The bare names are Claude Code's aliases, which follow each family's newest model, so
+// they are labelled as such rather than with a version they will outlive.
 window.CLAUDE_MODELS = [
   ['', ''],
-  ['opus[1m]', 'Opus 5 (1M context)'],
-  ['opus', 'Opus 5'],
-  ['sonnet', 'Sonnet 5'],
-  ['haiku', 'Haiku 4.5'],
-  ['fable', 'Fable 5.1'],
+  ['opus[1m]', 'Opus — latest, 1M context'],
+  ['opus', 'Opus — latest'],
+  ['claude-opus-5-5[1m]', 'Opus 5.5 (1M context)'],
+  ['claude-opus-5-5', 'Opus 5.5'],
+  ['sonnet', 'Sonnet — latest'],
+  ['claude-sonnet-5-5', 'Sonnet 5.5'],
+  ['haiku', 'Haiku — latest'],
+  ['fable', 'Fable — latest'],
+  ['claude-fable-5-1', 'Fable 5.1'],
 ]
 const DEFAULT_KEYS = { search: '/', viewToggle: 'v', board: 'b', tabRunning: '1', tabClosed: '2', tabArchived: '3' }
 window.KEY_ACTIONS = [
