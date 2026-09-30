@@ -1317,7 +1317,10 @@ async function maybeShowSkillsBanner() {
   let status
   try { status = await window.api.skillsStatus() } catch { return }
   if (!status) return
-  if (!status.installed) {
+  // "Not installed" is a machine with none of the skills. One that has them but misses a
+  // skill a newer release added gets it from the launch sync below, like any update.
+  const none = !status.installed && !((status.present || []).length)
+  if (none) {
     if (localStorage.getItem('csm.skillsBannerDismissed') === '1') return
     // First run owns this: the wizard's last step installs the skills and explains what
     // they are. Two prompts for the same thing on a fresh install is one too many — and
