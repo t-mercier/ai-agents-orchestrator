@@ -26,9 +26,19 @@ class Argv(unittest.TestCase):
     def test_codex_is_read_only_and_writes_its_answer_to_a_file(self):
         a = A.argv_for({"cli": "codex", "model": ""}, "Q", "/s", "/s/last")
         self.assertEqual(a[:3], ["codex", "exec", "--skip-git-repo-check"])
-        self.assertIn('sandbox_mode="read-only"', a)
+        self.assertIn('default_permissions="ao_invitee"', a)
         self.assertEqual(a[-3:], ["-o", "/s/last", "Q"])
         self.assertFalse(any(x.startswith("--model") for x in a))
+    def test_codex_reads_only_the_session_and_the_code(self):
+        # Its read-only sandbox forbids writes but reads the whole disk: probed on 2026-09-30,
+        # an invitee printed a file outside its folder with `head`. The permission profile
+        # lets it read the system (:minimal), the session's folder and the code, nothing else.
+        a = A.argv_for({"cli": "codex", "model": ""}, "Q", "/s/x", "/s/x/last", repo_dir='/w/re"po')
+        fs = a[a.index('default_permissions="ao_invitee"') + 2]
+        self.assertEqual(fs, 'permissions.ao_invitee.filesystem={":minimal"="read", ":slash_tmp"="none", "/s/x"="read", "/w/re\\"po"="read"}')
+        self.assertFalse(any("sandbox_mode" in x for x in a))
+        b = A.argv_for({"cli": "codex", "model": ""}, "Q", "/s/x", "/s/x/last")
+        self.assertEqual(b[b.index('default_permissions="ao_invitee"') + 2], 'permissions.ao_invitee.filesystem={":minimal"="read", ":slash_tmp"="none", "/s/x"="read"}')
     def test_copilot_has_no_write_shell_url_or_builtin_mcp(self):
         a = A.argv_for({"cli": "copilot", "model": "gpt-5.4"}, "Q", "/s", "/s/last")
         self.assertEqual(a[:3], ["copilot", "-p", "Q"])
@@ -228,7 +238,7 @@ class Jobs(unittest.TestCase):
         t = self.thread()
         self.assertIn("invitee=gpt state=done", t); self.assertIn("> Is it right?", t); self.assertIn("> PAPAYA", t)
         argv = open(self.log).read().splitlines()
-        self.assertEqual(argv[:2], ["codex", "exec"]); self.assertIn('sandbox_mode="read-only"', argv)
+        self.assertEqual(argv[:2], ["codex", "exec"]); self.assertIn('default_permissions="ao_invitee"', argv)
         self.assertIn("--env AO_ADVISOR=1 AO_HEADLESS=1", argv)
         self.assertTrue(os.path.exists(os.path.join(self.d, ".ao", "asks", self.jobs()[-1]["id"], "conversation.md")))
         self.assertEqual(open(os.path.join(self.d, ".ao", ".gitignore")).read().strip(), "*")

@@ -10,6 +10,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-09-30
+
+### Security
+
+- **A model invited through Codex reads only the session and its code.** Codex's read-only
+  sandbox stops writes and network, but not reads: an invited GPT could read any file of your
+  account, and what it read was sent to OpenAI. It now runs under a Codex permission profile
+  that lets it read the system tools, the session's folder and the code, and nothing else — not
+  your home folder, not `/tmp`. Checked on macOS with a real invitee: a file outside the session
+  is refused, the session's files are read. Claude and Copilot invitees were already confined.
+
 ## [0.22.0] - 2026-09-30
 
 ### Added

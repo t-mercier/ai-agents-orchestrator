@@ -73,7 +73,26 @@ def session_paths(notes_path):
     }
 
 
-def argv_for(inv, prompt, session_folder, last_path):
+def codex_readable(session_folder, repo_dir=None):
+    """Codex's permission profile: what its shell may read. Its `read-only` sandbox forbids
+    writes and network but reads the whole disk (probed on 2026-09-30: an invitee printed a
+    file outside its folder with `head`), so the profile names what it may read instead: the
+    system (`:minimal`, without /tmp), the session's folder and the code. Writes and network
+    stay denied (probed: `head`, `ls ~` and `curl` refused)."""
+    roots = []
+    # The sandbox checks the real path, so a folder reached through a symlink (/var → /private/var)
+    # is listed as both.
+    for r in [session_folder, repo_dir]:
+        for x in ([r, os.path.realpath(r)] if r else []):
+            if x not in roots:
+                roots.append(x)
+    # TOML basic strings take JSON's escapes, so json.dumps quotes any path safely.
+    # `:minimal` includes /tmp, where other tools' files sit; the folders listed after it win.
+    entries = ", ".join(['":minimal"="read"', '":slash_tmp"="none"'] + [f"{json.dumps(r)}=\"read\"" for r in roots])
+    return f"permissions.ao_invitee.filesystem={{{entries}}}"
+
+
+def argv_for(inv, prompt, session_folder, last_path, repo_dir=None):
     """The invitee's command line, read-only, with no network tool and no MCP server."""
     model = inv.get("model", "") or ""
     if model and not MODEL_RE.match(model):
@@ -91,7 +110,8 @@ def argv_for(inv, prompt, session_folder, last_path):
         # what is left is the sandboxed shell and patch tool, which cannot write or reach out.
         off = [x for f in CODEX_OFF for x in ("--disable", f)]
         return ["codex", "exec", "--skip-git-repo-check", "--ignore-user-config", "--ephemeral",
-                "-c", 'sandbox_mode="read-only"', "-c", 'web_search="disabled"', *off, *m, "-o", last_path, prompt]
+                "-c", 'default_permissions="ao_invitee"', "-c", codex_readable(session_folder, repo_dir),
+                "-c", 'web_search="disabled"', *off, *m, "-o", last_path, prompt]
     if cli == "copilot":
         # --available-tools hides every other tool, the user's MCP servers' included (probed:
         # the invitee then lists view, grep and glob). Last, since it takes several values.
@@ -513,7 +533,7 @@ def _run_job(job_dir):
     prompt = invitee_prompt(question, paths, job["cwd"], conversation=exported[0])
     with open(os.path.join(job_dir, "prompt.txt"), "w", encoding="utf-8") as f:
         f.write(prompt)
-    argv = argv_for(inv, prompt, paths["folder"], last)
+    argv = argv_for(inv, prompt, paths["folder"], last, repo_dir=job["cwd"] if os.path.isdir(job["cwd"]) else None)
     if not os.environ.get("AO_ASK_NO_LOGIN"):
         argv = shell_argv(argv, user_shell())
     env = dict(os.environ, AO_HEADLESS="1", AO_ADVISOR="1")
