@@ -1647,32 +1647,6 @@ function omWireMore(container, avail) {
   } })
 }
 
-// ＋New's invitation: kept per notes path in sessionStorage (a reload does not lose it)
-// until the new session is listed, idle, with its terminal; then invited and typed once.
-const OM_PENDING = 'csm.pendingInvite:'
-function omKeepPending(notesPath, list) {
-  try { sessionStorage.setItem(OM_PENDING + notesPath, JSON.stringify(list)) } catch { /* ignore */ }
-}
-async function omFlushPending(sessions) {
-  let keys = []
-  try { keys = Object.keys(sessionStorage).filter(k => k.startsWith(OM_PENDING)) } catch { return }
-  for (const k of keys) {
-    const notesPath = k.slice(OM_PENDING.length)
-    const s = (sessions || []).find(x => x.notesPath === notesPath && x.state === 'active')
-    if (!s) continue
-    const v = inviteVerdict(s)
-    if (!v.key) continue            // still busy with /start-session, or waiting: next poll
-    let list = []
-    try { list = JSON.parse(sessionStorage.getItem(k) || '[]') } catch { /* ignore */ }
-    try { sessionStorage.removeItem(k) } catch { /* ignore */ }
-    if (!list.length) continue
-    const res = await window.api.advisorsSet(notesPath, list)
-    if (!res || !res.ok) { if (window.showBanner) window.showBanner('Could not invite the models: ' + ((res && res.error) || 'unknown error')); continue }
-    typeIntoTerminal(v.key, OM().inviteLine(list, notesPath))
-  }
-}
-window.CSMInvite = { rowsHtml: omRowsHtml, wireMore: omWireMore, collect: omCollect, keepPending: omKeepPending, flushPending: omFlushPending, remember: (l) => omRemember(l) }
-
 async function openInviteDialog(s) {
   const v = inviteVerdict(s)
   if (v.why) { if (window.showBanner) window.showBanner(v.why); return }

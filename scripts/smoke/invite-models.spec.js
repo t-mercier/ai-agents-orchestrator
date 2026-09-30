@@ -131,66 +131,6 @@ test('Dismiss clears the invitees and tells the terminal', async ({ page }) => {
   await expect.poll(async () => (await calls(page, 'pty_input')).map(c => c.data).join('')).toContain('no longer invited')
 })
 
-// ＋New: the invitation waits for the session to exist (a Claude session's notes are written
-// by /start-session) and to be idle with its terminal, then is sent once.
-async function openNew(page) {
-  await page.addInitScript(() => {
-    let t
-    Object.defineProperty(window, '__TAURI__', {
-      configurable: true,
-      get() { return t },
-      set(v) {
-        const orig = v.core.invoke
-        window.__CALLS__ = []
-        v.core.invoke = (cmd, args) => {
-          window.__CALLS__.push({ cmd, args })
-          if (cmd === 'agents_available') return Promise.resolve([
-            { agent: 'claude', found: true, supported: true, hint: '' },
-            { agent: 'codex', found: true, supported: true, hint: '' },
-          ])
-          if (cmd === 'start_session') return Promise.resolve({ command: "claude '/start-session FEAT new-one'", notesPath: '/w/FEAT/new-one/notes.md', cwd: '/w' })
-          if (cmd === 'get_sessions') return orig(cmd, args).then(l => window.__NEW_UP__ ? [...l, { ...l[0], name: 'new-one', notesPath: '/w/FEAT/new-one/notes.md', sessionId: 'n1', status: window.__NEW_UP__, state: 'active', advisors: [] }] : l)
-          if (cmd === 'advisors_set') return Promise.resolve(null)
-          return orig(cmd, args)
-        }
-        t = v
-      },
-    })
-  })
-  await page.goto('/index.html')
-  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
-  await page.evaluate(() => { window.liveTerminalKeyFor = (sid, notes) => notes === '/w/FEAT/new-one/notes.md' ? 'pty:new' : null })
-}
-
-test('a new session with models picked gets the invitation once it is idle, and a reload keeps it pending', async ({ page }) => {
-  await openNew(page)
-  await page.locator('#new-session-btn').click()
-  await page.locator('#ns-name').fill('new one')
-  await page.locator('#ns-om-toggle').click()
-  await page.locator('#ns-om-rows [data-om-row="codex"] input[type="checkbox"]').check()
-  await page.locator('#new-session-form').evaluate((f) => f.requestSubmit())
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('csm.pendingInvite:/w/FEAT/new-one/notes.md'))).toContain('"gpt"')
-  expect(await calls(page, 'advisors_set')).toEqual([])
-  // Reloaded before the session came up: still pending.
-  await page.reload()
-  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
-  await page.evaluate(() => { window.liveTerminalKeyFor = (sid, notes) => notes === '/w/FEAT/new-one/notes.md' ? 'pty:new' : null })
-  // Up but still busy with /start-session: nothing sent yet.
-  await page.evaluate(() => { window.__NEW_UP__ = 'busy'; return window.refreshSessions() })
-  await page.waitForTimeout(300)
-  expect(await calls(page, 'advisors_set')).toEqual([])
-  // Idle: sent once.
-  await page.evaluate(() => { window.__NEW_UP__ = 'idle'; return window.refreshSessions() })
-  await expect.poll(async () => (await calls(page, 'advisors_set')).length).toBe(1)
-  expect((await calls(page, 'advisors_set'))[0].advisors[0].id).toBe('gpt')
-  await expect.poll(async () => (await calls(page, 'pty_input')).length).toBe(2)
-  expect((await calls(page, 'pty_input'))[0].sessionId).toBe('pty:new')
-  await page.evaluate(() => window.refreshSessions())
-  await page.waitForTimeout(400)
-  expect((await calls(page, 'advisors_set')).length).toBe(1)
-  expect(await page.evaluate(() => sessionStorage.getItem('csm.pendingInvite:/w/FEAT/new-one/notes.md'))).toBe(null)
-})
-
 test('the dialog opens with the models already invited, so inviting again keeps them', async ({ page }) => {
   await open(page, { advisors: { 'payments-api': [{ id: 'gpt', cli: 'codex', model: '', label: 'GPT (Codex)' }, { id: 'copilot', cli: 'copilot', model: 'gpt-5.4', label: 'Copilot · gpt-5.4' }] } })
   await menu(page, 'payments-api', 'Invite models…')

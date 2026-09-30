@@ -13,7 +13,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Other models advise a live session.** On a running session, **Invite models…** (its
-  actions, its menu, a shortcut, or a row in ＋New) invites GPT through Codex, Copilot with a
+  actions, its menu or a shortcut) invites GPT through Codex, Copilot with a
   model of your choice, or another Claude model. The session's agent consults them read-only
   through `ao_ask.py`: they read its conversation, its folder and the code, and never write.
   Each answer shows in the agent's terminal and in the session's **Other models** thread; a

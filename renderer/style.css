@@ -2472,8 +2472,3 @@ body.bru-resizing .layout { transition: none; }
 .om-error { color: var(--danger); font-size: 12.5px; margin: 0 0 8px; }
 .om-external pre.om-line { white-space: pre-wrap; word-break: break-all; font: 12px var(--mono, ui-monospace, Menlo, monospace); padding: 8px; border-radius: 8px;
   background: rgba(var(--tint), 0.06); }
-.ns-om-toggle { align-self: flex-start; border: 0; background: none; padding: 0; font: 600 12px var(--font); color: var(--accent); cursor: pointer; }
-.ns-om-toggle em { font-style: normal; font-weight: 400; color: var(--text-tertiary); }
-.ns-om-toggle::before { content: '▸ '; }
-.ns-om-toggle[aria-expanded="true"]::before { content: '▾ '; }
-.ns-om .om-row { grid-template-columns: 130px minmax(0, 1fr) auto; }
