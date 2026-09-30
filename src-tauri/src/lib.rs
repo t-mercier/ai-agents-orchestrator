@@ -778,13 +778,19 @@ fn set_always_on_top(window: tauri::WebviewWindow, flag: bool) -> bool {
 /// exactly the layer drawn during a live resize. Called from applyTheme() at boot + on
 /// every theme toggle. Colours mirror `--bg` in style.css.
 #[tauri::command]
-fn set_window_bg(window: tauri::WebviewWindow, dark: bool) {
-    let c = if dark {
-        tauri::window::Color(28, 28, 30, 255)
-    } else {
-        tauri::window::Color(245, 245, 247, 255)
-    };
-    let _ = window.set_background_color(Some(c));
+fn set_window_bg(window: tauri::WebviewWindow, theme: String) {
+    let (r, g, b) = window_bg(&theme);
+    let _ = window.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
+}
+
+/// `--bg` of each app theme; an unknown name is Dark.
+fn window_bg(theme: &str) -> (u8, u8, u8) {
+    match theme {
+        "dusk" => (42, 45, 56),
+        "mist" => (228, 231, 238),
+        "light" => (245, 245, 247),
+        _ => (28, 28, 30),
+    }
 }
 
 /// Write `body` to `path` atomically (tmp + fsync + rename), so a crash never leaves
@@ -1650,6 +1656,15 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_window_behind_the_app_takes_each_theme_s_background() {
+        assert_eq!(super::window_bg("dusk"), (42, 45, 56));
+        assert_eq!(super::window_bg("mist"), (228, 231, 238));
+        assert_eq!(super::window_bg("light"), (245, 245, 247));
+        assert_eq!(super::window_bg("dark"), (28, 28, 30));
+        assert_eq!(super::window_bg("neon"), (28, 28, 30));
+    }
+
 
     // Repointing the notes without re-keying the registry would orphan the session: the app
     // matches a live process to its notes THROUGH that map.

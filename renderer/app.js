@@ -72,13 +72,15 @@ function hexToRgbTriplet(hex) {
   const n = parseInt(m[1], 16)
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
+// Dark, Dusk, Mist, Light — darkest to lightest; anything else is Dark.
+window.APP_THEMES = ['dark', 'dusk', 'mist', 'light']
 window.applyTheme = (theme) => {
-  const t = theme === 'light' ? 'light' : 'dark'
+  const t = window.APP_THEMES.includes(theme) ? theme : 'dark'
   document.documentElement.dataset.theme = t
   try { localStorage.setItem('csm.theme', t) } catch { /* ignore */ }
   // Keep the native window background in sync so a resize doesn't flash white (dark theme)
   // — or dark (light theme) — at the growing edge before the webview repaints.
-  if (window.api && window.api.setWindowBg) window.api.setWindowBg(t === 'dark')
+  if (window.api && window.api.setWindowBg) window.api.setWindowBg(t)
 }
 // Pick legible text (black vs white) for a solid accent-filled element, by perceived
 // luminance. Lets a light accent (cyan, mauve…) keep readable CTA text without having
@@ -1645,7 +1647,7 @@ async function refreshUsage() {
 async function boot() {
   // Sync the native window background to the saved theme (the inline head script already
   // set dataset.theme before first paint) so a resize never flashes the wrong colour.
-  if (window.api && window.api.setWindowBg && window.getTheme) window.api.setWindowBg(window.getTheme() === 'dark')
+  if (window.api && window.api.setWindowBg && window.getTheme) window.api.setWindowBg(window.getTheme())
   try {
     window.CSM_CONFIG = await window.api.getConfig()
   if (window.renderGlobalPins) window.renderGlobalPins()

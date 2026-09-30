@@ -1,7 +1,7 @@
-// Embedded-terminal themes and fonts: the pure part terminal.js builds on. Four named themes
-// in the app's violet/teal, from darkest to lightest, plus `auto` (night when the app is
-// dark, day when it is light) and `custom` (the colours picked in Settings, on the night
-// palette). UMD like the other lib/ models: window.CSMTermTheme in the renderer, require()
+// Embedded-terminal themes and fonts: the pure part terminal.js builds on. Four palettes in
+// the app's violet/teal, one per app theme (Dark → night, Dusk, Mist, Light → day). The
+// terminal follows the app (`auto`) unless someone picked their own colours (`custom`,
+// on the night palette). UMD like the other lib/ models: window.CSMTermTheme in the renderer, require()
 // in jest.
 (function (root, factory) {
   const api = factory()
@@ -42,7 +42,8 @@
       brightBlue: '#4474d6', brightMagenta: '#7a69e6', brightCyan: '#119c8b', brightWhite: '#f6f7f9',
     },
   }
-  const NAMES = ['auto', 'night', 'dusk', 'mist', 'day', 'custom']
+  const NAMES = ['auto', 'custom']
+  const FOR_APP = { dark: 'night', dusk: 'dusk', mist: 'mist', light: 'day' }
 
   const FONTS = {
     sourcecode: "'Source Code Pro', ui-monospace, monospace",
@@ -67,17 +68,17 @@
       const picked = (s.bg && s.bg.toLowerCase() !== OLD_BG) || (s.fg && s.fg.toLowerCase() !== OLD_FG)
       p.theme = picked ? 'custom' : 'auto'
     }
+    // A palette saved by name (the terminal had its own themes for a day) follows the app.
     if (!NAMES.includes(p.theme)) p.theme = 'auto'
     return p
   }
 
-  /** The xterm theme for these prefs; `appIsDark` decides `auto`. */
-  function resolve(prefs, appIsDark) {
+  /** The xterm theme for these prefs, under the app theme (dark, dusk, mist or light). */
+  function resolve(prefs, appTheme) {
     const p = prefs || {}
     if (p.theme === 'custom') return { ...THEMES.night, background: p.bg, foreground: p.fg, cursorAccent: p.bg }
-    const name = THEMES[p.theme] ? p.theme : (appIsDark ? 'night' : 'day')
-    return { ...THEMES[name] }
+    return { ...THEMES[FOR_APP[appTheme] || 'night'] }
   }
 
-  return { THEMES, NAMES, FONTS, DEFAULTS, fontFamily, migrate, resolve }
+  return { THEMES, NAMES, FOR_APP, FONTS, DEFAULTS, fontFamily, migrate, resolve }
 })

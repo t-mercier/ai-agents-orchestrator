@@ -39,11 +39,20 @@
   --radius: 10px;
 }
 
+/* ===== Dusk ===== */
+/* A softer dark: slate surfaces instead of near-black. Same white tint as Dark, so every
+   overlay and text colour carries over; only the opaque surfaces move. */
+[data-theme="dusk"] {
+  --bg: rgb(42, 45, 56);
+  --surface-modal: rgba(50, 53, 66, 0.98);
+  --card-bg: rgba(60, 64, 78, 0.6);
+}
+
 /* ===== Light Theme ===== */
 /* Light theme — flips the tint and redefines the few opaque dark surfaces.
    Everything built on rgba(var(--tint), α) + the --text-* vars inverts on its own.
-   The embedded terminal stays dark by design (terminals read better dark). */
-[data-theme="light"] {
+   Mist shares it and only greys the surfaces (below). */
+[data-theme="light"], [data-theme="mist"] {
   --tint: 0, 0, 0;
   --bg: rgb(245, 245, 247);
   --surface-modal: rgba(252, 252, 254, 0.98);
@@ -51,6 +60,14 @@
   --danger: #d70015;   /* darker red for contrast on light surfaces */
   --agent-codex: #0f8a80;        --agent-codex-rgb: 15, 138, 128;
   --agent-copilot: #7b4fc9;      --agent-copilot-rgb: 123, 79, 201;
+}
+
+/* ===== Mist ===== */
+/* A softer light: pearl grey instead of white, for eyes that find Light too bright. */
+[data-theme="mist"] {
+  --bg: rgb(228, 231, 238);
+  --surface-modal: rgba(240, 242, 246, 0.98);
+  --card-bg: rgba(255, 255, 255, 0.55);
 }
 
 /* ===== Base Typography & Focus ===== */

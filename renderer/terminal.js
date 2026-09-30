@@ -16,13 +16,13 @@ function getTerminalPrefs() {
   try { p = JSON.parse(localStorage.getItem('csm.terminal') || '{}') } catch (_) {}
   return TT.migrate(p)
 }
-// app.js keeps data-theme at 'light' or 'dark'; before it has run, the system decides.
-function appIsDark() {
+// app.js keeps data-theme at dark, dusk, mist or light; before it has run, the system decides.
+function appTheme() {
   const t = document.documentElement.dataset.theme
-  if (t) return t !== 'light'
-  return !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches
+  if (t) return t
+  return !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
-function termTheme(prefs) { return TT.resolve(prefs, appIsDark()) }
+function termTheme(prefs) { return TT.resolve(prefs, appTheme()) }
 // The pane round the terminal is padding the terminal does not paint, so it takes the
 // theme's background too; otherwise a light theme sits in a dark frame.
 function paintPane(theme) {
