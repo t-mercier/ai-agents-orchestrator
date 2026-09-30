@@ -13,9 +13,10 @@ use std::time::{SystemTime};
 // Transcript fold cache, keyed by sessionId and validated by the file's (len, mtime).
 // The poll re-reads transcripts every 5s; for idle/historical sessions the file is
 // unchanged so this returns the cached fold (and skips the projects-dir scan too).
-// A running session appends, so its (len/mtime) changes and it re-reads — but those
-// are few vs the many static historical transcripts that dominated the cost.
-type TranscriptEntry = (PathBuf, u64, Option<SystemTime>, Transcript);
+// A running session appends, so its (len/mtime) changes: the fold then goes on from the
+// offset it had reached (the last field), instead of reading the whole file again — a busy
+// session with a 300 MB transcript otherwise cost ~0.6 s on every poll.
+type TranscriptEntry = (PathBuf, u64, Option<SystemTime>, Transcript, u64);
 static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -219,10 +220,16 @@ fn read_transcript(sid: &str) -> Transcript {
     }
     // Cache hit: cached path still exists and its (len, mtime) is unchanged. This
     // also skips the projects-dir scan below.
-    if let Some((path, len, mtime, tr)) = TRANSCRIPT_CACHE.lock().unwrap().get(sid) {
-        if let Ok(meta) = fs::metadata(path) {
-            if meta.len() == *len && meta.modified().ok() == *mtime {
-                return tr.clone();
+    let cached = TRANSCRIPT_CACHE.lock().unwrap().get(sid).cloned();
+    if let Some((path, len, mtime, tr, folded)) = cached {
+        if let Ok(meta) = fs::metadata(&path) {
+            if meta.len() == len && meta.modified().ok() == mtime {
+                return tr;
+            }
+            // Grown (or rewritten): fold_file goes on from `folded`, or starts over if the
+            // file is now shorter than what was folded.
+            if let Some((folded, t)) = fold_file(&path, Some((folded, tr))) {
+                return remember(sid, path, folded, t);
             }
         }
     }
@@ -251,12 +258,51 @@ fn read_transcript(sid: &str) -> Transcript {
         Some(p) => p,
         None => return t,
     };
-    let content = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return t,
+    match fold_file(&path, None) {
+        Some((folded, t)) => remember(sid, path, folded, t),
+        None => t,
+    }
+}
+
+/// Cache a fold, keyed by the file's current (len, mtime), with the offset it reached.
+fn remember(sid: &str, path: PathBuf, folded: u64, mut t: Transcript) -> Transcript {
+    let meta = fs::metadata(&path).ok();
+    let len = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    let mtime = meta.and_then(|m| m.modified().ok());
+    t.mtime = mtime;
+    TRANSCRIPT_CACHE.lock().unwrap().insert(sid.to_string(), (path, len, mtime, t.clone(), folded));
+    t
+}
+
+/// Fold a transcript from `prev`'s offset on (from the start without one, or when the file is
+/// now shorter than that offset), returning the offset reached and the fold. Only whole lines
+/// are folded: a line still being written is left for the next call. A last line with no
+/// newline is folded when it already parses, and the offset then covers it.
+fn fold_file(path: &std::path::Path, prev: Option<(u64, Transcript)>) -> Option<(u64, Transcript)> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let (start, mut t) = match prev {
+        Some((off, t)) if off <= len => (off, t),
+        _ => (0, Transcript::default()),
     };
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    let whole = buf.iter().rposition(|&b| b == b'\n').map(|i| i + 1).unwrap_or(0);
+    let tail = &buf[whole..];
+    let tail_parses = !tail.is_empty() && serde_json::from_slice::<Value>(tail).is_ok();
+    let upto = if tail_parses { buf.len() } else { whole };
+    let content = String::from_utf8_lossy(&buf[..upto]);
     t.found = true;
-    t.pr_urls = extract_pr_urls(&content);
+    fold_lines(&mut t, &content);
+    Some((start + upto as u64, t))
+}
+
+/// Fold transcript lines into `t`, in order: the last value of each field wins, the first cwd
+/// is the launch dir, and PR links accumulate.
+fn fold_lines(t: &mut Transcript, content: &str) {
+    t.pr_urls.extend(extract_pr_urls(content));
     for line in content.lines() {
         if line.is_empty() {
             continue;
@@ -303,17 +349,6 @@ fn read_transcript(sid: &str) -> Transcript {
             }
         }
     }
-
-    // Cache the fold, keyed by the file's current (len, mtime).
-    let meta = fs::metadata(&path).ok();
-    let len = meta.as_ref().map(|m| m.len()).unwrap_or(0);
-    let mtime = meta.and_then(|m| m.modified().ok());
-    t.mtime = mtime;
-    TRANSCRIPT_CACHE
-        .lock()
-        .unwrap()
-        .insert(sid.to_string(), (path, len, mtime, t.clone()));
-    t
 }
 
 /// The directory `claude` was launched from for a session — what `--resume` and
@@ -2008,6 +2043,75 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    // A transcript that grows is folded from where the last fold stopped. The fold of the
+    // pieces must equal the fold of the whole: every field, the PR links with their repeats.
+    fn fold_key(t: &super::Transcript) -> (Option<String>, Option<String>, Vec<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, bool) {
+        (t.git_branch.clone(), t.pr_link.clone(), t.pr_urls.clone(), t.last_activity.clone(), t.last_activity_at.clone(),
+         t.cwd.clone(), t.launch_cwd.clone(), t.continued_in.clone(), t.found)
+    }
+
+    fn line(i: usize) -> String {
+        format!(
+            "{{\"type\":\"assistant\",\"cwd\":\"/w/{i}\",\"gitBranch\":\"b{i}\",\"timestamp\":\"t{i}\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"Opened https://github.com/o/r/pull/{} and done {i}.\"}}]}}}}\n",
+            i % 3
+        )
+    }
+
+    #[test]
+    fn a_growing_transcript_folds_in_pieces_to_the_same_result() {
+        let dir = std::env::temp_dir().join(format!("ao-fold-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.jsonl");
+        let all: String = (0..40).map(line).collect();
+        std::fs::write(&path, &all).unwrap();
+        let (_, whole) = super::fold_file(&path, None).unwrap();
+
+        std::fs::write(&path, (0..10).map(line).collect::<String>()).unwrap();
+        let mut prev = super::fold_file(&path, None).unwrap();
+        // A line caught half written is not folded until it is whole.
+        let rest: String = (10..40).map(line).collect();
+        let (head, tail) = rest.split_at(rest.len() / 2 + 7);
+        std::fs::write(&path, format!("{}{}", (0..10).map(line).collect::<String>(), head)).unwrap();
+        prev = super::fold_file(&path, Some(prev)).unwrap();
+        std::fs::write(&path, &all).unwrap();
+        let _ = tail;
+        let (end, pieces) = super::fold_file(&path, Some(prev)).unwrap();
+        assert_eq!(fold_key(&pieces), fold_key(&whole));
+        assert_eq!(end, all.len() as u64);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_transcript_that_shrank_is_folded_again_from_the_start() {
+        let dir = std::env::temp_dir().join(format!("ao-fold-shrink-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.jsonl");
+        std::fs::write(&path, (0..20).map(line).collect::<String>()).unwrap();
+        let prev = super::fold_file(&path, None).unwrap();
+        std::fs::write(&path, (100..103).map(line).collect::<String>()).unwrap();
+        let (_, again) = super::fold_file(&path, Some(prev)).unwrap();
+        let (_, fresh) = super::fold_file(&path, None).unwrap();
+        assert_eq!(fold_key(&again), fold_key(&fresh));
+        assert_eq!(again.launch_cwd.as_deref(), Some("/w/100"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_last_line_without_a_newline_is_folded_once() {
+        let dir = std::env::temp_dir().join(format!("ao-fold-nl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.jsonl");
+        let body: String = (0..5).map(line).collect();
+        std::fs::write(&path, body.trim_end_matches('\n')).unwrap();
+        let prev = super::fold_file(&path, None).unwrap();
+        assert_eq!(prev.1.last_activity_at.as_deref(), Some("t4"));
+        std::fs::write(&path, format!("{}{}", body, line(5))).unwrap();
+        let (_, t) = super::fold_file(&path, Some(prev)).unwrap();
+        let (_, whole) = super::fold_file(&path, None).unwrap();
+        assert_eq!(fold_key(&t), fold_key(&whole));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     use super::remember_identity;
     use super::session_dir;
 
@@ -2976,3 +3080,4 @@ mod tests {
         assert!(!closed_while_live(marker, started + 5.0, started, stamp, "idle", false), "the dashboard's own Close ends the terminal itself");
     }
 }
+
