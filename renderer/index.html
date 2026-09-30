@@ -455,8 +455,20 @@
             </div>
             <div class="settings-section">
               <label class="modal-field inline-field">
+                <span>Theme</span>
+                <select id="set-term-theme">
+                  <option value="auto">Auto — follows the app</option>
+                  <option value="night">Night</option>
+                  <option value="dusk">Dusk</option>
+                  <option value="mist">Mist</option>
+                  <option value="day">Day</option>
+                  <option value="custom">Custom colors</option>
+                </select>
+              </label>
+              <label class="modal-field inline-field">
                 <span>Font</span>
                 <select id="set-term-font">
+                  <option value="sourcecode">Source Code Pro</option>
                   <option value="fira">Fira Code</option>
                   <option value="jetbrains">JetBrains Mono</option>
                   <option value="sfmono">SF Mono</option>
@@ -468,6 +480,7 @@
                 <span>Font size</span>
                 <input id="set-term-size" type="number" min="9" max="20" step="1">
               </label>
+              <p class="modal-hint">Picking a background or text color switches the theme to <strong>Custom colors</strong>.</p>
               <label class="modal-field inline-field">
                 <span>Background</span>
                 <input id="set-term-bg" type="color" class="accent-picker">
@@ -736,6 +749,7 @@
   <script src="looks.js"></script>
   <script src="prstate.js"></script>
   <script src="ui.js"></script>
+  <script src="lib/term-theme.js"></script>
   <script src="terminal.js"></script>
   <!-- Before app.js: boot() calls maybeOpenOnboarding, so it has to exist by then. -->
   <script src="onboarding.js"></script>

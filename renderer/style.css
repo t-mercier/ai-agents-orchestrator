@@ -1,3 +1,8 @@
+/* Source Code Pro (SIL OFL 1.1, renderer/fonts/OFL-source-code-pro.txt), bundled so the
+   embedded terminal's default font does not depend on what the machine has installed. */
+@font-face { font-family: 'Source Code Pro'; src: url('fonts/SourceCodePro-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Source Code Pro'; src: url('fonts/SourceCodePro-Semibold.woff2') format('woff2'); font-weight: 600 700; font-style: normal; font-display: swap; }
+
 /* ===== Reset & CSS Variables ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1415,13 +1420,13 @@ button.ticket-tag:hover { color: var(--accent); background: rgba(var(--accent-rg
   display: none;
   flex-direction: column;
   overflow: hidden;
-  background: #1c1c1e;
+  background: #121319;   /* until terminal.js paints the theme's own background */
   /* Breathing room round the text: without it the prompt sits ON the window's bottom edge,
      so the line being typed is the hardest one to read. The padding belongs HERE, on the
      parent, never on the element FitAddon measures — it sizes from clientHeight, which
      INCLUDES padding, so padding there makes it ask for a row that does not fit and the
      last line is clipped (measured: 21 rows proposed for 20 rows of room). */
-  padding: 6px 10px 10px;
+  padding: 10px 14px 12px;
   box-sizing: border-box;
 }
 

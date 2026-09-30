@@ -5,51 +5,40 @@ const terminals = new Map()  // sessionId → { term, fitAddon, div }
 let activeTerminalSession = null
 let terminalVisible = false
 
-const XTERM_THEME = {
-  background:    '#1c1c1e',
-  foreground:    'rgba(255,255,255,0.85)',
-  cursor:        '#0a84ff',
-  cursorAccent:  '#1c1c1e',
-  selectionBackground: 'rgba(10,132,255,0.25)',
-  black:         '#1c1c1e',  red:     '#ff453a',
-  green:         '#30d158',  yellow:  '#ffd60a',
-  blue:          '#0a84ff',  magenta: '#bf5af2',
-  cyan:          '#5ac8fa',  white:   'rgba(255,255,255,0.85)',
-  brightBlack:   '#636366',  brightRed:     '#ff6961',
-  brightGreen:   '#34c759',  brightYellow:  '#ffd426',
-  brightBlue:    '#409cff',  brightMagenta: '#da8fff',
-  brightCyan:    '#70d7ff',  brightWhite:   '#ffffff',
-}
-
 // ── Embedded-terminal appearance prefs (Settings → Terminal tab) ──
 // Live, client-side (localStorage 'csm.terminal'), like theme/accent — folds into
 // the durable prefs file (#18) later. Applied to new terminals at creation and to
-// every open terminal on change.
-const TERMINAL_FONTS = {
-  fira:      "'Fira Code', monospace",
-  jetbrains: "'JetBrains Mono', monospace",
-  sfmono:    'ui-monospace, monospace',   // resolves to real SF Mono on macOS
-  menlo:     'Menlo, monospace',
-  monaco:    'Monaco, monospace',
-}
-const TERM_DEFAULTS = { font: 'fira', fontSize: 12, bg: '#1c1c1e', fg: '#d9d9d9' }
-function fontFamilyFor(key) { return TERMINAL_FONTS[key] || TERMINAL_FONTS.fira }
+// every open terminal on change. Themes and fonts live in lib/term-theme.js.
+const TT = window.CSMTermTheme
+function fontFamilyFor(key) { return TT.fontFamily(key) }
 function getTerminalPrefs() {
   let p = {}
   try { p = JSON.parse(localStorage.getItem('csm.terminal') || '{}') } catch (_) {}
-  return { ...TERM_DEFAULTS, ...p }
+  return TT.migrate(p)
 }
-function termTheme(prefs) {
-  return { ...XTERM_THEME, background: prefs.bg, foreground: prefs.fg }
+// app.js keeps data-theme at 'light' or 'dark'; before it has run, the system decides.
+function appIsDark() {
+  const t = document.documentElement.dataset.theme
+  if (t) return t !== 'light'
+  return !window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+function termTheme(prefs) { return TT.resolve(prefs, appIsDark()) }
+// The pane round the terminal is padding the terminal does not paint, so it takes the
+// theme's background too; otherwise a light theme sits in a dark frame.
+function paintPane(theme) {
+  const pane = document.getElementById('detail-terminal-pane')
+  if (pane) pane.style.background = theme.background
 }
 // Apply current prefs to every open terminal (font/size change → refit + resize pty).
 function applyTerminalPrefs() {
   const prefs = getTerminalPrefs()
   const ff = fontFamilyFor(prefs.font)
+  const theme = termTheme(prefs)
+  paintPane(theme)
   terminals.forEach((entry, sid) => {
     entry.term.options.fontFamily = ff
     entry.term.options.fontSize = prefs.fontSize
-    entry.term.options.theme = termTheme(prefs)
+    entry.term.options.theme = theme
     if (entry.opened) {
       try {
         entry.fitAddon.fit()
@@ -66,6 +55,12 @@ function setTerminalPrefs(partial) {
 window.getTerminalPrefs = getTerminalPrefs
 window.setTerminalPrefs = setTerminalPrefs
 window.applyTerminalPrefs = applyTerminalPrefs
+// Load the bundled font at start, so the first terminal is measured with it at once rather
+// than waiting for its download.
+if (document.fonts && document.fonts.load) document.fonts.load("13px 'Source Code Pro'").catch(() => {})
+// `auto` follows the app: re-apply when its theme flips, or when the system does.
+new MutationObserver(applyTerminalPrefs).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTerminalPrefs)
 
 // Wire incoming pty data to the right xterm instance
 window.api.onPtyData((sessionId, data) => {
@@ -112,11 +107,15 @@ function ensureTerminal(sessionId, restartSlug = '', command = '') {
   container.appendChild(div)
 
   const prefs = getTerminalPrefs()
+  const theme = termTheme(prefs)
+  paintPane(theme)
   const term = new Terminal({
-    theme: termTheme(prefs),
+    theme,
     fontFamily: fontFamilyFor(prefs.font),
     fontSize: prefs.fontSize,
-    lineHeight: 1.0,   // default spacing — 1.15 looked off
+    // A little air between lines. Past ~1.3 the box-drawing characters of the agents' TUIs
+    // stop joining up, and their frames turn into dashed lines.
+    lineHeight: 1.2,
     cursorBlink: true,
     allowTransparency: false,
     scrollback: 5000,
@@ -227,6 +226,9 @@ function showTerminal(sessionId, cwd, restartSlug = '', command = '', agent = ''
   if (agent && !entry.agent) entry.agent = agent
   entry.div.style.display = 'flex'
   const fitSpawn = () => {
+    // The spawn waits for the fonts. A pane closed, or a process that exited, in that wait
+    // must not start an agent nobody sees: the entry is no longer the one in the map.
+    if (terminals.get(sessionId) !== entry || entry.dead) return
     if (!entry.opened) {
       // First reveal: open now that the div is laid out + visible, so xterm
       // measures a real char-cell size and fit() can compute the right columns.
