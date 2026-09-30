@@ -17,8 +17,52 @@ use std::time::{SystemTime};
 // offset it had reached (the last field), instead of reading the whole file again — a busy
 // session with a 300 MB transcript otherwise cost ~0.6 s on every poll.
 type TranscriptEntry = (PathBuf, u64, Option<SystemTime>, Transcript, u64);
+// Read back from disk at the first use, so a launch does not fold every transcript again
+// (1.3 s for 737 MB); each entry is still checked against the file's (len, mtime) before use.
 static TRANSCRIPT_CACHE: LazyLock<Mutex<HashMap<String, TranscriptEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+    LazyLock::new(|| Mutex::new(load_folds(&folds_path())));
+// Set when a fold changes the cache; the next poll writes it, at most every FOLDS_SAVE_EVERY.
+static FOLDS_DIRTY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static FOLDS_SAVED_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+const FOLDS_SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+
+fn folds_path() -> PathBuf {
+    crate::config::config_dir().join("transcript-folds.json")
+}
+
+/// The cached folds on disk; an absent or damaged file is an empty cache.
+fn load_folds(path: &Path) -> HashMap<String, TranscriptEntry> {
+    fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+fn save_folds(path: &Path, map: &HashMap<String, TranscriptEntry>) -> Result<(), String> {
+    let body = serde_json::to_string(map).map_err(|e| e.to_string())?;
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    crate::atomic_write(path, &body)
+}
+
+/// Write the folds if they changed and the last write is old enough. Called at the end of a
+/// poll, never while the cache lock is held.
+fn flush_folds() {
+    use std::sync::atomic::Ordering;
+    if !FOLDS_DIRTY.load(Ordering::Relaxed) {
+        return;
+    }
+    {
+        let mut at = FOLDS_SAVED_AT.lock().unwrap();
+        if at.is_some_and(|t| t.elapsed() < FOLDS_SAVE_EVERY) {
+            return;
+        }
+        *at = Some(std::time::Instant::now());
+    }
+    FOLDS_DIRTY.store(false, Ordering::Relaxed);
+    let snapshot = TRANSCRIPT_CACHE.lock().unwrap().clone();
+    if save_folds(&folds_path(), &snapshot).is_err() {
+        FOLDS_DIRTY.store(true, Ordering::Relaxed);
+    }
+}
 
 use crate::{is_safe_slug, is_valid_session_id};
 
@@ -108,7 +152,7 @@ pub(crate) fn is_session_process(comm: &str, args: &str) -> bool {
 
 /// Fields pulled from a session's transcript (jsonl). The transcript is the
 /// source of truth for where a session actually works + its branch + last reply.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 struct Transcript {
     git_branch: Option<String>,
     pr_link: Option<String>,
@@ -271,6 +315,7 @@ fn remember(sid: &str, path: PathBuf, folded: u64, mut t: Transcript) -> Transcr
     let mtime = meta.and_then(|m| m.modified().ok());
     t.mtime = mtime;
     TRANSCRIPT_CACHE.lock().unwrap().insert(sid.to_string(), (path, len, mtime, t.clone(), folded));
+    FOLDS_DIRTY.store(true, std::sync::atomic::Ordering::Relaxed);
     t
 }
 
@@ -1203,6 +1248,7 @@ fn sessions_now(pty: &crate::pty::PtyManager) -> Vec<Value> {
             }
         }
     }
+    flush_folds();
     out
 }
 
@@ -2001,6 +2047,7 @@ fn scan_historical() -> Vec<Value> {
             }));
         }
     }
+    flush_folds();
     out
 }
 
@@ -2043,6 +2090,37 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    // The folds survive a restart: launch reads them back instead of folding 700 MB again.
+    #[test]
+    fn folds_are_kept_on_disk_and_read_back() {
+        let dir = std::env::temp_dir().join(format!("ao-fold-disk-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.jsonl");
+        std::fs::write(&path, (0..6).map(line).collect::<String>()).unwrap();
+        let (folded, t) = super::fold_file(&path, None).unwrap();
+        let meta = std::fs::metadata(&path).unwrap();
+        let mut map = std::collections::HashMap::new();
+        map.insert("sid-1".to_string(), (path.clone(), meta.len(), meta.modified().ok(), t.clone(), folded));
+        let store = dir.join("cache.json");
+        super::save_folds(&store, &map).unwrap();
+        let back = super::load_folds(&store);
+        let (p2, len2, m2, t2, f2) = back.get("sid-1").unwrap();
+        assert_eq!((p2, *len2, *m2, *f2), (&path, meta.len(), meta.modified().ok(), folded));
+        assert_eq!(fold_key(t2), fold_key(&t));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_damaged_fold_store_is_an_empty_cache() {
+        let dir = std::env::temp_dir().join(format!("ao-fold-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = dir.join("cache.json");
+        std::fs::write(&store, "{not json").unwrap();
+        assert!(super::load_folds(&store).is_empty());
+        assert!(super::load_folds(&dir.join("absent.json")).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     // A transcript that grows is folded from where the last fold stopped. The fold of the
     // pieces must equal the fold of the whole: every field, the PR links with their repeats.
@@ -3079,4 +3157,5 @@ mod tests {
         assert!(!closed_while_live(marker, started + 5.0, started, stamp, "idle", false), "the dashboard's own Close ends the terminal itself");
     }
 }
+
 
