@@ -25,7 +25,10 @@ class Argv(unittest.TestCase):
         self.assertEqual(a[a.index("--tools") + 1], "Read,Grep,Glob")
     def test_codex_is_read_only_and_writes_its_answer_to_a_file(self):
         a = A.argv_for({"cli": "codex", "model": ""}, "Q", "/s", "/s/last")
-        self.assertEqual(a, ["codex", "exec", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', "-o", "/s/last", "Q"])
+        self.assertEqual(a[:3], ["codex", "exec", "--skip-git-repo-check"])
+        self.assertIn('sandbox_mode="read-only"', a)
+        self.assertEqual(a[-3:], ["-o", "/s/last", "Q"])
+        self.assertFalse(any(x.startswith("--model") for x in a))
     def test_copilot_has_no_write_shell_url_or_builtin_mcp(self):
         a = A.argv_for({"cli": "copilot", "model": "gpt-5.4"}, "Q", "/s", "/s/last")
         self.assertEqual(a[:3], ["copilot", "-p", "Q"])
@@ -42,6 +45,22 @@ class Argv(unittest.TestCase):
             A.argv_for({"cli": "copilot", "model": "-x"}, "Q", "/s", "/l")
         with self.assertRaises(ValueError):
             A.argv_for({"cli": "copilot", "model": "a;rm"}, "Q", "/s", "/l")
+
+class Hardening(unittest.TestCase):
+    """What an invitee can reach: read tools only, none of the user's MCP servers, apps or web."""
+    def test_codex_ignores_the_user_config_and_turns_its_tools_off(self):
+        a = A.argv_for({"cli": "codex", "model": "gpt-5.4"}, "Q", "/s", "/s/last")
+        for f in ["--ignore-user-config", "--ephemeral", "--model=gpt-5.4"]:
+            self.assertIn(f, a)
+        self.assertIn('web_search="disabled"', a)
+        for feature in ["apps", "browser_use", "computer_use", "image_generation", "multi_agent", "plugins", "memories", "hooks"]:
+            self.assertTrue(any(a[i:i+2] == ["--disable", feature] for i in range(len(a))), feature)
+        self.assertEqual(a[-1], "Q")
+
+    def test_copilot_sees_only_its_read_tools(self):
+        a = A.argv_for({"cli": "copilot", "model": ""}, "Q", "/s", "/s/last")
+        self.assertEqual(a[-4:], ["--available-tools", "view", "grep", "glob"])
+
 
 class Texts(unittest.TestCase):
     def test_entry_quotes_every_line_so_an_answer_cannot_forge_a_marker(self):
@@ -163,7 +182,7 @@ class Jobs(unittest.TestCase):
         argv = open(self.log).read().splitlines()
         self.assertEqual(argv[:2], ["codex", "exec"]); self.assertIn('sandbox_mode="read-only"', argv)
         self.assertIn("--env AO_ADVISOR=1 AO_HEADLESS=1", argv)
-        self.assertTrue(os.path.exists(os.path.join(self.d, ".ao", "conversation.md")))
+        self.assertTrue(os.path.exists(os.path.join(self.d, ".ao", "asks", self.jobs()[-1]["id"], "conversation.md")))
         self.assertEqual(open(os.path.join(self.d, ".ao", ".gitignore")).read().strip(), "*")
 
     def test_the_question_can_come_from_stdin(self):
@@ -230,6 +249,53 @@ class Jobs(unittest.TestCase):
         with self.assertRaises(ProcessLookupError):
             os.killpg(j["cli_pgid"], 0)
         self.assertIn("state=stopped", self.thread())
+
+    def test_stop_kills_a_cli_that_ignores_term(self):
+        env = dict(self.env, AO_FAKE_MODE="ignoreterm")
+        subprocess.run([sys.executable, ME, "ask", "--session", self.notes, "gpt", "q", "--follow", "1"],
+                       env=env, cwd=self.d, capture_output=True, timeout=30)
+        j = self.wait_state({"running"})
+        t0 = time.time()
+        self.run_ask("stop", j["id"])
+        j = self.wait_state({"stopped"}, secs=12)
+        self.assertLess(time.time() - t0, 10, "a CLI that ignores SIGTERM is killed, not waited on")
+
+    def test_two_consultations_at_once_both_finish(self):
+        env = dict(self.env, AO_FAKE_MODE="answer")
+        ps = [subprocess.Popen([sys.executable, ME, "ask", "--session", self.notes, who, "q", "--follow", "30"],
+                               env=env, cwd=self.d, stdout=subprocess.PIPE, stderr=subprocess.PIPE) for who in ("gpt", "copilot")]
+        outs = [p.communicate(timeout=60)[0].decode() for p in ps]
+        self.assertTrue(all("PAPAYA" in o for o in outs), outs)
+        self.assertEqual(sorted(j["state"] for j in self.jobs()), ["done", "done"])
+        self.assertEqual(self.thread().count("<!-- ao-ask "), 2)
+
+    def test_each_job_has_its_own_export(self):
+        self.run_ask("ask", "gpt", "q")
+        jd = os.path.join(self.d, ".ao", "asks", self.jobs()[-1]["id"])
+        self.assertTrue(os.path.exists(os.path.join(jd, "conversation.md")))
+        self.assertIn(os.path.join(jd, "conversation.md"), open(os.path.join(jd, "prompt.txt")).read())
+
+    def test_a_runner_that_fails_before_the_cli_records_why(self):
+        paths = A.session_paths(self.notes)
+        jd = A.new_job(paths, {"id": "gpt", "cli": "codex", "model": "-bad", "label": "GPT"}, "q", self.d, ("claude", ""))
+        A.run_job(jd)
+        j = A.read_job(jd)
+        self.assertEqual(j["state"], "failed"); self.assertIn("model", j["reason"])
+
+    def test_following_a_job_whose_folder_went_away_says_so(self):
+        import io, shutil
+        paths = A.session_paths(self.notes)
+        jd = A.new_job(paths, {"id": "gpt", "cli": "codex", "model": "", "label": "GPT"}, "q", self.d, ("claude", ""))
+        A._update_job(jd, runner_pid=os.getpid(), state="running")
+        shutil.rmtree(jd)
+        out = io.StringIO()
+        self.assertEqual(A.follow(jd, 5, out=out, header=False), 1)
+        self.assertIn("gone", out.getvalue())
+
+    def test_a_question_starting_with_a_dash_is_asked(self):
+        r = self.run_ask("ask", "gpt", "--", "-x is this flag right?")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("> -x is this flag right?", self.thread())
 
     def test_stdin_is_dev_null(self):
         r = self.run_ask("ask", "copilot", "q", mode="stdin")

@@ -251,8 +251,10 @@ pub(crate) fn stop_with(notes_path: &str, id: &str, command_of: impl Fn(i64) -> 
     if !pid_alive(pid) {
         return Err("this consultation is no longer running".into());
     }
+    // The job id is unique and random: its runner is the one `ao_ask.py _run …/<id>` process,
+    // whatever spelling of the session folder its argv holds.
     let cmd = command_of(pid);
-    if !(cmd.contains("ao_ask.py") && cmd.contains("_run") && cmd.contains(&*dir.to_string_lossy())) {
+    if !(cmd.contains("ao_ask.py") && cmd.contains(" _run ") && cmd.trim_end().ends_with(&format!("/{id}"))) {
         return Err("this consultation's process is no longer its own".into());
     }
     // SAFETY: a plain signal to a pid just checked to be this job's runner.
@@ -286,15 +288,17 @@ pub(crate) fn annotate(sessions: &mut [Value]) {
 #[tauri::command]
 pub(crate) fn advisors_set(notes_path: String, advisors: Vec<Invitee>) -> Result<(), String> {
     validate(&advisors)?;
-    let path = Path::new(&notes_path);
-    if path.file_name().and_then(|n| n.to_str()) != Some("notes.md") {
-        return Err("not a session's notes.md".into());
+    // Confined like every other notes.md the app writes: a real notes.md under a root.
+    let path = crate::notes_md_under_root(&notes_path)?;
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let written = notes_with(&content, &advisors, &notes_path);
+    if !advisors.is_empty() && from_notes(&written).map(|l| l.len()) != Ok(advisors.len()) {
+        return Err("this notes.md has no frontmatter to record the invited models in".into());
     }
     if !advisors.is_empty() {
         crate::skills::ensure_lib()?;
     }
-    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    crate::atomic_write(path, &notes_with(&content, &advisors, &notes_path))
+    crate::atomic_write(&path, &written)
 }
 
 #[tauri::command(async)]
@@ -304,7 +308,8 @@ pub(crate) fn other_models(notes_path: String) -> Value {
 
 #[tauri::command]
 pub(crate) fn advisor_stop(notes_path: String, id: String) -> Result<(), String> {
-    stop_with(&notes_path, &id, command_of)
+    let path = crate::notes_md_under_root(&notes_path)?;
+    stop_with(&path.to_string_lossy(), &id, command_of)
 }
 
 #[cfg(test)]
@@ -403,6 +408,30 @@ mod tests {
         let err = stop_with(notes.to_str().unwrap(), "j1", |_| "/usr/bin/some-other-process".into()).unwrap_err();
         assert!(err.contains("no longer its own"), "{err}");
         assert!(stop_with(notes.to_str().unwrap(), "../x", |_| String::new()).is_err());
+    }
+
+    #[test]
+    fn stop_signals_its_runner_whatever_the_spelling_of_the_notes_path() {
+        let d = tmp("stop-ok");
+        let jd = d.join(".ao").join("asks").join("20260930-010203-abcd");
+        std::fs::create_dir_all(&jd).unwrap();
+        let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        std::fs::write(jd.join("job.json"), json!({"id": "20260930-010203-abcd", "state": "running", "runner_pid": child.id()}).to_string()).unwrap();
+        // The runner's argv holds another spelling of the same folder (a symlinked root).
+        let cmd = "/usr/bin/python3 /Users/x/.claude/skills/lib/ao_ask.py _run /private/var/elsewhere/.ao/asks/20260930-010203-abcd".to_string();
+        stop_with(d.join("notes.md").to_str().unwrap(), "20260930-010203-abcd", |_| cmd.clone()).unwrap();
+        let status = child.wait().unwrap();
+        assert!(!status.success(), "the runner got SIGTERM");
+    }
+
+    #[test]
+    fn inviting_into_a_notes_md_outside_the_roots_is_refused() {
+        let d = tmp("outside");
+        let notes = d.join("notes.md");
+        std::fs::write(&notes, NOTES).unwrap();
+        let err = advisors_set(notes.to_string_lossy().into_owned(), vec![inv("gpt", "codex", "")]).unwrap_err();
+        assert!(err.contains("outside the configured roots"), "{err}");
+        assert_eq!(std::fs::read_to_string(&notes).unwrap(), NOTES, "nothing written");
     }
 
     #[test]

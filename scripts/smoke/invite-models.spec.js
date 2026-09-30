@@ -191,6 +191,20 @@ test('a new session with models picked gets the invitation once it is idle, and 
   expect(await page.evaluate(() => sessionStorage.getItem('csm.pendingInvite:/w/FEAT/new-one/notes.md'))).toBe(null)
 })
 
+test('the dialog opens with the models already invited, so inviting again keeps them', async ({ page }) => {
+  await open(page, { advisors: { 'payments-api': [{ id: 'gpt', cli: 'codex', model: '', label: 'GPT (Codex)' }, { id: 'copilot', cli: 'copilot', model: 'gpt-5.4', label: 'Copilot · gpt-5.4' }] } })
+  await menu(page, 'payments-api', 'Invite models…')
+  const d = page.locator('#invite-models-modal')
+  await expect(d.locator('[data-om-row="codex"] input[type="checkbox"]')).toBeChecked()
+  await expect(d.locator('[data-om-row="copilot"] input[type="checkbox"]')).toBeChecked()
+  await expect(d.locator('[data-om-row="copilot"] input[type="text"]')).toHaveValue('gpt-5.4')
+  await expect(d.locator('[data-om-row="claude"] input[type="checkbox"]')).not.toBeChecked()
+  await d.locator('[data-om-row="claude"] input[type="checkbox"]').check()
+  await d.locator('[data-om-invite]').click()
+  const set = await calls(page, 'advisors_set')
+  expect(set[0].advisors.map(a => a.id)).toEqual(['claude', 'gpt', 'copilot'])
+})
+
 test('a Codex session can invite models', async ({ page }) => {
   await open(page)
   await card(page, 'payments-api').click()

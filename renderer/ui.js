@@ -1597,23 +1597,23 @@ function omRemember(list) {
   try { localStorage.setItem(OM_SUGGEST, JSON.stringify(seen)) } catch { /* ignore */ }
 }
 
-function omRowHtml(cli, avail, n) {
+function omRowHtml(cli, avail, n, cur, second) {
   const names = { claude: 'Claude', codex: 'GPT (Codex)', copilot: 'Copilot' }
   const usable = avail && avail.found && avail.supported
   const hint = avail && avail.found && !avail.supported ? avail.hint : (!avail || !avail.found ? `${cli} is not installed` : '')
   let model
   if (cli === 'claude') {
-    const opts = (window.CLAUDE_MODELS || []).map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label || 'Default model')}</option>`).join('')
+    const opts = (window.CLAUDE_MODELS || []).map(([id, label]) => `<option value="${escapeHtml(id)}"${cur && cur.model === id ? ' selected' : ''}>${escapeHtml(label || 'Default model')}</option>`).join('')
     model = `<select aria-label="Claude model" ${usable ? '' : 'disabled'}>${opts}</select>`
   } else {
     const list = `om-suggest-${cli}`
     const sug = (omSuggestions()[cli] || []).map(m => `<option value="${escapeHtml(m)}"></option>`).join('')
-    model = `<input type="text" aria-label="${names[cli]} model" placeholder="${cli === 'copilot' ? 'auto' : 'default model'}" list="${list}" spellcheck="false" autocomplete="off" ${usable ? '' : 'disabled'}><datalist id="${list}">${sug}</datalist>`
+    model = `<input type="text" aria-label="${names[cli]} model" placeholder="${cli === 'copilot' ? 'auto' : 'default model'}" value="${escapeHtml((cur && cur.model) || '')}" list="${list}" spellcheck="false" autocomplete="off" ${usable ? '' : 'disabled'}><datalist id="${list}">${sug}</datalist>`
   }
   return `<div class="om-row" data-om-row="${cli}" data-om-n="${n}">
-    <label class="om-pick"><input type="checkbox" ${usable ? '' : 'disabled'}> ${names[cli]}${n > 1 ? ' (2)' : ''}</label>
+    <label class="om-pick"><input type="checkbox" ${usable ? '' : 'disabled'}${cur && usable ? ' checked' : ''}> ${names[cli]}${n > 1 ? ' (2)' : ''}</label>
     ${model}
-    ${usable && n === 1 && cli !== 'claude' ? `<button type="button" class="om-more" data-om-more="${cli}" title="Invite ${names[cli]} a second time, with another model">+</button>` : '<span class="om-more-gap"></span>'}
+    ${usable && n === 1 && cli !== 'claude' && !second ? `<button type="button" class="om-more" data-om-more="${cli}" title="Invite ${names[cli]} a second time, with another model">+</button>` : '<span class="om-more-gap"></span>'}
     ${hint ? `<small class="field-hint">${escapeHtml(hint)}</small>` : ''}
   </div>`
 }
@@ -1628,9 +1628,14 @@ function omCollect(container) {
   return { list: OM().withIds(rows, window.CLAUDE_MODELS) }
 }
 
-function omRowsHtml(avail) {
+// One row per CLI (two when two of its models are invited), checked with the models
+// already invited: inviting again edits the list, it does not silently replace it.
+function omRowsHtml(avail, current) {
   const by = (cli) => (avail || []).find(a => a.agent === cli)
-  return ['claude', 'codex', 'copilot'].map(c => omRowHtml(c, by(c), 1)).join('')
+  return ['claude', 'codex', 'copilot'].map(c => {
+    const cur = (current || []).filter(i => i.cli === c)
+    return omRowHtml(c, by(c), 1, cur[0], !!cur[1]) + (cur[1] ? omRowHtml(c, by(c), 2, cur[1]) : '')
+  }).join('')
 }
 
 function omWireMore(container, avail) {
@@ -1683,7 +1688,7 @@ async function openInviteDialog(s) {
   dlg.innerHTML = `<form method="dialog" class="modal-form om-form">
     <h2 class="modal-title">Invite models</h2>
     <p class="modal-hint">Invited models read this session and advise its agent, who consults them when a second opinion helps or when you ask. They never write.</p>
-    <div class="om-rows">${omRowsHtml(avail)}</div>
+    <div class="om-rows">${omRowsHtml(avail, advisorsOf(s))}</div>
     <p class="om-notice">The invited models read this session's whole conversation, its folder and the code, and what they read is sent to their provider (OpenAI for Codex, GitHub for Copilot, Anthropic for Claude). Their answers come back to this session's agent as advice.</p>
     <p class="om-error" role="alert" hidden></p>
     <div class="om-external" hidden></div>
@@ -1698,7 +1703,7 @@ async function openInviteDialog(s) {
   dlg.querySelector('[data-om-invite]').onclick = async () => {
     const got = omCollect(dlg)
     if (got.error) { err(got.error); return }
-    if (!got.list.length) { err('Pick at least one model to invite.'); return }
+    if (!got.list.length) { err(advisorsOf(s).length ? 'To stop inviting them all, use Dismiss models.' : 'Pick at least one model to invite.'); return }
     const list = got.list
     const res = await window.api.advisorsSet(s.notesPath, list)
     if (!res || !res.ok) { err('Could not invite them: ' + ((res && res.error) || 'unknown error')); return }
@@ -1709,6 +1714,10 @@ async function openInviteDialog(s) {
       typeIntoTerminal(now.key, line)
       dlg.close()
       if (window.showBanner) window.showBanner(`Invited ${list.map(i => i.label).join(', ')}: the invitation is in ${s.name || 'the session'}'s terminal.`)
+    } else if (!now.external) {
+      // It started working or waiting while the dialog was open: invited, but not typed now.
+      dlg.close()
+      if (window.showBanner) window.showBanner(`Invited, but not sent: ${now.why} Invite models again once it is idle to send the line.`)
     } else {
       // A terminal the app cannot type into: the line to paste there.
       const box = dlg.querySelector('.om-external')

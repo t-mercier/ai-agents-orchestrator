@@ -15,5 +15,6 @@ case "$AO_FAKE_MODE" in
   nonet)  echo 'error sending request: dns error: nodename nor servname provided, or not known' >&2; exit 1 ;;
   stdin)  got=$(cat); answer "STDIN=[$got]" ;;
   escape) answer "$(printf 'plain \033[31mred\033[0m text')" ;;
+  ignoreterm) trap '' TERM; i=0; while [ $i -lt 40 ]; do sleep 1; i=$((i+1)); done; answer "LATE" ;;
   *)      answer "OK" ;;
 esac

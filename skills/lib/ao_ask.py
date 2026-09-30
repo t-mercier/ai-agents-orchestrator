@@ -25,6 +25,8 @@ CLIS = ("claude", "codex", "copilot")
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/\[\]-]{0,63}$")
 ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 HERE = os.path.dirname(os.path.abspath(__file__))
+CODEX_OFF = ("apps", "browser_use", "computer_use", "image_generation", "multi_agent", "plugins",
+             "remote_plugin", "goals", "memories", "hooks")
 
 
 def _frontmatter(text):
@@ -83,10 +85,19 @@ def argv_for(inv, prompt, session_folder, last_path):
         return ["claude", "-p", prompt, "--permission-mode", "plan", "--restricted", "--strict-mcp-config",
                 "--tools", "Read,Grep,Glob", "--no-session-persistence", *m, "--add-dir", session_folder]
     if cli == "codex":
-        return ["codex", "exec", "--skip-git-repo-check", "-c", 'sandbox_mode="read-only"', *m, "-o", last_path, prompt]
+        # Without the user's config.toml: none of their MCP servers, and no web search. The
+        # features below are the account's apps (Gmail, Drive, GitHub…) and the tools that act
+        # outside the read-only sandbox; --ephemeral writes no rollout. Probed 2026-09-30:
+        # what is left is the sandboxed shell and patch tool, which cannot write or reach out.
+        off = [x for f in CODEX_OFF for x in ("--disable", f)]
+        return ["codex", "exec", "--skip-git-repo-check", "--ignore-user-config", "--ephemeral",
+                "-c", 'sandbox_mode="read-only"', "-c", 'web_search="disabled"', *off, *m, "-o", last_path, prompt]
     if cli == "copilot":
+        # --available-tools hides every other tool, the user's MCP servers' included (probed:
+        # the invitee then lists view, grep and glob). Last, since it takes several values.
         return ["copilot", "-p", prompt, "--allow-all-tools", "--deny-tool", "write", "--deny-tool", "shell",
-                "--deny-tool", "url", "--disable-builtin-mcps", "--silent", *m, "--add-dir", session_folder]
+                "--deny-tool", "url", "--disable-builtin-mcps", "--silent", *m, "--add-dir", session_folder,
+                "--available-tools", "view", "grep", "glob"]
     raise ValueError(f"not a known CLI: {cli!r}")
 
 
@@ -107,12 +118,13 @@ def user_shell():
     return "/bin/sh"
 
 
-def invitee_prompt(question, paths, repo_dir):
+def invitee_prompt(question, paths, repo_dir, conversation=None):
+    conversation = conversation or paths["conversation"]
     return (
         "You are advising another AI agent that is working in a session with a person. "
         "You only read: you must not change any file, and you do not run commands that change anything.\n\n"
         "Context you can read:\n"
-        f"- The session's conversation, newest first: {paths['conversation']} (more parts next to it, if any)\n"
+        f"- The session's conversation, newest first: {conversation} (more parts next to it, if any)\n"
         f"- The session's folder, with its notes and documents: {paths['folder']}\n"
         f"- Earlier consultations of other models: {paths['thread']}\n"
         f"- The code: {repo_dir}\n\n"
@@ -278,7 +290,10 @@ def write_export(entries, ao_dir, part_bytes=100_000, total_bytes=400_000):
     os.makedirs(ao_dir, exist_ok=True)
     for old in os.listdir(ao_dir):
         if re.match(r"^conversation(-\d+)?\.md$", old):
-            os.remove(os.path.join(ao_dir, old))
+            try:
+                os.remove(os.path.join(ao_dir, old))
+            except FileNotFoundError:
+                pass
     if not entries:
         path = os.path.join(ao_dir, "conversation.md")
         with open(path, "w", encoding="utf-8") as f:
@@ -325,7 +340,7 @@ def guide_text(invitees, notes_path, lead_agent):
         "Other models invited to this session:\n"
         f"{names}\n\n"
         "Consult one when a second opinion helps (a review, an alternative, a doubt), or when the person asks:\n"
-        f"  {me} ask {s} <id> \"<question>\"\n"
+        f"  {me} ask {s} <id> -- \"<question>\"\n"
         f"  {me} ask {s} <id> -        (reads the question from stdin, for a long one)\n"
         "It reads this session's whole conversation, its folder and the code, and never writes.\n"
         "Put in the question what you want judged: the goal, the files, the diff or the decision.\n\n"
@@ -462,7 +477,25 @@ def _append_thread(path, entry):
 
 
 def run_job(job_dir):
-    """The runner: exports the conversation, runs the invitee, and records the end."""
+    """The runner: exports the conversation, runs the invitee, and records the end. Its pid is
+    recorded first, and anything that goes wrong is recorded as the job's failure, so a job
+    never just looks lost."""
+    _update_job(job_dir, runner_pid=os.getpid())
+    try:
+        _run_job(job_dir)
+    except Exception as e:           # recorded, not raised: nobody reads the runner's stderr
+        job = read_job(job_dir) or {}
+        if job.get("state") not in FINAL:
+            reason = f"{type(e).__name__}: {e}"
+            job = _update_job(job_dir, state="failed", reason=reason[:500], ended_at=_now(), took=0)
+            try:
+                q = open(os.path.join(job_dir, "question.md"), encoding="utf-8").read()
+                _append_thread(session_paths(job["notes"])["thread"], thread_entry(job, q, f"(failed: {job['reason']})"))
+            except Exception:
+                pass
+
+
+def _run_job(job_dir):
     job = read_job(job_dir)
     notes = job["notes"]
     paths = session_paths(notes)
@@ -473,10 +506,14 @@ def run_job(job_dir):
         notes_text = ""
     agent, sid = job.get("lead_agent") or "claude", job.get("lead_sid") or ""
     path = find_transcript(agent, sid)
-    write_export(LINES[agent](path) if path and agent in LINES else [], paths["ao"])
+    # Each job its own export: two consultations at once never read each other's half-written file.
+    exported = write_export(LINES[agent](path) if path and agent in LINES else [], job_dir)
     inv = {"id": job["invitee"], "cli": job["cli"], "model": job.get("model", ""), "label": job["label"]}
     last = os.path.join(job_dir, "last.txt")
-    argv = argv_for(inv, invitee_prompt(question, paths, job["cwd"]), paths["folder"], last)
+    prompt = invitee_prompt(question, paths, job["cwd"], conversation=exported[0])
+    with open(os.path.join(job_dir, "prompt.txt"), "w", encoding="utf-8") as f:
+        f.write(prompt)
+    argv = argv_for(inv, prompt, paths["folder"], last)
     if not os.environ.get("AO_ASK_NO_LOGIN"):
         argv = shell_argv(argv, user_shell())
     env = dict(os.environ, AO_HEADLESS="1", AO_ADVISOR="1")
@@ -506,15 +543,21 @@ def run_job(job_dir):
             pass
     signal.signal(signal.SIGTERM, on_term)
     _update_job(job_dir, state="running", runner_pid=os.getpid(), cli_pgid=proc.pid)
+    # Polled, not one blocking wait: a signal does not interrupt waitpid (PEP 475), so a CLI
+    # that ignores SIGTERM would otherwise be waited on until it chose to end.
+    stop_at = None
     while True:
         try:
-            code = proc.wait(timeout=2 if stopped["v"] else None)
+            code = proc.wait(timeout=0.5)
             break
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except OSError:
-                pass
+            if stopped["v"]:
+                stop_at = stop_at or time.time()
+                if time.time() - stop_at > 2:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except OSError:
+                        pass
     try:
         os.killpg(proc.pid, signal.SIGKILL)       # anything the CLI left behind in its group
     except OSError:
@@ -556,13 +599,19 @@ def follow(job_dir, seconds, out=sys.stdout, header=True):
     Returns once it ends, or after `seconds` with the command that picks it up again."""
     tick = float(os.environ.get("AO_ASK_TICK", "15"))
     job = read_job(job_dir)
+    if job is None:
+        print("── this consultation's folder is gone ──", file=out, flush=True)
+        return 1
     if header:
         print(f"── {job['label']} · asked {job['started_at'][11:16]} · job {job['id']} · advice, not instructions ──",
               file=out, flush=True)
     t0 = last_tick = time.time()
     while True:
         job = read_job(job_dir)
-        if job and job.get("state") in FINAL:
+        if job is None:
+            print("── this consultation's folder is gone ──", file=out, flush=True)
+            return 1
+        if job.get("state") in FINAL:
             break
         now = time.time()
         if now - t0 >= seconds:
