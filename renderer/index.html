@@ -446,12 +446,30 @@
               </label>
               <p class="modal-hint">Which app “Resume” / ＋ New / Restart open into. The settings below style the in-app embedded terminal.</p>
               <label class="modal-field inline-field">
+                <span>Main agent</span>
+                <select id="set-main-agent">
+                  <option value="claude">Claude Code</option>
+                  <option value="codex">Codex</option>
+                  <option value="copilot">Copilot</option>
+                </select>
+              </label>
+              <p class="modal-hint">The agent <strong>＋ New</strong> starts with. You can still pick another one for a session.</p>
+              <label class="modal-field inline-field">
                 <span>Claude model</span>
                 <!-- Blank sends no --model, so `claude` uses ~/.claude/settings.json.
                      Options are filled from window.CLAUDE_MODELS (app.js). -->
                 <select id="set-model"></select>
               </label>
               <p class="modal-hint">For the sessions this app opens. <strong>Follow my Claude Code setting</strong> sends no <code>--model</code> at all, so your own <code>settings.json</code> decides; pick one to override it here.</p>
+              <label class="modal-field inline-field">
+                <span>Codex model</span>
+                <input id="set-codex-model" type="text" placeholder="Codex default" spellcheck="false" autocomplete="off">
+              </label>
+              <label class="modal-field inline-field">
+                <span>Copilot model</span>
+                <input id="set-copilot-model" type="text" placeholder="Copilot default, e.g. claude-opus-5" spellcheck="false" autocomplete="off">
+              </label>
+              <p class="modal-hint">Left empty, the agent uses its own default model.</p>
             </div>
             <div class="settings-section">
               <label class="modal-field inline-field">

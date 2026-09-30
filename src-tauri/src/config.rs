@@ -268,6 +268,11 @@ fn derive(user: &Value) -> Value {
         // Empty = send no `--model`, so `claude` uses ~/.claude/settings.json. See
         // pty::model_flag: the app used to force opus[1m] and silently override it.
         "claudeModel": user.get("claudeModel").and_then(Value::as_str).unwrap_or("").trim(),
+        // The agent ＋New starts with, and the model a Codex or Copilot session runs on
+        // (empty = no flag, the CLI's own default). Claude's stays `claudeModel`.
+        "mainAgent": main_agent_of(user),
+        "codexModel": agent_model_of(user, "codexModel"),
+        "copilotModel": agent_model_of(user, "copilotModel"),
         "terminalApp": terminal_app,
         // Brutus: always present and already normalised, so no reader has to guess.
         "assistant": assistant_of(user),
@@ -280,8 +285,41 @@ fn derive(user: &Value) -> Value {
     })
 }
 
+const AGENTS: [&str; 3] = ["claude", "codex", "copilot"];
+
+fn main_agent_of(user: &Value) -> &str {
+    user.get("mainAgent").and_then(Value::as_str).filter(|a| AGENTS.contains(a)).unwrap_or("claude")
+}
+
+fn agent_model_of(user: &Value, key: &str) -> String {
+    let m = user.get(key).and_then(Value::as_str).unwrap_or("").trim();
+    if crate::advisors::valid_model(m) { m.to_string() } else { String::new() }
+}
+
+/// The model Settings sets for a Codex or Copilot session; empty sends no flag. Claude's
+/// sessions read `claudeModel` through `pty::model_flag`.
+pub(crate) fn agent_model(cfg: &Value, agent: crate::agents::AgentId) -> String {
+    match agent {
+        crate::agents::AgentId::Codex => agent_model_of(cfg, "codexModel"),
+        crate::agents::AgentId::Copilot => agent_model_of(cfg, "copilotModel"),
+        crate::agents::AgentId::Claude => String::new(),
+    }
+}
+
 /// Validate a config — v2 schema only.
 fn validate(c: &Value) -> Result<(), String> {
+    if let Some(a) = c.get("mainAgent").and_then(Value::as_str) {
+        if !AGENTS.contains(&a) {
+            return Err(format!("not a known agent: {a}"));
+        }
+    }
+    for key in ["codexModel", "copilotModel"] {
+        let m = c.get(key).and_then(Value::as_str).unwrap_or("").trim();
+        // A leading dash would be read by the CLI as another of its options.
+        if !m.is_empty() && !crate::advisors::valid_model(m) {
+            return Err(format!("not a model name: {m}"));
+        }
+    }
     // Roots (v2): each needs a non-empty label.
     let mut root_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Some(roots) = c.get("roots").and_then(Value::as_array) {
@@ -696,6 +734,34 @@ mod tests {
         assert!(!onboarding_needed(false, 113), "pre-wizard install with sessions → never");
         assert!(!onboarding_needed(true, 0), "already run → never again on its own");
         assert!(!onboarding_needed(true, 5));
+    }
+
+    #[test]
+    fn the_main_agent_defaults_to_claude_and_refuses_an_unknown_one() {
+        let d = derive(&default_config());
+        assert_eq!(d["mainAgent"], "claude");
+        assert_eq!(d["codexModel"], "");
+        assert_eq!(d["copilotModel"], "");
+        let mut c = default_config();
+        c["mainAgent"] = json!("copilot");
+        c["copilotModel"] = json!("  claude-opus-5 ");
+        assert!(validate(&c).is_ok());
+        let d = derive(&c);
+        assert_eq!(d["mainAgent"], "copilot");
+        assert_eq!(d["copilotModel"], "claude-opus-5");
+        assert_eq!(super::agent_model(&d, crate::agents::AgentId::Copilot), "claude-opus-5");
+        assert_eq!(super::agent_model(&d, crate::agents::AgentId::Codex), "");
+        c["mainAgent"] = json!("gemini");
+        assert!(validate(&c).is_err());
+    }
+
+    #[test]
+    fn an_agent_model_that_reads_as_an_option_is_refused() {
+        let mut c = default_config();
+        c["codexModel"] = json!("--dangerously-bypass-approvals-and-sandbox");
+        assert!(validate(&c).is_err());
+        c["codexModel"] = json!("gpt-5.4");
+        assert!(validate(&c).is_ok());
     }
 
     #[test]

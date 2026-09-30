@@ -22,8 +22,27 @@
     }
   }
 
+  // The main agent and the models of Codex and Copilot (config keys; Save-gated). Agents
+  // this machine does not have stay listed, marked, so a saved choice is never hidden.
+  function populateAgents(cfg) {
+    const c = cfg || window.CSM_CONFIG || {}
+    if ($('set-main-agent')) $('set-main-agent').value = c.mainAgent || 'claude'
+    if ($('set-codex-model')) $('set-codex-model').value = c.codexModel || ''
+    if ($('set-copilot-model')) $('set-copilot-model').value = c.copilotModel || ''
+    if (!window.knownAgents || !$('set-main-agent')) return
+    window.knownAgents().then(list => {
+      if (!Array.isArray(list)) return
+      const usable = new Set(list.filter(a => a.found && a.supported).map(a => a.agent))
+      for (const o of $('set-main-agent').options) {
+        const base = { claude: 'Claude Code', codex: 'Codex', copilot: 'Copilot' }[o.value]
+        o.textContent = usable.has(o.value) || o.value === 'claude' ? base : `${base} (not installed)`
+      }
+    })
+  }
+
   function populateTerminalPrefs(cfg) {
     populateModel()
+    populateAgents(cfg)
     // Without this the select sat on its first option, and every Save reset the app.
     if ($('set-terminal')) $('set-terminal').value = ((cfg || window.CSM_CONFIG || {}).terminalApp) || ''
     if (!window.getTerminalPrefs) return
@@ -58,11 +77,24 @@
     // Guard: an unpopulated select reports '' , which would silently reset a chosen model.
     const model = $('set-model')
     out.claudeModel = model && model.options.length ? model.value : ((window.CSM_CONFIG || {}).claudeModel || '')
+    out.mainAgent = $('set-main-agent') ? $('set-main-agent').value : ((window.CSM_CONFIG || {}).mainAgent || 'claude')
+    out.codexModel = $('set-codex-model') ? $('set-codex-model').value.trim() : ((window.CSM_CONFIG || {}).codexModel || '')
+    out.copilotModel = $('set-copilot-model') ? $('set-copilot-model').value.trim() : ((window.CSM_CONFIG || {}).copilotModel || '')
+  }
+
+  // The backend refuses these too; saying it here keeps the other edits in the modal.
+  function validateAgents(out) {
+    const ok = window.CSMOtherModels ? window.CSMOtherModels.validModel : (m => /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]{0,63}$/.test(m))
+    for (const [name, m] of [['Codex', out.codexModel], ['Copilot', out.copilotModel]]) {
+      if (m && !ok(m)) return `${name} model: "${m}" is not a model name (letters, digits and . _ : / [ ] -, starting with a letter or digit).`
+    }
+    return ''
   }
 
   // Register populate (for embedded prefs) and collect (for terminal app config).
   window.CSMSettings.register({
     populate: populateTerminalPrefs,
     collect: collectTerminal,
+    validate: validateAgents,
   })
 })()

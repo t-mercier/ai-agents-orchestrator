@@ -271,7 +271,8 @@ pub fn pty_spawn(
     let mut agent_id: Option<String> = None;
     let inner = if let Some(notes) = agent_notes.as_deref().filter(|_| command.is_empty()) {
         // Resume or Restart of a Codex or Copilot session (a new one comes as `command`).
-        let r = crate::agents::session::relaunch_line(agent, notes, &cwd, &session_id, !restart_slug.is_empty())?;
+        let model = crate::config::agent_model(&crate::config::load(), agent);
+        let r = crate::agents::session::relaunch_line(agent, notes, &cwd, &session_id, !restart_slug.is_empty(), &model)?;
         agent_dir = r.dir;
         agent_id = r.session_id;
         r.line

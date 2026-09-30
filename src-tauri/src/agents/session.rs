@@ -123,7 +123,8 @@ pub(crate) fn canonical(path: &str) -> String {
     std::fs::canonicalize(path).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| path.to_string())
 }
 
-pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session_id: &str, restart: bool) -> Result<Relaunch, String> {
+/// `model` is the one Settings sets for this agent (`config::agent_model`); empty sends none.
+pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session_id: &str, restart: bool, model: &str) -> Result<Relaunch, String> {
     let dir = if Path::new(cwd).is_dir() {
         cwd.to_string()
     } else {
@@ -139,14 +140,14 @@ pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session
         let updated = crate::set_frontmatter_links(&content, "session_id", "session_ids", &ids);
         crate::atomic_write(Path::new(notes_path), &ensure_key(&updated, "session_id", &new_id))?;
         known = Some(new_id.clone()).filter(|i| !i.is_empty());
-        new_line(agent, &new_id, &first_prompt(&name, notes_path))
+        new_line(agent, &new_id, &first_prompt(&name, notes_path), model)
     } else {
         if !crate::is_valid_session_id(session_id) {
             return Err(format!("not a session id: {session_id}"));
         }
         known = Some(session_id.to_string());
         super::command(agent, &super::Launch {
-            resume: Some(session_id), prompt: None, model: "", mode: super::Mode::Interactive,
+            resume: Some(session_id), prompt: None, model, mode: super::Mode::Interactive,
             claude_settings: "", writable_roots: &[],
         })
     };
@@ -154,9 +155,9 @@ pub(crate) fn relaunch_line(agent: AgentId, notes_path: &str, cwd: &str, session
 }
 
 /// The command that starts a new session. Copilot takes the id the app chose.
-pub(crate) fn new_line(agent: AgentId, copilot_id: &str, prompt: &str) -> String {
+pub(crate) fn new_line(agent: AgentId, copilot_id: &str, prompt: &str, model: &str) -> String {
     let line = super::command(agent, &super::Launch {
-        resume: None, prompt: Some(prompt), model: "", mode: super::Mode::Interactive,
+        resume: None, prompt: Some(prompt), model, mode: super::Mode::Interactive,
         claude_settings: "", writable_roots: &[],
     });
     match agent {
@@ -243,12 +244,23 @@ mod tests {
     }
 
     #[test]
+    fn a_session_runs_on_the_model_set_for_its_agent() {
+        assert_eq!(
+            new_line(AgentId::Copilot, "4fa67fb9-1148-41dc-acd9-4867ad017342", "hi", "gpt-5.6-sol"),
+            "copilot --session-id '4fa67fb9-1148-41dc-acd9-4867ad017342' --model 'gpt-5.6-sol' -i 'hi'"
+        );
+        assert_eq!(new_line(AgentId::Codex, "", "hi", "gpt-5.4"), "codex -m 'gpt-5.4' 'hi'");
+        let r = relaunch_line(AgentId::Codex, "/w/n.md", "/", "01a0e9da-76d9", false, "gpt-5.4").unwrap();
+        assert_eq!(r.line, "cd '/' && codex resume -m 'gpt-5.4' '01a0e9da-76d9'");
+    }
+
+    #[test]
     fn a_new_copilot_session_runs_under_the_id_the_app_chose() {
         assert_eq!(
-            new_line(AgentId::Copilot, "4fa67fb9-1148-41dc-acd9-4867ad017342", "hi"),
+            new_line(AgentId::Copilot, "4fa67fb9-1148-41dc-acd9-4867ad017342", "hi", ""),
             "copilot --session-id '4fa67fb9-1148-41dc-acd9-4867ad017342' -i 'hi'"
         );
-        assert_eq!(new_line(AgentId::Codex, "", "hi"), "codex 'hi'");
+        assert_eq!(new_line(AgentId::Codex, "", "hi", ""), "codex 'hi'");
     }
 
     #[test]
@@ -259,7 +271,7 @@ mod tests {
         let mut n = notes(AgentId::Copilot, "fceb338b-f100-471c-9ed5-3975070c0ba2");
         n.name = "x";
         create(&p, &notes_text(&n)).unwrap();
-        let r = relaunch_line(AgentId::Copilot, p.to_str().unwrap(), dir.to_str().unwrap(), "", true).unwrap();
+        let r = relaunch_line(AgentId::Copilot, p.to_str().unwrap(), dir.to_str().unwrap(), "", true, "").unwrap();
         let line = r.line;
         let fm = crate::reader::parse_frontmatter(&std::fs::read_to_string(&p).unwrap());
         let new_id = fm.get("session_id").cloned().unwrap();
@@ -270,7 +282,7 @@ mod tests {
 
         let q = dir.join("FEAT/y/notes.md");
         create(&q, &notes_text(&notes(AgentId::Codex, "01a0e9da-76d9-7c12-882e-57b7554edd81"))).unwrap();
-        relaunch_line(AgentId::Codex, q.to_str().unwrap(), "", "", true).unwrap();
+        relaunch_line(AgentId::Codex, q.to_str().unwrap(), "", "", true, "").unwrap();
         let text = std::fs::read_to_string(&q).unwrap();
         assert!(text.starts_with("---\nsession_id: \n"), "the key stays, empty: {text}");
         let _ = std::fs::remove_dir_all(&dir);
@@ -292,13 +304,13 @@ mod tests {
 
     #[test]
     fn resume_refuses_a_malformed_id() {
-        assert!(relaunch_line(AgentId::Codex, "/w/n.md", "/", "x'; rm -rf ~", false).is_err());
-        let r = relaunch_line(AgentId::Codex, "/w/n.md", "/", "01a0e9da-76d9", false).unwrap();
+        assert!(relaunch_line(AgentId::Codex, "/w/n.md", "/", "x'; rm -rf ~", false, "").is_err());
+        let r = relaunch_line(AgentId::Codex, "/w/n.md", "/", "01a0e9da-76d9", false, "").unwrap();
         assert_eq!(r.line, "cd '/' && codex resume '01a0e9da-76d9'");
         assert_eq!(r.session_id.as_deref(), Some("01a0e9da-76d9"));
         // A launch folder that is gone falls back to the notes folder, and says so: a new
         // Codex session records the folder it really started in.
-        let gone = relaunch_line(AgentId::Codex, "/tmp/n.md", "/no/such/dir", "01a0e9da-76d9", false).unwrap();
+        let gone = relaunch_line(AgentId::Codex, "/tmp/n.md", "/no/such/dir", "01a0e9da-76d9", false, "").unwrap();
         assert_eq!(gone.dir, canonical("/tmp"));
     }
 

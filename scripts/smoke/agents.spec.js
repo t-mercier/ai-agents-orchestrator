@@ -191,7 +191,6 @@ test('Start pressed before the agent choice appears waits for the person to pick
       }
       t = v
     } })
-    try { localStorage.setItem('csm.nsAgent', 'codex') } catch {}
   }, ALL)
   await page.goto('/index.html')
   await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })

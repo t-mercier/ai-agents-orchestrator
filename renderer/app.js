@@ -979,13 +979,21 @@ if (skillClear) skillClear.addEventListener('click', () => {
 // Which agent CLIs this machine has — asked once per app run (a login shell per CLI is
 // not something to pay on every +New), then kept.
 let agentsKnown = null
+// The same probe, for Settings: asked once per run, shared with ＋New.
+let agentsProbe = null
+window.knownAgents = () => {
+  if (agentsKnown) return Promise.resolve(agentsKnown)
+  if (!window.api.agentsAvailable) return Promise.resolve([])
+  if (!agentsProbe) agentsProbe = window.api.agentsAvailable().then(got => { if (Array.isArray(got) && got.length) agentsKnown = got; return got }).finally(() => { agentsProbe = null })
+  return agentsProbe
+}
 async function fillAgentChoice() {
   const field = document.getElementById('ns-agent-field')
   const sel = document.getElementById('ns-agent')
   const hint = document.getElementById('ns-agent-hint')
   if (!field || !sel || !window.api.agentsAvailable) return
   if (!agentsKnown) {
-    const got = await window.api.agentsAvailable()
+    const got = await window.knownAgents()
     if (got && got.error) {
       // Said, not hidden: an empty list would read as "only Claude Code is installed".
       field.hidden = false
@@ -1002,9 +1010,11 @@ async function fillAgentChoice() {
   const others = usable.filter(a => a !== 'claude')
   const notes = agentsKnown.filter(a => a.found && !a.supported && a.hint).map(a => a.hint)
   field.hidden = !others.length && !notes.length
-  const last = (() => { try { return localStorage.getItem('csm.nsAgent') } catch { return null } })()
+  // Starts on the main agent from Settings; one not installed falls back to Claude Code.
+  const main = (window.CSM_CONFIG || {}).mainAgent || 'claude'
   const list = usable.includes('claude') ? usable : ['claude', ...usable]
-  sel.innerHTML = list.map(a => `<option value="${escapeAttr(a)}"${a === last ? ' selected' : ''}>${names[a]}</option>`).join('')
+  const pick = list.includes(main) ? main : 'claude'
+  sel.innerHTML = list.map(a => `<option value="${escapeAttr(a)}"${a === pick ? ' selected' : ''}>${names[a]}</option>`).join('')
   hint.textContent = notes.join(' ')
   hint.hidden = !notes.length
   describeAgent()
@@ -1091,7 +1101,6 @@ document.getElementById('new-session-form').addEventListener('submit', async (e)
   }
   const agentSel = document.getElementById('ns-agent')
   const agent = agentSel && !document.getElementById('ns-agent-field').hidden ? agentSel.value : 'claude'
-  try { localStorage.setItem('csm.nsAgent', agent) } catch {}
   // Codex and Copilot sessions run in the app's terminal: it is where the app sees them.
   const embedded = agent !== 'claude' || !!(window.getOpenIn && window.getOpenIn() === 'embedded')
   const res = await window.api.startSession({ category, name, ticket, startIn, branch, prLink, root, embedded, agent: agent === 'claude' ? null : agent })
