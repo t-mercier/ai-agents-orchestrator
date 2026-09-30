@@ -201,7 +201,7 @@ The skills run *inside* a session, so there are moments they cannot see. A **hoo
 small script that **Claude Code** runs at one of those moments — not the app. Six ship
 with it:
 
-- **`ao_skill_guard`** — refuses an edit to one of the app's 14 skills, with the reason
+- **`ao_skill_guard`** — refuses an edit to one of the app's 15 skills, with the reason
   and the alternative (a skill of your own under another name). The other half of "these
   are the app's": the files are also read-only on disk.
 - **`ao_autosave`** — the checkpoint used to happen only when you typed `/save-session`.
@@ -251,6 +251,7 @@ reopens it any time. If you would rather do it by hand,
 | **`/wrap-session <notes> <id>`** | The headless twin of `/close-session`, behind the dashboard's **Close** button: it summarises and closes without opening a terminal. |
 | **`/sync-refs <notes>`** | Realigns one session's references — each ticket's current status from your tracker, and any pull request whose branch names one of its tickets. Behind the **Sync** button, and run once per open session by **Sync all** in the titlebar (one `gh` batch first, then the sessions one at a time, then a receipt naming any failure). |
 | **`/import-session <CATEGORY> [name]`** | Binds the session you are in to a `notes.md` under a chosen space and category, and registers it. This is what first-run setup runs for each session you tick. |
+| **`/ask-other-models <model> [question]`** | A second opinion from another model, asked in plain words — *"ask GPT what it thinks"*, *"start a multi-model investigation with GPT"*. The session's agent invites the model (GPT through Codex, Copilot, or another Claude model), asks it, and weighs its answer with you. The invited model reads the session and never writes. |
 | **`/rename-category <OLD> <NEW>`** | Renames a category everywhere — moves its folder, re-tags every `notes.md`, updates the config. (The app does not move folders, so renaming *there* alone would orphan sessions — this skill does the real move.) |
 | **`/skill-propose`** | Turns what this session taught into a reusable skill — or, preferably, a patch to one you already have. Only fires when something reusable actually came up. With you there it shows the **exact wording** it would change and applies it on your yes; otherwise it stages the proposal for `/skills-review`. Every change is appended to `~/.claude/skills-applied.log`, which is how you undo one. |
 | **`/skills-review`** | Shows a staged proposal (full content, or a real diff) and promotes it only once you approve. Where a proposal lands when nobody was there to answer it — a headless close, a background run. |

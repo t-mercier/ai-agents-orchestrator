@@ -257,7 +257,7 @@ the contributor script — iterate over the 14 names this app ships; anything el
 is invisible to them: not scanned, not compared, not touched. The single case that *is*
 replaced is a skill of your own that happens to share one of those 14 names — pick another.
 
-**They install themselves.** Every launch copies the 14 skills and the hook scripts into
+**They install themselves.** Every launch copies the 15 skills and the hook scripts into
 `~/.claude/skills/`, so they arrive with the app and move forward with it — nothing to run.
 Contributors editing `skills/` have a script for getting a working tree in place without a
 rebuild; it is documented in
@@ -273,6 +273,7 @@ rebuild; it is documented in
 | `/restart-session <slug>` | Reload a session's notes **and its recorded session id** into a fresh session (history stays linked) |
 | `/archive-session <slug>` | Mark a session archived (drops it from the active list) |
 | `/import-session <CAT> <name>` | Bind an existing Claude Code session to a `notes.md` and register it, under a chosen space and category. Run by first-run setup |
+| `/ask-other-models <model> [question]` | A second opinion from another model: say *"ask GPT what it thinks"* or *"start a multi-model investigation with GPT"* and the session's agent invites it (GPT through Codex, Copilot, or another Claude model), asks, and weighs the answer with you. The invited model reads the session and never writes |
 | `/rename-category <OLD> <NEW>` | Rename a category everywhere — moves the folder, re-tags notes, updates config |
 | `/skill-propose` | Turn what this session taught into a new skill, or a patch to an existing one. With you there on a repeated correction it shows the verbatim change and applies it on your yes, logging it to `~/.claude/skills-applied.log`; otherwise it stages it for `/skills-review` |
 | `/skills-review` | The approval gate for staged proposals: list, diff, then approve or reject. Where a proposal lands when nobody was there to answer it |
@@ -298,7 +299,7 @@ setting its own). A hook you have already enabled globally is not injected a sec
 
 | Hook | Event | What it closes |
 |---|---|---|
-| `ao_skill_guard.py` | `PreToolUse` (`Edit`, `Write`…) | The 14 skills are the app's; an edit to one is refused with the reason and the alternative — a skill of your own under another name. |
+| `ao_skill_guard.py` | `PreToolUse` (`Edit`, `Write`…) | The 15 skills are the app's; an edit to one is refused with the reason and the alternative — a skill of your own under another name. |
 | `ao_autosave.py` | `Stop` | The checkpoint only happened when someone typed `/save-session`. This has the model run it itself — at 75 % and again at 90 % of context, and after 30 minutes without a checkpoint while the conversation moved. The figure is the session's real context percentage from the statusline cache, not a transcript byte count. |
 | `ao_checkpoint_relay.py` | `UserPromptSubmit` | The advice `ao_autosave` gives at 75 % and after 30 minutes is shown to you, but a Stop hook cannot show it to the model. This hands it over with your next message, once. |
 | `ao_precompact.py` | `PreCompact` | Compaction is when a session forgets. This appends an `(in progress)` line to the session history with the transcript path and the moment — the summary stays the model's to write, and the next hook says so once tools are back. |
@@ -335,7 +336,7 @@ a standing preference still relies on the model's judgment, or on the distil ste
 `/save-session` and `/close-session`.
 
 > [!IMPORTANT]
-> **Working from a clone? `git pull` alone does not update your skills.** It moves the repo's `skills/`; the copies Claude Code loads live in `~/.claude/skills/`, and a rebuild is what carries them across. **The app tells you when that has not happened** — a notice at launch and whenever the window regains focus, with an **Update** button that closes the gap. It needs no setup: a build from a clone watches that clone. Only this app's 14 skills are ever in scope, and one you had edited is restored and named — they are the app's, not customisable (see "Where they live"). A release `.dmg` has no clone to watch and stays quiet; its skills advance with the app. Details in [ADR-016](docs/adr/ADR-016-skills-reach-claude-skills-by-launch-sync-install-sh-is-the-fallback.md).
+> **Working from a clone? `git pull` alone does not update your skills.** It moves the repo's `skills/`; the copies Claude Code loads live in `~/.claude/skills/`, and a rebuild is what carries them across. **The app tells you when that has not happened** — a notice at launch and whenever the window regains focus, with an **Update** button that closes the gap. It needs no setup: a build from a clone watches that clone. Only this app's 15 skills are ever in scope, and one you had edited is restored and named — they are the app's, not customisable (see "Where they live"). A release `.dmg` has no clone to watch and stays quiet; its skills advance with the app. Details in [ADR-016](docs/adr/ADR-016-skills-reach-claude-skills-by-launch-sync-install-sh-is-the-fallback.md).
 >
 > **Updating from an earlier version?** Your config **auto-migrates to v2** on first launch — named spaces + per-space knowledge-notes folders, with a `.v1-backup` kept (see [ADR-015](docs/adr/ADR-015-config-v1-to-v2-migration-flag-gated-self-cleaning.md)). Nothing to do by hand.
 

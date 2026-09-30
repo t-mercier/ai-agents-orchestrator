@@ -500,6 +500,9 @@ fn start_session(
             agent, session_id: &session_id, category: &category, ticket: &safe_ticket, name: &safe_name,
             pr_link: pr, start_in: agents::session::one_line(&start_in_s)?, started_at: &started_at, today: &today,
         }))?;
+        // The first prompt names ao_ask.py (other models), which lives in skills/lib: installed
+        // here, since a Codex- or Copilot-only machine may never have run a skills sync.
+        let _ = skills::ensure_lib();
         let line = agents::session::new_line(agent, &session_id, &agents::session::first_prompt(&safe_name, &notes_path));
         let checkout = if branch.is_empty() { String::new() } else { format!("git checkout {} -- && ", pty::shell_quote(branch)) };
         let command = format!("cd {} && {checkout}{line}", pty::shell_quote(&dir));

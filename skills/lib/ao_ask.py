@@ -687,13 +687,127 @@ def stop_job(job_dir):
     return f"asked {job['id']} to stop; it has not ended yet", 0
 
 
+# ── Inviting, from the session itself ──────────────────────────────────────────────────
+# When the person asks their agent for another model's view ("start a multi-model
+# investigation with GPT"), the agent invites it with this command. The notes it writes are
+# the ones the app writes (src-tauri/src/advisors.rs, notes_with): same frontmatter line,
+# same section, so the app's chip, thread and Stop follow.
+
+ALIASES = {"gpt": "codex", "codex": "codex", "openai": "codex", "copilot": "copilot", "claude": "claude"}
+CLAUDE_NAMES = {"opus[1m]": "Opus 5 (1M context)", "opus": "Opus 5", "sonnet": "Sonnet 5", "haiku": "Haiku 4.5", "fable": "Fable 5.1"}
+PROVIDER = {"codex": "OpenAI", "copilot": "GitHub", "claude": "Anthropic"}
+
+
+def parse_who(word):
+    """`gpt`, `codex:gpt-5.4`, `copilot:gpt-5.4`, `claude:opus`, `opus` → (cli, model)."""
+    w = word.strip()
+    name, _, model = w.partition(":")
+    key = name.lower()
+    if key in CLAUDE_NAMES or key.startswith("opus") or key in ("sonnet", "haiku", "fable"):
+        cli, model = "claude", model or name
+    elif key in ALIASES:
+        cli = ALIASES[key]
+    else:
+        raise ValueError(f"not a model this app can invite: {word} (gpt, copilot, claude, opus, sonnet…)")
+    model = model.strip()
+    if cli == "copilot" and model == "auto":
+        model = ""
+    if model and not MODEL_RE.match(model):
+        raise ValueError(f"not a model name: {model!r}")
+    return cli, model
+
+
+def label_for(cli, model):
+    if cli == "codex":
+        return f"GPT · {model} (Codex)" if model else "GPT (Codex)"
+    if cli == "copilot":
+        return f"Copilot · {model}" if model else "Copilot"
+    return f"Claude · {CLAUDE_NAMES.get(model, model)}" if model else "Claude"
+
+
+def _slug(s):
+    return re.sub(r"^-+|-+$", "", re.sub(r"[^a-z0-9]+", "-", s.lower()))
+
+
+def merge_invitees(existing, pairs):
+    """`existing` plus each (cli, model) not already invited, with unique ids as the app gives."""
+    out = [dict(i) for i in existing]
+    used = {i["id"] for i in out}
+    for cli, model in pairs:
+        if any(i["cli"] == cli and i.get("model", "") == model for i in out):
+            continue
+        base = ("gpt" if cli == "codex" else f"claude-{_slug(model)}" if cli == "claude" and model else cli)[:29]
+        iid, n = base, 2
+        while iid in used:
+            iid, n = f"{base}-{n}", n + 1
+        used.add(iid)
+        out.append({"id": iid, "cli": cli, "model": model, "label": label_for(cli, model)})
+    return out
+
+
+def _shq(s):
+    return "'" + str(s).replace("'", "'\\''") + "'"
+
+
+def with_invitees(text, invitees, notes_path):
+    """`text` with the `advisors:` line and the `## Other models` section set, or both
+    removed for an empty list. Raises ValueError when there is no frontmatter."""
+    if not text.startswith("---\n") or text.find("\n---", 4) == -1:
+        raise ValueError("this notes.md has no frontmatter to record the invited models in")
+    end = text.find("\n---", 4)
+    fm = [l for l in text[4:end].split("\n") if l.partition(":")[0].strip() != "advisors"]
+    if invitees:
+        fm.append("advisors: " + json.dumps([{k: i.get(k, "") for k in ("id", "cli", "model", "label")} for i in invitees],
+                                            separators=(",", ":"), ensure_ascii=False))
+    text = "---\n" + "\n".join(fm) + text[end:]
+    body = None
+    if invitees:
+        names = "\n".join(f"- {i['label']} (`{i['id']}`)" for i in invitees)
+        guide = f"python3 ~/.claude/skills/lib/ao_ask.py guide --session {_shq(notes_path)}"
+        body = ("Other models are invited to read this session and advise its agent. To consult them, run:\n\n"
+                f"`{guide}`\n\n{names}")
+    marker = "\n## Other models\n"
+    at = text.find(marker)
+    if at != -1:
+        after = at + len(marker)
+        nxt = text.find("\n## ", after)
+        tail = text[nxt:] if nxt != -1 else ""
+        return f"{text[:at]}{marker}\n{body}\n{tail}" if body else f"{text[:at]}{tail}"
+    if not body:
+        return text
+    block = f"\n## Other models\n\n{body}\n"
+    hist = text.find("\n## Session history")
+    return f"{text[:hist]}{block}{text[hist:]}" if hist != -1 else text.rstrip("\n") + "\n" + block
+
+
+def find_session_notes(lead, registry=None):
+    """The notes.md of the session `lead` (agent, session id), from the registry the session
+    skills keep, or None."""
+    registry = registry or os.path.expanduser("~/.claude/active-sessions.json")
+    try:
+        with open(registry, encoding="utf-8") as f:
+            entry = (json.load(f) or {}).get(lead[1]) or {}
+        return entry.get("notes_path") or None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _write_notes(path, text):
+    tmp = f"{path}.ao-ask.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
 def main(argv):
     import argparse
     ap = argparse.ArgumentParser(prog="ao_ask.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("guide", "ask", "wait", "status", "stop"):
+    for name in ("guide", "ask", "wait", "status", "stop", "invite", "dismiss"):
         p = sub.add_parser(name)
-        p.add_argument("--session", required=True, help="the session's notes.md")
+        p.add_argument("--session", help="the session's notes.md (found from this session when left out)")
+        if name == "invite":
+            p.add_argument("who", nargs="+", help="gpt, copilot, claude, opus… optionally with :model (copilot:gpt-5.4)")
         if name == "ask":
             p.add_argument("invitee")
             p.add_argument("question", nargs="+", help="the question, or - to read it from stdin")
@@ -705,6 +819,12 @@ def main(argv):
         run_job(argv[2])
         return 0
     a = ap.parse_args(argv[1:])
+    if not a.session:
+        a.session = find_session_notes(lead_identity(dict(os.environ), ""))
+        if not a.session:
+            print("Which session is this? Pass --session <its notes.md>: this one is not in ~/.claude/active-sessions.json.",
+                  file=sys.stderr)
+            return 2
     paths = session_paths(a.session)
     try:
         notes_text = open(paths["notes"], encoding="utf-8").read()
@@ -712,6 +832,39 @@ def main(argv):
         print(f"cannot read {a.session}: {e.strerror}", file=sys.stderr)
         return 2
     invitees = read_invitees(notes_text)
+    if a.cmd in ("invite", "dismiss"):
+        import shutil
+        try:
+            pairs = [parse_who(w) for w in a.who] if a.cmd == "invite" else []
+        except ValueError as e:
+            print(e, file=sys.stderr)
+            return 2
+        missing = sorted({c for c, _ in pairs if not shutil.which(c)})
+        if missing:
+            print(f"{', '.join(missing)} is not installed on this machine", file=sys.stderr)
+            return 2
+        new = merge_invitees(invitees, pairs) if a.cmd == "invite" else []
+        if a.cmd == "dismiss" and os.path.isdir(paths["asks"]):
+            for jid in os.listdir(paths["asks"]):
+                job = read_job(os.path.join(paths["asks"], jid))
+                if job and job.get("state") in ("running", "starting"):
+                    stop_job(os.path.join(paths["asks"], jid))
+        try:
+            _write_notes(paths["notes"], with_invitees(notes_text, new, paths["notes"]))
+        except ValueError as e:
+            print(e, file=sys.stderr)
+            return 2
+        if a.cmd == "dismiss":
+            print("The other models are no longer invited to this session.")
+            return 0
+        added = [i for i in new if i["id"] not in {j["id"] for j in invitees}]
+        who = ", ".join(i["label"] for i in added) or "no one new (already invited)"
+        providers = ", ".join(sorted({PROVIDER[i["cli"]] for i in added})) or "their providers"
+        print(f"Invited: {who}. They read this session's whole conversation, its folder and the code; "
+              f"what they read is sent to {providers}. Tell the person so, in one line.\n")
+        lead = lead_identity(dict(os.environ), notes_text)
+        print(guide_text(new, paths["notes"], lead[0]), end="")
+        return 0
     if a.cmd == "guide":
         lead = lead_identity(dict(os.environ), notes_text)
         print(guide_text(invitees, paths["notes"], lead[0]), end="")

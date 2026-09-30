@@ -69,7 +69,10 @@ pub(crate) fn first_prompt(name: &str, notes_path: &str) -> String {
         "This is an AI Agents Orchestrator session, \"{name}\". Its notes are at {notes_path}: read them first. \
          Keep them current as you work: dated entries under \"Decisions made\", the files you change under \
          \"Files touched\", and an up-to-date \"Next steps\". Fill in \"Goal\" now if it is empty, then ask me \
-         what to do."
+         what to do. When I ask for another model's view (GPT, Copilot, Claude: \"start a multi-model investigation \
+         with GPT\"), invite it and consult it with: python3 ~/.claude/skills/lib/ao_ask.py invite --session {q} <gpt | copilot | claude:opus> \
+         (then follow what it prints). Run it outside your sandbox: it needs the network.",
+        q = crate::pty::shell_quote(notes_path),
     )
 }
 
@@ -304,5 +307,8 @@ mod tests {
         let p = first_prompt("try codex", "/w/FEAT/try-codex/notes.md");
         assert!(p.contains("/w/FEAT/try-codex/notes.md"));
         assert!(p.contains("\"try codex\""));
+        // Asked for on 2026-09-30: "start a multi-model investigation with GPT" works in a
+        // Codex or Copilot session too, which has none of the app's skills.
+        assert!(p.contains("ao_ask.py invite --session '/w/FEAT/try-codex/notes.md' <gpt"), "{p}");
     }
 }

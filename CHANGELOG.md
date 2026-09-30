@@ -19,6 +19,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   Each answer shows in the agent's terminal and in the session's **Other models** thread; a
   consultation has no time limit and can be stopped from the panel. What they read is sent to
   their provider, which the dialog says before you invite them.
+- **Ask for it in plain words.** In a Claude Code session, *"start a multi-model investigation
+  with GPT"* or *"what would Copilot say?"* is enough: the new `/ask-other-models` skill invites
+  the model, tells you what it will read, asks, and weighs the answer with you. A Codex or
+  Copilot session is told the same command in its first prompt.
 
 ### Removed
 

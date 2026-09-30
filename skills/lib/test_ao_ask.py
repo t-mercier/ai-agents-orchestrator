@@ -62,6 +62,54 @@ class Hardening(unittest.TestCase):
         self.assertEqual(a[-4:], ["--available-tools", "view", "grep", "glob"])
 
 
+class Invite(unittest.TestCase):
+    """The agent invites a model itself when the person asks it to ("start a multi-model
+    investigation with GPT"), in the notes format the app writes and reads."""
+    BASE = "---\nsession_id: s1\nagent: claude\nname: t\n---\n# t\n\n## Goal\nx\n\n## Session history\n- one\n"
+
+    def test_names_are_read_as_models(self):
+        self.assertEqual(A.parse_who("gpt"), ("codex", ""))
+        self.assertEqual(A.parse_who("codex:gpt-5.4"), ("codex", "gpt-5.4"))
+        self.assertEqual(A.parse_who("copilot:gpt-5.4"), ("copilot", "gpt-5.4"))
+        self.assertEqual(A.parse_who("copilot:auto"), ("copilot", ""))
+        self.assertEqual(A.parse_who("claude:opus"), ("claude", "opus"))
+        self.assertEqual(A.parse_who("opus"), ("claude", "opus"))
+        with self.assertRaises(ValueError):
+            A.parse_who("gemini")
+        with self.assertRaises(ValueError):
+            A.parse_who("copilot:-x")
+
+    def test_inviting_adds_to_the_list_and_writes_the_section(self):
+        t = A.with_invitees(self.BASE, A.merge_invitees([], [("codex", "")]), "/n/notes.md")
+        inv = A.read_invitees(t)
+        self.assertEqual([(i["id"], i["label"]) for i in inv], [("gpt", "GPT (Codex)")])
+        self.assertIn("## Other models", t); self.assertLess(t.index("## Other models"), t.index("## Session history"))
+        self.assertIn("ao_ask.py guide --session '/n/notes.md'", t)
+        line = next(l for l in t.splitlines() if l.startswith("advisors: "))
+        self.assertTrue(line.startswith('advisors: [{"id":"gpt","cli":"codex","model":"","label":"GPT (Codex)"}'))
+        t2 = A.with_invitees(t, A.merge_invitees(inv, [("copilot", "gpt-5.4"), ("codex", "")]), "/n/notes.md")
+        self.assertEqual([i["id"] for i in A.read_invitees(t2)], ["gpt", "copilot"])
+        self.assertEqual(t2.count("## Other models"), 1)
+
+    def test_dismissing_removes_the_line_and_the_section(self):
+        t = A.with_invitees(self.BASE, A.merge_invitees([], [("codex", "")]), "/n/notes.md")
+        t = A.with_invitees(t, [], "/n/notes.md")
+        self.assertNotIn("advisors:", t); self.assertNotIn("## Other models", t)
+        self.assertIn("## Session history\n- one", t)
+
+    def test_a_notes_md_without_frontmatter_is_refused(self):
+        with self.assertRaises(ValueError):
+            A.with_invitees("# no frontmatter\n", A.merge_invitees([], [("codex", "")]), "/n/notes.md")
+
+    def test_the_session_is_found_from_the_lead_when_not_given(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        reg = os.path.join(d, "active-sessions.json")
+        json.dump({"sid-1": {"notes_path": "/w/FEAT/x/notes.md"}}, open(reg, "w"))
+        self.assertEqual(A.find_session_notes(("claude", "sid-1"), reg), "/w/FEAT/x/notes.md")
+        self.assertIsNone(A.find_session_notes(("claude", "nope"), reg))
+
+
 class Texts(unittest.TestCase):
     def test_entry_quotes_every_line_so_an_answer_cannot_forge_a_marker(self):
         job = {"id": "j1", "invitee": "gpt", "label": "GPT (Codex)", "state": "done", "started_at": "2026-09-30T14:05:00", "took": 100}
@@ -324,6 +372,25 @@ class Jobs(unittest.TestCase):
         self.run_ask("ask", "gpt", "q")
         r = self.run_ask("status")
         self.assertIn("gpt", r.stdout); self.assertIn("done", r.stdout); self.assertIn("quiet", r.stdout)
+
+    def test_invite_then_ask_from_the_command_line(self):
+        with open(self.notes, "w") as f:
+            f.write("---\nsession_id: s1\nagent: claude\n---\n# t\n\n## Session history\n- one\n")
+        r = self.run_ask("invite", "gpt", "copilot:gpt-5.4")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("GPT (Codex)", r.stdout); self.assertIn("OpenAI", r.stdout)
+        self.assertEqual([i["id"] for i in A.read_invitees(open(self.notes).read())], ["gpt", "copilot"])
+        a = self.run_ask("ask", "copilot", "--", "q")
+        self.assertIn("PAPAYA", a.stdout)
+        d = self.run_ask("dismiss")
+        self.assertEqual(d.returncode, 0, d.stderr)
+        self.assertEqual(A.read_invitees(open(self.notes).read()), [])
+
+    def test_inviting_a_cli_that_is_not_installed_is_refused(self):
+        env = dict(self.env, PATH="/usr/bin:/bin")
+        r = subprocess.run([sys.executable, ME, "invite", "--session", self.notes, "gpt"], env=env, cwd=self.d,
+                           capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0); self.assertIn("not installed", r.stderr)
 
     def test_guide_prints_the_invitees(self):
         r = self.run_ask("guide")
