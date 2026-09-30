@@ -2,7 +2,7 @@
 # A stand-in for claude / codex / copilot in the ao_ask tests. Logs its argv (one per
 # line) to $AO_FAKE_LOG, then behaves as $AO_FAKE_MODE says.
 name=$(basename "$0")
-[ -n "$AO_FAKE_LOG" ] && { echo "$name"; for a in "$@"; do printf '%s\n' "$a"; done; echo "--env AO_ADVISOR=$AO_ADVISOR AO_HEADLESS=$AO_HEADLESS"; } > "$AO_FAKE_LOG"
+[ -n "$AO_FAKE_LOG" ] && { echo "$name"; for a in "$@"; do printf '%s\n' "$a"; done; echo "--env AO_ADVISOR=$AO_ADVISOR AO_HEADLESS=$AO_HEADLESS"; [ -n "$CODEX_HOME" ] && { echo "--codex-home $CODEX_HOME"; ls -A "$CODEX_HOME" | sed "s/^/--codex-home-has /"; [ -L "$CODEX_HOME/auth.json" ] && echo "--codex-auth-link $(readlink "$CODEX_HOME/auth.json")"; }; } > "$AO_FAKE_LOG"
 last=""
 prev=""
 for a in "$@"; do [ "$prev" = "-o" ] && last="$a"; prev="$a"; done

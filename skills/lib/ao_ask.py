@@ -393,6 +393,29 @@ def registry_dir():
     return os.environ.get("AO_ASK_REGISTRY") or os.path.expanduser("~/.config/ai-agents-orchestrator/asks")
 
 
+def codex_home(job_id):
+    """A CODEX_HOME of the invitee's own, holding only a link to the user's login. With the
+    user's own, `codex exec` loads their global AGENTS.md even under --ignore-user-config
+    (probed on 2026-10-01), and their skills, memories and history sit beside it. Outside the
+    session's folder, so the link is never synced or committed with the notes; removed when
+    the job ends."""
+    # Beside the registry, not in it: the registry holds only the pidfiles the app reads.
+    home = os.path.join(os.path.dirname(registry_dir().rstrip("/")), "codex-homes", job_id)
+    os.makedirs(home, exist_ok=True)
+    real = os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
+    auth = os.path.join(real, "auth.json")
+    link = os.path.join(home, "auth.json")
+    if os.path.exists(auth) and not os.path.lexists(link):
+        os.symlink(auth, link)
+    return home
+
+
+def _drop_home(home):
+    if home:
+        import shutil
+        shutil.rmtree(home, ignore_errors=True)
+
+
 def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -537,6 +560,9 @@ def _run_job(job_dir):
     if not os.environ.get("AO_ASK_NO_LOGIN"):
         argv = shell_argv(argv, user_shell())
     env = dict(os.environ, AO_HEADLESS="1", AO_ADVISOR="1")
+    own_home = codex_home(job["id"]) if inv["cli"] == "codex" else None
+    if own_home:
+        env["CODEX_HOME"] = own_home
     out = open(os.path.join(job_dir, "out.log"), "wb")
     err = open(os.path.join(job_dir, "err.log"), "wb")
     started = time.time()
@@ -546,6 +572,7 @@ def _run_job(job_dir):
                                 stdin=subprocess.DEVNULL, stdout=out, stderr=err, env=env,
                                 preexec_fn=os.setpgrp, close_fds=True)
     except OSError as e:
+        _drop_home(own_home)
         job = _update_job(job_dir, state="failed", reason=f"{inv['cli']} could not start: {e.strerror}",
                           ended_at=_now(), took=0, runner_pid=os.getpid())
         _append_thread(paths["thread"], thread_entry(job, question, f"(failed: {job['reason']})"))
@@ -588,6 +615,7 @@ def _run_job(job_dir):
         os.remove(reg_file)
     except OSError:
         pass
+    _drop_home(own_home)
     took = round(time.time() - started)
     answer = ""
     if inv["cli"] == "codex" and os.path.exists(last):

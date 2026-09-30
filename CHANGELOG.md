@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **A model invited through Codex no longer gets your personal Codex instructions.** Even
+  told to ignore your configuration, Codex loaded your global `~/.codex/AGENTS.md`, so the
+  invitee advised under your own rules; your Codex skills, memories and history sat beside it.
+  Each invitee now runs on a Codex home of its own, holding only a link to your login, removed
+  once it has answered. Claude and Copilot invitees load none of yours (checked).
+
 ## [0.22.1] - 2026-09-30
 
 ### Security

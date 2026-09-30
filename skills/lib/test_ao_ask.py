@@ -228,6 +228,23 @@ class Jobs(unittest.TestCase):
         p = os.path.join(self.d, "other-models.md")
         return open(p).read() if os.path.exists(p) else ""
 
+    def test_codex_runs_on_a_home_of_its_own_with_only_the_login(self):
+        # With the user's CODEX_HOME, codex exec loads their global AGENTS.md even under
+        # --ignore-user-config (probed on 2026-10-01): the invitee got their personal rules.
+        real = os.path.join(self.d, ".codex")
+        os.makedirs(real)
+        for name, body in (("auth.json", "{}"), ("AGENTS.md", "# Personal Preferences\n")):
+            with open(os.path.join(real, name), "w") as f:
+                f.write(body)
+        r = self.run_ask("ask", "gpt", "Is it right?")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = open(self.log).read().splitlines()
+        home = next(l.split(" ", 1)[1] for l in log if l.startswith("--codex-home "))
+        self.assertNotEqual(os.path.realpath(home), os.path.realpath(real))
+        self.assertEqual([l for l in log if l.startswith("--codex-home-has ")], ["--codex-home-has auth.json"])
+        self.assertIn(f"--codex-auth-link {os.path.join(real, 'auth.json')}", log)
+        self.assertFalse(os.path.exists(home), "the invitee's home is removed once it has answered")
+
     def test_ask_prints_the_framed_answer_and_writes_the_thread(self):
         r = self.run_ask("ask", "gpt", "Is it right?")
         self.assertEqual(r.returncode, 0, r.stderr)
