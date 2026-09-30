@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-30
+
 ### Added
 
 - **Other models advise a live session.** On a running session, **Invite models…** (its
