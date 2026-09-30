@@ -145,6 +145,17 @@ test('the dialog opens with the models already invited, so inviting again keeps 
   expect(set[0].advisors.map(a => a.id)).toEqual(['claude', 'gpt', 'copilot'])
 })
 
+test('a session that is not open offers no invitation at all', async ({ page }) => {
+  await open(page, { terminal: false })
+  await page.locator('.tab-btn[data-tab="closed"]').click()
+  const closed = page.locator('#panel-list .list-card[data-key$="invoice-pdf/notes.md"]')
+  await closed.click()
+  await expect(page.locator('#detail-info-pane [data-invite-models]')).toHaveCount(0)
+  await expect(page.locator('#detail-info-pane .act-verb', { hasText: 'Invite models' })).toHaveCount(0)
+  await closed.click({ button: 'right' })
+  await expect(page.locator('#session-menu .board-menu-item', { hasText: 'Invite models' })).toHaveCount(0)
+})
+
 test('a Codex session can invite models', async ({ page }) => {
   await open(page)
   await card(page, 'payments-api').click()

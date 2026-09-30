@@ -1292,7 +1292,7 @@ function renderDetailPanel(s, tab = 'running') {
   // those rows sit at the top of a pane you have usually scrolled past by the time you
   // reach this row, so dropping them from the toolbar simply lost the shortcut.
   const iv = inviteVerdict(s)
-  const invite = s.collab ? '' : iv.why
+  const invite = iv.hidden ? '' : iv.why
     ? `<button type="button" class="act-verb" disabled data-tip="${escapeHtml(iv.why)}">Invite models</button>`
     : `<button type="button" class="act-verb" data-invite-models="${escapeHtml(s.notesPath)}" data-tip="Let other models read this session and advise its agent">Invite models</button>`
   const refs = [ticketPill(s), prPill(s), sync, notesPill(s.notesPath), boardPill(s), editBtn, invite].filter(Boolean).join('')
@@ -1520,8 +1520,8 @@ function sessionMenuRows(s) {
   rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
     isPinnedSession(s) ? 'Unpin from the top' : 'Pin to the top'))
   const iv = inviteVerdict(s)
-  rows.push(iv.why ? row('', '', 'Invite models…', iv.why) : row('', `data-invite-models="${escapeHtml(s.notesPath)}"`, 'Invite models…'))
-  if (advisorsOf(s).length) rows.push(row('', `data-dismiss-models="${escapeHtml(s.notesPath)}"`, 'Dismiss models'))
+  if (!iv.hidden) rows.push(iv.why ? row('', '', 'Invite models…', iv.why) : row('', `data-invite-models="${escapeHtml(s.notesPath)}"`, 'Invite models…'))
+  if (!iv.hidden && advisorsOf(s).length) rows.push(row('', `data-dismiss-models="${escapeHtml(s.notesPath)}"`, 'Dismiss models'))
 
   // Where its files are
   rows.push(sep)
@@ -1561,18 +1561,18 @@ function omChip(s) {
 window.omChip = omChip
 
 // Whether the invitation can be typed into the session's terminal now: `{ key }` (its
-// embedded terminal), `{ external: true }` (a terminal the app cannot type into), or
-// `{ why }`. The same verdict pinned skills get: never type into a turn or an answer.
+// embedded terminal), `{ external: true }` (a terminal the app cannot type into), `{ why }`,
+// or `{ hidden: true }` for a session that is not open — models are invited into a session
+// that runs, never before it starts (her words, 2026-09-30: "ça n'a juste pas de sens").
+// The same verdict pinned skills get: never type into a turn or an answer.
 function inviteVerdict(s) {
-  if (!s || !s.notesPath) return { why: 'This session has no notes yet' }
-  if (s.collab) return { why: 'This session has no agent to consult them' }
+  if (!s || !s.notesPath || s.collab || s.state !== 'active') return { hidden: true }
   const key = pinTerminalKey(s)
   if (key) {
     const d = window.CSMSkillLaunch.decide('invite', { hasTerminal: true, status: s.state === 'active' ? (s.status || 'idle') : '' })
     return d.mode === 'blocked' ? { why: d.reason } : { key }
   }
-  if (s.state === 'active') return { external: true }
-  return { why: 'Open the session first: its agent is the one that consults them' }
+  return { external: true }
 }
 
 function sessionByNotes(notesPath) {
@@ -1649,6 +1649,7 @@ function omWireMore(container, avail) {
 
 async function openInviteDialog(s) {
   const v = inviteVerdict(s)
+  if (v.hidden) return
   if (v.why) { if (window.showBanner) window.showBanner(v.why); return }
   let dlg = document.getElementById('invite-models-modal')
   if (!dlg) {
@@ -1691,7 +1692,7 @@ async function openInviteDialog(s) {
     } else if (!now.external) {
       // It started working or waiting while the dialog was open: invited, but not typed now.
       dlg.close()
-      if (window.showBanner) window.showBanner(`Invited, but not sent: ${now.why} Invite models again once it is idle to send the line.`)
+      if (window.showBanner) window.showBanner(`Invited, but not sent: ${now.why || "the session is no longer open."} Invite models again once it is idle to send the line.`)
     } else {
       // A terminal the app cannot type into: the line to paste there.
       const box = dlg.querySelector('.om-external')
