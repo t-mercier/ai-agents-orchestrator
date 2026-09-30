@@ -234,7 +234,7 @@ fn read_transcript(sid: &str) -> Transcript {
         }
     }
 
-    let mut t = Transcript::default();
+    let t = Transcript::default();
     // KNOWN OVERHEAD (audit, deferred): a miss below is not cached, so every poll
     // re-runs this read_dir + per-subdir stat for each sid whose .jsonl is gone
     // (rotated/deleted historical sessions). Measured cost is small (one dir scan,
@@ -2046,9 +2046,8 @@ mod tests {
 
     // A transcript that grows is folded from where the last fold stopped. The fold of the
     // pieces must equal the fold of the whole: every field, the PR links with their repeats.
-    fn fold_key(t: &super::Transcript) -> (Option<String>, Option<String>, Vec<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, bool) {
-        (t.git_branch.clone(), t.pr_link.clone(), t.pr_urls.clone(), t.last_activity.clone(), t.last_activity_at.clone(),
-         t.cwd.clone(), t.launch_cwd.clone(), t.continued_in.clone(), t.found)
+    fn fold_key(t: &super::Transcript) -> String {
+        format!("{:?}", (&t.git_branch, &t.pr_link, &t.pr_urls, &t.last_activity, &t.last_activity_at, &t.cwd, &t.launch_cwd, &t.continued_in, t.found))
     }
 
     fn line(i: usize) -> String {
