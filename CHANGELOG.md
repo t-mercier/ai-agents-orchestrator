@@ -23,6 +23,26 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   with GPT"* or *"what would Copilot say?"* is enough: the new `/ask-other-models` skill invites
   the model, tells you what it will read, asks, and weighs the answer with you. A Codex or
   Copilot session is told the same command in its first prompt.
+- **Dusk and Mist.** Appearance offers four themes, darkest to lightest: Dark, Dusk (slate),
+  Mist (pearl grey) and Light. The embedded terminal follows the app's theme, in its colours,
+  unless you pick your own.
+- **Source Code Pro in the terminal**, bundled with the app, with a little more air between
+  lines.
+- **A Models tab.** Settings → Models sets the main agent (the one ＋ New starts with) and the
+  model each agent runs on. Codex's and Copilot's lists come from the CLIs themselves, with
+  **Other…** for a name you type; each agent says whether it is installed and signed in.
+  Codex and Copilot sessions now start and resume on the model you set.
+
+### Changed
+
+- The Claude model list names the `opus`, `sonnet`, `haiku` and `fable` aliases as the
+  latest of each family, and adds Opus 5.5, Sonnet 5.5 and Fable 5.1 by version.
+- ＋ New starts on the main agent instead of the last one picked.
+
+### Fixed
+
+- A terminal closed while its font was loading no longer starts its agent anyway.
+- Asking a CLI for a long answer (Codex's model catalogue) no longer times out.
 
 ### Removed
 
