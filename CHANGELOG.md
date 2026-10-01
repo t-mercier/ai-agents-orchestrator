@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.3] - 2026-10-01
+
 ### Fixed
 
 - **A fresh install no longer says the skills are missing after the setup wizard installed
