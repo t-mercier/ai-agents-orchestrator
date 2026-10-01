@@ -269,8 +269,18 @@ document.addEventListener('keydown', async (e) => {
   const times = await F.record(10000)
   frameProbeRunning = false
   const line = F.summary(F.stats(times), { terminals: document.querySelectorAll('.terminal-session-div').length })
-  try { await navigator.clipboard.writeText(line) } catch { /* the line is still shown */ }
-  shortcutNote(line + ' (copied)')
+  // The result stays until closed, with a Copy button: WKWebView refuses a clipboard write
+  // ten seconds after the key press (no user gesture left), so only a click can copy it.
+  document.querySelector('.shortcut-note')?.remove()
+  const t = document.createElement('div')
+  t.className = 'bru-toast shortcut-note frame-probe-result'; t.setAttribute('role', 'status')
+  t.innerHTML = '<span></span><a data-a="copy">Copy</a><a data-a="close">Close</a>'
+  t.querySelector('span').textContent = line
+  t.querySelector('[data-a=copy]').onclick = async (ev) => {
+    try { await navigator.clipboard.writeText(line); ev.target.textContent = 'Copied' } catch { ev.target.textContent = 'Could not copy' }
+  }
+  t.querySelector('[data-a=close]').onclick = () => t.remove()
+  document.body.appendChild(t)
 }, true)
 
 document.addEventListener('keydown', (e) => {

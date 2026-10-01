@@ -10,6 +10,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **⌥⌘P's result stays on screen with a Copy button.** It said "copied" when macOS had
+  refused the copy, ten seconds after the key press, and vanished after a few seconds.
+
 ## [0.22.2] - 2026-10-01
 
 ### Security
