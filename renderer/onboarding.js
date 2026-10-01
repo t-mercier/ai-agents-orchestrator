@@ -684,6 +684,7 @@
     window.onboardingPending = false
     await window.api.finishOnboarding()
     modal.close()
+    if (window.refreshSkillsBanner) window.refreshSkillsBanner()
     if (window.fetchAndRender) window.fetchAndRender(false)
   }
 

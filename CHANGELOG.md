@@ -12,6 +12,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A fresh install no longer says the skills are missing after the setup wizard installed
+  them.** The launch check could answer before the wizard said it was opening, and showed
+  its banner behind it; nothing checked again once the wizard had installed the skills. It
+  now waits for the wizard's answer, and looks again when the wizard closes.
+- **With a banner up, the title bar no longer scrolls away.** The window's main area ignored
+  the banners' height, so the page grew past the window and scrolled as a whole.
 - **⌥⌘P's result stays on screen with a Copy button.** It said "copied" when macOS had
   refused the copy, ten seconds after the key press, and vanished after a few seconds.
 

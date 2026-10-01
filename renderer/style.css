@@ -669,13 +669,19 @@ body.mode-board .board-view { display: block; flex: 1; min-height: 0; overflow: 
 /* Layout: full height below titlebar. Only when the usage bar is shown (has-usage set on
    <html> by refreshUsage) do we reserve its 26px — so a user without the piggyback cache
    sees no empty gap at the bottom, and the fixed bar never overlaps the content when shown. */
+/* The page is a column: title bar, the banners when shown, then the layout taking what is
+   left. A fixed calc(100vh - titlebar) ignored the banners, so with one up the page grew
+   past the window by the banner's height and scrolled, title bar included. */
+body { display: flex; flex-direction: column; overflow: hidden; }
+.titlebar, .skills-banner { flex-shrink: 0; }
 .layout {
   display: flex;
-  height: calc(100vh - var(--titlebar-h));
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 html.has-usage .layout {
-  height: calc(100vh - var(--titlebar-h) - 26px);
+  margin-bottom: 26px;
 }
 
 /* Board search: a row above the category-filter bar (which carries the divider). */

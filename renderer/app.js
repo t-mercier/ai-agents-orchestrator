@@ -1370,37 +1370,63 @@ async function maybeShowSkillsBanner() {
     // they are. Two prompts for the same thing on a fresh install is one too many — and
     // this one carries a permanent "dismiss", so the wizard could lose the argument.
     if (window.onboardingPending) return
-    el.innerHTML =
-      '<span class="sb-text">The session skills (<code>/start-session</code>…) aren\'t installed yet. ' +
-      'Install them into <code>~/.claude/skills</code> to drive ＋New, Resume and Restart.</span>' +
-      '<button type="button" class="sb-install">Install skills</button>' +
-      '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
-    el.hidden = false
-    const install = el.querySelector('.sb-install')
-    install.addEventListener('click', async () => {
-      install.disabled = true; install.textContent = 'Installing…'
-      const res = await window.api.installSkills(false)
-      if (res && res.ok) {
-        el.hidden = true; el.innerHTML = ''
-        if (window.confirmAction) {
-          const n = (res.installed || []).filter(s => s !== 'lib').length
-          const extra = res.config_seeded ? ' A default config was created — set your spaces in Settings (⚙).' : ''
-          window.confirmAction({ title: 'Session skills installed', body: `${n} skills are now in ~/.claude/skills.${extra} Open a fresh Claude Code session to use them.`, confirmLabel: 'OK' })
-        }
-      } else {
-        install.disabled = false; install.textContent = 'Install skills'
-        if (window.confirmAction) window.confirmAction({ title: 'Install failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
-      }
-    })
-    el.querySelector('.sb-dismiss').addEventListener('click', () => {
-      localStorage.setItem('csm.skillsBannerDismissed', '1')
-      el.hidden = true; el.innerHTML = ''
-    })
+    // The wizard may not have said yet that it opens: it asks the backend first, and that
+    // answer can come after this one. Ask the same question rather than race it; the
+    // wizard's close calls refreshSkillsBanner, which offers the install if still needed.
+    if (window.api.needsOnboarding && await window.api.needsOnboarding()) return
+    showInstallNudge(el)
     return
   }
   await syncSkillsOnLaunch(el)
   await maybeOfferAppUpdate(el)
   maybeOfferCheckoutUpdate(el)
+}
+
+// Called when the wizard closes: hide an install offer the wizard made stale, or make it
+// if the wizard was left without installing.
+window.refreshSkillsBanner = async () => {
+  const el = document.getElementById('skills-banner')
+  if (!el || !window.api || !window.api.skillsStatus) return
+  let status
+  try { status = await window.api.skillsStatus() } catch { return }
+  if (!status) return
+  const none = !status.installed && !((status.present || []).length)
+  if (!none) {
+    if (el.dataset.kind === 'install') { el.hidden = true; el.innerHTML = ''; delete el.dataset.kind }
+    return
+  }
+  if (localStorage.getItem('csm.skillsBannerDismissed') === '1' || el.dataset.kind === 'install') return
+  showInstallNudge(el)
+}
+
+function showInstallNudge(el) {
+  el.dataset.kind = 'install'
+  el.innerHTML =
+    '<span class="sb-text">The session skills (<code>/start-session</code>…) aren\'t installed yet. ' +
+    'Install them into <code>~/.claude/skills</code> to drive ＋New, Resume and Restart.</span>' +
+    '<button type="button" class="sb-install">Install skills</button>' +
+    '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
+  el.hidden = false
+  const install = el.querySelector('.sb-install')
+  install.addEventListener('click', async () => {
+    install.disabled = true; install.textContent = 'Installing…'
+    const res = await window.api.installSkills(false)
+    if (res && res.ok) {
+      el.hidden = true; el.innerHTML = ''; delete el.dataset.kind
+      if (window.confirmAction) {
+        const n = (res.installed || []).filter(s => s !== 'lib').length
+        const extra = res.config_seeded ? ' A default config was created — set your spaces in Settings (⚙).' : ''
+        window.confirmAction({ title: 'Session skills installed', body: `${n} skills are now in ~/.claude/skills.${extra} Open a fresh Claude Code session to use them.`, confirmLabel: 'OK' })
+      }
+    } else {
+      install.disabled = false; install.textContent = 'Install skills'
+      if (window.confirmAction) window.confirmAction({ title: 'Install failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+    }
+  })
+  el.querySelector('.sb-dismiss').addEventListener('click', () => {
+    localStorage.setItem('csm.skillsBannerDismissed', '1')
+    el.hidden = true; el.innerHTML = ''; delete el.dataset.kind
+  })
 }
 
 // Skills are installed → keep them at this build's versions, silently, the way an app
