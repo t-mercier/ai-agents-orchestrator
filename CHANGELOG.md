@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pause and Close session in the terminal toolbar work again.** Since 0.19.0 the app runs
+  under a security policy that blocks any action written in the page's HTML, and these
+  buttons (the detail window's Close too) were wired that way: they lit up under the pointer
+  and did nothing. They are now wired from the app's scripts, and a test clicks them under
+  the app's own policy.
+
 ## [0.22.3] - 2026-10-01
 
 ### Fixed

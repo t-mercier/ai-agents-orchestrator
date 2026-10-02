@@ -448,6 +448,11 @@ window.pauseActiveTerminal = () => {
   if (window.refreshSessions) window.refreshSessions()
 }
 window.hasLiveTerminal = hasLiveTerminal
+// The toolbar's buttons are wired here, never with onclick="…" in the HTML: the app's CSP
+// (script-src 'self') blocks every handler written in a page, so those buttons did nothing
+// in the app from 0.19.0, when the CSP arrived, while the CSP-less test fixture clicked fine.
+document.querySelectorAll('.terminal-pause-btn').forEach(b => b.addEventListener('click', () => window.pauseActiveTerminal()))
+document.querySelectorAll('.terminal-close-btn').forEach(b => b.addEventListener('click', () => window.closeTerminalPane()))
 // "Pause" (list/card action, no wrap-up): kill a session's live embedded terminal by its
 // Map key WITHOUT any /close-session injection — the session just goes idle (dead pid),
 // stays in Running. Handles both the visible pane (hides it) and a backgrounded one.
