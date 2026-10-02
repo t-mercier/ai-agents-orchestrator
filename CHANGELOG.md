@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.4] - 2026-10-02
+
 ### Fixed
 
 - **Pause and Close session in the terminal toolbar work again.** Since 0.19.0 the app runs
