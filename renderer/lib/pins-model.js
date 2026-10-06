@@ -16,7 +16,9 @@
 
   // A pin only means something in the Running tab: once a session is closed, archived or
   // gone, its pin is dropped, or it would hold a slot nobody can see. An empty running
-  // list keeps every pin, so a fetch that returned nothing cannot wipe them all.
+  // list keeps every pin, so a backend that briefly answers with no session cannot wipe
+  // them; closing the last running session then keeps its pin until the next non-empty
+  // poll, which is invisible since a closed session never shows as pinned.
   function keepRunning(keys, runningKeys) {
     if (!runningKeys.length) return keys
     const live = new Set(runningKeys)

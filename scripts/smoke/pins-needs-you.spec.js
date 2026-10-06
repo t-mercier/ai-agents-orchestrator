@@ -35,13 +35,15 @@ test('a session that leaves Running is unpinned', async ({ page }) => {
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('csm.pinnedKeys')))).toEqual([])
 })
 
-test('closed sessions show no pin control', async ({ page }) => {
+test('a closed session shows no pin control and does not float as pinned', async ({ page }) => {
   await seed(page)
   await page.evaluate(async () => {
+    window.togglePin('/Users/dev/work/FEAT/p-0/notes.md')
     window.__seeded[0] = { ...window.__seeded[0], state: 'closed' }
     renderAll(window.__seeded, null, 'closed', true)
   })
   await expect(page.locator('.pin-btn[data-pin-key="/Users/dev/work/FEAT/p-0/notes.md"]')).toHaveCount(0)
+  await expect(page.locator('.list-pinned')).toHaveCount(0)
 })
 
 test('"Needs you" stays at the top while the list scrolls', async ({ page }) => {

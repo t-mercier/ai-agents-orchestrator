@@ -25,7 +25,7 @@ describe('keepRunning', () => {
     expect(Pins.keepRunning(['a', 'closed', 'gone'], ['a', 'b'])).toEqual(['a'])
   })
 
-  test('keeps every pin when the running list is empty, so a failed fetch cannot wipe them', () => {
+  test('keeps every pin when the running list is empty, so an empty answer cannot wipe them', () => {
     expect(Pins.keepRunning(['a', 'b'], [])).toEqual(['a', 'b'])
   })
 })

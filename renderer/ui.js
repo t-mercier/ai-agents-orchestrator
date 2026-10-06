@@ -246,11 +246,12 @@ function hasBusy(sessions) {
 }
 
 // Pin state is owned by app.js (persisted in localStorage, capped). These read it.
-function isPinnedSession(s) {
-  return !!(window.isPinned && window.isPinned(sessionKey(s)))
-}
-// Closed and archived sessions cannot be pinned: their pin is dropped on the next poll.
+// Closed and archived sessions cannot be pinned, and a pin they still hold (dropped on the
+// next Running poll) does not float them.
 const canPin = (s) => s.state !== 'closed' && s.state !== 'archived'
+function isPinnedSession(s) {
+  return canPin(s) && !!(window.isPinned && window.isPinned(sessionKey(s)))
+}
 function pinBtn(s) {
   if (!canPin(s)) return ''
   const k = sessionKey(s)
