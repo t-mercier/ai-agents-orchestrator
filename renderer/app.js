@@ -39,25 +39,23 @@ function rootCategoryNames() { return [...new Set(filterCategories())] }
 const activeSpaceFilters = new Set()
 window.passesSpaceFilter = (root) => activeSpaceFilters.size === 0 || root == null || activeSpaceFilters.has(root)
 
-// Pinned sessions float to the top. Capped (a grid screenful) and persisted
+// Pinned sessions float to the top. Capped (lib/pins-model.js) and persisted
 // locally — these are app prefs, not session state, so no ~/.claude writes.
-const PIN_LIMIT = 8
-let pinnedKeys = new Set()
-try { pinnedKeys = new Set(JSON.parse(localStorage.getItem('csm.pinnedKeys') || '[]')) } catch { /* ignore */ }
+let pinnedKeys = []
+try { pinnedKeys = JSON.parse(localStorage.getItem('csm.pinnedKeys') || '[]') } catch { /* ignore */ }
+function savePins() {
+  try { localStorage.setItem('csm.pinnedKeys', JSON.stringify(pinnedKeys)) } catch { /* ignore */ }
+}
 
-function isPinned(key) { return pinnedKeys.has(key) }
+function isPinned(key) { return pinnedKeys.includes(key) }
 function togglePin(key) {
-  if (pinnedKeys.has(key)) {
-    pinnedKeys.delete(key)
-  } else {
-    if (pinnedKeys.size >= PIN_LIMIT) {
-      const el = document.getElementById('cat-filter-list') || document.body
-      el.animate?.([{ opacity: 1 }, { opacity: 0.4 }, { opacity: 1 }], { duration: 250 })
-      return  // at the cap — ignore
-    }
-    pinnedKeys.add(key)
+  const { keys, result } = window.CSMPins.toggle(pinnedKeys, key)
+  if (result === 'full') {
+    shortcutNote(`Max pinned sessions reached (${window.CSMPins.PIN_LIMIT}) — unpin one first`)
+    return
   }
-  try { localStorage.setItem('csm.pinnedKeys', JSON.stringify([...pinnedKeys])) } catch { /* ignore */ }
+  pinnedKeys = keys
+  savePins()
   renderAll(filterSessions(sessions, searchQuery), selectedKey, activeTab, true)
 }
 window.isPinned = isPinned
@@ -500,6 +498,11 @@ async function fetchAndRender(resort = false) {
     // current view or clobber the shared session list.
     if (tab !== activeTab) return
     sessions = fetched
+    // Closed, archived or vanished sessions give their pin back (lib/pins-model.js).
+    if (tab === 'running') {
+      const kept = window.CSMPins.keepRunning(pinnedKeys, fetched.map(s => s.notesPath || s.sessionId || s.name || ''))
+      if (kept.length !== pinnedKeys.length) { pinnedKeys = kept; savePins() }
+    }
     window._lastSessions = sessions
     window._lastSelectedKey = selectedKey
     window._sessionsLoaded = true   // first fetch done → empty list shows "empty", not "Loading…"

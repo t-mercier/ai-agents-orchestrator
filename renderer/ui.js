@@ -249,7 +249,10 @@ function hasBusy(sessions) {
 function isPinnedSession(s) {
   return !!(window.isPinned && window.isPinned(sessionKey(s)))
 }
+// Closed and archived sessions cannot be pinned: their pin is dropped on the next poll.
+const canPin = (s) => s.state !== 'closed' && s.state !== 'archived'
 function pinBtn(s) {
+  if (!canPin(s)) return ''
   const k = sessionKey(s)
   const p = isPinnedSession(s)
   return `<button class="pin-btn ${p ? 'pinned' : ''}" data-pin-key="${escapeHtml(k)}"
@@ -645,7 +648,8 @@ function renderPanelList(sessions, selectedKey, changedKeys) {
   let html = ''
   if (waiting.length) {
     waiting.sort((a, b) => rankOf(a) - rankOf(b))
-    html += renderCategoryGroup('⚡ Needs you', waiting, selectedKey, changedKeys)
+    // Sticky (style.css .needs-you-sticky): stays in view while the rest of the list scrolls.
+    html += `<div class="needs-you-sticky">${renderCategoryGroup('⚡ Needs you', waiting, selectedKey, changedKeys)}</div>`
   }
   if (pinned.length) html += renderPinnedBlock(pinned, selectedKey, changedKeys)
   if (multi) {
@@ -1517,7 +1521,7 @@ function sessionMenuRows(s) {
         'Sync tickets and pull requests')
     : row('', '', 'Sync tickets and pull requests', 'This session has no ticket and no pull request'))
   rows.push(row('', `data-open-board="${escapeHtml(sessionKey(s))}"`, 'Add to board…'))
-  rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
+  if (canPin(s)) rows.push(row('pin-btn', `data-pin-key="${escapeHtml(sessionKey(s))}"`,
     isPinnedSession(s) ? 'Unpin from the top' : 'Pin to the top'))
   const iv = inviteVerdict(s)
   if (!iv.hidden) rows.push(iv.why ? row('', '', 'Invite models…', iv.why) : row('', `data-invite-models="${escapeHtml(s.notesPath)}"`, 'Invite models…'))
