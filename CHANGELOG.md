@@ -10,6 +10,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.5] - 2026-10-07
+
+### Fixed
+
+- **Pinning a session works again once old pins are gone.** Pins are capped at 8, and sessions
+  that had been closed, archived or deleted kept their pin while showing nowhere, so the cap
+  could be reached with fewer than 8 visible pins and a click on the bookmark did nothing. A
+  session now gives its pin back when it leaves Running, closed and archived sessions no longer
+  offer a pin, and a ninth pin says "Max pinned sessions reached (8) — unpin one first".
+
+### Changed
+
+- **"Needs you" stays at the top of the list while you scroll.** Sessions waiting for you no
+  longer scroll out of view; past almost half the column, the group scrolls inside its own box.
+
 ## [0.22.4] - 2026-10-02
 
 ### Fixed
