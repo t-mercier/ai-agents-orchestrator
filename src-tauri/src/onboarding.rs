@@ -131,6 +131,8 @@ pub fn import_session_headless(
     if !is_valid_session_id(&session_id) {
         return Err("invalid sessionId".into());
     }
+    // Import the conversation that lives now, not one Claude Code has continued elsewhere.
+    let session_id = reader::live_session_of(&session_id);
     let cfg = config::load();
     let category = resolve_category(&cfg, &category)?;
     let want_root = root.trim();

@@ -120,7 +120,7 @@ pub fn run_skill(skill: String, cwd: String, resume: Option<String>) -> Result<V
             if !crate::is_valid_session_id(id) {
                 return Err(format!("not a session id: {id}"));
             }
-            format!(" --resume {}", crate::pty::shell_quote(id))
+            format!(" --resume {}", crate::pty::shell_quote(&crate::resume_target(id)))
         }
         _ => String::new(),
     };

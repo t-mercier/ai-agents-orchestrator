@@ -292,6 +292,7 @@ fn open_in_terminal(cwd: String, session_id: String) -> Result<(), String> {
     // mode would leave the session perpetually "stale" because the close never records.
     // Matches +New / Import (which already force auto for the same reason).
     let settings_arg = launch_settings_arg();
+    let session_id = resume_target(&session_id);
     let cmd = if std::path::Path::new(&cwd).is_absolute() {
         format!(
             "cd {} && claude --resume {}{} --permission-mode auto{}",
@@ -1028,16 +1029,63 @@ fn remove_from_active_sessions(notes_path: &str, abs: &std::path::Path) -> Resul
 /// process whose id it does not know is an unmanaged one. Both writes belong to the same
 /// repair. Silent when there is nothing under `from` — the caller has already decided.
 pub(crate) fn rekey_registry_entry(from: &str, to: &str) -> Result<(), String> {
+    rekey_registry_entry_at(&config::home().join(".claude").join("active-sessions.json"), from, to)
+}
+
+fn rekey_registry_entry_at(active: &std::path::Path, from: &str, to: &str) -> Result<(), String> {
     if from == to || to.is_empty() {
         return Ok(());
     }
-    let active = config::home().join(".claude").join("active-sessions.json");
-    let Ok(s) = std::fs::read_to_string(&active) else { return Ok(()) };
+    let Ok(s) = std::fs::read_to_string(active) else { return Ok(()) };
     let Ok(serde_json::Value::Object(mut map)) = serde_json::from_str(&s) else { return Ok(()) };
     let Some(entry) = map.remove(from) else { return Ok(()) };
     map.insert(to.to_string(), entry);
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(map)).map_err(|e| e.to_string())?;
-    atomic_write(&active, &body)
+    atomic_write(active, &body)
+}
+
+/// The conversation `claude --resume` must reopen for `sid`.
+///
+/// When Claude Code continues a conversation under a new id, it leaves the old transcript in
+/// place with a `continued-in` pointer, and `--resume <old id>` reopens the old one frozen at
+/// that point: a session resumed after an app update came back two days in the past. Every
+/// resume therefore follows the pointer, and the notes and the registry are moved to the live
+/// id (the Doctor's KIND_CONTINUED repair, applied at once), so the next Close or skill run
+/// reopens the same conversation.
+pub(crate) fn resume_target(sid: &str) -> String {
+    let live = reader::live_session_of(sid);
+    if live != sid {
+        let registry = config::home().join(".claude").join("active-sessions.json");
+        if let Err(e) = adopt_live_session(&registry, sid, &live, notes_md_under_root) {
+            eprintln!("[ai-agents-orchestrator] {sid} continued in {live}; notes not repointed: {e}");
+        }
+    }
+    live
+}
+
+/// Point the registry entry for `from`, and its notes' `session_id`, at `to`. The notes are
+/// rewritten only while they still name `from`, so a notes.md already moved on is left alone.
+fn adopt_live_session(
+    registry: &std::path::Path,
+    from: &str,
+    to: &str,
+    notes_abs: impl Fn(&str) -> Result<std::path::PathBuf, String>,
+) -> Result<(), String> {
+    let notes_path = std::fs::read_to_string(registry)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get(from)?.get("notes_path")?.as_str().map(str::to_string));
+    if let Some(np) = notes_path {
+        let abs = notes_abs(&np)?;
+        let content = std::fs::read_to_string(&abs).map_err(|e| e.to_string())?;
+        let names_from = reader::parse_frontmatter(&content).get("session_id").map(String::as_str) == Some(from);
+        if names_from {
+            if let Some(next) = doctor::rewrite_session_id(&content, to) {
+                atomic_write(&abs, &next)?;
+            }
+        }
+    }
+    rekey_registry_entry_at(registry, from, to)
 }
 
 /// Drop registry entries pointing at `notes_path`, matching the stored string only.
@@ -1304,6 +1352,7 @@ fn wrap_session(notes_path: String, session_id: String, cwd: String) -> Result<S
     if !std::path::Path::new(&cwd).is_dir() {
         return Err(format!("no such working directory: {cwd}"));
     }
+    let session_id = resume_target(&session_id);
     // The minute this Close began: the wrap counts only if it stamps a close at or after it.
     let started = local_date_time().map(|(d, t)| format!("{d} {t}"));
     let started_ms = std::time::SystemTime::now()
@@ -1657,6 +1706,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use super::adopt_live_session;
     #[test]
     fn the_window_behind_the_app_takes_each_theme_s_background() {
         assert_eq!(super::window_bg("dusk"), (42, 45, 56));
@@ -2037,6 +2087,46 @@ mod tests {
     /// Concurrent writers to the SAME file used to share one fixed `.ao-tmp`, so one of
     /// them renamed a path the other had already moved away ("os error 2"). Unique tmp
     /// names make every writer independent; one of them wins, none of them fails.
+    /// A conversation continued under a new id: the notes and the registry follow it, so the
+    /// next resume, Close or skill run reopens the live conversation, not the frozen one.
+    #[test]
+    fn a_continued_conversation_moves_the_notes_and_the_registry_to_the_live_id() {
+        let dir = std::env::temp_dir().join(format!("ao-adopt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let notes = dir.join("notes.md");
+        let registry = dir.join("active-sessions.json");
+        std::fs::write(&notes, "---\nsession_id: old-id\nname: x\n---\n\n# Body\n").unwrap();
+        std::fs::write(&registry, serde_json::json!({
+            "old-id": { "notes_path": notes.to_string_lossy() },
+            "other": { "notes_path": "/elsewhere/notes.md" },
+        }).to_string()).unwrap();
+
+        adopt_live_session(&registry, "old-id", "live-id", |p| Ok(std::path::PathBuf::from(p))).unwrap();
+
+        let reg: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&registry).unwrap()).unwrap();
+        assert!(reg.get("old-id").is_none() && reg.get("live-id").is_some(), "registry rekeyed: {reg}");
+        assert!(reg.get("other").is_some(), "other entries kept");
+        let after = std::fs::read_to_string(&notes).unwrap();
+        assert!(after.contains("session_id: live-id") && after.contains("name: x") && after.ends_with("# Body\n"), "{after}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Notes that already name another conversation are not pulled back.
+    #[test]
+    fn notes_that_moved_on_are_not_rewritten() {
+        let dir = std::env::temp_dir().join(format!("ao-adopt-kept-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let notes = dir.join("notes.md");
+        let registry = dir.join("active-sessions.json");
+        std::fs::write(&notes, "---\nsession_id: newer-id\n---\n").unwrap();
+        std::fs::write(&registry, serde_json::json!({ "old-id": { "notes_path": notes.to_string_lossy() } }).to_string()).unwrap();
+
+        adopt_live_session(&registry, "old-id", "live-id", |p| Ok(std::path::PathBuf::from(p))).unwrap();
+
+        assert!(std::fs::read_to_string(&notes).unwrap().contains("session_id: newer-id"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn concurrent_atomic_writes_do_not_collide() {
         let dir = std::env::temp_dir().join(format!("ao-atomic-{}", std::process::id()));

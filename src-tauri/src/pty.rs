@@ -298,7 +298,7 @@ pub fn pty_spawn(
         format!(
             "cd {} && claude --resume {}{} --permission-mode auto{}",
             shell_quote(&cwd),
-            shell_quote(&session_id),
+            shell_quote(&crate::resume_target(&session_id)),
             model_flag(),
             settings_arg,
         )
