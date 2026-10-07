@@ -10,6 +10,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.6] - 2026-10-07
+
+### Fixed
+
+- **Resuming a session reopens where you left it.** When Claude Code carries a conversation on
+  under a new id, it leaves a pointer in the old one, and the app resumed the old one: a
+  session could come back days in the past. Resume, Close and skill runs now follow that
+  pointer, and the session's notes are moved to the conversation that is alive.
+
 ## [0.22.5] - 2026-10-07
 
 ### Fixed
