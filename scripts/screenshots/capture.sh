@@ -27,6 +27,8 @@ SHOTS=(
   "settings:settings.png:1440:900"
   "terminal:terminal.png:1440:900"
   "brutus:brutus.png:1440:900"
+  "landing:landing.png:1440:1000"
+  "landingRunning:landing-running.png:1440:1000"
 )
 
 find_chrome() {

@@ -24,6 +24,8 @@ const CONFIG = {
               TEST: '#8fb8d8', PERSO: '#c9a2d9' },
   ticketBaseUrl: 'https://jira.example.com/browse/',
   scanDirs: [{ base: '/Users/dev/work', root: 'Work' }],
+  // The skill shortcuts, so the shots show the row as it looks once someone uses the app.
+  pinnedSkills: { global: ['sync-refs'], session: ['save-session', 'ask-other-models', 'wrap-session'] },
 }
 
 const S = (o) => {
@@ -135,10 +137,11 @@ const KANBAN = {
   colorSeed: '#7E93B8', colorScheme: 'spectrum',
 }
 
+// The field names `renderUsage` reads (app.js). The old `weeklyPct` / `fiveHourResetAt` matched
+// nothing, so the shots showed the 5h bar alone, without its reset, 7d or ctx.
 const USAGE = {
-  model: 'Opus 5', fiveHourPct: 38, weeklyPct: 54,
-  fiveHourResetAt: NOW + 2 * 3600_000, weeklyResetAt: NOW + 3 * 86400_000,
-  sessions: { 'checkout-redesign': { model: 'Opus 5', contextPct: 41 } },
+  model: 'Opus 5.5 (1M context)', fiveHourPct: 2, sevenDayPct: 58, contextPct: 25,
+  fiveHourResetsAt: NOW + (4 * 60 + 32) * 60_000, sevenDayResetsAt: NOW + 86400_000,
 }
 
 // ── Backend stub ───────────────────────────────────────────────────────────────
@@ -237,6 +240,15 @@ const SCENES = {
     click('#panel-list .list-card[data-key$="checkout-redesign/notes.md"]')
     await sleep(250)
   },
+  // landing.png — a session whose process has ended: the state in which the app shows the
+  // ACTIONS row (Resume, Close, the pinned skills). Taller, so the row clears the bottom edge.
+  async landing() {
+    await waitFor(() => document.querySelector('#panel-list .list-card'))
+    click('#panel-list .list-card[data-key$="legacy-export/notes.md"]')
+    await sleep(250)
+  },
+  // landing-running.png — the same window with a session running: the terminal fills the pane.
+  async landingRunning() { await SCENES.terminal() },
   // light.png — same, light theme.
   async light() {
     await SCENES.list()

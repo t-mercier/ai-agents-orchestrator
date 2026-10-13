@@ -32,6 +32,9 @@ loudly if `index.html` moves them.
 | `board` | `board.png` | Board: a group, an urgent flag, attached notes |
 | `settings` | `settings.png` | Settings → Appearance over the board |
 | `terminal` | `terminal.png` | Embedded terminal, output pushed through the real `pty-data` path |
+| `brutus` | `brutus.png` | List view with the ⌘K palette open, Brutus answering |
+| `landing` | `landing.png` | Landing page, 1440×1000: a session whose process has ended, the only state with the ACTIONS row |
+| `landingRunning` | `landing-running.png` | Landing page, 1440×1000: the same window with the session's terminal open |
 
 Add a shot: add a scene to `fixture.js`, then a `scene:file:w:h` line to `SHOTS` in
 `capture.sh`.
