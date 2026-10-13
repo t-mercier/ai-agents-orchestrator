@@ -157,6 +157,7 @@
   /* feature rows */
   .feature { display: grid; grid-template-columns: 1fr 1.15fr; gap: 56px; align-items: center; margin-bottom: 96px; }
   .feature:last-child { margin-bottom: 0; }
+  .grid3 + .feature { margin-top: 96px; }   /* the cards had no gap before the first feature */
   .feature.flip .copy { order: 2; }
   .feature h3 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 14px; }
   .feature p { color: var(--muted); font-size: 16.5px; }
