@@ -140,14 +140,14 @@ test('a context menu opens at the pointer', async ({ page }) => {
 
 test('the titlebar shows one empty pinned slot, sized like its neighbours', async ({ page }) => {
   // Shipped: three fixed slots, each a 36x32 icon square next to 25px-tall buttons.
-  const slots = page.locator('#pin-global .pin-slot')
-  await expect(slots).toHaveCount(1)
-  await expect(slots.first()).toHaveClass(/empty/)
+  // The fixture pins sync-refs in the titlebar, so the empty slot follows the pinned ones.
+  await expect(page.locator('#pin-global .pin-slot.empty')).toHaveCount(1)
+  await expect(page.locator('#pin-global .pin-slot').last()).toHaveClass(/empty/)
 
   const { slot, neighbour } = await page.evaluate(() => {
     const h = (el) => Math.round(el.getBoundingClientRect().height)
     return {
-      slot: h(document.querySelector('#pin-global .pin-slot')),
+      slot: h(document.querySelector('#pin-global .pin-slot.empty')),
       neighbour: h(document.getElementById('settings-btn')),
     }
   })
