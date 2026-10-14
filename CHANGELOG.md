@@ -10,11 +10,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-14
+
 ### Added
 
 - **Brutus speaks first.** When you arrive in the morning, come back from a break, or a case
   moves while you work, he says in a bubble who is waiting on your answer, which steps your notes
-  left for you, what was merged or moved, and how many sessions went stale — and offers to list
+  left for you, what was merged or moved, and how many sessions went stale, and offers to list
   them. Nothing is repeated twice in a day. Turn it off, set the stale threshold or quiet hours in
   Settings → AI Companion.
 - **`👤` marks a step that needs you.** The session skills now mark a Next step that needs an
