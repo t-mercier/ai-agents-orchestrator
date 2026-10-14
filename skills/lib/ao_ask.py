@@ -12,8 +12,6 @@ outlives the command that started it (see `_run`).
     ao_ask.py wait   --session <notes.md> <job id>                  [--follow SECONDS]
     ao_ask.py status --session <notes.md>
     ao_ask.py stop   --session <notes.md> <job id>
-
-Spec: docs/superpowers/specs/2026-09-30-invite-models-design.md.
 """
 import json
 import os

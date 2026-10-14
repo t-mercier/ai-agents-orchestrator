@@ -2,7 +2,7 @@
 //! through `skills/lib/ao_ask.py`. The app writes who is invited into the session's
 //! notes.md, reads the thread of consultations back from `other-models.md` and the jobs from
 //! `.ao/asks/*/job.json`, stops a job, and keeps an invitee's `claude -p` out of the session
-//! list. Spec: docs/superpowers/specs/2026-09-30-invite-models-design.md.
+//! list.
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};

@@ -1,7 +1,6 @@
 // Brutus speaks first: at the morning arrival, back from a pause, and when a case moves.
 // This file only decides WHEN and keeps the record; lib/nudge-model.js decides WHAT, the
 // backend words it (one tool-less Haiku run) and brutus.js draws it.
-// See docs/superpowers/specs/2026-10-13-brutus-nudges-design.md.
 ;(function () {
   const N = window.CSMNudgeModel
   if (!N || !window.api || !window.api.brutusNudge) return

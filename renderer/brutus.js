@@ -1,6 +1,6 @@
 // Brutus in the app: a bubble (default home) or a docked side panel, and a ⌘K palette
 // over either — one conversation shared by all three. The backend streams each run as
-// 'brutus-event's; this file only renders them. See docs/superpowers/specs/2026-09-23-brutus-design.md.
+// 'brutus-event's; this file only renders them.
 ;(function () {
   if (!window.api || !window.api.brutusAsk) return
   const M = window.CSMBrutus

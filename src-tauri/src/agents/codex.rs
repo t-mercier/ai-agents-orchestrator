@@ -1,6 +1,5 @@
 //! Codex CLI sessions: where their rollouts are, what state they are in, and which rollout
-//! a session the app just started wrote. Shapes observed on codex-cli 0.158.0 (see the
-//! probe results in docs/superpowers/research/2026-09-28-codex-copilot-parity.md).
+//! a session the app just started wrote. Shapes observed on codex-cli 0.158.0.
 
 use super::Fold;
 use serde_json::Value;

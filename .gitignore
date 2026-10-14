@@ -34,6 +34,8 @@ secrets.json
 
 # Local scratch
 .superpowers/
+# Design specs, plans and research: kept locally, not published.
+docs/superpowers/
 
 # Python bytecode
 __pycache__/

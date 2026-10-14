@@ -1552,7 +1552,7 @@ function sessionMenuRows(s) {
   return rows.join('')
 }
 
-// ── Other models (docs/superpowers/specs/2026-09-30-invite-models-design.md) ─────────────
+// ── Other models ──
 // A session's agent consults invited models read-only through ao_ask.py. The app writes who
 // is invited (advisors_set), types the invitation into the session's terminal, and shows
 // the thread of consultations (other_models).

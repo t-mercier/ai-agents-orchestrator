@@ -2240,7 +2240,6 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .btn-ghost:hover { color: var(--text-primary); border-color: var(--accent); }
 
 /* ===== Brutus ===== */
-/* Ported from the approved demo (docs/superpowers/specs/2026-09-23-brutus/ui-demo.js). */
 .bru-av { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%;
   background: linear-gradient(135deg, var(--accent), #5fb8a8); color:#fff; font:800 11px/1 var(--font);
   flex:none; box-shadow: 0 0 0 1px rgba(var(--tint),.08) inset; }

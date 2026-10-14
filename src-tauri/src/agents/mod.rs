@@ -1,6 +1,5 @@
 //! The three agent CLIs a session can run in — Claude Code, Codex and Copilot — and the one
-//! place that knows how each is launched. See
-//! docs/superpowers/specs/2026-09-28-multi-agent-parity-design.md.
+//! place that knows how each is launched.
 
 use crate::pty::shell_quote;
 

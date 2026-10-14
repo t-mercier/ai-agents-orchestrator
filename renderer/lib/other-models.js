@@ -1,8 +1,7 @@
 // Invited models: other models a session's agent consults read-only (skills/lib/ao_ask.py).
 // This is the pure part the UI builds on: names, ids, the chip, the line typed into the
 // session's terminal, and which thread entries show open. UMD like the other lib/ models:
-// window.CSMOtherModels in the renderer, require() in jest. Spec:
-// docs/superpowers/specs/2026-09-30-invite-models-design.md.
+// window.CSMOtherModels in the renderer, require() in jest.
 (function (root, factory) {
   const api = factory()
   if (typeof module !== 'undefined' && module.exports) module.exports = api

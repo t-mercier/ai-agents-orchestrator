@@ -1,6 +1,5 @@
 //! GitHub Copilot CLI sessions (1.0 and later): where their events are and what state they
-//! are in. Shapes observed on 1.0.89 (see the probe results in
-//! docs/superpowers/research/2026-09-28-codex-copilot-parity.md).
+//! are in. Shapes observed on 1.0.89.
 
 use super::Fold;
 use serde_json::Value;

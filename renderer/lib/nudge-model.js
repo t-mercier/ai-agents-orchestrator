@@ -1,6 +1,6 @@
 // Brutus's nudges: which facts are worth saying at which moment. UMD like the other lib/
 // models: window.CSMNudgeModel in the renderer, require() in jest. Pure: no DOM, no storage,
-// no clock of its own — every time is passed in. See docs/superpowers/specs/2026-10-13-brutus-nudges-design.md.
+// no clock of its own — every time is passed in.
 (function (root, factory) {
   const api = factory()
   if (typeof module !== 'undefined' && module.exports) module.exports = api
