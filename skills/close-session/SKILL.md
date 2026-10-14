@@ -99,6 +99,7 @@ From the work done in this session, gather:
   - **At most 7 items, all open (`- [ ]`), one line each, ≤100 characters, imperative.** If an item needs a paragraph to justify it, it is an **Open question**, not a step.
   - **A finished item is DELETED, not ticked.** Its record already exists twice — in *Decisions made* (dated, with the reason) and in *Session history*. The third copy, undated and unreadable, is what turned one session's list into 99 lines (270 in another).
   - **The first line is the top priority and nothing else** — no preamble, no parenthesised status line. The dashboard reads that first line as the card's "where was I" cue and truncates it at 64 characters, so anything else there is what the session looks like from the outside.
+  - **Mark with `👤` a step that needs an action from the person** — a decision, a capture on a device, a message to send, a credential to rotate: `- [ ] 👤 Take the capture on the test phone for FEAT-1842`. Brutus reminds the person of these; leave it off what the agent can do itself.
 - **One-line summary** — a concrete result in past tense, 10–15 words (not "worked on X").
 
 Skip noise (don't list every read/grep). **Re-validate Goal** if it's drifted (rewrite in one line if needed).

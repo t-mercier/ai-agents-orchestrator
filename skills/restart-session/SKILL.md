@@ -330,6 +330,7 @@ Read the current session's `cwd` from its `~/.claude/sessions/<pid>.json`.
 **If the session's plan has changed** (you see the next steps are no longer realistic/clear, or the Goal has drifted — common after a restart) — rewrite them:
 - Edit Goal to one line if it needs it.
 - Edit Next steps: a todo-list (`- [ ]` items, ≤7 open, one line each); mark completed as `- [x]`.
+Mark with `👤` a step that needs an action from the person (a decision, a capture on a device, a message to send): `- [ ] 👤 …`. Brutus reminds the person of these.
 - Brief the user that you've refreshed the plan (one sentence).
 
 Print a tight 5-second summary:

@@ -208,6 +208,7 @@ listed work the session had nothing to do with.
 Read the notes you just created. **DO NOT leave `<fill in>` placeholders.** Rewrite:
 - **Goal**: a single line capturing what was asked (the real why), in plain English.
 - **Next steps**: a todo-list (`- [ ]` items), 3–7 items, one line each. Concrete: what comes next (not general advice). Mark any already-done items as `- [x]`.
+Mark with `👤` a step that needs an action from the person (a decision, a capture on a device, a message to send): `- [ ] 👤 …`. Brutus reminds the person of these.
 
 Both are mandatory — stop and ask the user if the task is unclear. If you can infer the real goal from the context, write it yourself (don't push it to the user later).
 

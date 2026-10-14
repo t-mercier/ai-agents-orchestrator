@@ -17,6 +17,7 @@
     homeOpen: false, palette: false, running: false, stopping: false,
     log: (() => { try { return JSON.parse(store.get(LOG_KEY, '[]')) } catch { return [] } })(),
     steps: [], pendingText: '', memory: 0,
+    nudge: null, recap: null, idle: [],
   }
   const name = () => ((window.CSM_CONFIG || {}).assistant || {}).name || 'Brutus'
   // Turned off in Settings: nothing of him is drawn, and ⌘K goes back to the page.
@@ -105,7 +106,27 @@
     : esc(M.initialOf(name()))
   const av = (cls = 'lg', still = false, badge = false) => `<span class="bru-pet ${cls}">${face(still, badge)}</span>`
 
+  const NM = () => window.CSMNudgeModel
+  // Opened or put away: renderer/nudges.js stops keeping it as pending.
+  const nudgeDone = () => window.dispatchEvent(new Event('brutus-nudge-done'))
+  // A nudge turn carries its stale list, so "want me to list them?" can answer from it.
+  function nudgeTurnHTML(t) {
+    const list = t.stale && t.stale.length && !t.listed ? `<button type="button" class="bru-nudge-list" data-bru="nudge-list" data-turn="${state.log.indexOf(t)}">${NM().words(t.lang).listAsk}</button>` : ''
+    return `<div class="bru-b">${av('', true)}<div class="bru-bt">${M.renderAnswer(t.text, sessions())}${list}</div></div>`
+  }
+  function nudgeBubble() {
+    if (!state.nudge || state.homeOpen || state.palette) return
+    const n = document.createElement('div')
+    n.className = `bru-nudge ${state.home === 'side' ? 'under-tb' : ''}`
+    n.setAttribute('role', 'status')
+    const w = NM().words(state.nudge.lang)
+    n.innerHTML = `<div class="bru-bt">${M.renderAnswer(NM().preview(state.nudge.text, 3, state.nudge.lang), sessions())}</div>
+      <div class="bru-nudge-acts"><button type="button" class="bru-nudge-open" data-bru="nudge-open">${w.open}</button><button type="button" data-bru="nudge-later">${w.later}</button></div>`
+    n.addEventListener('click', onClick)
+    document.body.appendChild(n)
+  }
   function turnHTML(t) {
+    if (t.role === 'brutus' && t.nudge) return nudgeTurnHTML(t)
     if (t.role === 'user') return `<div class="bru-u">${esc(t.text)}</div>`
     if (t.role === 'error') return `<div class="bru-b">${av('', true)}<div class="bru-bt bru-err">${esc(t.text)}</div></div>`
     return `<div class="bru-b">${av('', true)}<div class="bru-bt">${t.steps ? `<div class="bru-steps">${I.eye}${esc(t.steps)}</div>` : ''}${M.renderAnswer(t.text, sessions())}</div></div>`
@@ -136,7 +157,7 @@
     // plays its entrance, or every answer would slide it in again.
     const wasHome = !!document.querySelector('.bru-panel.v-A, .bru-panel.v-C')
     const wasPalette = !!document.querySelector('.bru-panel.v-B')
-    document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab').forEach(e => e.remove())
+    document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab,.bru-nudge').forEach(e => e.remove())
     const tb = document.getElementById('brutus-btn')
     if (!enabled()) {
       document.querySelectorAll('.bru-toast,.bru-menu').forEach(e => e.remove())
@@ -176,6 +197,7 @@
       if (wasPalette) p.classList.add('bru-still')
       p.querySelector('input')?.focus()
     }
+    nudgeBubble()
   }
   function mount(cls, html) {
     const p = document.createElement('div')
@@ -204,6 +226,17 @@
     if (sugg) return send(sugg.textContent)
     const a = e.target.closest('[data-bru]'); if (!a) return
     const k = a.dataset.bru
+    if (k === 'nudge-open') {
+      const n = state.nudge; state.nudge = null
+      state.log.push({ role: 'brutus', nudge: true, text: n.text, stale: n.stale || [], lang: n.lang }); saveLog()
+      state.recap = n.text; state.homeOpen = true; render(); nudgeDone(); return
+    }
+    if (k === 'nudge-later') { state.nudge = null; render(); nudgeDone(); return }
+    if (k === 'nudge-list') {
+      const t = state.log[Number(a.dataset.turn)]; if (!t) return
+      t.listed = true
+      state.log.push({ role: 'brutus', text: NM().staleLines(t.stale, t.lang) }); saveLog(); render(); return
+    }
     if (k === 'close') { state.homeOpen = false; render() }
     else if (k === 'send') send(a.closest('.bru-panel').querySelector('input').value)
     else if (k === 'stop') stop()
@@ -221,7 +254,10 @@
     state.log.push({ role: 'user', text: t }); saveLog()
     state.running = true; state.stopping = false; state.steps = []; state.pendingText = ''
     render()
-    try { await window.api.brutusAsk(t) }
+    // The reply to a nudge goes with the nudge: his conversation does not contain it.
+    const msg = state.recap ? NM().withRecap(state.recap, t) : t
+    state.recap = null
+    try { await window.api.brutusAsk(msg) }
     catch (e) { finish({ kind: 'error', message: String(e) }) }
   }
   // Stop is received even before claude has started (the backend is still preparing):
@@ -234,6 +270,7 @@
   function finish(ev) {
     if (!state.running) return
     state.running = false; state.stopping = false
+    const waiters = state.idle.splice(0); setTimeout(() => waiters.forEach(cb => cb()), 0)
     // A moment of joy when an answer lands, then back to rest.
     if (ev.kind === 'done' && !ev.is_error) { state.happyUntil = Date.now() + 2400; setTimeout(render, 2500) }
     if (ev.kind === 'error' || (ev.kind === 'done' && ev.is_error)) {
@@ -333,6 +370,18 @@
   window.CSMBrutusUI = {
     open: () => { state.homeOpen = true; render() }, close: () => { state.homeOpen = false; render() },
     palette: () => { state.palette = true; render() }, setHome, refresh,
+    // A nudge that arrives while another is still unread joins it: replacing it would lose
+    // reminders that were already recorded as said.
+    showNudge: (n) => {
+      if (!enabled() || !n || !n.text) return
+      const prev = state.nudge
+      state.nudge = { text: prev ? `${prev.text}\n${n.text}` : n.text, stale: n.stale || (prev && prev.stale) || [], lang: n.lang === 'fr' ? 'fr' : 'en' }
+      render()
+    },
+    // The nudge on screen, merged as shown, so renderer/nudges.js can keep it until it is seen.
+    pendingNudge: () => (state.nudge ? { ...state.nudge } : null),
+    onIdle: (cb) => { if (!state.running) cb(); else state.idle.push(cb) },
+    lastUserText: () => { const u = [...state.log].reverse().find(t => t.role === 'user'); return u ? u.text : '' },
   }
   refresh()
 })()

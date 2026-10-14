@@ -604,6 +604,22 @@
               <div class="bru-card" id="set-assistant-sample"></div>
             </div>
             <div class="settings-section">
+              <label class="modal-field checkbox-field">
+                <input id="set-assistant-nudges" type="checkbox">
+                <span>Nudges</span>
+                <em class="modal-hint">He speaks first when you arrive, come back from a break, or a case moves: who is waiting on you, what you noted to do, what went stale.</em>
+              </label>
+              <label class="modal-field">
+                <span>A session is stale after</span>
+                <input id="set-assistant-stale" type="number" min="1" max="60" step="1"> <span class="field-hint">days</span>
+              </label>
+              <label class="modal-field">
+                <span>Do not disturb</span>
+                <span><input id="set-assistant-quiet-from" type="time"> to <input id="set-assistant-quiet-to" type="time"></span>
+                <small class="field-hint">Leave empty to allow nudges at any time.</small>
+              </label>
+            </div>
+            <div class="settings-section">
               <span class="modal-label">Appears as</span>
               <label class="modal-field checkbox-field"><input type="radio" name="set-assistant-home" value="bubble"><span>Bubble</span><em class="modal-hint">Bottom-right. Right-click it to dock him in the side panel.</em></label>
               <label class="modal-field checkbox-field"><input type="radio" name="set-assistant-home" value="side"><span>Side panel</span><em class="modal-hint">Docked on the right; the dashboard makes room.</em></label>
@@ -776,6 +792,7 @@
   <script src="lib/skill-launch-model.js"></script>
   <script src="lib/search-model.js"></script>
   <script src="lib/brutus-model.js"></script>
+  <script src="lib/nudge-model.js"></script>
   <script src="lib/pets.js"></script>
   <script src="lib/keymap.js"></script>
   <script src="lib/frame-probe.js"></script>
@@ -790,6 +807,7 @@
   <script src="onboarding.js"></script>
   <script src="app.js"></script>
   <script src="brutus.js"></script>
+  <script src="nudges.js"></script>
   <script src="board.js"></script>
   <script src="settings/core.js"></script>
   <script src="settings/general.js"></script>

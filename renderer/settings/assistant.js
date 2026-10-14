@@ -33,6 +33,10 @@
     const a = (window.CSM_CONFIG || {}).assistant || {}
     $('set-assistant-enabled').checked = a.enabled !== false
     $('set-assistant-name').value = a.name || 'Brutus'
+    $('set-assistant-nudges').checked = a.nudges !== false
+    $('set-assistant-stale').value = String(a.staleDays || window.CSMNudgeModel.STALE_DAYS)
+    $('set-assistant-quiet-from').value = (a.quietHours && a.quietHours.from) || ''
+    $('set-assistant-quiet-to').value = (a.quietHours && a.quietHours.to) || ''
     style = STYLES[a.style] ? a.style : 'concise'
     pet = window.CSMPets && window.CSMPets.NAMES.includes(a.pet) ? a.pet : 'blob'
     let home = 'bubble'; try { home = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}
@@ -40,7 +44,14 @@
     paint()
   }
   function collect(out) {
-    out.assistant = { name: ($('set-assistant-name').value || '').trim() || 'Brutus', style, enabled: $('set-assistant-enabled').checked, pet }
+    const days = Math.round(Number($('set-assistant-stale').value))
+    const from = $('set-assistant-quiet-from').value, to = $('set-assistant-quiet-to').value
+    out.assistant = { name: ($('set-assistant-name').value || '').trim() || 'Brutus', style, enabled: $('set-assistant-enabled').checked, pet,
+      // The backend normalises all three again (config.rs): an out-of-range day count or a
+      // half-filled window falls back rather than passing through.
+      nudges: $('set-assistant-nudges').checked,
+      staleDays: days >= 1 && days <= 60 ? days : window.CSMNudgeModel.STALE_DAYS,
+      quietHours: from && to && from !== to ? { from, to } : null }
     // Only on a real change: setHome opens him in his new home, which every Save must not do.
     const home = document.querySelector('input[name="set-assistant-home"]:checked')
     let was = 'bubble'; try { was = localStorage.getItem('csm.brutusHome') === 'side' ? 'side' : 'bubble' } catch {}

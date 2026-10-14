@@ -100,6 +100,24 @@ pub(crate) fn clean_assistant_name(raw: &str) -> String {
     no_ctrl.trim().chars().take(ASSISTANT_NAME_MAX).collect()
 }
 
+const STALE_DAYS_DEFAULT: u64 = 3;
+
+/// "HH:MM", 00:00–23:59.
+fn valid_hhmm(s: &str) -> bool {
+    let Some((h, m)) = s.split_once(':') else { return false };
+    h.len() == 2 && m.len() == 2
+        && h.parse::<u8>().is_ok_and(|h| h < 24)
+        && m.parse::<u8>().is_ok_and(|m| m < 60)
+}
+
+fn quiet_hours_of(v: Option<&Value>) -> Value {
+    let get = |k: &str| v.and_then(|q| q.get(k)).and_then(Value::as_str).filter(|s| valid_hhmm(s));
+    match (get("from"), get("to")) {
+        (Some(f), Some(t)) if f != t => json!({ "from": f, "to": t }),
+        _ => Value::Null,
+    }
+}
+
 fn assistant_of(user: &Value) -> Value {
     let a = user.get("assistant");
     let name = a
@@ -120,7 +138,15 @@ fn assistant_of(user: &Value) -> Value {
         .and_then(Value::as_str)
         .filter(|p| ASSISTANT_PETS.contains(p))
         .unwrap_or(ASSISTANT_PETS[0]);
-    json!({ "name": name, "style": style, "enabled": enabled, "pet": pet })
+    let nudges = a.and_then(|a| a.get("nudges")).and_then(Value::as_bool).unwrap_or(true);
+    let stale_days = a
+        .and_then(|a| a.get("staleDays"))
+        .and_then(Value::as_u64)
+        .filter(|d| (1..=60).contains(d))
+        .unwrap_or(STALE_DAYS_DEFAULT);
+    let quiet = quiet_hours_of(a.and_then(|a| a.get("quietHours")));
+    json!({ "name": name, "style": style, "enabled": enabled, "pet": pet,
+            "nudges": nudges, "staleDays": stale_days, "quietHours": quiet })
 }
 
 /// Whether the user has Brutus turned on, read from a derived config.
@@ -660,15 +686,36 @@ mod tests {
     #[test]
     fn assistant_defaults_to_brutus_concise_and_normalises_what_it_is_given() {
         let d = derive(&default_config());
-        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true, "pet": "blob" }));
+        assert_eq!(d["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true, "pet": "blob", "nudges": true, "staleDays": 3, "quietHours": null }));
 
         let mut c = default_config();
         c["assistant"] = json!({ "name": "  Jarvis\u{7}  ", "style": "nerdy" });
-        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy", "enabled": true, "pet": "blob" }));
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Jarvis", "style": "nerdy", "enabled": true, "pet": "blob", "nudges": true, "staleDays": 3, "quietHours": null }));
 
         c["assistant"] = json!({ "name": "", "style": "shouty" });
-        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true, "pet": "blob" }),
+        assert_eq!(derive(&c)["assistant"], json!({ "name": "Brutus", "style": "concise", "enabled": true, "pet": "blob", "nudges": true, "staleDays": 3, "quietHours": null }),
             "an empty name and an unknown style fall back, never pass through");
+    }
+
+    // 2026-10-13, Brutus nudges: on unless turned off, a stale threshold in days, and an
+    // optional quiet window. Anything malformed falls back, never passes through.
+    #[test]
+    fn nudge_settings_are_normalised() {
+        let mut c = default_config();
+        c["assistant"] = json!({ "nudges": false, "staleDays": 7, "quietHours": { "from": "22:00", "to": "07:30" } });
+        let a = derive(&c)["assistant"].clone();
+        assert_eq!(a["nudges"], false);
+        assert_eq!(a["staleDays"], 7);
+        assert_eq!(a["quietHours"], json!({ "from": "22:00", "to": "07:30" }));
+
+        c["assistant"] = json!({ "nudges": "no", "staleDays": 0, "quietHours": { "from": "25:00", "to": "07:00" } });
+        let a = derive(&c)["assistant"].clone();
+        assert_eq!(a["nudges"], true, "a non-boolean is not a choice");
+        assert_eq!(a["staleDays"], 3, "0 days would call every session stale");
+        assert_eq!(a["quietHours"], serde_json::Value::Null, "25:00 is not a time");
+
+        c["assistant"] = json!({ "staleDays": 400 });
+        assert_eq!(derive(&c)["assistant"]["staleDays"], 3);
     }
 
     // Asked for on 2026-09-28: not everyone wants an assistant. Only an explicit false

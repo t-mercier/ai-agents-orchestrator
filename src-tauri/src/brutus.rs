@@ -63,9 +63,195 @@ const MESSAGE_FILE: &str = "message.txt";
 /// and not on the shell's stdin either: an rc file that reads stdin would swallow it. It
 /// is redirected from a file into claude alone.
 pub(crate) fn shell_line(p: &Plan) -> String {
-    let args: Vec<String> = claude_args(p).iter().map(|a| pty::shell_quote(a)).collect();
-    let msg = format!("{}/{MESSAGE_FILE}", p.dir);
-    format!("cd {} && exec env AO_HEADLESS=1 claude {} < {}", pty::shell_quote(&p.dir), args.join(" "), pty::shell_quote(&msg))
+    headless_line(&p.dir, &claude_args(p), &format!("{}/{MESSAGE_FILE}", p.dir))
+}
+
+/// `claude` run from `dir` with `args`, its stdin redirected from `input`. Shared by the
+/// chat and the nudge runs.
+fn headless_line(dir: &str, args: &[String], input: &str) -> String {
+    let args: Vec<String> = args.iter().map(|a| pty::shell_quote(a)).collect();
+    format!("cd {} && exec env AO_HEADLESS=1 claude {} < {}", pty::shell_quote(dir), args.join(" "), pty::shell_quote(input))
+}
+
+const NUDGE_FILE: &str = "nudge.txt";
+const NUDGE_TIMEOUT: Duration = Duration::from_secs(20);
+const MAX_PAYLOAD: usize = 16_000;
+static NUDGING: AtomicBool = AtomicBool::new(false);
+
+/// The nudge run, as probed (scripts/probe-brutus-sandbox.sh): no tool, no folder, no MCP,
+/// Haiku whatever model Brutus answers on. Nothing to resume: each nudge stands alone.
+pub(crate) fn nudge_args(agents: &str) -> Vec<String> {
+    [
+        "--restricted", "--agents", agents, "--agent", brutus_agent::NUDGE_AGENT, "-p",
+        "--output-format", "json", "--tools", "", "--strict-mcp-config",
+        "--permission-mode", "dontAsk", "--model", "haiku",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
+/// Writes the facts to `nudge.txt` in `dir` and returns the line that feeds them to claude,
+/// with the file's path. The facts come from the person's notes: they go through the file,
+/// never through the command line.
+pub(crate) fn prepare_nudge(dir: &std::path::Path, payload: &str, agents: &str) -> Result<(String, std::path::PathBuf), String> {
+    let input = dir.join(NUDGE_FILE);
+    std::fs::write(&input, payload).map_err(|e| format!("could not write the facts: {e}"))?;
+    let line = headless_line(&dir.to_string_lossy(), &nudge_args(agents), &input.to_string_lossy());
+    Ok((line, input))
+}
+
+pub(crate) fn check_payload(p: &str) -> Result<String, String> {
+    if p.chars().count() > MAX_PAYLOAD {
+        return Err(format!("nudge payload over {MAX_PAYLOAD} characters"));
+    }
+    let v: Value = serde_json::from_str(p).map_err(|_| "nudge payload is not JSON".to_string())?;
+    if !v.is_object() {
+        return Err("nudge payload must be an object".into());
+    }
+    Ok(v.to_string())
+}
+
+/// `{message, triage}` from the run's JSON output. The model may wrap its JSON in a code
+/// fence; anything that is not one non-empty message and well-formed triage is an error,
+/// and the renderer then words the nudge from its templates.
+pub(crate) fn parse_nudge_reply(stdout: &str) -> Result<Value, String> {
+    let out: Value = serde_json::from_str(stdout.trim()).map_err(|_| "no result from claude".to_string())?;
+    if out.get("is_error").and_then(Value::as_bool).unwrap_or(true) {
+        return Err("the nudge run failed".into());
+    }
+    let text = out.get("result").and_then(Value::as_str).unwrap_or("");
+    let (Some(a), Some(b)) = (text.find('{'), text.rfind('}')) else { return Err("no JSON in the reply".into()) };
+    let v: Value = serde_json::from_str(&text[a..=b]).map_err(|_| "the reply is not JSON".to_string())?;
+    let message = v.get("message").and_then(Value::as_str).map(str::trim).filter(|m| !m.is_empty())
+        .ok_or("the reply has no message")?;
+    let mut triage = serde_json::Map::new();
+    for (k, val) in v.get("triage").and_then(Value::as_object).into_iter().flatten() {
+        if brutus_home::is_triage_entry(k, val) {
+            triage.insert(k.clone(), val.clone());
+        }
+    }
+    Ok(json!({ "message": message, "triage": triage }))
+}
+
+/// Clears NUDGING on drop, panics included.
+pub(crate) struct Nudging;
+impl Drop for Nudging {
+    fn drop(&mut self) {
+        NUDGING.store(false, Ordering::SeqCst);
+    }
+}
+
+/// One nudge at a time, and none while Brutus answers: a nudge never interrupts him. The
+/// chat does not check NUDGING, so a message sent during a nudge is never refused.
+pub(crate) fn take_nudge_slot() -> Result<Nudging, String> {
+    if BUSY.load(Ordering::SeqCst) || NUDGING.swap(true, Ordering::SeqCst) {
+        return Err("busy".into());
+    }
+    Ok(Nudging)
+}
+
+/// Removes the facts file and kills the run's whole process group, on every way out of a
+/// run: whatever the login shell or claude started is gone with it.
+struct NudgeRun {
+    input: std::path::PathBuf,
+    child: Option<Child>,
+}
+impl Drop for NudgeRun {
+    fn drop(&mut self) {
+        if let Some(c) = self.child.as_mut() {
+            // The run leads its own session, so its id is also its group's.
+            if let Ok(pgid) = i32::try_from(c.id()) {
+                unsafe { libc::killpg(pgid, libc::SIGKILL) };
+            }
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+        let _ = std::fs::remove_file(&self.input);
+    }
+}
+
+/// How long the output may take to close once the run's group is killed: a process that
+/// left the group can still hold it open, and the run is over either way.
+const NUDGE_DRAIN: Duration = Duration::from_secs(1);
+
+/// Runs `cmd` to its end or to `timeout`, and returns its stdout. A failed run reports its
+/// exit status and the first line it wrote to stderr, so a nudge that keeps falling back to
+/// the templates can be diagnosed from the log.
+pub(crate) fn wait_nudge(mut cmd: Command, input: &std::path::Path, timeout: Duration) -> Result<String, String> {
+    use std::os::unix::process::CommandExt;
+    let mut run = NudgeRun { input: input.to_path_buf(), child: None };
+    // A session of its own, not only a group: an interactive login shell in a background
+    // group of the app's terminal is stopped as soon as it touches the terminal (measured
+    // under `cargo tauri dev`), while a new session has no terminal at all.
+    unsafe {
+        cmd.pre_exec(|| if libc::setsid() == -1 { Err(std::io::Error::last_os_error()) } else { Ok(()) });
+    }
+    let child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()
+        .map_err(|e| format!("could not start claude: {e}"))?;
+    let child = run.child.insert(child);
+    let drain = |r: Option<Box<dyn std::io::Read + Send>>| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut s = String::new();
+            if let Some(mut r) = r {
+                let _ = r.read_to_string(&mut s);
+            }
+            let _ = tx.send(s);
+        });
+        rx
+    };
+    let out = drain(child.stdout.take().map(|r| Box::new(r) as Box<dyn std::io::Read + Send>));
+    let err = drain(child.stderr.take().map(|r| Box::new(r) as Box<dyn std::io::Read + Send>));
+    let started = Instant::now();
+    let status = loop {
+        if let Some(st) = child.try_wait().map_err(|e| e.to_string())? {
+            break Some(st);
+        }
+        if started.elapsed() > timeout {
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    // Over or ended, the run is done: what it left behind goes, so the output can close.
+    drop(run);
+    let collect = |rx: std::sync::mpsc::Receiver<String>| rx.recv_timeout(NUDGE_DRAIN).unwrap_or_default();
+    let (out, err) = (collect(out), collect(err));
+    match status {
+        None => Err(format!("the nudge took longer than {} s", timeout.as_secs_f32())),
+        Some(s) if !s.success() => {
+            let first = err.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+            Err(format!("claude exited with {s}{}", if first.is_empty() { String::new() } else { format!(": {first}") }))
+        }
+        Some(_) => Ok(out),
+    }
+}
+
+#[tauri::command(async)]
+pub fn brutus_nudge(payload: String) -> Result<Value, String> {
+    let payload = check_payload(&payload)?;
+    let cfg = config::load();
+    if !config::assistant_enabled(&cfg) {
+        return Err("The assistant is turned off.".into());
+    }
+    // Refused while he answers: the renderer waits for him to finish and asks once more.
+    let _slot = take_nudge_slot()?;
+    let dir = brutus_home::ensure()?;
+    let a = cfg.get("assistant").cloned().unwrap_or(Value::Null);
+    let agents = brutus_agent::nudge_agents_json(
+        a.get("name").and_then(Value::as_str).unwrap_or("Brutus"),
+        a.get("style").and_then(Value::as_str).unwrap_or("concise"),
+    );
+    let (line, input) = prepare_nudge(&dir, &payload, &agents)?;
+    let mut cmd = Command::new(crate::shell::user_shell());
+    cmd.args(["-ilc", &line]);
+    let started = Instant::now();
+    let r = wait_nudge(cmd, &input, NUDGE_TIMEOUT).and_then(|out| parse_nudge_reply(&out));
+    match &r {
+        Ok(_) => log::info!("brutus: nudge worded in {} ms", started.elapsed().as_millis()),
+        Err(e) => log::warn!("brutus: nudge failed after {} ms: {e}", started.elapsed().as_millis()),
+    }
+    r
 }
 
 #[derive(Serialize, Debug, PartialEq, Clone)]
@@ -504,6 +690,25 @@ pub fn brutus_open_memory() -> Result<(), String> {
     Command::new(opener).arg(dir.join("memory.md")).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn brutus_nudge_state() -> Value {
+    let d = brutus_home::dir();
+    let read = |f: &str| brutus_home::read_state_file(&d.join(f)).unwrap_or_else(|e| {
+        log::warn!("brutus: {e}; nudges start empty and the file is not saved over");
+        None
+    });
+    let (n, t) = (read("nudges.json"), read("triage.json"));
+    for f in brutus_home::unreadable_nudge_files(n.as_deref(), t.as_deref()) {
+        log::warn!("brutus: {f} could not be read and starts empty");
+    }
+    brutus_home::nudge_state_from(n.as_deref(), t.as_deref())
+}
+
+#[tauri::command]
+pub fn brutus_nudge_save(state: Value) -> Result<(), String> {
+    brutus_home::save_nudge_state_in(&brutus_home::ensure()?, &state)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -771,5 +976,129 @@ mod tests {
         p.resume = None;
         ask(p, |_| { runs += 1; Ok(true) }, || panic!("nothing to forget")).unwrap();
         assert_eq!(runs, 1);
+    }
+
+    #[test]
+    fn the_nudge_run_has_no_tool_no_folder_and_haiku() {
+        let a = nudge_args(r#"{"brutus-nudge":{}}"#);
+        let at = |f: &str| a.iter().position(|x| x == f).map(|i| a[i + 1].clone());
+        assert_eq!(at("--tools").as_deref(), Some(""));
+        assert_eq!(at("--model").as_deref(), Some("haiku"));
+        assert_eq!(at("--agent").as_deref(), Some("brutus-nudge"));
+        assert_eq!(at("--output-format").as_deref(), Some("json"));
+        for f in ["--restricted", "--strict-mcp-config", "-p"] { assert!(a.contains(&f.to_string()), "{f}") }
+        assert!(!a.contains(&"--add-dir".to_string()) && !a.contains(&"--resume".to_string()));
+    }
+
+    #[test]
+    fn the_facts_go_to_a_file_and_never_reach_the_command_line() {
+        let t = std::env::temp_dir().join(format!("ao-brutus-nudge-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let (line, input) = prepare_nudge(&t, r#"{"items":[{"text":"MARKER-4711"}]}"#, r#"{"brutus-nudge":{}}"#).unwrap();
+        assert!(std::fs::read_to_string(&input).unwrap().contains("MARKER-4711"));
+        assert!(!line.contains("MARKER-4711"), "{line}");
+        assert!(line.ends_with(&format!("< {}", pty::shell_quote(&input.to_string_lossy()))), "{line}");
+        let _ = std::fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn a_nudge_is_refused_while_brutus_answers_or_another_nudge_runs() {
+        let _g = GLOBALS.lock().unwrap_or_else(|e| e.into_inner());
+        let answering = Busy::acquire().expect("free");
+        assert_eq!(take_nudge_slot().err().as_deref(), Some("busy"));
+        drop(answering);
+        let first = take_nudge_slot().expect("free once he is done");
+        assert_eq!(take_nudge_slot().err().as_deref(), Some("busy"));
+        assert!(Busy::acquire().is_ok(), "a nudge never blocks the chat");
+        drop(first);
+        assert!(take_nudge_slot().is_ok(), "released on drop");
+    }
+
+    fn sh(script: &str) -> Command {
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", script]);
+        c
+    }
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let f = std::env::temp_dir().join(format!("ao-nudge-{name}-{}", std::process::id()));
+        std::fs::write(&f, "{}").unwrap();
+        f
+    }
+
+    #[test]
+    fn a_nudge_run_over_its_time_is_killed_and_its_file_removed() {
+        let input = scratch("slow");
+        let started = Instant::now();
+        let r = wait_nudge(sh("sleep 5"), &input, Duration::from_millis(300));
+        assert!(r.unwrap_err().contains("longer than"));
+        assert!(started.elapsed() < Duration::from_secs(3), "killed, not waited for");
+        assert!(!input.exists());
+    }
+
+    #[test]
+    fn a_nudge_run_that_fails_reports_its_exit_and_first_error_line() {
+        let input = scratch("fail");
+        let e = wait_nudge(sh("echo 'not logged in' >&2; echo more >&2; exit 3"), &input, Duration::from_secs(5)).unwrap_err();
+        assert!(e.contains("exited") && e.contains("not logged in") && !e.contains("more"), "{e}");
+        assert!(!input.exists());
+    }
+
+    #[test]
+    fn a_nudge_run_that_succeeds_returns_its_output() {
+        let input = scratch("ok");
+        assert_eq!(wait_nudge(sh("echo out"), &input, Duration::from_secs(5)).unwrap().trim(), "out");
+        assert!(!input.exists());
+    }
+
+    fn gone(pid: i32) -> bool {
+        (0..40).any(|_| { std::thread::sleep(Duration::from_millis(50)); (unsafe { libc::kill(pid, 0) }) != 0 })
+    }
+
+    #[test]
+    fn a_nudge_run_over_its_time_returns_even_when_a_child_holds_its_output() {
+        let input = scratch("holder");
+        let pidf = std::env::temp_dir().join(format!("ao-nudge-holder-pid-{}", std::process::id()));
+        let started = Instant::now();
+        let r = wait_nudge(sh(&format!("sleep 30 & echo $! > '{}'; sleep 10", pidf.display())), &input, Duration::from_millis(300));
+        assert!(r.unwrap_err().contains("longer than"));
+        assert!(started.elapsed() < Duration::from_secs(3), "returned after {:?}", started.elapsed());
+        let pid: i32 = std::fs::read_to_string(&pidf).unwrap().trim().parse().unwrap();
+        assert!(gone(pid), "the background child is killed with the run");
+        let _ = std::fs::remove_file(&pidf);
+    }
+
+    #[test]
+    fn a_nudge_run_that_exits_returns_even_when_a_child_keeps_its_output_open() {
+        let input = scratch("lingers");
+        let started = Instant::now();
+        let r = wait_nudge(sh("echo out; sleep 30 &"), &input, Duration::from_secs(10));
+        assert_eq!(r.unwrap().trim(), "out");
+        assert!(started.elapsed() < Duration::from_secs(4), "returned after {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn a_nudge_run_that_cannot_start_still_removes_its_file() {
+        let input = scratch("nostart");
+        assert!(wait_nudge(Command::new("/nonexistent/ao-shell"), &input, Duration::from_secs(1)).is_err());
+        assert!(!input.exists());
+    }
+
+    #[test]
+    fn a_nudge_reply_is_read_from_the_result_and_held_to_its_shape() {
+        let out = r#"{"type":"result","is_error":false,"result":"```json\n{\"message\":\"[[session:a]] waits.\",\"triage\":{\"0a1b2c3d\":\"you\",\"zz\":\"you\",\"1a2b3c4d\":\"maybe\"}}\n```"}"#;
+        let v = parse_nudge_reply(out).unwrap();
+        assert_eq!(v["message"], "[[session:a]] waits.");
+        assert_eq!(v["triage"], json!({ "0a1b2c3d": "you" }), "a bad key or value is dropped");
+        assert!(parse_nudge_reply(r#"{"type":"result","is_error":true,"result":"x"}"#).is_err());
+        assert!(parse_nudge_reply(r#"{"type":"result","is_error":false,"result":"no json here"}"#).is_err());
+        assert!(parse_nudge_reply(r#"{"type":"result","is_error":false,"result":"{\"message\":\"\"}"}"#).is_err());
+        assert!(parse_nudge_reply("garbage").is_err());
+    }
+
+    #[test]
+    fn a_payload_is_a_bounded_json_object() {
+        assert!(check_payload(r#"{"moment":"morning"}"#).is_ok());
+        assert!(check_payload("[1]").is_err());
+        assert!(check_payload(&format!(r#"{{"x":"{}"}}"#, "a".repeat(17_000))).is_err());
     }
 }

@@ -85,6 +85,13 @@
     brutusStatus: () => invoke('brutus_status').catch(() => ({ memoryCount: 0, running: false, hasConversation: false })),
     brutusOpenDoc: (name) => invoke('brutus_open_doc', { name }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
     brutusOpenMemory: () => invoke('brutus_open_memory').then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    // null when it cannot be read: renderer/nudges.js then starts from its own empty state.
+    brutusNudgeState: () => invoke('brutus_nudge_state').catch(() => null),
+    // Saving is best-effort: a failed save only means a reminder may be said once more.
+    brutusNudgeSave: (state) => invoke('brutus_nudge_save', { state }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
+    // One Haiku run turning facts into a sentence. Never throws: the caller falls back to
+    // its templates on { ok: false }, 'busy' included.
+    brutusNudge: (payload) => invoke('brutus_nudge', { payload }).then((r) => ({ ok: true, ...r })).catch((e) => ({ ok: false, error: String(e) })),
     onEvent: (name, cb) => window.__TAURI__.event.listen(name, (e) => cb(e.payload)),
 
     // ── New-session launcher (src-tauri/src/lib.rs) ──

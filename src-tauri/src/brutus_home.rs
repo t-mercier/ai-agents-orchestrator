@@ -212,6 +212,81 @@ pub(crate) fn memory_count(text: &str) -> usize {
     text.lines().filter(|l| l.trim_start().starts_with("- ")).count()
 }
 
+const NUDGE_STATE_MAX: usize = 1 << 20;
+
+/// What the nudges remember between runs, from `nudges.json` and `triage.json`. A missing
+/// or unreadable file is an empty state: the next run then takes the morning shape.
+pub(crate) fn nudge_state_from(nudges: Option<&str>, triage: Option<&str>) -> Value {
+    let n: Value = nudges.and_then(|s| serde_json::from_str(s).ok()).unwrap_or(Value::Null);
+    let t: Value = triage.and_then(|s| serde_json::from_str(s).ok()).filter(Value::is_object).unwrap_or(json!({}));
+    let said = n.get("said").cloned().filter(Value::is_object).unwrap_or(json!({}));
+    let last_visit = n.get("lastVisit").cloned().filter(Value::is_number).unwrap_or(Value::Null);
+    let last_facts = n.get("lastFacts").cloned().filter(Value::is_array).unwrap_or(Value::Null);
+    let pending = n.get("pending").cloned().filter(Value::is_object).unwrap_or(Value::Null);
+    json!({ "said": said, "lastVisit": last_visit, "lastFacts": last_facts, "triage": t, "pending": pending })
+}
+
+/// The state files that exist but cannot be read back. They are reset on the next save, so
+/// the caller logs them first.
+pub(crate) fn unreadable_nudge_files(nudges: Option<&str>, triage: Option<&str>) -> Vec<&'static str> {
+    let bad = |s: Option<&str>| s.is_some_and(|s| !serde_json::from_str::<Value>(s).is_ok_and(|v| v.is_object()));
+    [("nudges.json", nudges), ("triage.json", triage)].into_iter().filter(|(_, s)| bad(*s)).map(|(f, _)| f).collect()
+}
+
+/// A triage answer: an 8-hex-digit line hash and one of two words. The only thing a model's
+/// output reaches on disk, so the reply parser and the save hold it to the same shape.
+pub(crate) fn is_triage_entry(k: &str, v: &Value) -> bool {
+    k.len() == 8 && k.bytes().all(|b| b.is_ascii_hexdigit()) && matches!(v.as_str(), Some("you") | Some("agent"))
+}
+
+/// The two file bodies for a state the renderer sends. Triage answers are the only thing
+/// a model's output reaches, so they are held to two words and a hash-shaped key.
+pub(crate) fn split_nudge_state(v: &Value) -> Result<(String, String), String> {
+    let o = v.as_object().ok_or("nudge state must be an object")?;
+    let triage = o.get("triage").cloned().unwrap_or(json!({}));
+    let t = triage.as_object().ok_or("triage must be an object")?;
+    if let Some(k) = t.iter().find(|(k, v)| !is_triage_entry(k, v)).map(|(k, _)| k) {
+        return Err(format!("not a triage entry: {k}"));
+    }
+    let pending = o.get("pending").cloned().unwrap_or(Value::Null);
+    if !(pending.is_null() || pending.is_object()) {
+        return Err("a pending nudge must be an object".into());
+    }
+    let nudges = json!({
+        "pending": pending,
+        "said": o.get("said").cloned().unwrap_or(json!({})),
+        "lastVisit": o.get("lastVisit").cloned().unwrap_or(Value::Null),
+        "lastFacts": o.get("lastFacts").cloned().unwrap_or(Value::Null),
+    })
+    .to_string();
+    let triage = triage.to_string();
+    if nudges.len() + triage.len() > NUDGE_STATE_MAX {
+        return Err("nudge state over 1 MiB".into());
+    }
+    Ok((nudges, triage))
+}
+
+/// A state file's body: `None` when it does not exist, an error when it exists and cannot
+/// be read. The two differ: a missing file starts empty, an unreadable one must not be
+/// saved over, or what it holds (what was said, the triage) would be lost for good.
+pub(crate) fn read_state_file(p: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(p) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("{}: {e}", p.display())),
+    }
+}
+
+/// Writes the two state files in `dir`, refusing while either exists and cannot be read.
+pub(crate) fn save_nudge_state_in(dir: &Path, state: &Value) -> Result<(), String> {
+    let (nudges, triage) = split_nudge_state(state)?;
+    for f in ["nudges.json", "triage.json"] {
+        read_state_file(&dir.join(f)).map_err(|e| format!("not saved over an unreadable file ({e})"))?;
+    }
+    crate::atomic_write(&dir.join("nudges.json"), &nudges)?;
+    crate::atomic_write(&dir.join("triage.json"), &triage)
+}
+
 /// True when `cwd` is Brutus's folder — his runs are Claude Code processes like any other,
 /// and must not be listed as sessions.
 pub(crate) fn is_brutus_cwd(cwd: &str) -> bool {
@@ -356,5 +431,62 @@ mod tests {
     fn memory_counts_bullets_only() {
         assert_eq!(memory_count("# Memory\n\n- 2026-09-23 likes short answers\n- x\ntext\n"), 2);
         assert_eq!(memory_count(""), 0);
+    }
+
+    #[test]
+    fn nudge_state_defaults_when_the_files_are_missing_or_broken() {
+        let v = nudge_state_from(None, Some("not json"));
+        assert_eq!(v, json!({ "said": {}, "lastVisit": null, "lastFacts": null, "triage": {}, "pending": null }));
+        assert_eq!(unreadable_nudge_files(None, Some("not json")), vec!["triage.json"]);
+        assert_eq!(unreadable_nudge_files(Some("{}"), Some("[]")), vec!["triage.json"], "triage must be an object");
+        assert!(unreadable_nudge_files(Some("{}"), None).is_empty(), "a missing file is not a broken one");
+    }
+
+    #[test]
+    fn nudge_state_round_trips_through_its_two_files() {
+        let st = json!({ "said": { "waiting|/w/a/notes.md": "2026-10-13" }, "lastVisit": 1760000000000u64,
+                         "lastFacts": [{ "key": "waiting|/w/a/notes.md" }], "triage": { "0a1b2c3d": "you" },
+                         "pending": { "text": "[[session:a]] waits.", "stale": [], "lang": "en" } });
+        let (n, t) = split_nudge_state(&st).unwrap();
+        assert_eq!(nudge_state_from(Some(&n), Some(&t)), st);
+    }
+
+    fn nudge_dir(name: &str) -> std::path::PathBuf {
+        let t = std::env::temp_dir().join(format!("ao-nudge-state-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        fs::create_dir_all(&t).unwrap();
+        t
+    }
+
+    #[test]
+    fn a_missing_state_file_reads_as_none_and_an_unreadable_one_as_an_error() {
+        let t = nudge_dir("read");
+        assert_eq!(read_state_file(&t.join("nudges.json")), Ok(None));
+        fs::create_dir(t.join("triage.json")).unwrap();
+        assert!(read_state_file(&t.join("triage.json")).is_err());
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn a_state_file_that_cannot_be_read_is_never_saved_over() {
+        let t = nudge_dir("save");
+        let st = json!({ "said": { "a": "2026-10-14" } });
+        save_nudge_state_in(&t, &st).unwrap();
+        assert!(fs::read_to_string(t.join("nudges.json")).unwrap().contains("2026-10-14"));
+        fs::remove_file(t.join("triage.json")).unwrap();
+        fs::create_dir(t.join("triage.json")).unwrap();
+        assert!(save_nudge_state_in(&t, &st).is_err());
+        assert!(t.join("triage.json").is_dir(), "left as it was");
+        let _ = fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn nudge_state_refuses_what_it_should_not_store() {
+        assert!(split_nudge_state(&json!([])).is_err());
+        assert!(split_nudge_state(&json!({ "triage": { "0a1b2c3d": "rm -rf" } })).is_err());
+        assert!(split_nudge_state(&json!({ "triage": { "../x": "you" } })).is_err());
+        let big = "x".repeat(1_100_000);
+        assert!(split_nudge_state(&json!({ "lastFacts": [big] })).is_err());
+        assert!(split_nudge_state(&json!({ "pending": "text" })).is_err(), "a pending nudge is an object or null");
     }
 }

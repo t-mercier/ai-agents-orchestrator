@@ -127,6 +127,7 @@ NOW=$(date +"%Y-%m-%d %H:%M"); TODAY=$(date +%Y-%m-%d)
 Write `$NOTES_PATH` (Write tool), substituting the bracketed values. Fill the Goal +
 Next steps from what you can infer about the conversation so far (it's already loaded);
 leave them as a short prompt if unclear.
+Mark with `👤` a step that needs an action from the person (a decision, a capture on a device, a message to send): `- [ ] 👤 …`. Brutus reminds the person of these.
 
 ```markdown
 ---

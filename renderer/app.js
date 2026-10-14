@@ -485,6 +485,8 @@ async function fetchAndRender(resort = false) {
         window.api.getHistoricalSessions('stale'),
       ])
       noteLiveSessions(active)
+      // Unfiltered, for Brutus's nudges: the list on screen follows the search box.
+      window._runningActive = active
       fetched = [...active, ...stale]
     } else {
       fetched = await window.api.getHistoricalSessions(tab)
@@ -1798,8 +1800,16 @@ async function boot() {
   setInterval(() => {
     if (viewMode === 'board') window.refreshBoard()
     else if (!fetchInFlight) fetchAndRender(false)
+    window.nudgePoll()
     refreshUsage()                            // refresh usage bar on every poll
   }, POLL_INTERVAL)
+}
+// Brutus's nudges watch the Running sessions on each poll (renderer/nudges.js): the full live
+// list, not the one on screen, which follows the search box.
+window.nudgePoll = () => {
+  if (window.CSMNudges && activeTab === 'running' && window._runningActive) {
+    window.CSMNudges.onPoll(window._runningActive).catch(e => console.warn('brutus nudges: poll failed', e))
+  }
 }
 window.reloadConfig = async () => {           // called by Settings after save
   window.CSM_CONFIG = await window.api.getConfig()
