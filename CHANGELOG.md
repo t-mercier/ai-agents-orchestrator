@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-10-16
+
 ### Changed
 
 - **Brutus's reminders read at a glance.** Each session is named once with its steps under it,
