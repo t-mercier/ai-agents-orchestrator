@@ -146,6 +146,33 @@ describe('decide', () => {
     expect(N.decide({ moment: 'morning', facts: f, previous: null, said: {}, now: NOW, settings: { ...on, nudges: false } })).toBe(null)
     expect(N.decide({ moment: 'morning', facts: f, previous: null, said: {}, now: NOW, settings: { ...on, quietHours: { from: '08:00', to: '10:00' } } })).toBe(null)
   })
+  test('every waiting agent is said, the steps stop at the cap, the rest is counted', () => {
+    const steps = Array.from({ length: 8 }, (_, i) => `- [ ] 👤 step ${i}`).join('\n')
+    const f = facts([S({ name: 'a', status: 'waiting', nextSteps: steps }), S({ name: 'b', status: 'waiting' })])
+    const d = N.decide({ moment: 'morning', facts: f, previous: null, said: {}, now: NOW, settings: on })
+    expect(d.items.filter(i => i.kind === 'waiting')).toHaveLength(2)
+    expect(d.items.filter(i => i.kind === 'task')).toHaveLength(N.MAX_TASKS)
+    expect(d.more).toBe(8 - N.MAX_TASKS)
+    expect(d.keys).toEqual(d.items.map(i => i.key))
+    expect(d.keys).toHaveLength(2 + N.MAX_TASKS)
+  })
+  test('the steps named rotate: the next morning names the ones left out first', () => {
+    const steps = Array.from({ length: 8 }, (_, i) => `- [ ] 👤 step ${i}`).join('\n')
+    const f = facts([S({ name: 'a', nextSteps: steps })])
+    const day1 = N.decide({ moment: 'morning', facts: f, previous: null, said: {}, now: NOW, settings: on })
+    const said = Object.fromEntries(day1.keys.map(k => [k, '2026-10-12']))
+    const day2 = N.decide({ moment: 'morning', facts: f, previous: f, said, now: NOW, settings: on })
+    expect(day2.items.filter(i => i.kind === 'task')).toHaveLength(N.MAX_TASKS)
+    const older = { ...said }; for (const k of day1.keys.slice(0, 2)) older[k] = '2026-10-10'
+    const day3 = N.decide({ moment: 'morning', facts: f, previous: f, said: older, now: NOW, settings: on })
+    expect(day3.items.map(i => i.text)).toEqual(expect.arrayContaining(['👤 step 0', '👤 step 1']))
+    expect(day2.items.filter(i => i.kind === 'task').map(i => i.text)).toEqual(expect.arrayContaining(['👤 step 5', '👤 step 6', '👤 step 7']))
+  })
+  test('a session is named once even when its steps are not next to each other', () => {
+    const t = N.template([{ kind: 'task', session: 'a', notesPath: '/a', text: 'one' }, { kind: 'task', session: 'b', notesPath: '/b', text: 'two' },
+      { kind: 'task', session: 'a', notesPath: '/a', text: 'three' }, { kind: 'task', session: 'a', notesPath: '/other', text: 'four' }])
+    expect(t.split('\n')).toEqual(['For [[session:a]]:', '- one', '- three', 'For [[session:b]]:', '- two', 'For [[session:a]]:', '- four'])
+  })
   test('untriaged lines travel beside the items, not as items', () => {
     const d = N.decide({ moment: 'morning', facts: facts([S({ name: 'a', status: 'waiting', nextSteps: '- [ ] check CI' })]), previous: null, said: {}, now: NOW, settings: on })
     expect(d.items.map(i => i.kind)).toEqual(['waiting'])
@@ -163,9 +190,22 @@ describe('wording', () => {
     expect(t).toContain('6 sessions have not moved for more than 3 days')
     expect(t).toContain('and 2 other open steps')
   })
+  test('the steps sit under their session, named once, each cut to one line', () => {
+    const long = 'decide with the owner whether the overlay keeps its own layer or moves into the shared style sheet'
+    const t = N.template([{ kind: 'task', session: 'a', text: 'one' }, { kind: 'task', session: 'a', text: long },
+      { kind: 'task', session: 'b', text: 'two' }])
+    expect(t.split('\n')).toEqual(['For [[session:a]]:', '- one', `- ${N.short(long)}`, 'For [[session:b]]:', '- two'])
+    expect(N.short(long).length).toBeLessThanOrEqual(70)
+    expect(N.short(long).endsWith('…')).toBe(true)
+    expect(N.short('short enough')).toBe('short enough')
+  })
+  test('the steps left out and the untriaged lines are one count', () => {
+    expect(N.template([{ kind: 'waiting', session: 'a' }], 2, 'en', 3).split('\n').pop()).toBe('… and 5 other open steps.')
+  })
   test('preview keeps three lines and says how many more', () => {
     expect(N.preview('1\n2\n3\n4\n5')).toBe('1\n2\n3\n… and 2 more things')
     expect(N.preview('1\n2')).toBe('1\n2')
+    expect(N.preview('x\nFor a:\n- s1\n- s2', 2)).toBe('x\n… and 3 more things')
   })
   test('a message naming a session that is not in the facts is refused', () => {
     const f = [{ kind: 'waiting', session: 'a' }]
@@ -185,6 +225,7 @@ describe('wording', () => {
   test('the payload caps untriaged lines at 40', () => {
     const u = Array.from({ length: 50 }, (_, i) => ({ hash: String(i).padStart(8, '0'), text: `l${i}`, session: 's' }))
     expect(N.payload({ moment: 'morning', items: [], untriaged: u, sample: '', name: 'Brutus', staleDays: 3 }).untriaged).toHaveLength(40)
+    expect(N.payload({ moment: 'morning', items: [], untriaged: [], sample: '', name: 'Brutus', staleDays: 3, more: 4 }).more).toBe(4)
   })
 })
 
@@ -205,6 +246,7 @@ describe('language of the fallback', () => {
     expect(t).not.toContain('👤')
     expect(t).toContain('6 sessions n’ont pas bougé depuis plus de 3 jours')
     expect(t).toContain('et 2 autres étapes ouvertes')
+    expect(t).toContain('Pour [[session:a]] :\n- faire la capture')
   })
   test('the French preview says how many more', () => {
     expect(N.preview('1\n2\n3\n4', 3, 'fr')).toBe('1\n2\n3\n… et 1 autre chose')
@@ -266,11 +308,16 @@ describe('wording of every kind', () => {
   const finished = { kind: 'finished', session: 'a' }
   test('English', () => {
     expect(N.template([pr, ticket, finished]).split('\n')).toEqual([
-      'PR #12 (Fix it) was merged — [[session:a]].', 'FEAT-2 moved to Done — [[session:a]].', '[[session:a]] finished its turn.'])
+      '[[session:a]] finished its turn.', 'Moved in [[session:a]]: PR #12 merged, FEAT-2 Done.'])
+  })
+  test('a PR URL without a number is named by its title', () => {
+    expect(N.template([{ kind: 'pr', session: 'a', url: 'https://g/o/r/pull/12/', text: 'Fix it', state: 'merged' },
+      { kind: 'pr', session: 'b', url: 'https://g/o/r', text: 'Other', state: 'closed' }])).toBe(
+      'Moved in [[session:a]]: PR #12 merged.\nMoved in [[session:b]]: PR "Other" closed.')
   })
   test('French', () => {
     expect(N.template([pr, ticket, finished], 0, 'fr').split('\n')).toEqual([
-      'La PR #12 (Fix it) est mergée — [[session:a]].', 'FEAT-2 est passé en Done — [[session:a]].', '[[session:a]] a fini son tour.'])
+      '[[session:a]] a fini son tour.', 'Ça a bougé dans [[session:a]] : PR #12 mergée, FEAT-2 en Done.'])
   })
 })
 
@@ -323,8 +370,8 @@ describe('the stale list', () => {
   const fmt = () => '10/10/2026'
   test('one line per session, with the step defanged, in the language of the nudge', () => {
     const stale = [{ session: 'old', at: 1, step: 'run [[session:b]]' }, { session: 'none', at: null, step: '' }]
-    expect(N.staleLines(stale, 'en', fmt)).toBe('- [[session:old]] — last active 10/10/2026 — next: run [​[session:b]]\n- [[session:none]] — no activity recorded')
-    expect(N.staleLines(stale, 'fr', fmt)).toBe('- [[session:old]] — actif le 10/10/2026 — ensuite : run [​[session:b]]\n- [[session:none]] — aucune activité')
+    expect(N.staleLines(stale, 'en', fmt)).toBe('- [[session:old]], last active 10/10/2026, next: run [​[session:b]]\n- [[session:none]], no activity recorded')
+    expect(N.staleLines(stale, 'fr', fmt)).toBe('- [[session:old]], actif le 10/10/2026, ensuite : run [​[session:b]]\n- [[session:none]], aucune activité')
   })
   test('the labels around a nudge come from the same words', () => {
     expect(N.words('fr')).toEqual(expect.objectContaining({ listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'Pas maintenant' }))

@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Brutus's reminders read at a glance.** Each session is named once with its steps under it,
+  at most five steps are named and the rest are counted, and the steps he names rotate from one
+  morning to the next. Ticket and PR changes share one line.
+- **The reminder bubble points at Brutus.** It sits above his avatar, or under his titlebar
+  button when he is docked, with a tail toward him and his name on top.
+
 ## [0.23.0] - 2026-10-14
 
 ### Added

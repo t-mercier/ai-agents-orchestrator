@@ -17,11 +17,11 @@ test('a nudge shows as a bubble with its session as a chip', async ({ page }) =>
 
 test('Open unfolds the recap into the conversation', async ({ page }) => {
   await boot(page)
-  await nudge(page, { text: 'Line one.\nLine two.\nLine three.\nLine four.', stale: [] })
-  await expect(page.locator('.bru-nudge')).toContainText('… and 1 more things')
+  await nudge(page, { text: 'Line one.\nLine two.\nLine three.\nLine four.\nLine five.\nLine six.\nLine seven.', stale: [] })
+  await expect(page.locator('.bru-nudge')).toContainText('… and 1 more thing')
   await page.locator('.bru-nudge [data-bru="nudge-open"]').click()
   await expect(page.locator('.bru-nudge')).toHaveCount(0)
-  await expect(page.locator('.bru-panel .bru-body')).toContainText('Line four.')
+  await expect(page.locator('.bru-panel .bru-body')).toContainText('Line seven.')
 })
 
 test('"Want me to list them?" lists the stale sessions without a model call', async ({ page }) => {
@@ -83,7 +83,9 @@ test('the morning run shows Haiku\'s wording and remembers what it said', async 
 test('a failed Haiku run falls back to the templates', async ({ page }) => {
   await boot(page); await seedWaiting(page)
   await page.evaluate(() => { window.__NUDGE_FAIL__ = true; return window.CSMNudges.run('morning') })
-  await expect(page.locator('.bru-nudge')).toContainText('For checkout-redesign: capture on the Nothing')
+  const b = page.locator('.bru-nudge')
+  await expect(b).toContainText('For checkout-redesign:')
+  await expect(b.locator('li')).toContainText('capture on the Nothing')
 })
 
 test('a second run with nothing new says nothing', async ({ page }) => {
@@ -248,7 +250,8 @@ test('a wording that names a session outside the facts falls back to the templat
   await boot(page); await seedWaiting(page)
   await page.evaluate(() => { window.__NUDGE_REPLY__ = { message: '[[session:ghost]] needs you.', triage: {} }; return window.CSMNudges.run('morning') })
   const b = page.locator('.bru-nudge')
-  await expect(b).toContainText('For checkout-redesign: capture on the Nothing')
+  await expect(b).toContainText('For checkout-redesign:')
+  await expect(b.locator('li')).toContainText('capture on the Nothing')
   await expect(b).not.toContainText('ghost')
 })
 

@@ -120,11 +120,26 @@
     n.className = `bru-nudge ${state.home === 'side' ? 'under-tb' : ''}`
     n.setAttribute('role', 'status')
     const w = NM().words(state.nudge.lang)
-    n.innerHTML = `<div class="bru-bt">${M.renderAnswer(NM().preview(state.nudge.text, 3, state.nudge.lang), sessions())}</div>
+    n.innerHTML = `<div class="bru-nudge-who">${esc(name())}</div><div class="bru-bt">${M.renderAnswer(NM().preview(state.nudge.text, 6, state.nudge.lang), sessions())}</div>
       <div class="bru-nudge-acts"><button type="button" class="bru-nudge-open" data-bru="nudge-open">${w.open}</button><button type="button" data-bru="nudge-later">${w.later}</button></div>`
     n.addEventListener('click', onClick)
     document.body.appendChild(n)
+    anchor(n)
   }
+  // Points the bubble's tail at whoever speaks: the avatar, or the titlebar button when docked,
+  // with the bubble's right edge kept on screen.
+  function anchor(n) {
+    const a = document.querySelector(state.home === 'side' ? '#brutus-btn' : '.bru-fab')
+    const r = a && a.getBoundingClientRect()
+    if (!r || !r.width) return
+    const mid = r.left + r.width / 2
+    const right = Math.max(12, Math.min(innerWidth - mid - 28, innerWidth - n.offsetWidth - 12))
+    n.style.right = `${right}px`
+    n.style.setProperty('--tail', `${Math.max(16, Math.min(innerWidth - right - mid, n.offsetWidth - 16))}px`)
+    if (state.home === 'side') n.style.top = `${Math.round(r.bottom + 10)}px`
+  }
+  // The titlebar button moves with the window's width: keep the tail on it.
+  window.addEventListener('resize', () => { const n = document.querySelector('.bru-nudge'); if (n) anchor(n) })
   function turnHTML(t) {
     if (t.role === 'brutus' && t.nudge) return nudgeTurnHTML(t)
     if (t.role === 'user') return `<div class="bru-u">${esc(t.text)}</div>`
@@ -375,7 +390,7 @@
     showNudge: (n) => {
       if (!enabled() || !n || !n.text) return
       const prev = state.nudge
-      state.nudge = { text: prev ? `${prev.text}\n${n.text}` : n.text, stale: n.stale || (prev && prev.stale) || [], lang: n.lang === 'fr' ? 'fr' : 'en' }
+      state.nudge = { text: prev ? `${prev.text}\n\n${n.text}` : n.text, stale: n.stale || (prev && prev.stale) || [], lang: n.lang === 'fr' ? 'fr' : 'en' }
       render()
     },
     // The nudge on screen, merged as shown, so renderer/nudges.js can keep it until it is seen.

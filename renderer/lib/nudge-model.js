@@ -15,6 +15,8 @@
   // The longest message the model may write, the longest sample of the person's own words
   // sent to it, and the most untriaged lines one run carries.
   const MAX_MESSAGE = 2000, SAMPLE_CHARS = 280, MAX_UNTRIAGED = 40
+  // A nudge is read at a glance: the steps it names, and how long each one may run.
+  const MAX_TASKS = 5, STEP_CHARS = 70
   // The baseline kept between visits: enough for thousands of open steps, small enough to
   // stay far under the state file's 1 MiB cap.
   const MAX_FACTS = 2000
@@ -133,15 +135,31 @@
       ? morningItems(facts, previous, said, dayKey(now), settings.staleDays || STALE_DAYS)
       : changeItems(facts, previous, said)
     items.sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
+    // Every waiting agent is said; the steps stop at MAX_TASKS and the rest become a count.
+    // The steps said longest ago come first, never-said ones before all, so the five named
+    // rotate from one morning to the next instead of the same five every day. Back from a
+    // pause or on a moved case, only changed steps are candidates: one left out then is
+    // counted, and named again at the next morning recap.
+    const tasks = items.filter(i => i.kind === 'task')
+      .map((i, n) => [i, n]).sort(([a, x], [b, y]) => String(said[a.key] || '').localeCompare(String(said[b.key] || '')) || x - y).map(([i]) => i)
+    const named = new Set(tasks.slice(0, MAX_TASKS))
+    const shown = items.filter(i => i.kind !== 'task' || named.has(i))
     const untriaged = shape === 'morning' ? facts.filter(f => f.kind === 'task' && f.owner === 'untriaged') : []
-    if (!items.length) return null
-    return { items, keys: items.map(i => i.key), untriaged }
+    if (!shown.length) return null
+    return { items: shown, keys: shown.map(i => i.key), untriaged, more: Math.max(0, tasks.length - MAX_TASKS) }
   }
 
   const chip = (n) => `[[session:${n}]]`
   // Note text is untrusted: a [[session:…]] or [[doc:…]] written in it must not become a chip.
   const defang = (t) => String(t || '').replace(/\[\[/g, '[\u200b[')
   const clean = (t) => defang(String(t || '').replace(YOU, '').trim())
+  // A step as one line of a nudge: cut on a word, the full text stays in the session's notes.
+  function short(t, max = STEP_CHARS) {
+    const s = String(t || '').replace(/\s+/g, ' ').trim()
+    if (s.length <= max) return s
+    const cut = s.slice(0, max - 1), sp = cut.lastIndexOf(' ')
+    return `${(sp > max / 2 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, '')}…`
+  }
   // The fallback speaks the language Brutus uses with the person (her decision, 2026-10-13):
   // French when their last message to him reads as French, otherwise the caller's fallback.
   const FR_WORDS = /\b(je|tu|il|elle|nous|vous|le|la|les|une|des|est|pas|pour|que|qui|quoi|avec|dans|sur|mais|ça|c'est|j'ai|oui|merci|stp)\b/i
@@ -153,28 +171,30 @@
   const WORDS = {
     en: {
       waiting: (c) => `${c} is waiting on your answer.`,
-      task: (c, t) => `For ${c}: ${t}`,
+      task: (c) => `For ${c}:`,
       finished: (c) => `${c} finished its turn.`,
-      pr: (n, title, state, c) => `PR #${n}${title ? ` (${title})` : ''} was ${state} — ${c}.`,
-      ticket: (k, state, c) => `${k} moved to ${state} — ${c}.`,
-      staleCount: (n, d) => `${n} session${n > 1 ? 's have' : ' has'} not moved for more than ${d} days — want me to list them?`,
-      untriaged: (n) => `… and ${n} other open steps.`,
-      more: (n) => `… and ${n} more things`,
+      pr: (n, state) => `PR ${n} ${state}`,
+      ticket: (k, state) => `${k} ${state}`,
+      news: (c, l) => `Moved in ${c}: ${l.join(', ')}.`,
+      staleCount: (n, d) => `${n} session${n > 1 ? 's have' : ' has'} not moved for more than ${d} days. Want me to list them?`,
+      untriaged: (n) => `… and ${n} other open step${n > 1 ? 's' : ''}.`,
+      more: (n) => `… and ${n} more thing${n > 1 ? 's' : ''}`,
       listAsk: 'Want me to list them?', open: 'Open', later: 'Not now',
-      listLine: (c, day, step) => `- ${c} — ${day}${step ? ` — next: ${step}` : ''}`,
+      listLine: (c, day, step) => `- ${c}, ${day}${step ? `, next: ${step}` : ''}`,
       activeOn: (d) => `last active ${d}`, noActivity: 'no activity recorded',
     },
     fr: {
       waiting: (c) => `${c} attend ta réponse.`,
-      task: (c, t) => `Pour ${c} : ${t}`,
+      task: (c) => `Pour ${c} :`,
       finished: (c) => `${c} a fini son tour.`,
-      pr: (n, title, state, c) => `La PR #${n}${title ? ` (${title})` : ''} est ${({ merged: 'mergée', closed: 'fermée', open: 'ouverte', draft: 'en brouillon' })[state] || state} — ${c}.`,
-      ticket: (k, state, c) => `${k} est passé en ${state} — ${c}.`,
-      staleCount: (n, d) => `${n} session${n > 1 ? 's n’ont' : ' n’a'} pas bougé depuis plus de ${d} jours — je te les liste ?`,
-      untriaged: (n) => `… et ${n} autres étapes ouvertes.`,
+      pr: (n, state) => `PR ${n} ${({ merged: 'mergée', closed: 'fermée', open: 'ouverte', draft: 'en brouillon' })[state] || state}`,
+      ticket: (k, state) => `${k} en ${state}`,
+      news: (c, l) => `Ça a bougé dans ${c} : ${l.join(', ')}.`,
+      staleCount: (n, d) => `${n} session${n > 1 ? 's n’ont' : ' n’a'} pas bougé depuis plus de ${d} jours. Je te les liste ?`,
+      untriaged: (n) => `… et ${n} autre${n > 1 ? 's' : ''} étape${n > 1 ? 's' : ''} ouverte${n > 1 ? 's' : ''}.`,
       more: (n) => `… et ${n} autre${n > 1 ? 's' : ''} chose${n > 1 ? 's' : ''}`,
       listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'Pas maintenant',
-      listLine: (c, day, step) => `- ${c} — ${day}${step ? ` — ensuite : ${step}` : ''}`,
+      listLine: (c, day, step) => `- ${c}, ${day}${step ? `, ensuite : ${step}` : ''}`,
       activeOn: (d) => `actif le ${d}`, noActivity: 'aucune activité',
     },
   }
@@ -183,22 +203,43 @@
     const w = words(lang), c = chip(i.session)
     switch (i.kind) {
       case 'waiting': return w.waiting(c)
-      case 'task': return w.task(c, clean(i.text))
       case 'finished': return w.finished(c)
-      case 'pr': return w.pr(String(i.url || '').split('/').pop(), i.text, i.state, c)
-      case 'ticket': return w.ticket(i.text, i.state, c)
       case 'staleCount': return w.staleCount(i.count, i.days)
       default: return ''
     }
   }
-  function template(items, untriagedCount = 0, lang = 'en') {
-    const lines = items.map(i => line(i, lang)).filter(Boolean)
-    if (untriagedCount) lines.push(words(lang).untriaged(untriagedCount))
-    return lines.join('\n')
+  // A PR by its number when the URL has one, else by its title.
+  const prName = (i) => { const m = /\/pull\/(\d+)/.exec(String(i.url || '')); return m ? `#${m[1]}` : `"${short(clean(i.text), 40)}"` }
+  const news = (i, w) => i.kind === 'pr' ? w.pr(prName(i), i.state) : w.ticket(i.text, i.state)
+  // Facts grouped under their session, keyed on the notes path: two sessions can share a name.
+  function bySession(items) {
+    const g = new Map()
+    for (const i of items) { const k = i.notesPath || i.session; if (!g.has(k)) g.set(k, { session: i.session, items: [] }); g.get(k).items.push(i) }
+    return [...g.values()]
   }
+  // The fallback when the model gives no wording: waiting agents, then the steps under their
+  // session's name once, the turns that finished, every state change on one line, the counts.
+  function template(items, untriagedCount = 0, lang = 'en', more = 0) {
+    const w = words(lang), out = []
+    for (const i of items.filter(x => x.kind === 'waiting')) out.push(line(i, lang))
+    for (const g of bySession(items.filter(x => x.kind === 'task'))) {
+      out.push(w.task(chip(g.session)))
+      for (const i of g.items) out.push(`- ${short(clean(i.text))}`)
+    }
+    for (const i of items.filter(x => x.kind === 'finished')) out.push(line(i, lang))
+    for (const g of bySession(items.filter(x => x.kind === 'pr' || x.kind === 'ticket'))) out.push(w.news(chip(g.session), g.items.map(i => news(i, w))))
+    for (const i of items.filter(x => x.kind === 'staleCount')) out.push(line(i, lang))
+    const rest = more + untriagedCount
+    if (rest) out.push(w.untriaged(rest))
+    return out.join('\n')
+  }
+  // The first lines of a nudge. It never ends on a session's header with its steps cut off.
   function preview(text, max = 3, lang = 'en') {
     const l = String(text || '').split('\n').filter(x => x.trim())
-    return l.length <= max ? l.join('\n') : `${l.slice(0, max).join('\n')}\n${words(lang).more(l.length - max)}`
+    if (l.length <= max) return l.join('\n')
+    let n = max
+    if (n > 1 && !/^\s*[-*] /.test(l[n - 1]) && /^\s*[-*] /.test(l[n])) n--
+    return `${l.slice(0, n).join('\n')}\n${words(lang).more(l.length - n)}`
   }
   function validMessage(message, facts) {
     const m = String(message || '').trim()
@@ -231,13 +272,13 @@
     for (const [k, d] of Object.entries(said || {})) if (live.has(k) || d >= since) out[k] = d
     return out
   }
-  function payload({ moment, items, untriaged, sample, name, staleDays }) {
+  function payload({ moment, items, untriaged, sample, name, staleDays, more = 0 }) {
     return {
-      moment, name, staleDays, sample: String(sample || '').slice(0, SAMPLE_CHARS),
+      moment, name, staleDays, more, sample: String(sample || '').slice(0, SAMPLE_CHARS),
       items: items.map(i => ({ kind: i.kind, session: i.session, text: clean(i.text), state: i.state, count: i.count })),
       untriaged: (untriaged || []).slice(0, MAX_UNTRIAGED).map(u => ({ hash: u.hash, session: u.session, text: defang(u.text) })),
     }
   }
 
-  return { hashLine, openSteps, collect, baseline, momentFor, inQuiet, dayKey, YOU, STALE_DAYS, MAX_MESSAGE, MAX_FACTS, decide, template, preview, validMessage, withRecap, staleList, staleLines, words, payload, langOf, prune, defang }
+  return { MAX_TASKS, short, hashLine, openSteps, collect, baseline, momentFor, inQuiet, dayKey, YOU, STALE_DAYS, MAX_MESSAGE, MAX_FACTS, decide, template, preview, validMessage, withRecap, staleList, staleLines, words, payload, langOf, prune, defang }
 })

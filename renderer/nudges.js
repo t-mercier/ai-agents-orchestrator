@@ -57,7 +57,7 @@
   const idle = () => new Promise(r => (window.CSMBrutusUI ? window.CSMBrutusUI.onIdle(r) : r()))
   async function word(d, facts, moment) {
     const payload = JSON.stringify(N.payload({ moment, items: d.items, untriaged: d.untriaged, sample: sample(),
-      name: cfg().name || 'Brutus', staleDays: settings().staleDays }))
+      name: cfg().name || 'Brutus', staleDays: settings().staleDays, more: d.more }))
     await idle()
     let r = await window.api.brutusNudge(payload)
     // He started answering between the wait and the call: wait for him once more.
@@ -70,7 +70,7 @@
       if (N.validMessage(r.message, facts)) return r.message
       console.warn('brutus nudges: the wording named something outside the facts; using the templates')
     } else console.warn(`brutus nudges: no wording (${r && r.error}); using the templates`)
-    return N.template(d.items, d.untriaged.length, lang())
+    return N.template(d.items, d.untriaged.length, lang(), d.more)
   }
 
   // Shows the nudge and keeps it as pending until it is opened or put away: it is recorded

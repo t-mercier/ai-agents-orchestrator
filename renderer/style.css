@@ -2322,11 +2322,19 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .bru-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bru-fab .bru-pet.xl { width: 56px; height: 56px; }
 .bru-fab svg.pet-svg { filter: drop-shadow(0 5px 7px rgba(0,0,0,.4)); }
-/* A nudge: Brutus speaking first, beside his avatar (or under the titlebar button when docked). */
-.bru-nudge { position:fixed; right:84px; bottom:44px; z-index:902; max-width:340px; padding:10px 12px;
-  background:var(--surface-modal); border:1px solid var(--card-border); border-radius:14px 14px 4px 14px;
-  box-shadow:0 12px 30px -12px rgba(0,0,0,.5); font:13px/1.45 var(--font); animation:bru-pop .16s ease-out; }
-.bru-nudge.under-tb { right:12px; bottom:auto; top:44px; border-radius:4px 14px 14px 14px; }
+/* A nudge: Brutus speaking first, in a bubble above his avatar whose tail points at it (or
+   below the titlebar button when docked). brutus.js sets --tail to the avatar's centre. */
+.bru-nudge { position:fixed; right:18px; bottom:106px; z-index:902; width:320px; max-width:calc(100vw - 36px); padding:10px 12px;
+  background:var(--surface-modal); border:1px solid var(--card-border); border-radius:14px;
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.55); font:13px/1.45 var(--font); animation:bru-pop .16s ease-out; transform-origin:bottom right; }
+.bru-nudge::after { content:""; position:absolute; right:calc(var(--tail, 28px) - 6px); bottom:-7px; width:12px; height:12px; background:var(--surface-modal);
+  border-right:1px solid var(--card-border); border-bottom:1px solid var(--card-border); transform:rotate(45deg); }
+.bru-nudge.under-tb { bottom:auto; top:48px; transform-origin:top right; }
+.bru-nudge.under-tb::after { bottom:auto; top:-7px; border:0; border-left:1px solid var(--card-border); border-top:1px solid var(--card-border); }
+.bru-nudge-who { font:600 10.5px var(--font); color:var(--accent); margin-bottom:5px; }
+/* The steps under a session read as a list: .bru-bt's own list drops the markers. */
+.bru-nudge ul { margin:2px 0 4px; padding-left:16px; list-style:disc; display:block; }
+.bru-nudge li { display:list-item; color:var(--text-secondary); }
 .bru-nudge .bru-bt { background:none; padding:0; }
 .bru-nudge-acts { display:flex; gap:6px; justify-content:flex-end; margin-top:8px; }
 .bru-nudge-acts button, .bru-nudge-list { font:500 12px var(--font); border:1px solid var(--card-border); background:transparent;

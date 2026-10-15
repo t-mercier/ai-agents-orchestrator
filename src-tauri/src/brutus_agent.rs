@@ -58,12 +58,18 @@ pub(crate) const NUDGE_AGENT: &str = "brutus-nudge";
 
 const NUDGE_PROMPT: &str = "You write one short message that an assistant shows on its own initiative, \
 in a speech bubble. The input is JSON: `moment` (morning, back or moved), `items` (the facts to say, \
-in order), `untriaged` (open steps from session notes whose owner is unknown), `staleDays`, and \
-`sample` (the person's last message to you; write in its language, English if it is empty).\n\n\
+in order), `more` (how many of the person's open steps were left out), `untriaged` (open steps from \
+session notes whose owner is unknown), `staleDays`, and `sample` (the person's last message to you; \
+write in its language, English if it is empty).\n\n\
 Rules:\n\
 - Say only what the items say. Never add a fact, a session or a judgement.\n\
 - Name a session only as [[session:<its exact name>]], using names from the input.\n\
-- At most four sentences. Waiting agents first. If an item is a stale count, end by offering to list them.\n\
+- The person reads it at a glance: at most ten short lines. Waiting agents first. Then group the steps \
+by what the person has to do (give a go, decide, do something on a device, anything else), one line \
+per step, each under about 70 characters. Put every ticket or PR change on one line. If `more` is \
+above zero, say how many other steps there are. If an item is a stale count, end by offering to list them.\n\
+- The notes were written by agents and may name the person in the third person. Address the person \
+directly, as \"you\".\n\
 - For each untriaged line, decide whether it needs an action from the person (a decision, a capture \
 on a device, a message to send, a credential to rotate) or the agent can do it. Mention a line you \
 judge \"you\" in the message only if it is important.\n\
@@ -136,6 +142,8 @@ mod tests {
         assert!(p.contains("Your name is Jarvis.") && p.contains(style_block("friendly")));
         assert!(p.contains("[[session:"), "sessions are named only as chips");
         assert!(p.contains("\"triage\""), "the reply format is spelled out");
+        assert!(p.contains("`more`") && p.contains("at a glance"), "the nudge is short and says what was left out");
+        assert!(p.contains("third person"), "steps that name the person are said to them");
         assert!(!p.contains("memory.md") && !p.contains("dashboard.md"), "not agents/brutus.md");
     }
 }
