@@ -15,12 +15,12 @@ def notes(steps, after="## Session history\n- 2026-10-16 | x | y\n"):
 
 
 class TestProblems(unittest.TestCase):
-    def check(self, text, tool="Edit", name="notes.md"):
+    def check(self, text, tool="Edit", name="notes.md", new="- [ ] the step just written"):
         d = tempfile.mkdtemp()
         p = os.path.join(d, name)
         with open(p, "w", encoding="utf-8") as f:
             f.write(text)
-        return g.check({"tool_name": tool, "tool_input": {"file_path": p}})
+        return g.check({"tool_name": tool, "tool_input": {"file_path": p, "new_string": new}})
 
     def test_a_short_queue_says_nothing(self):
         self.assertIsNone(self.check(notes("- [ ] Ship the fix\n- [ ] 👤 Take the capture on the phone\n")))
@@ -49,8 +49,24 @@ class TestProblems(unittest.TestCase):
         self.assertIn("1 ticked step", out["reason"])
 
     def test_only_the_next_steps_section_counts(self):
-        long_decision = "## Decisions made\n- " + "y" * 400 + "\n"
+        long_decision = "## Decisions made\n- " + "y" * 400 + "\n## Session history\n- x | y\n"
         self.assertIsNone(self.check(notes("- [ ] Ship\n", after=long_decision)))
+
+    def test_an_edit_that_does_not_touch_the_steps_is_not_blamed_for_them(self):
+        bad = notes("- [ ] " + "x" * 200 + "\n")
+        self.assertIsNone(self.check(bad, new="- 2026-10-16 (in progress) | session=x | saved"))
+        self.assertIsNotNone(self.check(bad, tool="Write", new=None))
+        d = tempfile.mkdtemp(); p = os.path.join(d, "notes.md")
+        open(p, "w").write(bad)
+        multi = {"tool_name": "MultiEdit", "tool_input": {"file_path": p, "edits": [{"new_string": "x"}, {"new_string": "## Next steps\n"}]}}
+        self.assertIsNotNone(g.check(multi))
+
+    def test_a_notes_md_that_is_not_a_session_s_is_ignored(self):
+        self.assertIsNone(self.check("# Meeting notes\n\n## Next steps\n- [ ] " + "x" * 200 + "\n"))
+
+    def test_the_heading_may_differ_in_case_or_carry_a_suffix(self):
+        text = notes("- [ ] " + "x" * 200 + "\n").replace("## Next steps", "## Next Steps (priority)")
+        self.assertIsNotNone(self.check(text))
 
     def test_other_files_tools_and_missing_sections_are_ignored(self):
         bad = notes("- [ ] " + "x" * 200 + "\n")

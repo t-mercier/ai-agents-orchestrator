@@ -91,6 +91,18 @@ describe('ticket and PR references', () => {
   test('a pasted PR URL is a link', () => {
     expect(B.renderAnswer('see https://github.com/o/r/pull/5 now', ss, base)).toContain('data-bru-url="https://github.com/o/r/pull/5">https://github.com/o/r/pull/5</a>')
   })
+  test('a malformed PR link in the notes cannot add attributes to the link', () => {
+    const evil = [{ name: 'x', status: 'idle', prLink: 'https://github.com/o" style="position:fixed;inset:0" x="/r/pull/12' }]
+    expect(B.renderAnswer('PR #12 merged.', evil, base)).not.toContain('style=')
+  })
+  test('a PR URL whose repo looks like a ticket key is one link, not two nested', () => {
+    const html = B.renderAnswer('see https://github.com/acme/PROJ-42/pull/5', ss, base)
+    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).not.toContain('browse/PROJ-42')
+  })
+  test('a tracker URL that is not http(s) links nothing', () => {
+    expect(B.renderAnswer('PROJ-42 moved.', ss, 'javascript:alert(1)//')).not.toContain('bru-ref')
+  })
   test('keys inside a chip or code, and escaped quotes, are left alone', () => {
     const named = [...ss, { name: 'PROJ-9 fix', status: 'idle' }]
     const html = B.renderAnswer("[[session:PROJ-9 fix]] and `PROJ-3` and it's #12", named, base)

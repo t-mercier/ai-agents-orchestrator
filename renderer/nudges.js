@@ -12,7 +12,7 @@
   const SCAN_MS = 5 * 60_000, PRS_MS = 60_000
   let st = { said: {}, lastVisit: null, lastFacts: null, triage: {}, pending: null, snoozeUntil: null }
   let ready = null, lastBlur = null, pollPrev = null, pollAt = 0, polling = false, batch = null, stale = []
-  let lastScan = { at: 0, facts: null }, prs = { at: 0, v: {} }, lastNudgeAt = 0
+  let lastScan = { at: 0, facts: null }, prs = { at: 0, v: {} }, lastNudgeAt = 0, heldBase = null, snoozeTimer = null
   // The model's "not hers" verdicts hold for this run of the app only: a wrong one hides a
   // line from the count until the next launch, not forever.
   const agentLines = {}
@@ -93,7 +93,12 @@
       st.lastFacts = N.baseline(facts)
       // Recorded before the wording is awaited, so nothing running meanwhile says it again.
       if (d) for (const k of d.keys) st.said[k] = N.dayKey(now)
-      if (d) show(await word(d, facts, moment), facts)
+      if (d) {
+        const text = await word(d, facts, moment)
+        // Paused while it was being worded: not said after all, so it comes back later.
+        if (silent(Date.now())) for (const k of d.keys) delete st.said[k]
+        else show(text, facts)
+      }
       prune()
       await save()
     })
@@ -128,11 +133,14 @@
     clearTimeout(batch.timer); batch = null
     return serial(async () => {
       const now = Date.now(), latest = pollPrev || []
-      if (silent(now)) return
+      // Paused: keep the oldest baseline, so what moved meanwhile is said when it ends.
+      if (silent(now)) { heldBase = heldBase || base; return }
       const d = N.decide({ moment: 'moved', facts: latest, previous: base, said: st.said, now, settings: settings() })
       if (!d) return
       for (const k of d.keys) st.said[k] = N.dayKey(now)
-      show(await word(d, latest, 'moved'), latest)
+      const text = await word(d, latest, 'moved')
+      if (silent(Date.now())) { for (const k of d.keys) delete st.said[k]; heldBase = heldBase || base; return }
+      show(text, latest)
       prune()
       await save()
     })
@@ -169,18 +177,34 @@
   // An unreadable state reads as none (lib/tauri-api.js): the launch then takes the morning shape.
   ready = window.api.brutusNudgeState().then(s => {
     if (s) st = { ...st, ...s }
+    armSnooze()
     if (st.pending && window.CSMBrutusUI) window.CSMBrutusUI.showNudge(st.pending)
   })
   // Paused from his panel: kept quiet until `until` (ms), or speaking again with null. Like
   // quiet hours, the baseline stays put, so what moved meanwhile is said when it ends.
+  // Set at once, not behind the queue, so a nudge being worded sees it before it shows.
   function snooze(until) {
+    st.snoozeUntil = typeof until === 'number' && until > Date.now() ? until : null
+    armSnooze()
+    window.dispatchEvent(new Event('brutus-snooze'))
     return serial(async () => {
       await ready
-      st.snoozeUntil = typeof until === 'number' && until > Date.now() ? until : null
       await save()
-      window.dispatchEvent(new Event('brutus-snooze'))
-      if (st.snoozeUntil === null) onForeground()
+      if (st.snoozeUntil === null) awake()
     })
+  }
+  // The pause ends on its own at its time, as it would with Resume.
+  function armSnooze() {
+    clearTimeout(snoozeTimer)
+    if (typeof st.snoozeUntil === 'number' && st.snoozeUntil > Date.now()) {
+      snoozeTimer = setTimeout(() => { st.snoozeUntil = null; window.dispatchEvent(new Event('brutus-snooze')); serial(save); awake() },
+        Math.min(st.snoozeUntil - Date.now(), 2 ** 31 - 1))
+    }
+  }
+  // Speaking again: what moved during the pause, then whatever the moment calls for.
+  function awake() {
+    if (heldBase && !batch) { batch = { base: heldBase, timer: null }; heldBase = null; flushMoved() }
+    onForeground()
   }
   window.CSMNudges = { run, onPoll, flushMoved, foreground: onForeground, settled: () => chain, state: () => st, snooze,
     snoozedUntil: () => (snoozed(Date.now()) ? st.snoozeUntil : null) }

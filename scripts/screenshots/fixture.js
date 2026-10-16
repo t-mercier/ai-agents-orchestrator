@@ -204,6 +204,8 @@ window.__TAURI__ = {
       if (cmd === 'brutus_nudge' && window.__NUDGE_FAIL__) return Promise.reject(new Error('the nudge took longer than 20 s'))
       // A test can make the backend refuse the next N nudges as Rust does while Brutus answers.
       if (cmd === 'brutus_nudge' && window.__NUDGE_BUSY__ > 0) { window.__NUDGE_BUSY__--; return Promise.reject('busy') }
+      // A test can hold the wording until it calls __NUDGE_RELEASE__(), to act while it runs.
+      if (cmd === 'brutus_nudge' && window.__NUDGE_HOLD__) return new Promise(r => { window.__NUDGE_RELEASE__ = () => r(window.__NUDGE_REPLY__ || null) })
       if (cmd === 'brutus_nudge' && window.__NUDGE_REPLY__) return Promise.resolve(window.__NUDGE_REPLY__)
       // A test can start the app from a saved state (set before the page loads).
       if (cmd === 'brutus_nudge_state' && window.__NUDGE_STATE__) return Promise.resolve(window.__NUDGE_STATE__)

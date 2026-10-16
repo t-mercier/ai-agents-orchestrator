@@ -35,8 +35,26 @@ QUOTED = 5
 
 def next_steps(text):
     """The lines of the `## Next steps` section, without its heading, or None."""
-    m = re.search(r"^## Next steps[ \t]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    m = re.search(r"^## Next steps\b[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M | re.I)
     return m.group(1).split("\n") if m else None
+
+
+def is_session_notes(text):
+    """A session's notes: frontmatter first, a Next steps and a Session history section.
+    Any other notes.md (a repo's docs, a personal file) is not this hook's business."""
+    return (text.startswith("---\n") and re.search(r"^## Session history", text, re.M) is not None
+            and next_steps(text) is not None)
+
+
+def touches_steps(payload):
+    """Did this call write the Next steps? A Write rewrites the whole file; an Edit or
+    MultiEdit only counts when its new text has a step or the section's heading, so
+    appending a history line does not answer for steps written long ago."""
+    ti = payload.get("tool_input") or {}
+    if payload.get("tool_name") == "Write":
+        return True
+    news = [ti.get("new_string") or ""] + [(e or {}).get("new_string") or "" for e in ti.get("edits") or []]
+    return any(re.search(r"^\s*[-*] \[[ xX]\]|^## Next steps", n, re.M | re.I) for n in news)
 
 
 def problems(lines):
@@ -85,11 +103,13 @@ def check(payload):
     if payload.get("tool_name") not in EDIT_TOOLS:
         return None
     path = (payload.get("tool_input") or {}).get("file_path") or ""
-    if os.path.basename(path) != "notes.md" or not os.path.isfile(path):
+    if os.path.basename(path) != "notes.md" or not os.path.isfile(path) or not touches_steps(payload):
         return None
     with open(path, encoding="utf-8", errors="replace") as f:
-        lines = next_steps(f.read())
-    found = problems(lines) if lines is not None else []
+        text = f.read()
+    if not is_session_notes(text):
+        return None
+    found = problems(next_steps(text))
     return {"decision": "block", "reason": reason(found)} if found else None
 
 

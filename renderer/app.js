@@ -633,6 +633,9 @@ document.getElementById('panel-detail')?.addEventListener('mousedown', () => rev
 // the session shape (running sessions carry a live `status`; historical ones a
 // `historyStatus`).
 window.goToSession = async (key) => {
+  // Brutus names sessions from any tab: the index is built for the board, so build it here
+  // when the session is not in it yet.
+  if (!(window._boardIndex || {})[key]) await buildBoardIndex()
   const s = (window._boardIndex || {})[key]
   if (!s) return
   // active + stale both live in the Running tab; closed/archived in their own.

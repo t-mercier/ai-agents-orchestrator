@@ -338,3 +338,25 @@ test('the moon in his panel pauses the reminders, and Resume lifts the pause', a
   await expect(page.locator('.bru-panel .bru-sub')).not.toContainText('Quiet until')
   expect(await page.evaluate(() => window.__LAST_NUDGE_SAVE__.snoozeUntil)).toBe(null)
 })
+
+test('a chip naming a closed session opens it in the Closed tab', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => window.CSMBrutusUI.close())
+  const name = await page.evaluate(() => ((window._historicalForBrutus || []).find(s => s.state === 'closed') || {}).name)
+  expect(name).toBeTruthy()
+  await nudge(page, { text: `[[session:${name}]] was closed.`, stale: [] })
+  await page.locator('.bru-nudge .bru-chip').click()
+  await expect(page.locator('.tab-btn.active')).toHaveAttribute('data-tab', 'closed')
+  await expect(page.locator('#panel-list .list-card.selected')).toContainText(name)
+})
+
+test('a pause set while a reminder is being worded keeps it from showing', async ({ page }) => {
+  await boot(page); await seedWaiting(page)
+  await page.evaluate(() => { window.__NUDGE_HOLD__ = true; window.CSMNudges.run('morning') })
+  await page.waitForFunction(() => typeof window.__NUDGE_RELEASE__ === 'function')
+  await page.evaluate(() => { window.CSMNudges.snooze(Date.now() + 3600_000); window.__NUDGE_RELEASE__() })
+  await page.evaluate(() => window.CSMNudges.settled())
+  await expect(page.locator('.bru-nudge')).toHaveCount(0)
+  // Not recorded as said: it can come up once the pause is over.
+  expect(Object.keys(await page.evaluate(() => window.CSMNudges.state().said)).some(k => k.startsWith('waiting|'))).toBe(false)
+})

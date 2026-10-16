@@ -235,7 +235,10 @@
     const chip = e.target.closest('[data-brutus-session]')
     if (chip) return goTo(chip.dataset.brutusSession)
     const refA = e.target.closest('[data-bru-url]')
-    if (refA) { window.api.openExternal(refA.dataset.bruUrl); return }
+    if (refA) {
+      window.api.openExternal(refA.dataset.bruUrl).then(r => { if (r && r.ok === false) say(`Could not open ${refA.dataset.bruUrl}: ${r.error}`) })
+      return
+    }
     const doc = e.target.closest('[data-bru-doc]')
     if (doc) {
       window.api.brutusOpenDoc(doc.dataset.bruDoc).then(r => { if (r && !r.ok) say(`Could not open ${doc.dataset.bruDoc}: ${r.error}`) })
@@ -323,20 +326,20 @@
   }
   // A session chip opens that session, the way a click on its card does, and shows where
   // it is in the list. A name no session has falls back to finding the card by its text.
-  function goTo(n) {
+  async function goTo(n) {
     const s = sessions().find(x => (x.name || '') === n)
     const key = s ? (s.notesPath || s.sessionId || s.name) : ''
-    if (key && window.selectSession && window._lastSelectedKey !== key) window.selectSession(key)
-    if (key && window.revealSelected) window.revealSelected()
+    // Its tab (Running, Closed, Archived) and the List view first, then selected.
+    if (key && window.goToSession) await window.goToSession(key)
     const cards = [...document.querySelectorAll('#panel-list .list-card[data-key]')]
-    const el = (key && cards.find(c => c.dataset.key === key)) || cards.find(c => (c.textContent || '').includes(n))
+    const el = key ? cards.find(c => c.dataset.key === key) : cards.find(c => (c.textContent || '').includes(n))
     if (!el) return
     el.classList.add('bru-flash'); setTimeout(() => el.classList.remove('bru-flash'), 1300)
   }
   const quietUntil = () => (window.CSMNudges && window.CSMNudges.snoozedUntil ? window.CSMNudges.snoozedUntil() : null)
   const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   // Tomorrow at 05:00, when the morning recap may start.
-  const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(5, 0, 0, 0); return d.getTime() }
+  const tomorrow = () => { const d = new Date(); if (d.getHours() >= 5) d.setDate(d.getDate() + 1); d.setHours(5, 0, 0, 0); return d.getTime() }
   function snoozeMenu(anchor) {
     document.querySelector('.bru-menu')?.remove()
     const m = document.createElement('div'); m.className = 'bru-menu'

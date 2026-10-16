@@ -24,29 +24,30 @@
 
   // Ticket keys and PR references in his text, as links. A key is linked only when its
   // project prefix is one the sessions use, so "UTF-8" stays text; "#123" only when exactly
-  // one known PR has that number. Chips, doc cards and code are left alone.
-  const TICKET = /\b([A-Z][A-Z0-9]{1,9})-(\d+)\b/g
-  const PR_URL = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/(\d+)/g
-  const ref = (url, label) => `<a class="bru-ref" data-bru-url="${url}">${label}</a>`
+  // one known PR has that number. Chips, doc cards and code are left alone. One pass over
+  // the text, so a link's own URL is never scanned again for a key.
+  const KEY = /^([A-Z][A-Z0-9]{1,9})-\d+$/
+  const REFS = /(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+)|\b([A-Z][A-Z0-9]{1,9})-(\d+)\b|(?<![\w&;"/])#(\d+)\b/g
+  const ref = (url, label) => `<a class="bru-ref" data-bru-url="${esc(url)}">${label}</a>`
   function refsOf(sessions, ticketBase) {
     const prefixes = new Set(), prs = new Map()
     for (const s of sessions || []) {
-      for (const t of [s.ticket, ...(s.tickets || [])]) { const m = /^([A-Z][A-Z0-9]*)-\d+$/.exec(String(t || '')); if (m) prefixes.add(m[1]) }
+      for (const t of [s.ticket, ...(s.tickets || [])]) { const m = KEY.exec(String(t || '')); if (m) prefixes.add(m[1]) }
       for (const u of [s.prLink, ...(s.prLinks || [])]) {
-        const m = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/.exec(String(u || ''))
+        // Only the part of the link that matches: a malformed one cannot carry a quote along.
+        const m = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/(\d+)/.exec(String(u || ''))
         if (m) prs.set(m[1], prs.has(m[1]) && prs.get(m[1]) !== m[0] ? null : m[0])
       }
     }
-    return { prefixes, prs, ticketBase: ticketBase || '' }
+    return { prefixes, prs, ticketBase: /^https?:\/\//.test(ticketBase || '') ? ticketBase : '' }
   }
   function linkRefs(t, refs) {
     if (!refs) return t
-    return t.split(/(\[\[[^\]]*\]\]|`[^`]+`)/).map((part, i) => {
-      if (i % 2) return part
-      let out = part.replace(PR_URL, (u) => ref(u, u))
-      if (refs.ticketBase) out = out.replace(TICKET, (k, p) => (refs.prefixes.has(p) ? ref(esc(refs.ticketBase) + k, k) : k))
-      return out.replace(/(^|[^\w&;"\/])#(\d+)\b/g, (all, pre, n) => (refs.prs.get(n) ? `${pre}${ref(refs.prs.get(n), `#${n}`)}` : all))
-    }).join('')
+    return t.split(/(\[\[[^\]]*\]\]|`[^`]+`)/).map((part, i) => i % 2 ? part : part.replace(REFS, (all, url, p, n, pr) => {
+      if (url) return ref(url, url)
+      if (p) return refs.ticketBase && refs.prefixes.has(p) ? ref(refs.ticketBase + all, all) : all
+      return refs.prs.get(pr) ? ref(refs.prs.get(pr), all) : all
+    })).join('')
   }
 
   function inline(t, sessions, refs) {
