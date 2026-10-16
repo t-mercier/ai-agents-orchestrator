@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-16
+
 ### Changed
 
 - **A session lists only the tickets you are assigned to.** Besides the ticket a session is
