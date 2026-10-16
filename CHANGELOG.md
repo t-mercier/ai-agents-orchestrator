@@ -25,6 +25,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 - **A session named by Brutus opens.** Clicking its chip selects the session, as a click on its
   card does, instead of only flashing the card; the outline is no longer cut at the edges.
+- **Brutus's reminders no longer fill your chat history.** Each reminder was saved as a Claude
+  Code conversation titled with its raw JSON, so every app that lists those conversations
+  showed one per reminder. They are no longer saved.
 
 ## [0.23.1] - 2026-10-16
 

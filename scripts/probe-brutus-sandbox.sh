@@ -20,7 +20,7 @@ printf '{"permissions":{"allow":["Edit(/%s/brutus/memory.md)","Edit(/%s/brutus/d
 AGENTS='{"brutus":{"description":"probe","tools":["Read","Glob","Grep","Write","Edit"],"prompt":"Your name is Brutus."}}'
 SANDBOX_ARGS=(--restricted --agents "$AGENTS" --agent brutus --tools Read,Glob,Grep,Write,Edit
   --strict-mcp-config --settings "$W/brutus/settings.json" --add-dir "$W/space/BUG"
-  --permission-mode dontAsk --model haiku)
+  --permission-mode dontAsk --model haiku --no-session-persistence)
 # Each run leaves its stderr and exit code behind, so a FAIL can say why: a claude that is
 # not logged in fails every check, and the reason is in its stderr.
 run() {
@@ -83,7 +83,7 @@ NUDGE_AGENTS='{"brutus-nudge":{"description":"probe","tools":[],"prompt":"Answer
 READ_AGENTS='{"brutus-nudge":{"description":"probe","tools":["Read"],"prompt":"Answer in one word."}}'
 nudge_init() {
   local agents=$1; shift
-  (cd "$W/brutus" && printf 'Say ok.' | claude --restricted --agents "$agents" --agent brutus-nudge -p \
+  (cd "$W/brutus" && printf 'Say ok.' | claude --restricted --agents "$agents" --agent brutus-nudge -p --no-session-persistence \
     --output-format stream-json --verbose "$@" --strict-mcp-config --permission-mode dontAsk --model haiku \
     2>"$W/last.err" || true) | python3 -c '
 import json, sys
@@ -110,7 +110,7 @@ check "falsifier: with both locks open the run has Read" 'grep -q "\"Read\"" <<<
 # The reply's shape, as brutus::parse_nudge_reply reads it: one JSON object on stdout with
 # is_error false and the model's text in result. The facts come from a file, as in the app.
 printf '{"moment":"morning","items":[]}' > "$W/brutus/nudge.txt"
-reply=$(cd "$W/brutus" && claude --restricted --agents "$NUDGE_AGENTS" --agent brutus-nudge -p --output-format json \
+reply=$(cd "$W/brutus" && claude --restricted --agents "$NUDGE_AGENTS" --agent brutus-nudge -p --no-session-persistence --output-format json \
   --tools "" --strict-mcp-config --permission-mode dontAsk --model haiku < "$W/brutus/nudge.txt" 2>"$W/last.err" || true)
 check "the nudge reply is one JSON result with is_error false" \
   'python3 -c "import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get(\"is_error\") is False and isinstance(d.get(\"result\"), str) else 1)" "$reply"'

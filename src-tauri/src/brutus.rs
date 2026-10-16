@@ -85,6 +85,9 @@ pub(crate) fn nudge_args(agents: &str) -> Vec<String> {
         "--restricted", "--agents", agents, "--agent", brutus_agent::NUDGE_AGENT, "-p",
         "--output-format", "json", "--tools", "", "--strict-mcp-config",
         "--permission-mode", "dontAsk", "--model", "haiku",
+        // A nudge is one throwaway call: saved, each one became a conversation named after
+        // its JSON in every history that lists Claude Code sessions.
+        "--no-session-persistence",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -981,6 +984,7 @@ mod tests {
     #[test]
     fn the_nudge_run_has_no_tool_no_folder_and_haiku() {
         let a = nudge_args(r#"{"brutus-nudge":{}}"#);
+        assert!(a.contains(&"--no-session-persistence".to_string()), "a nudge run must not be saved as a conversation");
         let at = |f: &str| a.iter().position(|x| x == f).map(|i| a[i + 1].clone());
         assert_eq!(at("--tools").as_deref(), Some(""));
         assert_eq!(at("--model").as_deref(), Some("haiku"));
