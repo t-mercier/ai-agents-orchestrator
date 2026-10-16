@@ -22,8 +22,35 @@
     return `<span class="bru-chip" data-brutus-session="${escapedName}"><span class="bru-dot ${statusOf(s)}"></span>${escapedName}</span>`
   }
 
-  function inline(t, sessions) {
-    return t
+  // Ticket keys and PR references in his text, as links. A key is linked only when its
+  // project prefix is one the sessions use, so "UTF-8" stays text; "#123" only when exactly
+  // one known PR has that number. Chips, doc cards and code are left alone.
+  const TICKET = /\b([A-Z][A-Z0-9]{1,9})-(\d+)\b/g
+  const PR_URL = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/(\d+)/g
+  const ref = (url, label) => `<a class="bru-ref" data-bru-url="${url}">${label}</a>`
+  function refsOf(sessions, ticketBase) {
+    const prefixes = new Set(), prs = new Map()
+    for (const s of sessions || []) {
+      for (const t of [s.ticket, ...(s.tickets || [])]) { const m = /^([A-Z][A-Z0-9]*)-\d+$/.exec(String(t || '')); if (m) prefixes.add(m[1]) }
+      for (const u of [s.prLink, ...(s.prLinks || [])]) {
+        const m = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/.exec(String(u || ''))
+        if (m) prs.set(m[1], prs.has(m[1]) && prs.get(m[1]) !== m[0] ? null : m[0])
+      }
+    }
+    return { prefixes, prs, ticketBase: ticketBase || '' }
+  }
+  function linkRefs(t, refs) {
+    if (!refs) return t
+    return t.split(/(\[\[[^\]]*\]\]|`[^`]+`)/).map((part, i) => {
+      if (i % 2) return part
+      let out = part.replace(PR_URL, (u) => ref(u, u))
+      if (refs.ticketBase) out = out.replace(TICKET, (k, p) => (refs.prefixes.has(p) ? ref(esc(refs.ticketBase) + k, k) : k))
+      return out.replace(/(^|[^\w&;"\/])#(\d+)\b/g, (all, pre, n) => (refs.prs.get(n) ? `${pre}${ref(refs.prs.get(n), `#${n}`)}` : all))
+    }).join('')
+  }
+
+  function inline(t, sessions, refs) {
+    return linkRefs(t, refs)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\[\[session:([^\]]+?)\]\]/g, (_, n) => chipFor(n.trim(), sessions))
@@ -38,7 +65,8 @@
     return `<span class="bru-doc"><span class="bru-doc-name">📄 ${name}</span><button type="button" class="bru-doc-open" data-bru-doc="${name}">Open</button></span>`
   }
 
-  function renderAnswer(text, sessions) {
+  function renderAnswer(text, sessions, ticketBase) {
+    const refs = refsOf(sessions, ticketBase)
     const blocks = esc(String(text || '')).split(/\n\s*\n/)
     return blocks.map(b => {
       const lines = b.split('\n').filter(l => l.trim())
@@ -49,8 +77,8 @@
       const para = []
       for (const l of lines) {
         const m = /^\s*[-*] (.*)$/.exec(l)
-        if (m) { if (para.length) { out.push(`<p>${para.join('<br>')}</p>`); para.length = 0 } list.push(`<li>${inline(m[1], sessions)}</li>`) }
-        else { flush(); para.push(inline(l, sessions)) }
+        if (m) { if (para.length) { out.push(`<p>${para.join('<br>')}</p>`); para.length = 0 } list.push(`<li>${inline(m[1], sessions, refs)}</li>`) }
+        else { flush(); para.push(inline(l, sessions, refs)) }
       }
       flush()
       if (para.length) out.push(`<p>${para.join('<br>')}</p>`)

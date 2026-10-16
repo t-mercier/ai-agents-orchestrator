@@ -2312,7 +2312,10 @@ body.dl-drag-active .list-card { pointer-events: none; }
 .bru-sugg button:hover { color:var(--text-primary); border-color:rgba(var(--accent-rgb),.5); }
 .bru-empty { margin:auto 0; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; padding:10px 6px; }
 .bru-empty h4 { font:700 14px var(--font); margin:4px 0 0; } .bru-empty p { font-size:12px; color:var(--text-secondary); margin:0 0 6px; max-width:300px; }
-.bru-flash { outline: 2px solid var(--accent) !important; outline-offset: 2px; border-radius: 8px; transition: outline-color .6s; }
+/* Inside the card: the list's containers clip anything drawn outside it. */
+.bru-flash { box-shadow: inset 0 0 0 2px var(--accent) !important; border-radius: 8px; transition: box-shadow .6s; }
+.bru-ref { color: var(--accent); cursor: pointer; text-decoration: underline; text-decoration-color: rgba(var(--accent-rgb), .4); text-underline-offset: 2px; }
+.bru-ref:hover { text-decoration-color: var(--accent); }
 
 /* A — bubble */
 /* No disc: the companion floats on its own, lifted by a shadow that follows its outline. */
@@ -2379,6 +2382,8 @@ body.bru-resizing .layout { transition: none; }
 .bru-menu button { display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:transparent; border:0; color:inherit;
   font:inherit; padding:6px 9px; border-radius:6px; cursor:pointer; }
 .bru-menu button:hover { background:rgba(var(--accent-rgb),.18); }
+.bru-menu-head { font:600 10.5px var(--font); color:var(--text-tertiary); padding:4px 10px 6px; text-transform:uppercase; letter-spacing:.04em; }
+.bru-ib.on { color: var(--accent); }
 .bru-menu .sep { height:.5px; background:rgba(var(--tint),.1); margin:4px 2px; }
 .bru-menu small { color:var(--text-tertiary); font-size:10.5px; margin-left:auto; }
 .bru-toast { position:fixed; z-index:1003; left:50%; bottom:64px; transform:translateX(-50%); background:var(--surface-modal);

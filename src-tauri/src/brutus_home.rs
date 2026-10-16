@@ -223,7 +223,8 @@ pub(crate) fn nudge_state_from(nudges: Option<&str>, triage: Option<&str>) -> Va
     let last_visit = n.get("lastVisit").cloned().filter(Value::is_number).unwrap_or(Value::Null);
     let last_facts = n.get("lastFacts").cloned().filter(Value::is_array).unwrap_or(Value::Null);
     let pending = n.get("pending").cloned().filter(Value::is_object).unwrap_or(Value::Null);
-    json!({ "said": said, "lastVisit": last_visit, "lastFacts": last_facts, "triage": t, "pending": pending })
+    let snooze = n.get("snoozeUntil").cloned().filter(Value::is_number).unwrap_or(Value::Null);
+    json!({ "said": said, "lastVisit": last_visit, "lastFacts": last_facts, "triage": t, "pending": pending, "snoozeUntil": snooze })
 }
 
 /// The state files that exist but cannot be read back. They are reset on the next save, so
@@ -252,8 +253,14 @@ pub(crate) fn split_nudge_state(v: &Value) -> Result<(String, String), String> {
     if !(pending.is_null() || pending.is_object()) {
         return Err("a pending nudge must be an object".into());
     }
+    // Until when he keeps quiet, set from his panel: a time in ms, or nothing.
+    let snooze = o.get("snoozeUntil").cloned().unwrap_or(Value::Null);
+    if !(snooze.is_null() || snooze.is_number()) {
+        return Err("snoozeUntil must be a time or null".into());
+    }
     let nudges = json!({
         "pending": pending,
+        "snoozeUntil": snooze,
         "said": o.get("said").cloned().unwrap_or(json!({})),
         "lastVisit": o.get("lastVisit").cloned().unwrap_or(Value::Null),
         "lastFacts": o.get("lastFacts").cloned().unwrap_or(Value::Null),
@@ -436,7 +443,7 @@ mod tests {
     #[test]
     fn nudge_state_defaults_when_the_files_are_missing_or_broken() {
         let v = nudge_state_from(None, Some("not json"));
-        assert_eq!(v, json!({ "said": {}, "lastVisit": null, "lastFacts": null, "triage": {}, "pending": null }));
+        assert_eq!(v, json!({ "said": {}, "lastVisit": null, "lastFacts": null, "triage": {}, "pending": null, "snoozeUntil": null }));
         assert_eq!(unreadable_nudge_files(None, Some("not json")), vec!["triage.json"]);
         assert_eq!(unreadable_nudge_files(Some("{}"), Some("[]")), vec!["triage.json"], "triage must be an object");
         assert!(unreadable_nudge_files(Some("{}"), None).is_empty(), "a missing file is not a broken one");
@@ -446,7 +453,7 @@ mod tests {
     fn nudge_state_round_trips_through_its_two_files() {
         let st = json!({ "said": { "waiting|/w/a/notes.md": "2026-10-13" }, "lastVisit": 1760000000000u64,
                          "lastFacts": [{ "key": "waiting|/w/a/notes.md" }], "triage": { "0a1b2c3d": "you" },
-                         "pending": { "text": "[[session:a]] waits.", "stale": [], "lang": "en" } });
+                         "pending": { "text": "[[session:a]] waits.", "stale": [], "lang": "en" }, "snoozeUntil": 1760003600000u64 });
         let (n, t) = split_nudge_state(&st).unwrap();
         assert_eq!(nudge_state_from(Some(&n), Some(&t)), st);
     }
@@ -488,5 +495,6 @@ mod tests {
         let big = "x".repeat(1_100_000);
         assert!(split_nudge_state(&json!({ "lastFacts": [big] })).is_err());
         assert!(split_nudge_state(&json!({ "pending": "text" })).is_err(), "a pending nudge is an object or null");
+        assert!(split_nudge_state(&json!({ "snoozeUntil": "soon" })).is_err(), "a snooze is a time or null");
     }
 }

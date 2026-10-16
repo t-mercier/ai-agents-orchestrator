@@ -10,7 +10,7 @@
   const MOVED_GAP_MS = 5 * 60_000
   // How long a history scan, or the PR states, stay good enough to reuse.
   const SCAN_MS = 5 * 60_000, PRS_MS = 60_000
-  let st = { said: {}, lastVisit: null, lastFacts: null, triage: {}, pending: null }
+  let st = { said: {}, lastVisit: null, lastFacts: null, triage: {}, pending: null, snoozeUntil: null }
   let ready = null, lastBlur = null, pollPrev = null, pollAt = 0, polling = false, batch = null, stale = []
   let lastScan = { at: 0, facts: null }, prs = { at: 0, v: {} }, lastNudgeAt = 0
   // The model's "not hers" verdicts hold for this run of the app only: a wrong one hides a
@@ -28,7 +28,8 @@
   }
   // Off, or inside Do not disturb: nothing is said and the baseline does not move, so the
   // recap waits for the window to end instead of being lost.
-  const silent = (now) => !settings().nudges || N.inQuiet(now, settings().quietHours)
+  const snoozed = (now) => typeof st.snoozeUntil === 'number' && now < st.snoozeUntil
+  const silent = (now) => !settings().nudges || N.inQuiet(now, settings().quietHours) || snoozed(now)
   // One nudge at a time: a launch and a focus, or a run and a moved batch, would otherwise
   // both pass momentFor and make two Haiku calls.
   let chain = Promise.resolve()
@@ -170,7 +171,19 @@
     if (s) st = { ...st, ...s }
     if (st.pending && window.CSMBrutusUI) window.CSMBrutusUI.showNudge(st.pending)
   })
-  window.CSMNudges = { run, onPoll, flushMoved, foreground: onForeground, settled: () => chain, state: () => st }
+  // Paused from his panel: kept quiet until `until` (ms), or speaking again with null. Like
+  // quiet hours, the baseline stays put, so what moved meanwhile is said when it ends.
+  function snooze(until) {
+    return serial(async () => {
+      await ready
+      st.snoozeUntil = typeof until === 'number' && until > Date.now() ? until : null
+      await save()
+      window.dispatchEvent(new Event('brutus-snooze'))
+      if (st.snoozeUntil === null) onForeground()
+    })
+  }
+  window.CSMNudges = { run, onPoll, flushMoved, foreground: onForeground, settled: () => chain, state: () => st, snooze,
+    snoozedUntil: () => (snoozed(Date.now()) ? st.snoozeUntil : null) }
   // Launch counts as arriving: there is no focus event when the first visit is the launch.
   onForeground()
 })()

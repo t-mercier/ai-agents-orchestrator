@@ -10,6 +10,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Pause Brutus from his panel.** The moon in his header keeps him quiet for 30 minutes, an
+  hour, two hours or until tomorrow morning; what moved meanwhile is said when the pause ends.
+- **Ticket and PR references in his messages are links.** A ticket key opens in your tracker
+  when a tracker URL is set, and a PR number opens on GitHub when one of your sessions has it.
+
+### Fixed
+
+- **A session named by Brutus opens.** Clicking its chip selects the session, as a click on its
+  card does, instead of only flashing the card; the outline is no longer cut at the edges.
+
 ## [0.23.1] - 2026-10-16
 
 ### Changed

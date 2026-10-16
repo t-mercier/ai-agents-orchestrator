@@ -68,3 +68,36 @@ test('status and initial', () => {
   expect(B.initialOf('  élodie')).toBe('É')
   expect(B.initialOf('')).toBe('B')
 })
+
+describe('ticket and PR references', () => {
+  const ss = [{ name: 'a', status: 'idle', ticket: 'PROJ-1', tickets: ['OPS-7'], prLinks: ['https://github.com/o/r/pull/12', 'https://github.com/o/s/pull/30'] },
+    { name: 'b', status: 'idle', prLink: 'https://github.com/o/t/pull/30' }]
+  const base = 'https://tracker.example/browse/'
+  test('a key with a known prefix links to the tracker; an unknown prefix stays text', () => {
+    const html = B.renderAnswer('PROJ-42 moved, see UTF-8 and OPS-7.', ss, base)
+    expect(html).toContain('<a class="bru-ref" data-bru-url="https://tracker.example/browse/PROJ-42">PROJ-42</a>')
+    expect(html).toContain('data-bru-url="https://tracker.example/browse/OPS-7"')
+    expect(html).not.toContain('browse/UTF-8')
+  })
+  test('without a tracker URL no key is linked', () => {
+    expect(B.renderAnswer('PROJ-42 moved.', ss, '')).not.toContain('bru-ref')
+  })
+  test('#N links when one known PR has that number; two make it ambiguous', () => {
+    const html = B.renderAnswer('PR #12 merged, #30 closed, #99 open.', ss, base)
+    expect(html).toContain('<a class="bru-ref" data-bru-url="https://github.com/o/r/pull/12">#12</a>')
+    expect(html).not.toContain('>#30<')
+    expect(html).not.toContain('>#99<')
+  })
+  test('a pasted PR URL is a link', () => {
+    expect(B.renderAnswer('see https://github.com/o/r/pull/5 now', ss, base)).toContain('data-bru-url="https://github.com/o/r/pull/5">https://github.com/o/r/pull/5</a>')
+  })
+  test('keys inside a chip or code, and escaped quotes, are left alone', () => {
+    const named = [...ss, { name: 'PROJ-9 fix', status: 'idle' }]
+    const html = B.renderAnswer("[[session:PROJ-9 fix]] and `PROJ-3` and it's #12", named, base)
+    expect(html).not.toContain('browse/PROJ-9')
+    expect(html).not.toContain('browse/PROJ-3')
+    expect(html).toContain('data-brutus-session="PROJ-9 fix"')
+    expect(html).toContain('it&#39;s')
+    expect(html).toContain('>#12</a>')
+  })
+})

@@ -305,3 +305,36 @@ test('leaving the app inside quiet hours keeps the baseline, so the morning reca
   expect(await page.evaluate(() => window.CSMNudges.state().lastVisit)).toBe(before)
   expect(await page.evaluate(() => window.__LAST_NUDGE_SAVE__)).toBeUndefined()
 })
+
+test('a session chip opens that session and outlines its card inside the list', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => window.CSMBrutusUI.close())
+  await nudge(page, { text: '[[session:checkout-redesign]] is waiting on your answer.', stale: [] })
+  await page.locator('.bru-nudge .bru-chip').click()
+  const card = page.locator('#panel-list .list-card.selected')
+  await expect(card).toContainText('checkout-redesign')
+  await expect(card).toHaveClass(/bru-flash/)
+  expect(await card.evaluate(e => getComputedStyle(e).outlineStyle)).toBe('none')
+  // A second click keeps it open: selectSession toggles, the chip must not.
+  await nudge(page, { text: '[[session:checkout-redesign]] again.', stale: [] })
+  await page.locator('.bru-nudge .bru-chip').last().click()
+  await expect(page.locator('#panel-list .list-card.selected')).toContainText('checkout-redesign')
+})
+
+test('the moon in his panel pauses the reminders, and Resume lifts the pause', async ({ page }) => {
+  await boot(page); await seedWaiting(page)
+  await page.evaluate(() => window.CSMBrutusUI.open())
+  await page.locator('.bru-panel [data-bru="snooze"]').click()
+  await page.locator('.bru-menu button', { hasText: '1 hour' }).click()
+  await expect(page.locator('.bru-panel .bru-sub')).toContainText('Quiet until')
+  const until = await page.evaluate(() => window.__LAST_NUDGE_SAVE__.snoozeUntil)
+  expect(until - Date.now()).toBeGreaterThan(55 * 60_000)
+  // Paused: a morning run says nothing.
+  await page.evaluate(() => window.CSMBrutusUI.close())
+  await page.evaluate(() => window.CSMNudges.run('morning'))
+  await expect(page.locator('.bru-nudge')).toHaveCount(0)
+  await page.evaluate(() => window.CSMBrutusUI.open())
+  await page.locator('.bru-panel [data-bru="unsnooze"]').click()
+  await expect(page.locator('.bru-panel .bru-sub')).not.toContainText('Quiet until')
+  expect(await page.evaluate(() => window.__LAST_NUDGE_SAVE__.snoozeUntil)).toBe(null)
+})
