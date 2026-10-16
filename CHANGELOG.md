@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-16
+
 ### Added
 
 - **Pause Brutus from his panel.** The moon in his header keeps him quiet for 30 minutes, an
