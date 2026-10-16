@@ -4,7 +4,7 @@ description: >-
   Bring a session's tickets and pull requests back in line with reality — run UNATTENDED by
   the dashboard's Sync button. Reads the tracker for each ticket's current status and asks
   `gh` for the pull requests that belong to this session's work, then rewrites the
-  frontmatter. Touches nothing else. Trigger on "/sync-refs <notes_path>".
+  frontmatter, dropping the extra tickets the user is not assigned to. Touches nothing else. Trigger on "/sync-refs <notes_path>".
 allowed-tools: Bash Read Edit
 argument-hint: "<notes_path>"
 ---
@@ -48,8 +48,11 @@ No tickets and no PRs → nothing to sync. Say so in one line and stop.
 
 ```
 key in (GOSDK-201341, GOSDK-221110, NAV-206836)      # every ticket from Step 1
-fields: key, status
+fields: key, status, assignee
 ```
+
+and, to know who the user is, the tracker's current-user call (`atlassianUserInfo` for Jira):
+its account id is what each `assignee` is compared with.
 
 Transcripts of this skill showed the drift this rule removes: one run made a single JQL
 call, the next made a `getJiraIssue` call per ticket. Same result, N times the cost, and
@@ -75,6 +78,21 @@ known value.
 If no tracker MCP is available, leave `ticket_states:` **untouched** and say so in the
 confirmation. Silently wiping the statuses because a tool was missing would look like every
 ticket lost its status.
+
+### Only the user's tickets stay
+
+The extra tickets (`tickets:`) are the ones the user works on, and the tracker's assignee says
+who that is. Remove from `tickets:` every key whose `assignee` is not the user, unassigned
+included, and its `ticket_states:` entry with it. Being the reporter is not enough: a ticket
+the user filed for a colleague is the colleague's work, and showing it on the user's card is
+what made the board confusing.
+
+- The primary `ticket:` is **never** removed, whoever owns it: the session is about it.
+- A key the tracker did not answer for stays: no answer is not evidence it is someone
+  else's.
+- No tracker MCP available: remove nothing.
+
+Name the removed keys in the confirmation, so a wrong removal is seen the same day.
 
 ## Step 3 — Pull requests, from `gh` — a fixed sequence
 
@@ -133,15 +151,15 @@ as `pr_links:` entries.
 hand is a deliberate act, and a branch can be deleted while its PR still matters. Pruning
 is the dashboard's editor, on purpose.
 
-**The whole sync is those calls and no others**: one read of the file, one JQL, one
+**The whole sync is those calls and no others**: one read of the file, one current-user call, one JQL, one
 `gh pr list` per known repo (or one `gh search prs`), one `pr_mine.py keep`, one edit, one
 line of confirmation.
 A run that needs more than that is a run that went wrong — say so rather than improvise.
 
 ## Step 4 — Confirm in one line
 
-Print what changed: how many ticket statuses were refreshed, which PRs were newly attached,
-or that nothing moved. **In English**, whatever language the surrounding session uses — this
+Print what changed: how many ticket statuses were refreshed, which tickets were dropped as
+not the user's, which PRs were newly attached, or that nothing moved. **In English**, whatever language the surrounding session uses — this
 line is app UI, not conversation. One line: the app shows it as-is.
 
 Worth flagging when it happens: a ticket the tracker redirected to another key (a moved

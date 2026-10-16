@@ -95,6 +95,15 @@ the primary.
 
 Tickets are stricter than PRs. A session carries the ticket it is dedicated to (`ticket:`) and the tickets this session created in the tracker — a NEW issue filed in THIS conversation. Creating a link, a comment or a transition creates no ticket: `create_issue_link` between two existing issues is exactly the call that makes a related ticket look like this session's. Never add a ticket that was only read, linked, mentioned or found: the issues Jira links to this one, a parent, a duplicate, a ticket named in a note are not this session's, and attaching them makes the card say the session is about work it is not about. Add those, matching `^[A-Za-z][A-Za-z0-9]*-[0-9]+$`, uppercased.
 
+**And only the user's own.** An extra ticket is attached only when the tracker says the user
+is its **assignee**. Filing a ticket makes the user its reporter, not its owner: one filed for
+a colleague, or left unassigned, is not this session's work, and listing it makes the card
+look like the user owns it. Check every candidate in ONE query, `key in (A-1, A-2) AND
+assignee = currentUser()`, and add only the keys it returns. No tracker reachable: add none,
+and say so in the confirmation. The primary `ticket:` is never checked, because the session
+is about that ticket whoever owns it (a review of a colleague's work, say).
+
+
 Record each ticket's status too, when this session actually saw one — a tracker lookup, a
 status you were told, a transition you performed. Never invent one, and never leave an
 entry you now know is wrong: an out-of-date status shown as current is worse than none.

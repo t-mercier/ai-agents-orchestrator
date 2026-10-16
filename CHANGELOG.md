@@ -10,6 +10,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **A session lists only the tickets you are assigned to.** Besides the ticket a session is
+  about, the tickets attached to it are the ones the tracker assigns to you; one you filed for a
+  colleague no longer appears on your card. Sync drops the extra tickets that are not yours.
+
 ## [0.24.0] - 2026-10-16
 
 ### Added
