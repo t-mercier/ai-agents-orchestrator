@@ -44,9 +44,12 @@
     const open = [...live, ...stale].filter(s => s && s.notesPath)
     for (const s of open) {
       const np = s.notesPath, session = s.name || '', at = ageOf(s)
+      // Every PR merged or closed: the work shipped, and the steps the notes still list are
+      // most likely out of date. They are not said; the stale list offers to close it instead.
+      const links = linksOf(s), shipped = links.length > 0 && links.every(u => prs[u] && (prs[u].state === 'merged' || prs[u].state === 'closed'))
       if (s.state === 'active' && s.status === 'waiting') out.push({ key: `waiting|${np}|${s.lastActivityAt || ''}`, kind: 'waiting', session, notesPath: np, text: '', at })
       if (s.state === 'active' && s.status === 'busy') out.push({ key: `busy|${np}|${s.lastActivityAt || ''}`, kind: 'busy', session, notesPath: np, text: '', at })
-      for (const line of openSteps(s.nextSteps)) {
+      for (const line of shipped ? [] : openSteps(s.nextSteps)) {
         const hash = hashLine(line)
         const owner = line.includes(YOU) ? 'you' : (triage[hash] || 'untriaged')
         if (owner === 'agent') continue
@@ -61,7 +64,7 @@
         out.push({ key: `ticket|${m[1]}|${m[2]}`, kind: 'ticket', session, notesPath: np, text: m[1], at, state: m[2] })
       }
       if (at !== null && now - at > staleDays * DAY) {
-        out.push({ key: `stale|${np}`, kind: 'stale', session, notesPath: np, text: openSteps(s.nextSteps)[0] || '', at })
+        out.push({ key: `stale|${np}`, kind: 'stale', session, notesPath: np, text: shipped ? '' : (openSteps(s.nextSteps)[0] || ''), at, shipped })
       }
     }
     return [...new Map(out.map(f => [f.key, f])).values()]
@@ -181,6 +184,7 @@
       more: (n) => `… and ${n} more thing${n > 1 ? 's' : ''}`,
       listAsk: 'Want me to list them?', open: 'Open', later: 'Not now',
       listLine: (c, day, step) => `- ${c}, ${day}${step ? `, next: ${step}` : ''}`,
+      shipped: 'PR merged, ready to close',
       activeOn: (d) => `last active ${d}`, noActivity: 'no activity recorded',
     },
     fr: {
@@ -195,6 +199,7 @@
       more: (n) => `… et ${n} autre${n > 1 ? 's' : ''} chose${n > 1 ? 's' : ''}`,
       listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'Pas maintenant',
       listLine: (c, day, step) => `- ${c}, ${day}${step ? `, ensuite : ${step}` : ''}`,
+      shipped: 'PR mergée, prête à fermer',
       activeOn: (d) => `actif le ${d}`, noActivity: 'aucune activité',
     },
   }
@@ -259,12 +264,15 @@
   }
   function staleList(facts) {
     return (facts || []).filter(f => f.kind === 'stale').sort((a, b) => (a.at || 0) - (b.at || 0))
-      .map(f => ({ session: f.session, at: f.at, step: f.text }))
+      .map(f => ({ session: f.session, at: f.at, step: f.text, shipped: !!f.shipped }))
   }
   // The answer to "want me to list them?", from the list the nudge carried.
   function staleLines(stale, lang = 'en', fmt = (t) => new Date(t).toLocaleDateString()) {
     const w = words(lang)
-    return (stale || []).map(s => w.listLine(chip(defang(s.session)), s.at ? w.activeOn(fmt(s.at)) : w.noActivity, s.step ? defang(s.step) : '')).join('\n')
+    return (stale || []).map(s => {
+      const line = w.listLine(chip(defang(s.session)), s.at ? w.activeOn(fmt(s.at)) : w.noActivity, s.step ? defang(s.step) : '')
+      return s.shipped ? `${line}, ${w.shipped}` : line
+    }).join('\n')
   }
   function prune(said, facts, now, days = 7) {
     const live = new Set((facts || []).map(f => f.key))

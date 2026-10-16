@@ -220,7 +220,7 @@ describe('wording', () => {
   })
   test('the stale list is oldest first with its first step', () => {
     const l = N.staleList([{ kind: 'stale', session: 'b', at: 2, text: 's2' }, { kind: 'stale', session: 'a', at: 1, text: 's1' }])
-    expect(l).toEqual([{ session: 'a', at: 1, step: 's1' }, { session: 'b', at: 2, step: 's2' }])
+    expect(l).toEqual([{ session: 'a', at: 1, step: 's1', shipped: false }, { session: 'b', at: 2, step: 's2', shipped: false }])
   })
   test('the payload caps untriaged lines at 40', () => {
     const u = Array.from({ length: 50 }, (_, i) => ({ hash: String(i).padStart(8, '0'), text: `l${i}`, session: 's' }))
@@ -363,6 +363,27 @@ describe('what the model may write', () => {
   })
   test('a message over the cap is refused', () => {
     expect(N.validMessage('a'.repeat(N.MAX_MESSAGE + 1), facts)).toBe(false)
+  })
+})
+
+describe('a session whose PRs all shipped', () => {
+  const NOW2 = Date.now()
+  const old = (o) => ({ state: 'stale', status: 'idle', notesPath: `/w/${o.name}/notes.md`, lastActivityAt: new Date(NOW2 - 5 * 86400_000).toISOString(), ...o })
+  const merged = { 'https://github.com/o/r/pull/1': { state: 'merged' }, 'https://github.com/o/r/pull/2': { state: 'open' } }
+  test('its steps are not said, and the stale list offers to close it', () => {
+    const f = N.collect({ live: [], stale: [old({ name: 'done', prLinks: ['https://github.com/o/r/pull/1'], nextSteps: '- [ ] 👤 verify on the phone' })], prs: merged, triage: {}, now: NOW2 })
+    expect(f.some(x => x.kind === 'task')).toBe(false)
+    const l = N.staleList(f)
+    expect(l[0]).toMatchObject({ step: '', shipped: true })
+    expect(N.staleLines(l, 'en', () => 'd')).toBe('- [[session:done]], last active d, PR merged, ready to close')
+    expect(N.staleLines(l, 'fr', () => 'd')).toBe('- [[session:done]], actif le d, PR mergée, prête à fermer')
+  })
+  test('one PR still open, or a state not known, keeps the steps', () => {
+    for (const links of [['https://github.com/o/r/pull/1', 'https://github.com/o/r/pull/2'], ['https://github.com/o/r/pull/9']]) {
+      const f = N.collect({ live: [], stale: [old({ name: 'wip', prLinks: links, nextSteps: '- [ ] 👤 verify on the phone' })], prs: merged, triage: {}, now: NOW2 })
+      expect(f.some(x => x.kind === 'task')).toBe(true)
+      expect(N.staleList(f)[0].shipped).toBe(false)
+    }
   })
 })
 

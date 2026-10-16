@@ -15,6 +15,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - **A session lists only the tickets you are assigned to.** Besides the ticket a session is
   about, the tickets attached to it are the ones the tracker assigns to you; one you filed for a
   colleague no longer appears on your card. Sync drops the extra tickets that are not yours.
+- **Brutus stops reminding the steps of shipped work.** When every PR of a session is merged or
+  closed, its leftover next steps are not said any more, and the list of quiet sessions says the
+  PR merged and the session is ready to close.
 
 ## [0.24.0] - 2026-10-16
 
