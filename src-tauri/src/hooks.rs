@@ -37,7 +37,7 @@ static HOOKS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../hooks");
 
 /// The hooks this app ships, in the order the UI lists them.
 /// (`file`, the settings.json event, the matcher it needs, one line of what it does)
-const SHIPPED: [(&str, &str, Option<&str>, &str); 7] = [
+const SHIPPED: [(&str, &str, Option<&str>, &str); 8] = [
     (
         "ao_skill_guard.py",
         "PreToolUse",
@@ -81,6 +81,12 @@ const SHIPPED: [(&str, &str, Option<&str>, &str); 7] = [
         "UserPromptSubmit",
         None,
         "Nudges the model to check /learn when your own wording states a preference or correction.",
+    ),
+    (
+        "notes_steps_guard.py",
+        "PostToolUse",
+        Some("Edit|Write|MultiEdit"),
+        "After an edit to a notes.md, sends the model back to its Next steps when they break the rule: at most 7, one line of 100 characters each, finished ones deleted.",
     ),
 ];
 
@@ -429,8 +435,11 @@ mod tests {
         let text = hooks.to_string();
         // Their Bash-only pr_attach covers gh; ours adds the MCP tool and nothing else.
         let post = hooks["PostToolUse"].as_array().unwrap();
-        assert_eq!(post.len(), 1);
-        assert_eq!(post[0]["matcher"], PR_ATTACH_MCP_ONLY, "MCP-only, never a second Bash group");
+        assert_eq!(post.len(), 2, "pr_attach's MCP group and the notes guard");
+        let pr = post.iter().find(|g| g.to_string().contains("pr_attach.py")).unwrap();
+        assert_eq!(pr["matcher"], PR_ATTACH_MCP_ONLY, "MCP-only, never a second Bash group");
+        let guard = post.iter().find(|g| g.to_string().contains("notes_steps_guard.py")).unwrap();
+        assert_eq!(guard["matcher"], "Edit|Write|MultiEdit");
         for file in ["ao_skill_guard.py", "ao_autosave.py", "ao_precompact.py", "ao_session_start.py", "learn_nudge.py"] {
             assert!(text.contains(file), "{file} must ride in the launch settings");
         }

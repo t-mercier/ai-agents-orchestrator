@@ -16,6 +16,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   hour, two hours or until tomorrow morning; what moved meanwhile is said when the pause ends.
 - **Ticket and PR references in his messages are links.** A ticket key opens in your tracker
   when a tracker URL is set, and a PR number opens on GitHub when one of your sessions has it.
+- **Next steps stay a short queue.** A new hook reads a session's Next steps back after every
+  edit to its notes and sends the agent to rewrite them when they break the rule: at most seven,
+  one line of 100 characters each, finished steps deleted. The detail moves to Open questions
+  or Decisions made.
 
 ### Fixed
 
