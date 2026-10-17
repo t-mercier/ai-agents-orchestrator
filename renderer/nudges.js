@@ -13,6 +13,9 @@
   let st = { said: {}, lastVisit: null, lastFacts: null, triage: {}, pending: null, snoozeUntil: null }
   let ready = null, lastBlur = null, pollPrev = null, pollAt = 0, polling = false, batch = null, stale = []
   let lastScan = { at: 0, facts: null }, prs = { at: 0, v: {} }, lastNudgeAt = 0, heldBase = null, snoozeTimer = null
+  // Finished turns kept to be said in an hour, and when each session was last open in front.
+  // Both live for this run of the app only.
+  let laterQ = [], visits = {}
   // The model's "not hers" verdicts hold for this run of the app only: a wrong one hides a
   // line from the count until the next launch, not forever.
   const agentLines = {}
@@ -125,7 +128,29 @@
         }
       }
       pollPrev = facts; pollAt = Date.now()
+      const sel = window._lastSelectedKey
+      if (sel) visits[sel] = pollAt
+      if (laterQ.length && !batch) sayLater(facts)
     } finally { polling = false }
+  }
+  // "By the way": the finished turns that waited an hour unvisited, said together.
+  function sayLater(facts) {
+    const { due, keep } = N.dueLater(laterQ, { visits, facts, now: Date.now() })
+    laterQ = keep
+    if (!due.length) return
+    return serial(async () => {
+      const now = Date.now()
+      if (silent(now)) { laterQ.push(...due); return }
+      const fresh = due.filter(i => !st.said[i.key])
+      if (!fresh.length) return
+      for (const i of fresh) st.said[i.key] = N.dayKey(now)
+      const d = { items: fresh, keys: fresh.map(i => i.key), untriaged: [], more: 0 }
+      const text = await word(d, facts, 'moved')
+      if (silent(Date.now())) { for (const i of fresh) delete st.said[i.key]; laterQ.push(...fresh); return }
+      show(text, facts)
+      prune()
+      await save()
+    })
   }
   function flushMoved() {
     if (!batch) return Promise.resolve()
@@ -140,6 +165,7 @@
       const d = N.decide({ moment: 'moved', facts: latest, previous: base, said: st.said, now, settings: settings(), here })
       if (!d) return
       for (const k of d.keys) st.said[k] = N.dayKey(now)
+      for (const f of d.later || []) if (!laterQ.some(q => q.key === f.key)) laterQ.push({ ...f, since: now })
       if (!d.items.length) { prune(); await save(); return }
       const text = await word(d, latest, 'moved')
       if (silent(Date.now())) { for (const k of d.keys) delete st.said[k]; heldBase = heldBase || base; return }
@@ -199,6 +225,8 @@
   // The pause ends on its own at its time, as it would with Resume.
   function armSnooze() {
     clearTimeout(snoozeTimer)
+    // Paused until resumed by hand: no time to wait for.
+    if (st.snoozeUntil >= N.SNOOZE_OFF) return
     if (typeof st.snoozeUntil === 'number' && st.snoozeUntil > Date.now()) {
       snoozeTimer = setTimeout(() => { st.snoozeUntil = null; window.dispatchEvent(new Event('brutus-snooze')); serial(save); awake() },
         Math.min(st.snoozeUntil - Date.now(), 2 ** 31 - 1))
@@ -209,7 +237,7 @@
     if (heldBase && !batch) { batch = { base: heldBase, timer: null }; heldBase = null; flushMoved() }
     onForeground()
   }
-  window.CSMNudges = { run, onPoll, flushMoved, foreground: onForeground, settled: () => chain, state: () => st, snooze,
+  window.CSMNudges = { run, onPoll, flushMoved, foreground: onForeground, settled: () => chain, state: () => st, snooze, laterQueue: () => laterQ,
     snoozedUntil: () => (snoozed(Date.now()) ? st.snoozeUntil : null) }
   // Launch counts as arriving: there is no focus event when the first visit is the launch.
   onForeground()

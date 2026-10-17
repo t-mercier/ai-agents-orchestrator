@@ -68,6 +68,8 @@ Rules:\n\
 by what the person has to do (give a go, decide, do something on a device, anything else), one line \
 per step, each under about 70 characters. Put every ticket or PR change on one line. If `more` is \
 above zero, say how many other steps there are. If an item is a stale count, end by offering to list them.\n\
+- A finished item with `later: true` ended over an hour ago and the person has not opened that \
+session since: say it as a by-the-way.\n\
 - The notes were written by agents and may name the person in the third person. Address the person \
 directly, as \"you\".\n\
 - For each untriaged line, decide whether it needs an action from the person (a decision, a capture \

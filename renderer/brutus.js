@@ -166,7 +166,7 @@
     if (palette && turns.length > 2) { lead = `<div class="bru-earlier">↑ ${turns.length - 2} earlier messages</div>`; turns = turns.slice(-2) }
     return lead + turns.map(turnHTML).join('') + liveHTML()
   }
-  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${quietUntil() ? `Quiet until ${esc(hhmm(quietUntil()))} · <a data-bru="unsnooze">Resume</a>` : state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib${quietUntil() ? ' on' : ''}" data-bru="snooze" title="${quietUntil() ? `Quiet until ${hhmm(quietUntil())}` : 'Pause his reminders'}">${I.moon}</button><button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
+  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${quietUntil() ? `${quietUntil() >= NM().SNOOZE_OFF ? 'Reminders paused' : `Quiet until ${esc(hhmm(quietUntil()))}`} · <a data-bru="unsnooze">Resume</a>` : state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib${quietUntil() ? ' on' : ''}" data-bru="snooze" title="${quietUntil() ? (quietUntil() >= NM().SNOOZE_OFF ? 'Reminders paused' : `Quiet until ${hhmm(quietUntil())}`) : 'Pause his reminders'}">${I.moon}</button><button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
   const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his memory and his docs</span></div></div>`
 
   function render() {
@@ -343,7 +343,7 @@
   function snoozeMenu(anchor) {
     document.querySelector('.bru-menu')?.remove()
     const m = document.createElement('div'); m.className = 'bru-menu'
-    const opts = [['30 minutes', 30 * 60_000], ['1 hour', 60 * 60_000], ['2 hours', 120 * 60_000], ['Until tomorrow', 0]]
+    const opts = [['30 minutes', 30 * 60_000], ['1 hour', 60 * 60_000], ['2 hours', 120 * 60_000], ['Until tomorrow', 0], ['Until I turn it back on', -1]]
     m.innerHTML = `<div class="bru-menu-head">Pause his reminders</div>${opts.map(([l], i) => `<button type="button" data-i="${i}">${l}</button>`).join('')}${quietUntil() ? '<div class="sep"></div><button type="button" data-i="resume">Resume now</button>' : ''}`
     document.body.appendChild(m)
     const r = anchor.getBoundingClientRect(), mr = m.getBoundingClientRect()
@@ -356,7 +356,8 @@
       const btn = e.target.closest('button[data-i]'); if (!btn || !window.CSMNudges) return
       done()
       const i = btn.dataset.i
-      window.CSMNudges.snooze(i === 'resume' ? null : (opts[i][1] ? Date.now() + opts[i][1] : tomorrow()))
+      const ms = i === 'resume' ? null : opts[i][1]
+      window.CSMNudges.snooze(ms === null ? null : ms < 0 ? NM().SNOOZE_OFF : ms ? Date.now() + ms : tomorrow())
     })
   }
   function menu(x, y) {

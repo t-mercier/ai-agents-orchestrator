@@ -1,4 +1,4 @@
-// Brutus nudges: the bubble, Open, Not now, the stale list, and the template fallback.
+// Brutus nudges: the bubble, Open, OK, the stale list, and the template fallback.
 const { test, expect } = require('@playwright/test')
 
 async function boot(page) {
@@ -34,7 +34,7 @@ test('"Want me to list them?" lists the stale sessions without a model call', as
   await expect(page.locator('.bru-panel .bru-body .bru-chip', { hasText: 'legacy-export' })).toBeVisible()
 })
 
-test('Not now closes the bubble', async ({ page }) => {
+test('OK closes the bubble', async ({ page }) => {
   await boot(page)
   await nudge(page, { text: 'Something.', stale: [] })
   await page.locator('.bru-nudge [data-bru="nudge-later"]').click()
@@ -283,7 +283,7 @@ test('the bubble speaks the language of the nudge', async ({ page }) => {
   await boot(page)
   await page.evaluate(() => window.CSMBrutusUI.showNudge({ text: 'Quelque chose.', stale: [], lang: 'fr' }))
   await expect(page.locator('.bru-nudge [data-bru="nudge-open"]')).toHaveText('Ouvrir')
-  await expect(page.locator('.bru-nudge [data-bru="nudge-later"]')).toHaveText('Pas maintenant')
+  await expect(page.locator('.bru-nudge [data-bru="nudge-later"]')).toHaveText('OK')
 })
 
 test('the model\'s "not yours" verdict is not saved; its "yours" is', async ({ page }) => {
@@ -374,4 +374,36 @@ test('the session open in front is not announced when it moves; the others still
   const b = page.locator('.bru-nudge')
   await expect(b).toContainText('payments-api is waiting on your answer.')
   await expect(b).not.toContainText('checkout-redesign')
+})
+
+test('another session finishing is said an hour later, as a by-the-way, unless it was opened', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => { window.__NUDGE_FAIL__ = true; window._lastSelectedKey = null })
+  const poll = (list) => page.evaluate((l) => window.CSMNudges.onPoll(l), list)
+  await poll([session('checkout-redesign', 'busy'), session('payments-api', 'busy')])
+  await poll([session('checkout-redesign', 'idle'), session('payments-api', 'idle')])
+  await page.evaluate(() => window.CSMNudges.flushMoved())
+  await expect(page.locator('.bru-nudge')).toHaveCount(0)
+  expect(await page.evaluate(() => window.CSMNudges.laterQueue().length)).toBe(2)
+  // An hour on: payments-api was opened meanwhile, checkout-redesign was not.
+  await page.evaluate(() => {
+    for (const q of window.CSMNudges.laterQueue()) q.since = Date.now() - 61 * 60_000
+    window._lastSelectedKey = '/w/payments-api/notes.md'
+  })
+  await poll([session('checkout-redesign', 'idle'), session('payments-api', 'idle')])
+  await page.evaluate(() => window.CSMNudges.settled())
+  const b = page.locator('.bru-nudge')
+  await expect(b).toContainText('By the way, checkout-redesign finished its turn.')
+  await expect(b).not.toContainText('payments-api')
+})
+
+test('a pause with no end stays until Resume', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => window.CSMBrutusUI.open())
+  await page.locator('.bru-panel [data-bru="snooze"]').click()
+  await page.locator('.bru-menu button', { hasText: 'Until I turn it back on' }).click()
+  await expect(page.locator('.bru-panel .bru-sub')).toContainText('Reminders paused')
+  expect(await page.evaluate(() => window.CSMNudges.snoozedUntil())).toBeGreaterThan(Date.now() + 365 * 86400_000)
+  await page.locator('.bru-panel [data-bru="unsnooze"]').click()
+  await expect(page.locator('.bru-panel .bru-sub')).not.toContainText('paused')
 })

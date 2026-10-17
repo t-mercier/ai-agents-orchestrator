@@ -17,6 +17,11 @@
   const MAX_MESSAGE = 2000, SAMPLE_CHARS = 280, MAX_UNTRIAGED = 40
   // A nudge is read at a glance: the steps it names, and how long each one may run.
   const MAX_TASKS = 5, STEP_CHARS = 70
+  // Another session's finished turn is said only once it has waited this long unvisited:
+  // a turn that just ended is not news yet, and one the person went back to never is.
+  const LATER_MS = 60 * MIN
+  // A pause with no end: the latest time a Date holds, so "now < it" is always true.
+  const SNOOZE_OFF = 8.64e15
   // The baseline kept between visits: enough for thousands of open steps, small enough to
   // stay far under the state file's 1 MiB cap.
   const MAX_FACTS = 2000
@@ -140,7 +145,10 @@
       ? morningItems(facts, previous, said, dayKey(now), settings.staleDays || STALE_DAYS)
       : changeItems(facts, previous, said)
     const seen = moment === 'moved' && here ? items.filter(i => i.notesPath === here) : []
-    if (seen.length) items.splice(0, items.length, ...items.filter(i => !seen.includes(i)))
+    // On a moved case, a finished turn elsewhere waits: the caller says it in an hour if the
+    // person has not gone back to that session by then. Not recorded as said meanwhile.
+    const later = moment === 'moved' ? items.filter(i => i.kind === 'finished' && !seen.includes(i)) : []
+    if (seen.length || later.length) items.splice(0, items.length, ...items.filter(i => !seen.includes(i) && !later.includes(i)))
     items.sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
     // Every waiting agent is said; the steps stop at MAX_TASKS and the rest become a count.
     // The steps said longest ago come first, never-said ones before all, so the five named
@@ -152,9 +160,21 @@
     const named = new Set(tasks.slice(0, MAX_TASKS))
     const shown = items.filter(i => i.kind !== 'task' || named.has(i))
     const untriaged = shape === 'morning' ? facts.filter(f => f.kind === 'task' && f.owner === 'untriaged') : []
-    if (!shown.length && !seen.length) return null
+    if (!shown.length && !seen.length && !later.length) return null
     // Only what was seen in front: nothing to show, but recorded so it is not said later.
-    return { items: shown, keys: [...shown, ...seen].map(i => i.key), untriaged, more: Math.max(0, tasks.length - MAX_TASKS) }
+    return { items: shown, keys: [...shown, ...seen].map(i => i.key), untriaged, more: Math.max(0, tasks.length - MAX_TASKS), later }
+  }
+
+  // The finished turns kept for later that are due now: an hour old, their session not
+  // visited since and not running again. `keep` is what still waits.
+  function dueLater(queue, { visits = {}, facts = [], now, delay = LATER_MS }) {
+    const active = new Set(facts.filter(f => f.kind === 'busy' || f.kind === 'waiting').map(f => f.notesPath))
+    const due = [], keep = []
+    for (const q of queue || []) {
+      if ((visits[q.notesPath] || 0) > q.since || active.has(q.notesPath)) continue
+      ;(now - q.since >= delay ? due : keep).push(q)
+    }
+    return { due: due.map(q => ({ ...q, later: true })), keep }
   }
 
   const chip = (n) => `[[session:${n}]]`
@@ -181,13 +201,14 @@
       waiting: (c) => `${c} is waiting on your answer.`,
       task: (c) => `For ${c}:`,
       finished: (c) => `${c} finished its turn.`,
+      finishedLater: (c) => `By the way, ${c} finished its turn.`,
       pr: (n, state) => `PR ${n} ${state}`,
       ticket: (k, state) => `${k} ${state}`,
       news: (c, l) => `Moved in ${c}: ${l.join(', ')}.`,
       staleCount: (n, d) => `${n} session${n > 1 ? 's have' : ' has'} not moved for more than ${d} days. Want me to list them?`,
       untriaged: (n) => `… and ${n} other open step${n > 1 ? 's' : ''}.`,
       more: (n) => `… and ${n} more thing${n > 1 ? 's' : ''}`,
-      listAsk: 'Want me to list them?', open: 'Open', later: 'Not now',
+      listAsk: 'Want me to list them?', open: 'Open', later: 'OK',
       listLine: (c, day, step) => `- ${c}, ${day}${step ? `, next: ${step}` : ''}`,
       shipped: 'PR merged, ready to close',
       activeOn: (d) => `last active ${d}`, noActivity: 'no activity recorded',
@@ -196,13 +217,14 @@
       waiting: (c) => `${c} attend ta réponse.`,
       task: (c) => `Pour ${c} :`,
       finished: (c) => `${c} a fini son tour.`,
+      finishedLater: (c) => `Au fait, ${c} a fini son tour.`,
       pr: (n, state) => `PR ${n} ${({ merged: 'mergée', closed: 'fermée', open: 'ouverte', draft: 'en brouillon' })[state] || state}`,
       ticket: (k, state) => `${k} en ${state}`,
       news: (c, l) => `Ça a bougé dans ${c} : ${l.join(', ')}.`,
       staleCount: (n, d) => `${n} session${n > 1 ? 's n’ont' : ' n’a'} pas bougé depuis plus de ${d} jours. Je te les liste ?`,
       untriaged: (n) => `… et ${n} autre${n > 1 ? 's' : ''} étape${n > 1 ? 's' : ''} ouverte${n > 1 ? 's' : ''}.`,
       more: (n) => `… et ${n} autre${n > 1 ? 's' : ''} chose${n > 1 ? 's' : ''}`,
-      listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'Pas maintenant',
+      listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'OK',
       listLine: (c, day, step) => `- ${c}, ${day}${step ? `, ensuite : ${step}` : ''}`,
       shipped: 'PR mergée, prête à fermer',
       activeOn: (d) => `actif le ${d}`, noActivity: 'aucune activité',
@@ -213,7 +235,7 @@
     const w = words(lang), c = chip(i.session)
     switch (i.kind) {
       case 'waiting': return w.waiting(c)
-      case 'finished': return w.finished(c)
+      case 'finished': return i.later ? w.finishedLater(c) : w.finished(c)
       case 'staleCount': return w.staleCount(i.count, i.days)
       default: return ''
     }
@@ -288,10 +310,10 @@
   function payload({ moment, items, untriaged, sample, name, staleDays, more = 0 }) {
     return {
       moment, name, staleDays, more, sample: String(sample || '').slice(0, SAMPLE_CHARS),
-      items: items.map(i => ({ kind: i.kind, session: i.session, text: clean(i.text), state: i.state, count: i.count })),
+      items: items.map(i => ({ kind: i.kind, session: i.session, text: clean(i.text), state: i.state, count: i.count, later: i.later || undefined })),
       untriaged: (untriaged || []).slice(0, MAX_UNTRIAGED).map(u => ({ hash: u.hash, session: u.session, text: defang(u.text) })),
     }
   }
 
-  return { MAX_TASKS, short, hashLine, openSteps, collect, baseline, momentFor, inQuiet, dayKey, YOU, STALE_DAYS, MAX_MESSAGE, MAX_FACTS, decide, template, preview, validMessage, withRecap, staleList, staleLines, words, payload, langOf, prune, defang }
+  return { MAX_TASKS, LATER_MS, SNOOZE_OFF, dueLater, short, hashLine, openSteps, collect, baseline, momentFor, inQuiet, dayKey, YOU, STALE_DAYS, MAX_MESSAGE, MAX_FACTS, decide, template, preview, validMessage, withRecap, staleList, staleLines, words, payload, langOf, prune, defang }
 })

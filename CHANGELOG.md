@@ -15,6 +15,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - **Brutus no longer tells you about the session you are on.** While the app is in front, a turn
   that ends or an agent that starts waiting in the open session is not announced; you are already
   looking at it. The morning and back-from-a-pause recaps are unchanged.
+- **A finished turn elsewhere waits an hour.** When another session finishes while you work,
+  Brutus says it only if you have not opened that session within the hour: "By the way, X
+  finished its turn." A session waiting on your answer is still said at once.
+- **"Not now" is "OK".** The button only ever closed the bubble; its new name says so.
+- **Pause until you resume.** The pause menu has "Until I turn it back on".
 
 ## [0.24.1] - 2026-10-16
 

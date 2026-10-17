@@ -129,10 +129,25 @@ describe('decide', () => {
     const f = facts([S({ name: 'a', nextSteps: '- [x] 👤 take the capture' })])
     expect(f.some(x => x.kind === 'task')).toBe(false)
   })
-  test('busy → idle is a finished turn', () => {
+  test('busy → idle is a finished turn: on a moved case it waits for later, back from a pause it is said', () => {
     const prev = facts([S({ name: 'a', status: 'busy' })])
     const d = N.decide({ moment: 'moved', facts: facts([S({ name: 'a', status: 'idle' })]), previous: prev, said: {}, now: NOW, settings: on })
-    expect(d.items).toEqual([expect.objectContaining({ kind: 'finished', session: 'a' })])
+    expect(d.items).toEqual([])
+    expect(d.later).toEqual([expect.objectContaining({ kind: 'finished', session: 'a' })])
+    expect(d.keys).toEqual([])
+  })
+  test('a finished turn kept for later is due after an hour, unless its session was visited or runs again', () => {
+    const q = [{ key: 'finished|/a|1', kind: 'finished', session: 'a', notesPath: '/a', since: 0 },
+      { key: 'finished|/b|1', kind: 'finished', session: 'b', notesPath: '/b', since: 0 },
+      { key: 'finished|/c|1', kind: 'finished', session: 'c', notesPath: '/c', since: 0 }]
+    const early = N.dueLater(q, { now: N.LATER_MS - 1 })
+    expect(early.due).toEqual([]); expect(early.keep).toHaveLength(3)
+    const r = N.dueLater(q, { visits: { '/b': 10 }, facts: [{ kind: 'busy', notesPath: '/c' }], now: N.LATER_MS })
+    expect(r.due.map(i => i.session)).toEqual(['a'])
+    expect(r.due[0].later).toBe(true)
+    expect(r.keep).toEqual([])
+    expect(N.template(r.due)).toBe('By the way, [[session:a]] finished its turn.')
+    expect(N.template(r.due, 0, 'fr')).toBe('Au fait, [[session:a]] a fini son tour.')
   })
   test('a merged PR is news; an open one is not', () => {
     const live = [S({ name: 'a', prLinks: ['u'] })]
@@ -175,12 +190,12 @@ describe('decide', () => {
   })
   test('on a moved case, the session open in front is recorded as said but not shown', () => {
     const prev = facts([S({ name: 'a', status: 'busy' }), S({ name: 'b', status: 'busy' })])
-    const cur = facts([S({ name: 'a', status: 'idle' }), S({ name: 'b', status: 'idle' })])
+    const cur = facts([S({ name: 'a', status: 'waiting' }), S({ name: 'b', status: 'waiting' })])
     const hereA = prev.find(f => f.session === 'a').notesPath
     const d = N.decide({ moment: 'moved', facts: cur, previous: prev, said: {}, now: NOW, settings: on, here: hereA })
     expect(d.items.map(i => i.session)).toEqual(['b'])
     expect(d.keys.some(k => k.includes(hereA))).toBe(true)
-    const only = N.decide({ moment: 'moved', facts: facts([S({ name: 'a', status: 'idle' })]), previous: facts([S({ name: 'a', status: 'busy' })]), said: {}, now: NOW, settings: on, here: hereA })
+    const only = N.decide({ moment: 'moved', facts: facts([S({ name: 'a', status: 'waiting' })]), previous: facts([S({ name: 'a', status: 'busy' })]), said: {}, now: NOW, settings: on, here: hereA })
     expect(only.items).toEqual([])
     expect(only.keys).toHaveLength(1)
   })
@@ -362,7 +377,8 @@ describe('decide, the rarer paths', () => {
     expect(slim.every(f => !('text' in f))).toBe(true)
     const idle = N.collect({ ...base, live: [S({ name: 'a', nextSteps: '- [ ] 👤 x' })] })
     const d = N.decide({ moment: 'moved', facts: idle, previous: slim, said: {}, now: NOW, settings: on })
-    expect(d.items.map(i => i.kind)).toEqual(['finished'])
+    expect(d.later.map(i => i.kind)).toEqual(['finished'])
+    expect(N.decide({ moment: 'back', facts: idle, previous: slim, said: {}, now: NOW, settings: on }).items.map(i => i.kind)).toEqual(['finished'])
   })
   test('the baseline is capped', () => {
     const many = Array.from({ length: N.MAX_FACTS + 50 }, (_, i) => ({ key: `task|n|${i}`, kind: 'task', text: 'x' }))
@@ -411,7 +427,7 @@ describe('the stale list', () => {
     expect(N.staleLines(stale, 'fr', fmt)).toBe('- [[session:old]], actif le 10/10/2026, ensuite : run [​[session:b]]\n- [[session:none]], aucune activité')
   })
   test('the labels around a nudge come from the same words', () => {
-    expect(N.words('fr')).toEqual(expect.objectContaining({ listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'Pas maintenant' }))
+    expect(N.words('fr')).toEqual(expect.objectContaining({ listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'OK' }))
     expect(N.words('xx').open).toBe('Open')
   })
 })
