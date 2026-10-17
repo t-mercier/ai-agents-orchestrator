@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-17
+
 ### Fixed
 
 - **Brutus no longer tells you about the session you are on.** While the app is in front, a turn
