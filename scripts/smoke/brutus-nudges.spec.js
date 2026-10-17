@@ -360,3 +360,18 @@ test('a pause set while a reminder is being worded keeps it from showing', async
   // Not recorded as said: it can come up once the pause is over.
   expect(Object.keys(await page.evaluate(() => window.CSMNudges.state().said)).some(k => k.startsWith('waiting|'))).toBe(false)
 })
+
+test('the session open in front is not announced when it moves; the others still are', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => { window.__NUDGE_FAIL__ = true; window._lastSelectedKey = '/w/checkout-redesign/notes.md' })
+  const poll = (list) => page.evaluate((l) => window.CSMNudges.onPoll(l), list)
+  await poll([session('checkout-redesign', 'busy'), session('payments-api', 'busy')])
+  await poll([session('checkout-redesign', 'waiting'), session('payments-api', 'busy')])
+  await page.evaluate(() => window.CSMNudges.flushMoved())
+  await expect(page.locator('.bru-nudge')).toHaveCount(0)
+  await poll([session('checkout-redesign', 'waiting'), session('payments-api', 'waiting')])
+  await page.evaluate(() => window.CSMNudges.flushMoved())
+  const b = page.locator('.bru-nudge')
+  await expect(b).toContainText('payments-api is waiting on your answer.')
+  await expect(b).not.toContainText('checkout-redesign')
+})

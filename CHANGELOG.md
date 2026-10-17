@@ -10,6 +10,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Brutus no longer tells you about the session you are on.** While the app is in front, a turn
+  that ends or an agent that starts waiting in the open session is not announced; you are already
+  looking at it. The morning and back-from-a-pause recaps are unchanged.
+
 ## [0.24.1] - 2026-10-16
 
 ### Changed

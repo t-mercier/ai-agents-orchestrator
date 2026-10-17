@@ -130,13 +130,17 @@
     return [...facts.filter(f => (mine(f) || NEWS(f)) && changed(f)), ...finishedTurns(facts, previous)].filter(f => !said[f.key])
   }
 
-  function decide({ moment, facts, previous, said = {}, now, settings }) {
+  // `here` is the notes path of the session open in front of the person: on a moved case
+  // they are already looking at it, so what changed there is recorded as said, not shown.
+  function decide({ moment, facts, previous, said = {}, now, settings, here = null }) {
     if (!settings || settings.nudges === false || inQuiet(now, settings.quietHours)) return null
     if (moment === 'moved' && !previous) return null
     const shape = (moment === 'back' && !previous) ? 'morning' : moment
     const items = shape === 'morning'
       ? morningItems(facts, previous, said, dayKey(now), settings.staleDays || STALE_DAYS)
       : changeItems(facts, previous, said)
+    const seen = moment === 'moved' && here ? items.filter(i => i.notesPath === here) : []
+    if (seen.length) items.splice(0, items.length, ...items.filter(i => !seen.includes(i)))
     items.sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
     // Every waiting agent is said; the steps stop at MAX_TASKS and the rest become a count.
     // The steps said longest ago come first, never-said ones before all, so the five named
@@ -148,8 +152,9 @@
     const named = new Set(tasks.slice(0, MAX_TASKS))
     const shown = items.filter(i => i.kind !== 'task' || named.has(i))
     const untriaged = shape === 'morning' ? facts.filter(f => f.kind === 'task' && f.owner === 'untriaged') : []
-    if (!shown.length) return null
-    return { items: shown, keys: shown.map(i => i.key), untriaged, more: Math.max(0, tasks.length - MAX_TASKS) }
+    if (!shown.length && !seen.length) return null
+    // Only what was seen in front: nothing to show, but recorded so it is not said later.
+    return { items: shown, keys: [...shown, ...seen].map(i => i.key), untriaged, more: Math.max(0, tasks.length - MAX_TASKS) }
   }
 
   const chip = (n) => `[[session:${n}]]`

@@ -93,7 +93,7 @@
       st.lastFacts = N.baseline(facts)
       // Recorded before the wording is awaited, so nothing running meanwhile says it again.
       if (d) for (const k of d.keys) st.said[k] = N.dayKey(now)
-      if (d) {
+      if (d && d.items.length) {
         const text = await word(d, facts, moment)
         // Paused while it was being worded: not said after all, so it comes back later.
         if (silent(Date.now())) for (const k of d.keys) delete st.said[k]
@@ -135,9 +135,12 @@
       const now = Date.now(), latest = pollPrev || []
       // Paused: keep the oldest baseline, so what moved meanwhile is said when it ends.
       if (silent(now)) { heldBase = heldBase || base; return }
-      const d = N.decide({ moment: 'moved', facts: latest, previous: base, said: st.said, now, settings: settings() })
+      // The session open in front: what changed there was just seen, not to be announced.
+      const here = document.hasFocus() ? window._lastSelectedKey || null : null
+      const d = N.decide({ moment: 'moved', facts: latest, previous: base, said: st.said, now, settings: settings(), here })
       if (!d) return
       for (const k of d.keys) st.said[k] = N.dayKey(now)
+      if (!d.items.length) { prune(); await save(); return }
       const text = await word(d, latest, 'moved')
       if (silent(Date.now())) { for (const k of d.keys) delete st.said[k]; heldBase = heldBase || base; return }
       show(text, latest)

@@ -173,6 +173,22 @@ describe('decide', () => {
       { kind: 'task', session: 'a', notesPath: '/a', text: 'three' }, { kind: 'task', session: 'a', notesPath: '/other', text: 'four' }])
     expect(t.split('\n')).toEqual(['For [[session:a]]:', '- one', '- three', 'For [[session:b]]:', '- two', 'For [[session:a]]:', '- four'])
   })
+  test('on a moved case, the session open in front is recorded as said but not shown', () => {
+    const prev = facts([S({ name: 'a', status: 'busy' }), S({ name: 'b', status: 'busy' })])
+    const cur = facts([S({ name: 'a', status: 'idle' }), S({ name: 'b', status: 'idle' })])
+    const hereA = prev.find(f => f.session === 'a').notesPath
+    const d = N.decide({ moment: 'moved', facts: cur, previous: prev, said: {}, now: NOW, settings: on, here: hereA })
+    expect(d.items.map(i => i.session)).toEqual(['b'])
+    expect(d.keys.some(k => k.includes(hereA))).toBe(true)
+    const only = N.decide({ moment: 'moved', facts: facts([S({ name: 'a', status: 'idle' })]), previous: facts([S({ name: 'a', status: 'busy' })]), said: {}, now: NOW, settings: on, here: hereA })
+    expect(only.items).toEqual([])
+    expect(only.keys).toHaveLength(1)
+  })
+  test('the morning recap still names the session left selected', () => {
+    const f = facts([waitingA])
+    const d = N.decide({ moment: 'morning', facts: f, previous: null, said: {}, now: NOW, settings: on, here: f[0].notesPath })
+    expect(d.items.map(i => i.kind)).toContain('waiting')
+  })
   test('untriaged lines travel beside the items, not as items', () => {
     const d = N.decide({ moment: 'morning', facts: facts([S({ name: 'a', status: 'waiting', nextSteps: '- [ ] check CI' })]), previous: null, said: {}, now: NOW, settings: on })
     expect(d.items.map(i => i.kind)).toEqual(['waiting'])
