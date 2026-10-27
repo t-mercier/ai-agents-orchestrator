@@ -10,6 +10,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A running session no longer shows as stopped when Claude Code leaves a stray byte in its
+  state file.** Claude Code was seen rewriting `~/.claude/sessions/<pid>.json` shorter without
+  truncating it, leaving an extra `}` at the end. The app could not parse the file and drew the
+  live session grey; it now reads the first object and ignores what follows.
+
 ## [0.25.0] - 2026-10-17
 
 ### Fixed

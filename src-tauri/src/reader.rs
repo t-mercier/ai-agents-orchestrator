@@ -66,6 +66,18 @@ fn flush_folds() {
 
 use crate::{is_safe_slug, is_valid_session_id};
 
+/// A `~/.claude/sessions/<pid>.json`, parsed. Only the leading object counts: Claude Code
+/// has been seen rewriting one shorter without truncating it, leaving a stray `}` behind,
+/// and a strict parse then dropped a live session from the board, greyed out.
+pub(crate) fn parse_pidfile(text: &str) -> Option<Value> {
+    let d: Value = serde_json::Deserializer::from_str(text).into_iter::<Value>().next()?.ok()?;
+    d.is_object().then_some(d)
+}
+
+pub(crate) fn read_pidfile(path: &Path) -> Option<Value> {
+    parse_pidfile(&fs::read_to_string(path).ok()?)
+}
+
 /// Whether `pid` is a running Claude Code process. A pidfile left by a crash names a pid
 /// the kernel reuses after a reboot, and a reused pid owned by root answers EPERM, so an
 /// answer to kill(pid, 0) alone made dead sessions read as Running and their pidfiles
@@ -761,10 +773,7 @@ fn running_session_ids() -> (HashSet<String>, HashSet<String>) {
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let data: Value = match fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-        {
+        let data: Value = match read_pidfile(&path) {
             Some(d) => d,
             None => continue,
         };
@@ -1026,8 +1035,7 @@ fn sessions_now(pty: &crate::pty::PtyManager) -> Vec<Value> {
             .into_iter()
             .flatten()
             .flatten()
-            .filter_map(|e| fs::read_to_string(e.path()).ok())
-            .filter_map(|t| serde_json::from_str::<Value>(&t).ok())
+            .filter_map(|e| read_pidfile(&e.path()))
             .filter_map(|d| {
                 let sid = d.get("sessionId").and_then(Value::as_str)?.to_string();
                 let st = d.get("status").and_then(Value::as_str).unwrap_or("idle").to_string();
@@ -1064,10 +1072,7 @@ fn sessions_now(pty: &crate::pty::PtyManager) -> Vec<Value> {
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let data: Value = match fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-        {
+        let data: Value = match read_pidfile(&path) {
             Some(d) => d,
             None => continue,
         };
@@ -2090,6 +2095,19 @@ fn bucket_by_status(all: Vec<Value>) -> Value {
 
 #[cfg(test)]
 mod tests {
+
+    // Claude Code has been seen leaving a stray `}` after a pidfile's object (a shorter
+    // rewrite over a longer one). The session must still read as running.
+    #[test]
+    fn a_pidfile_with_trailing_bytes_still_parses() {
+        use super::parse_pidfile;
+        let d = parse_pidfile(r#"{"pid":7,"sessionId":"s","status":"busy"}}"#).unwrap();
+        assert_eq!(d["sessionId"], "s");
+        assert!(parse_pidfile(r#"{"pid":7,"sessionId":"s"}"#).is_some());
+        assert!(parse_pidfile(r#"{"pid":7,"sess"#).is_none());
+        assert!(parse_pidfile("").is_none());
+        assert!(parse_pidfile("[1]").is_none());
+    }
 
     // The folds survive a restart: launch reads them back instead of folding 700 MB again.
     #[test]

@@ -770,10 +770,7 @@ fn scan_pidfiles(
             continue;
         }
         // Alive: attribute it to the notes.md the registry has for its session id.
-        let meta = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|c| serde_json::from_str::<Value>(&c).ok())
-            .unwrap_or_else(|| serde_json::json!({}));
+        let meta = crate::reader::read_pidfile(&path).unwrap_or_else(|| serde_json::json!({}));
         let entry = meta
             .get("sessionId")
             .and_then(Value::as_str)
