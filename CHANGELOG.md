@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-10-27
+
 ### Fixed
 
 - **A running session no longer shows as stopped when Claude Code leaves a stray byte in its
