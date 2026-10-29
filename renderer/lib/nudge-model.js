@@ -62,12 +62,10 @@
       }
       for (const url of linksOf(s)) {
         const p = prs[url]; if (!p || !p.state) continue
-        out.push({ key: `pr|${url}|${p.state}`, kind: 'pr', session, notesPath: np, text: p.title || '', at, state: p.state, url })
+        out.push({ key: `pr|${url}|${p.state}`, kind: 'pr', session, notesPath: np, text: p.title || '', at, state: p.state, url, shipped })
       }
-      for (const l of s.ticketStates || []) {
-        const m = /^([A-Z][A-Z0-9]+-\d+): (.+)$/.exec(l); if (!m) continue
-        out.push({ key: `ticket|${m[1]}|${m[2]}`, kind: 'ticket', session, notesPath: np, text: m[1], at, state: m[2] })
-      }
+      // No ticket facts: the status a session copied into its notes can be days old, and
+      // Brutus repeated it as news.
       if (at !== null && now - at > staleDays * DAY) {
         out.push({ key: `stale|${np}`, kind: 'stale', session, notesPath: np, text: shipped ? '' : (openSteps(s.nextSteps)[0] || ''), at, shipped })
       }
@@ -102,7 +100,9 @@
   }
 
   const ORDER = { waiting: 0, task: 1, finished: 2, pr: 2, ticket: 2, staleCount: 3 }
-  const NEWS = (f) => f.kind === 'ticket' || (f.kind === 'pr' && (f.state === 'merged' || f.state === 'closed'))
+  // A PR is worth saying only when it is the last of its session to land: the session can
+  // then be closed. One merged while others are still open asks nothing of the person.
+  const NEWS = (f) => f.kind === 'pr' && f.shipped && (f.state === 'merged' || f.state === 'closed')
 
   function finishedTurns(facts, previous) {
     const now = new Set(facts.filter(f => f.kind === 'busy').map(f => f.notesPath))
@@ -113,14 +113,25 @@
 
   const mine = (f) => f.kind === 'waiting' || (f.kind === 'task' && f.owner === 'you')
   const changedSince = (previous) => { const before = new Set((previous || []).map(f => f.key)); return (f) => !before.has(f.key) }
+  // A PR state is news only against the state the baseline saw for the same PR. A link
+  // attached today to a PR merged weeks ago is new to Brutus, not news to the person.
+  const movedSince = (previous) => {
+    const was = new Map()
+    for (const f of previous || []) {
+      if (f.kind !== 'pr') continue
+      const k = String(f.key), cut = k.lastIndexOf('|')
+      was.set(k.slice(3, cut), k.slice(cut + 1))
+    }
+    return (f) => was.has(f.url) && was.get(f.url) !== f.state
+  }
 
   // The morning recap: everything still open on the person, once a day, plus the news and the
   // stale count.
   function morningItems(facts, previous, said, today, staleDays) {
-    const changed = changedSince(previous)
-    // Without a baseline nothing has "moved": a ticket or PR state is news only against one.
+    const moved = movedSince(previous)
+    // Without a baseline nothing has "moved": a PR state is news only against one.
     const items = [...facts.filter(f => mine(f) && said[f.key] !== today),
-                   ...(previous ? facts.filter(f => NEWS(f) && changed(f) && !said[f.key]) : []),
+                   ...(previous ? facts.filter(f => NEWS(f) && moved(f) && !said[f.key]) : []),
                    ...finishedTurns(facts, previous).filter(f => !said[f.key])]
     const stale = facts.filter(f => f.kind === 'stale')
     if (stale.length && said[`stale-count|${today}`] === undefined) {
@@ -131,8 +142,8 @@
 
   // Back from a pause, or a case that moved: only what changed against the baseline.
   function changeItems(facts, previous, said) {
-    const changed = changedSince(previous)
-    return [...facts.filter(f => (mine(f) || NEWS(f)) && changed(f)), ...finishedTurns(facts, previous)].filter(f => !said[f.key])
+    const changed = changedSince(previous), moved = movedSince(previous)
+    return [...facts.filter(f => (mine(f) && changed(f)) || (NEWS(f) && moved(f))), ...finishedTurns(facts, previous)].filter(f => !said[f.key])
   }
 
   // `here` is the notes path of the session open in front of the person: on a moved case
@@ -210,7 +221,7 @@
       more: (n) => `… and ${n} more thing${n > 1 ? 's' : ''}`,
       listAsk: 'Want me to list them?', open: 'Open', later: 'OK',
       listLine: (c, day, step) => `- ${c}, ${day}${step ? `, next: ${step}` : ''}`,
-      shipped: 'PR merged, ready to close',
+      shipped: 'PR merged, ready to close', readyToClose: 'ready to close',
       activeOn: (d) => `last active ${d}`, noActivity: 'no activity recorded',
     },
     fr: {
@@ -226,7 +237,7 @@
       more: (n) => `… et ${n} autre${n > 1 ? 's' : ''} chose${n > 1 ? 's' : ''}`,
       listAsk: 'Je te les liste ?', open: 'Ouvrir', later: 'OK',
       listLine: (c, day, step) => `- ${c}, ${day}${step ? `, ensuite : ${step}` : ''}`,
-      shipped: 'PR mergée, prête à fermer',
+      shipped: 'PR mergée, prête à fermer', readyToClose: 'prête à fermer',
       activeOn: (d) => `actif le ${d}`, noActivity: 'aucune activité',
     },
   }
@@ -242,7 +253,7 @@
   }
   // A PR by its number when the URL has one, else by its title.
   const prName = (i) => { const m = /\/pull\/(\d+)/.exec(String(i.url || '')); return m ? `#${m[1]}` : `"${short(clean(i.text), 40)}"` }
-  const news = (i, w) => i.kind === 'pr' ? w.pr(prName(i), i.state) : w.ticket(i.text, i.state)
+  const news = (i, w) => i.kind === 'pr' ? `${w.pr(prName(i), i.state)}${i.shipped ? `, ${w.readyToClose}` : ''}` : w.ticket(i.text, i.state)
   // Facts grouped under their session, keyed on the notes path: two sessions can share a name.
   function bySession(items) {
     const g = new Map()
@@ -310,7 +321,7 @@
   function payload({ moment, items, untriaged, sample, name, staleDays, more = 0 }) {
     return {
       moment, name, staleDays, more, sample: String(sample || '').slice(0, SAMPLE_CHARS),
-      items: items.map(i => ({ kind: i.kind, session: i.session, text: clean(i.text), state: i.state, count: i.count, later: i.later || undefined })),
+      items: items.map(i => ({ kind: i.kind, session: i.session, text: clean(i.text), state: i.state, count: i.count, later: i.later || undefined, shipped: i.shipped || undefined })),
       untriaged: (untriaged || []).slice(0, MAX_UNTRIAGED).map(u => ({ hash: u.hash, session: u.session, text: defang(u.text) })),
     }
   }

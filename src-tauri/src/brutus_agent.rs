@@ -66,7 +66,8 @@ Rules:\n\
 - Name a session only as [[session:<its exact name>]], using names from the input.\n\
 - The person reads it at a glance: at most ten short lines. Waiting agents first. Then group the steps \
 by what the person has to do (give a go, decide, do something on a device, anything else), one line \
-per step, each under about 70 characters. Put every ticket or PR change on one line. If `more` is \
+per step, each under about 70 characters. A PR item with `shipped: true` is the last PR of its session \
+to land: say in one line that the session is ready to close. If `more` is \
 above zero, say how many other steps there are. If an item is a stale count, end by offering to list them.\n\
 - A finished item with `later: true` ended over an hour ago and the person has not opened that \
 session since: say it as a by-the-way.\n\

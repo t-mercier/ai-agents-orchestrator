@@ -39,10 +39,11 @@ describe('collect', () => {
     const t = N.collect({ ...base, live, triage: { [N.hashLine('answer the reviewer')]: 'you' } }).find(x => x.kind === 'task')
     expect(t.owner).toBe('you')
   })
-  test('a PR and a ticket are keyed by their state', () => {
+  test('a PR is keyed by its state; tickets are not facts', () => {
     const live = [S({ name: 'a', prLinks: ['https://g/o/r/pull/12'], ticketStates: ['FEAT-1: In Review'] })]
     const f = N.collect({ ...base, live, prs: { 'https://g/o/r/pull/12': { state: 'merged', title: 'fix' } } })
-    expect(f.map(x => x.key)).toEqual(expect.arrayContaining(['pr|https://g/o/r/pull/12|merged', 'ticket|FEAT-1|In Review']))
+    expect(f.map(x => x.key)).toContain('pr|https://g/o/r/pull/12|merged')
+    expect(f.filter(x => x.kind === 'ticket')).toEqual([])
   })
   test('stale: open and quiet for more than N days; a recent one is not', () => {
     const old = S({ name: 'old', state: 'stale', lastActivityAt: new Date(NOW - 4 * D).toISOString(), nextSteps: '- [ ] map headers' })
@@ -155,6 +156,27 @@ describe('decide', () => {
     const cur = N.collect({ live, prs: { u: { state: 'merged', title: 'fix' } }, triage: {}, now: NOW, staleDays: 3 })
     expect(N.decide({ moment: 'moved', facts: cur, previous: prev, said: {}, now: NOW, settings: on }).items[0]).toMatchObject({ kind: 'pr', state: 'merged' })
     expect(N.decide({ moment: 'moved', facts: prev, previous: [], said: {}, now: NOW, settings: on })).toBe(null)
+  })
+  // A ticket status copied into notes.md can be days old, and a merged PR in a session that
+  // still has open PRs asks nothing of the person: neither is said.
+  test('a merged PR is news only when it is the last of its session to land', () => {
+    const live = [S({ name: 'a', prLinks: ['u', 'v'], nextSteps: '- [ ] 👤 check it' })]
+    const prev = N.collect({ live, prs: { u: { state: 'open' }, v: { state: 'draft' } }, triage: {}, now: NOW, staleDays: 3 })
+    const half = N.collect({ live, prs: { u: { state: 'merged' }, v: { state: 'draft' } }, triage: {}, now: NOW, staleDays: 3 })
+    expect(N.decide({ moment: 'moved', facts: half, previous: prev, said: {}, now: NOW, settings: on })).toBe(null)
+    const all = N.collect({ live, prs: { u: { state: 'merged' }, v: { state: 'closed' } }, triage: {}, now: NOW, staleDays: 3 })
+    const d = N.decide({ moment: 'moved', facts: all, previous: half, said: {}, now: NOW, settings: on })
+    expect(d.items.map(i => i.key)).toEqual(['pr|v|closed'])
+    expect(N.template(d.items)).toBe('Moved in [[session:a]]: PR "" closed, ready to close.')
+  })
+  // A link attached today to a PR merged two weeks ago is not news: only a state the
+  // baseline saw change is.
+  test('a PR seen for the first time is not news', () => {
+    const before = N.collect({ live: [S({ name: 'a' })], prs: {}, triage: {}, now: NOW, staleDays: 3 })
+    const live = [S({ name: 'a', prLinks: ['https://g/o/r/pull/12'] })]
+    const cur = N.collect({ live, prs: { 'https://g/o/r/pull/12': { state: 'merged', title: 'old' } }, triage: {}, now: NOW, staleDays: 3 })
+    expect(N.decide({ moment: 'moved', facts: cur, previous: before, said: {}, now: NOW, settings: on })).toBe(null)
+    expect(N.decide({ moment: 'morning', facts: cur, previous: before, said: {}, now: NOW, settings: on })).toBe(null)
   })
   test('nudges off, or quiet hours, say nothing', () => {
     const f = facts([waitingA])

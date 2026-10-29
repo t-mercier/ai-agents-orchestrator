@@ -10,6 +10,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Brutus no longer announces PR and ticket news that asks nothing of you.** A merged PR is said
+  only when it is the last PR of its session to land, and then as "ready to close". Ticket
+  statuses are no longer said at all: the copy in a session's notes could be days old, so Brutus
+  repeated a status Jira had already moved past.
+- **A PR is news only when Brutus saw its state change.** A link attached today to a PR merged
+  two weeks ago was announced as if it had just merged.
+
 ## [0.25.1] - 2026-10-27
 
 ### Fixed
