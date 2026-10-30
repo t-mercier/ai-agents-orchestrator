@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-10-30
+
 ### Fixed
 
 - **Brutus no longer announces PR and ticket news that asks nothing of you.** A merged PR is said
