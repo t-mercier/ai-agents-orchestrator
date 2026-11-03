@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Brutus's nudges are now written by Opus instead of Haiku.** On the same facts, Haiku
+  answered the person's last message as if it were a conversation and added remarks no fact
+  held; Opus says only what the facts say, in fewer words.
+- **A nudge may take up to 60 s to write, instead of 20 s.** A morning recap took 21 s with
+  Opus and 24 s with Haiku, so the 20 s limit cut it off and the templates spoke instead.
+
 ## [0.25.2] - 2026-10-30
 
 ### Fixed

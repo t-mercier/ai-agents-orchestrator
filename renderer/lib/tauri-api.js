@@ -89,7 +89,7 @@
     brutusNudgeState: () => invoke('brutus_nudge_state').catch(() => null),
     // Saving is best-effort: a failed save only means a reminder may be said once more.
     brutusNudgeSave: (state) => invoke('brutus_nudge_save', { state }).then(() => ({ ok: true })).catch((e) => ({ ok: false, error: String(e) })),
-    // One Haiku run turning facts into a sentence. Never throws: the caller falls back to
+    // One Opus run turning facts into a sentence. Never throws: the caller falls back to
     // its templates on { ok: false }, 'busy' included.
     brutusNudge: (payload) => invoke('brutus_nudge', { payload }).then((r) => ({ ok: true, ...r })).catch((e) => ({ ok: false, error: String(e) })),
     onEvent: (name, cb) => window.__TAURI__.event.listen(name, (e) => cb(e.payload)),

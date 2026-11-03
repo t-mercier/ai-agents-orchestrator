@@ -52,7 +52,7 @@ test('the probe runs to the end without shasum', () => {
 })
 
 // The nudge run (brutus_nudge) has no tool at all; the probe must pass that exact set.
-test('the nudge probe passes an empty --tools and the haiku model', () => {
+test('the nudge probe passes an empty --tools and the opus model', () => {
   const { args } = probe('bash')
   const i = args.indexOf('brutus-nudge')
   expect(i).toBeGreaterThan(0)
@@ -60,6 +60,6 @@ test('the nudge probe passes an empty --tools and the haiku model', () => {
   expect(tail).toContain('--tools')
   expect(tail[tail.indexOf('--tools') + 1]).toBe('')
   expect(tail).toContain('--strict-mcp-config')
-  expect(tail[tail.indexOf('--model') + 1]).toBe('haiku')
+  expect(tail[tail.indexOf('--model') + 1]).toBe('opus')
   expect(tail).not.toContain('--add-dir')
 })

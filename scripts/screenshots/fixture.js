@@ -201,7 +201,7 @@ window.__TAURI__ = {
       }
       // Kept so a test can read what Settings → Save would have written.
       if (cmd === 'set_config') { window.__LAST_SET_CONFIG__ = args.cfg; return Promise.resolve(null) }
-      if (cmd === 'brutus_nudge' && window.__NUDGE_FAIL__) return Promise.reject(new Error('the nudge took longer than 20 s'))
+      if (cmd === 'brutus_nudge' && window.__NUDGE_FAIL__) return Promise.reject(new Error('the nudge took longer than 60 s'))
       // A test can make the backend refuse the next N nudges as Rust does while Brutus answers.
       if (cmd === 'brutus_nudge' && window.__NUDGE_BUSY__ > 0) { window.__NUDGE_BUSY__--; return Promise.reject('busy') }
       // A test can hold the wording until it calls __NUDGE_RELEASE__(), to act while it runs.

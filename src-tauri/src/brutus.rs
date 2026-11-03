@@ -74,17 +74,19 @@ fn headless_line(dir: &str, args: &[String], input: &str) -> String {
 }
 
 const NUDGE_FILE: &str = "nudge.txt";
-const NUDGE_TIMEOUT: Duration = Duration::from_secs(20);
+// Opus took 21 s on a morning recap; 20 s cut it off and the templates spoke instead.
+const NUDGE_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_PAYLOAD: usize = 16_000;
 static NUDGING: AtomicBool = AtomicBool::new(false);
 
 /// The nudge run, as probed (scripts/probe-brutus-sandbox.sh): no tool, no folder, no MCP,
-/// Haiku whatever model Brutus answers on. Nothing to resume: each nudge stands alone.
+/// Opus whatever model Brutus answers on: Haiku answered the person's last message and
+/// added remarks no fact held. Nothing to resume: each nudge stands alone.
 pub(crate) fn nudge_args(agents: &str) -> Vec<String> {
     [
         "--restricted", "--agents", agents, "--agent", brutus_agent::NUDGE_AGENT, "-p",
         "--output-format", "json", "--tools", "", "--strict-mcp-config",
-        "--permission-mode", "dontAsk", "--model", "haiku",
+        "--permission-mode", "dontAsk", "--model", "opus",
         // A nudge is one throwaway call: saved, each one became a conversation named after
         // its JSON in every history that lists Claude Code sessions.
         "--no-session-persistence",
@@ -982,12 +984,13 @@ mod tests {
     }
 
     #[test]
-    fn the_nudge_run_has_no_tool_no_folder_and_haiku() {
+    fn the_nudge_run_has_no_tool_no_folder_and_opus() {
         let a = nudge_args(r#"{"brutus-nudge":{}}"#);
         assert!(a.contains(&"--no-session-persistence".to_string()), "a nudge run must not be saved as a conversation");
         let at = |f: &str| a.iter().position(|x| x == f).map(|i| a[i + 1].clone());
         assert_eq!(at("--tools").as_deref(), Some(""));
-        assert_eq!(at("--model").as_deref(), Some("haiku"));
+        assert_eq!(at("--model").as_deref(), Some("opus"));
+        assert!(NUDGE_TIMEOUT >= Duration::from_secs(60), "Opus takes over 20 s on a morning recap");
         assert_eq!(at("--agent").as_deref(), Some("brutus-nudge"));
         assert_eq!(at("--output-format").as_deref(), Some("json"));
         for f in ["--restricted", "--strict-mcp-config", "-p"] { assert!(a.contains(&f.to_string()), "{f}") }

@@ -1,12 +1,12 @@
 // Brutus speaks first: at the morning arrival, back from a pause, and when a case moves.
 // This file only decides WHEN and keeps the record; lib/nudge-model.js decides WHAT, the
-// backend words it (one tool-less Haiku run) and brutus.js draws it.
+// backend words it (one tool-less Opus run) and brutus.js draws it.
 ;(function () {
   const N = window.CSMNudgeModel
   if (!N || !window.api || !window.api.brutusNudge) return
   const GROUP_MS = 2 * 60_000
   // A case that moves again soon after a nudge waits for this gap, so a busy afternoon does
-  // not cost one Haiku run every two minutes. The batch is delayed, never dropped.
+  // not cost one Opus run every two minutes. The batch is delayed, never dropped.
   const MOVED_GAP_MS = 5 * 60_000
   // How long a history scan, or the PR states, stay good enough to reuse.
   const SCAN_MS = 5 * 60_000, PRS_MS = 60_000
@@ -34,7 +34,7 @@
   const snoozed = (now) => typeof st.snoozeUntil === 'number' && now < st.snoozeUntil
   const silent = (now) => !settings().nudges || N.inQuiet(now, settings().quietHours) || snoozed(now)
   // One nudge at a time: a launch and a focus, or a run and a moved batch, would otherwise
-  // both pass momentFor and make two Haiku calls.
+  // both pass momentFor and make two Opus calls.
   let chain = Promise.resolve()
   const serial = (fn) => (chain = chain.then(fn, fn))
 
@@ -52,7 +52,7 @@
     return facts
   }
 
-  // Ask Haiku for the wording; any failure, or a session it named that is not in the
+  // Ask Opus for the wording; any failure, or a session it named that is not in the
   // facts, falls back to the templates. The reminder itself is never lost.
   const sample = () => (window.CSMBrutusUI ? window.CSMBrutusUI.lastUserText() : '')
   const uiLang = () => (String(navigator.language || '').toLowerCase().startsWith('fr') ? 'fr' : 'en')

@@ -71,7 +71,7 @@ async function seedWaiting(page) {
   })
 }
 
-test('the morning run shows Haiku\'s wording and remembers what it said', async ({ page }) => {
+test('the morning run shows the model\'s wording and remembers what it said', async ({ page }) => {
   await boot(page); await seedWaiting(page)
   await page.evaluate(() => window.CSMNudges.run('morning'))
   await expect(page.locator('.bru-nudge')).toContainText('is waiting on your answer')
@@ -80,7 +80,7 @@ test('the morning run shows Haiku\'s wording and remembers what it said', async 
   expect(saved.lastFacts.length).toBeGreaterThan(0)
 })
 
-test('a failed Haiku run falls back to the templates', async ({ page }) => {
+test('a failed nudge run falls back to the templates', async ({ page }) => {
   await boot(page); await seedWaiting(page)
   await page.evaluate(() => { window.__NUDGE_FAIL__ = true; return window.CSMNudges.run('morning') })
   const b = page.locator('.bru-nudge')
