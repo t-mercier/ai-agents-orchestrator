@@ -10,6 +10,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-11-03
+
 ### Changed
 
 - **Brutus's nudges are now written by Opus instead of Haiku.** On the same facts, Haiku
