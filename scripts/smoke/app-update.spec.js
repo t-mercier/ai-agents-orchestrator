@@ -14,7 +14,7 @@ async function stubInvoke(page) {
         window.__CALLS__ = []
         v.core.invoke = (cmd, args) => {
           window.__CALLS__.push(cmd)
-          if (cmd === 'app_update_check') return Promise.resolve({ version: '0.21.0', current: '0.20.4', notes: '' })
+          if (cmd === 'app_update_check') return Promise.resolve({ version: window.__NEXT_VERSION__ || '0.21.0', current: '0.20.4', notes: '' })
           if (cmd === 'app_update_install') return new Promise(() => {})   // a real install restarts
           return orig(cmd, args)
         }
@@ -92,4 +92,22 @@ test('Cancel leaves the update switch as it was', async ({ page }) => {
   await page.locator('#settings-modal form').evaluate((f) => f.requestSubmit())
   await page.evaluate(() => document.getElementById('settings-modal').close())
   await expect.poll(() => page.evaluate(() => localStorage.getItem('csm.updateCheck'))).not.toBe('off')
+})
+
+// The notice can stay up for days. A release published meanwhile must replace the version
+// it names, or it keeps offering one that is no longer the newest.
+test('a notice on screen names the newer release once one is published', async ({ page }) => {
+  await stubInvoke(page)
+  await page.goto('/index.html')
+  await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
+  await expect(page.locator('#skills-banner .sb-text')).toContainText('0.21.0')
+
+  await page.evaluate(() => {
+    window.__NEXT_VERSION__ = '0.21.1'
+    const now = Date.now
+    Date.now = () => now() + 7 * 3600 * 1000   // past the six-hour gap between checks
+    window.dispatchEvent(new Event('focus'))
+  })
+  await expect(page.locator('#skills-banner .sb-text')).toContainText('0.21.1')
+  await expect(page.locator('#skills-banner .sb-install')).toHaveCount(1)
 })

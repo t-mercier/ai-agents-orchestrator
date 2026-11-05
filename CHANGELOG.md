@@ -10,6 +10,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.4] - 2026-11-05
+
+### Fixed
+
+- **The update notice now names the newest release.** A notice left on screen kept the
+  version it first showed: with 0.25.3 out, it still offered 0.25.2 until the app restarted.
+  The app now checks again while the notice is up and replaces the version. Install already
+  fetched the newest release, so only the text was wrong.
+
 ## [0.25.3] - 2026-11-03
 
 ### Changed

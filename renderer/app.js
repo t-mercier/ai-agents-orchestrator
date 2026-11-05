@@ -1472,25 +1472,36 @@ async function syncSkillsOnLaunch(el) {
 // A newer release is published → offer it in place. The app checks at launch and at most
 // every six hours when the window regains focus: a release is a weekly event, not a poll.
 // Dismiss is per version, so the notice comes back for the NEXT release, not this one.
+// A notice already on screen is checked again too: a release published while it is up
+// replaces its version, which otherwise kept naming the older one until a restart.
 let appUpdateCheckedAt = 0
 async function maybeOfferAppUpdate(el) {
   if (!el || !window.api || !window.api.appUpdateCheck) return
   // Turned off in Settings → General: the app then makes no call of its own.
   try { if (localStorage.getItem('csm.updateCheck') === 'off') return } catch {}
   if (window.onboardingPending) return
-  if (!el.hidden) return
+  // The banner is shared: leave it alone while it shows another notice.
+  const shown = () => el.querySelector('.sb-text[data-app-version]')
+  if (!el.hidden && !shown()) return
   const now = Date.now()
   if (now - appUpdateCheckedAt < 6 * 3600 * 1000) return
   appUpdateCheckedAt = now
   const upd = await window.api.appUpdateCheck()
   // A check that failed (offline) asks again at the next focus instead of in six hours.
   if (upd === undefined) { appUpdateCheckedAt = 0; return }
-  if (!upd || !upd.version || !el.hidden) return
+  if (!upd || !upd.version) return
+  if (!el.hidden) {
+    const cur = shown()
+    // Another notice took the banner meanwhile, or this version is already offered.
+    if (!cur || cur.dataset.appVersion === upd.version) return
+    // An install started from the older notice already fetches the newest release.
+    if (el.querySelector('.sb-install:disabled')) return
+  }
   let dismissed = null; try { dismissed = localStorage.getItem('csm.appUpdateDismissed') } catch {}
   if (dismissed === upd.version) return
   const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
   el.innerHTML =
-    `<span class="sb-text">Version <strong>${esc(upd.version)}</strong> is available — you have ${esc(upd.current)}.</span>` +
+    `<span class="sb-text" data-app-version="${esc(upd.version)}">Version <strong>${esc(upd.version)}</strong> is available — you have ${esc(upd.current)}.</span>` +
     '<button type="button" class="sb-install">Install and restart</button>' +
     '<button type="button" class="sb-dismiss" aria-label="Dismiss">×</button>'
   el.hidden = false
