@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.5] - 2026-11-07
+
+### Fixed
+
+- **macOS builds again.** GitHub retired the macOS image the release used, so 0.25.4 was
+  published for Linux only and Mac users stayed on 0.25.3. 0.25.5 brings the 0.25.4 fix to
+  macOS: the update notice now names the newest release.
+
 ## [0.25.4] - 2026-11-05
 
 ### Fixed
