@@ -9,7 +9,7 @@ on:
 jobs:
   js:
     name: Renderer logic + secret scan
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
       matrix:
         # Linux too: the cfg(not(target_os = "macos")) code is otherwise first compiled
         # by release.yml, at tag time.
-        platform: [macos-14, ubuntu-22.04]
+        platform: [macos-15, ubuntu-22.04]
     runs-on: ${{ matrix.platform }}
     defaults:
       run:
