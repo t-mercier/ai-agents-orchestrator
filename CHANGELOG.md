@@ -10,6 +10,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.6] - 2026-11-10
+### Fixed
+- **macOS stops asking for folder access again and again.** AO is now signed with the same
+  certificate in every release, so macOS recognises it as the same app and keeps the
+  permissions you granted. It asks one last time after the update to 0.25.6.
+
 ## [0.25.5] - 2026-11-07
 
 ### Fixed
