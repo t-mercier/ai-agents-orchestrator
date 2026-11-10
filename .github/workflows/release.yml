@@ -3,9 +3,11 @@ name: Release
 # On a version tag, build every platform bundle and attach them to the GitHub Release:
 #   - macOS: a single UNIVERSAL .dmg/.app (Intel + Apple Silicon)
 #   - Linux: .deb + .AppImage
-# The release body is taken from the matching CHANGELOG.md section. Not signed by Apple (alpha);
-# the update archives are signed with the app's own updater key, and latest.json is published
-# next to them for the in-app updater.
+# The release body is taken from the matching CHANGELOG.md section. Not signed by Apple (alpha):
+# the macOS app is signed with the project's own self-signed certificate, which gives it the same
+# identity in every release, so macOS keeps the permissions a user granted across updates. The
+# update archives are signed with the app's own updater key, and latest.json is published next
+# to them for the in-app updater.
 on:
   push:
     tags: ['v*']
@@ -68,6 +70,28 @@ jobs:
             echo 'AO_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - name: Import the macOS signing certificate
+        # Without a certificate the app is signed ad hoc, and an ad-hoc identity changes with
+        # every build: macOS then treats each release as a new app and asks the user again for
+        # every folder permission. The certificate is self-signed, so Gatekeeper still warns on
+        # first install; only the identity is made stable. It goes into a keychain of its own,
+        # and tauri-action finds it by name (APPLE_SIGNING_IDENTITY below).
+        if: matrix.platform == 'macos-15'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/signing.keychain-db"
+          KC_PW="$(openssl rand -hex 16)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -77,6 +101,8 @@ jobs:
           # this build turns createUpdaterArtifacts on (tauri.updater.conf.json, below).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # The certificate imported above, by its name. Empty on Linux, which signs nothing.
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-15' && 'AI Agents Orchestrator' || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
@@ -89,3 +115,13 @@ jobs:
           # Update archives and their signatures are built for releases only: a local
           # `cargo tauri build` has no signing key and would fail with them on.
           args: ${{ matrix.args }} --config src-tauri/tauri.updater.conf.json
+
+      - name: Check the macOS app has a stable identity
+        # An ad-hoc signature has no certificate leaf in its designated requirement. A release
+        # that falls back to it would quietly bring the permission prompts back.
+        if: matrix.platform == 'macos-15'
+        run: |
+          APP=$(ls -d src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app)
+          REQ=$(codesign -d -r- "$APP" 2>&1)
+          echo "$REQ"
+          echo "$REQ" | grep -q 'identifier "com.aiagentsorchestrator.app" and certificate leaf'
