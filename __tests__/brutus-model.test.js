@@ -189,6 +189,22 @@ describe('proposed actions', () => {
     expect(named).not.toContain('<strong>')
     expect(named).toContain('data-bru-target="**x** FEAT-12"')
   })
+  test('two sessions sharing a name make the button refuse rather than guess', () => {
+    const twins = [...sessions, { name: 'legacy-export', state: 'stale', notesPath: '/w/BUG/legacy-export/notes.md' }]
+    for (const body of ['pause:legacy-export', 'close:legacy-export', 'board:legacy-export:review']) {
+      expect(B.resolveAction(B.parseAction(body), { ...ctx, sessions: twins }))
+        .toMatchObject({ ok: false, why: 'More than one session is named legacy-export' })
+    }
+    const html = B.renderAnswer('[[action:pause:legacy-export]]', twins, '', { ...ctx, sessions: twins })
+    expect(html).toContain('disabled title="More than one session is named legacy-export"')
+    // The same session listed twice (on screen and as read) is still one session.
+    expect(B.resolveAction(B.parseAction('pause:legacy-export'), { ...ctx, sessions: [...sessions, sessions[1]] }).ok).toBe(true)
+  })
+  test('a marker inside a fenced block stays literal, closed or not', () => {
+    expect(render('Like this:\n```\n[[action:close:legacy-export]]\n```\n')).not.toContain('<button')
+    expect(render('```\n[[action:close:legacy-export]]')).not.toContain('<button')
+    expect(render('```\nx\n```\n[[action:close:legacy-export]]')).toContain('<button')
+  })
   test('a stray placeholder byte in his text cannot pose as a button', () => {
     expect(render('a \u00000\u0000 b')).not.toContain('<button')
   })

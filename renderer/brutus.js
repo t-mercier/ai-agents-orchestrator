@@ -111,7 +111,7 @@
   function actionCtx() {
     const board = window.CSMBoard ? window.CSMBoard.load() : { columns: [], placements: {} }
     return {
-      sessions: window.CSMBrutusSessions ? window.CSMBrutusSessions(true) : [],
+      sessions: window.CSMBrutusActionSessions ? window.CSMBrutusActionSessions() : [],
       columns: board.columns, placements: board.placements,
       categories: window.newSessionCategories ? window.newSessionCategories() : [],
       why: window.CSMSessionActions ? window.CSMSessionActions.why : {},
@@ -265,9 +265,10 @@
     state.steps = []; state.pendingText = ''
     saveLog(); refresh(); freshen()
   }
-  // The sessions his proposed actions are drawn against, read again, then redrawn.
+  // The sessions his proposed actions are drawn against, read again (or a read younger
+  // than 30 s reused), then redrawn.
   function freshen() {
-    if (window.refreshBrutusSessions) window.refreshBrutusSessions().then(render, () => {})
+    if (window.refreshBrutusSessions) window.refreshBrutusSessions(30_000).then(render, () => {})
   }
   window.api.onEvent('brutus-event', (ev) => {
     if (!ev || !state.running) return
@@ -290,9 +291,20 @@
   // A button for an action he proposed. Checked again against freshly read sessions, then
   // handed to the app's own action, which asks for confirmation where its control does.
   // An action that no longer applies says why instead of doing nothing.
+  // A read that fails stops it: the last good list may be the state it was meant to avoid.
+  // A second click while the first is still being checked is ignored.
+  let acting = false
   async function runAction(d) {
+    if (acting) return
+    acting = true
+    try { await act(d) } finally { acting = false }
+  }
+  async function act(d) {
     const a = { verb: d.bruAction || '', name: d.bruTarget || '', arg: d.bruArg || '' }
-    if (window.refreshBrutusSessions) await window.refreshBrutusSessions()
+    if (a.verb !== 'new') {
+      const read = window.refreshBrutusSessions ? await window.refreshBrutusSessions(0).catch(() => false) : false
+      if (!read) return say('Could not read the sessions, nothing was done.')
+    }
     const r = M.resolveAction(a, actionCtx())
     const A = window.CSMSessionActions
     if (!r.ok || (a.verb === 'new' ? !window.openNewSession : !A)) {

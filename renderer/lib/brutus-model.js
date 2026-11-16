@@ -96,18 +96,23 @@
       if (!(c.categories || []).includes(a.arg)) return { ok: false, label, why: a.arg ? `No category named "${a.arg}"` : 'No category given' }
       return { ok: true, label, category: a.arg }
     }
-    const session = (c.sessions || []).find(x => (x.name || '') === a.name)
+    // Every distinct session with that name: with two, a click would act on whichever came
+    // first, so the button refuses instead.
+    const named = (c.sessions || []).filter(x => (x.name || '') === a.name)
+    const distinct = new Set(named.map(keyOf)).size
+    const session = named[0]
     const label = `${VERBS[a.verb]} ${a.name}${a.verb === 'board' && a.arg ? ` to ${a.arg}` : ''}`
     if (!a.name || !session) return { ok: false, label, why: `No session named "${a.name}"` }
+    if (distinct > 1) return { ok: false, label, why: `More than one session is named ${a.name}` }
     if (a.verb === 'board') {
       const col = (c.columns || []).find(x => x.id === a.arg) ||
         (c.columns || []).find(x => String(x.name || '').toLowerCase() === a.arg.toLowerCase())
       if (!a.arg || !col) return { ok: false, label, why: `No board column named "${a.arg}"` }
-      const named = `${VERBS.board} ${a.name} to ${col.name}`
-      if (col.hidden) return { ok: false, label: named, why: `The column "${col.name}" is hidden` }
-      if (!keyOf(session)) return { ok: false, label: named, why: 'This session cannot be placed on the board' }
-      if ((c.placements || {})[keyOf(session)] === col.id) return { ok: false, label: named, why: `Already in ${col.name}` }
-      return { ok: true, label: named, session, column: col.id }
+      const moved = `${VERBS.board} ${a.name} to ${col.name}`
+      if (col.hidden) return { ok: false, label: moved, why: `The column "${col.name}" is hidden` }
+      if (!keyOf(session)) return { ok: false, label: moved, why: 'This session cannot be placed on the board' }
+      if ((c.placements || {})[keyOf(session)] === col.id) return { ok: false, label: moved, why: `Already in ${col.name}` }
+      return { ok: true, label: moved, session, column: col.id }
     }
     const test = (c.why || {})[a.verb]
     const why = test ? test(session) : 'Not available here'
@@ -122,10 +127,11 @@
 
   // Markers are taken out before the text is escaped and formatted, and their buttons put
   // back last, so nothing in a session name is read as a link, bold or a chip. One inside
-  // a code span stays text: that is how he quotes the syntax without proposing anything.
+  // a code span or a fenced block (an unclosed fence runs to the end) stays text: that is
+  // how he quotes the syntax without proposing anything.
   function extractActions(text) {
     const acts = []
-    const marked = String(text || '').replace(/\u0000/g, '').split(/(`[^`\n]+`)/)
+    const marked = String(text || '').replace(/\u0000/g, '').split(/(```[\s\S]*?(?:```|$)|`[^`\n]+`)/)
       .map((part, i) => i % 2 ? part : part.replace(ACTION, (_, body) => { acts.push(parseAction(body)); return `\u0000${acts.length - 1}\u0000` }))
       .join('')
     return { marked, acts }

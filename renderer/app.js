@@ -1,14 +1,24 @@
 let sessions = []
 // Brutus resolves the names in his answers against what the dashboard shows: the list on
-// screen, and the live, stale and closed ones last read by seedTabCounts. Deduped by name,
-// the list on screen first; `readFirst` puts the ones seedTabCounts read first instead, for
-// his proposed actions, which re-read them before they are drawn and again on a click.
-window.CSMBrutusSessions = (readFirst = false) => {
+// screen, and the live, stale and closed ones last read by seedTabCounts. For his chips,
+// deduped by name, the list on screen first.
+window.CSMBrutusSessions = () => {
   const seen = new Set()
-  const read = [...(window._liveForBrutus || []), ...(window._historicalForBrutus || [])]
-  return (readFirst ? [...read, ...sessions] : [...sessions, ...read]).filter(s => {
+  return [...sessions, ...(window._liveForBrutus || []), ...(window._historicalForBrutus || [])].filter(s => {
     if (!s || !s.name || seen.has(s.name)) return false
     seen.add(s.name); return true
+  })
+}
+// For his proposed actions: every distinct session, deduped by its key (the same session
+// listed twice is one), never by name, so two sessions sharing a name are both there and
+// the button can refuse to guess. The ones seedTabCounts read first: they are re-read
+// before his buttons are drawn and again on a click.
+window.CSMBrutusActionSessions = () => {
+  const seen = new Set()
+  const key = (s) => s.notesPath || s.sessionId || s.name || ''
+  return [...(window._liveForBrutus || []), ...(window._historicalForBrutus || []), ...sessions].filter(s => {
+    if (!s || !s.name || seen.has(key(s))) return false
+    seen.add(key(s)); return true
   })
 }
 let selectedKey = null   // unique session key (notesPath || sessionId || name), not raw sessionId
@@ -885,7 +895,9 @@ window.confirmAction = ({ title = 'Heads up', body = '', confirmLabel = 'Continu
   })
 
 // Re-fetch + re-render the current tab (e.g. after archiving moves a session out).
-window.refreshSessions = () => fetchAndRender(true)
+// Called after every close, archive, sync or pause: the read Brutus keeps for 30 s is out
+// of date from then on.
+window.refreshSessions = () => { brutusReadAt = 0; return fetchAndRender(true) }
 
 window.selectSession = selectSession
 window.switchTab = switchTab
@@ -1370,12 +1382,21 @@ async function seedTabCounts() {
     window._liveForBrutus = active
     window._historicalForBrutus = [...hist.stale, ...hist.closed]
     if (window.updateTabBadges) window.updateTabBadges()
-  } catch (e) { /* badges fall back to lazy per-visit fill */ }
+    brutusReadAt = Date.now()
+    return true
+  } catch (e) { return false /* badges fall back to lazy per-visit fill */ }
 }
 // Brutus re-reads every session when his panel opens, when an answer lands and before
 // running an action he proposed: seeded at launch only, these lists would draw and run his
-// buttons against a state that has since changed.
-window.refreshBrutusSessions = seedTabCounts
+// buttons against a state that has since changed. A redraw accepts a read younger than
+// `maxAgeMs` (each read scans every historical session); a click passes 0 and always reads.
+// Resolves to false when the read failed, and calls made meanwhile share the one in flight.
+let brutusReadAt = 0, brutusRead = null
+window.refreshBrutusSessions = (maxAgeMs = 0) => {
+  if (maxAgeMs && Date.now() - brutusReadAt < maxAgeMs) return Promise.resolve(true)
+  if (!brutusRead) brutusRead = seedTabCounts().finally(() => { brutusRead = null })
+  return brutusRead
+}
 
 // First-launch nudge: if the bundled session skills aren't in ~/.claude/skills yet,
 // offer a one-click install (non-force — a fresh install, never clobbering edits).

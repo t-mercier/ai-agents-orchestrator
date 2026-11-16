@@ -55,8 +55,8 @@ test('a proposed new session opens the dialog with its category chosen, and star
   expect(await page.evaluate(() => window.__LAUNCHED__)).toBe(0)
 })
 
-// The lists his buttons are checked against are read again when an answer lands: a session
-// closed after launch can be archived from his answer without restarting the app.
+// The lists his buttons are checked against are read again after the app changes a
+// session: one closed after launch can be archived from his next answer without a restart.
 test('a session closed after launch is archivable from his next answer', async ({ page }) => {
   await page.goto('/index.html')
   await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
@@ -72,6 +72,7 @@ test('a session closed after launch is archivable from his next answer', async (
       return { ...h, closed: [{ ...was, state: 'closed', historyStatus: 'closed' }, ...h.closed] }
     }
     window.__BRUTUS_SCRIPT__ = { reads: [], text: '[[action:archive:legacy-export]]' }
+    window.refreshSessions()   // what the app does once it has closed a session
     window.CSMBrutusUI.setHome('bubble')
   })
   await page.locator('.bru-panel.v-A input').fill('archive it')
@@ -80,4 +81,13 @@ test('a session closed after launch is archivable from his next answer', async (
   await page.locator('.bru-act[data-bru-action="archive"]').click()
   await expect(page.locator('#confirm-title')).toHaveText('Archive session')
   await page.locator('#confirm-cancel').click()
+})
+
+// A click re-reads the sessions; when that read fails it acts on nothing and says so.
+test('a failed re-read on a click does nothing and says so', async ({ page }) => {
+  await answer(page, '[[action:close:legacy-export]]')
+  await page.evaluate(() => { window.api.getHistoricalAll = () => Promise.reject(new Error('scan failed')) })
+  await page.locator('.bru-act[data-bru-action="close"]').click()
+  await expect(page.locator('.bru-panel.v-A .bru-err').last()).toHaveText('Could not read the sessions, nothing was done.')
+  await expect(page.locator('#confirm-modal')).toBeHidden()
 })
