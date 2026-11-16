@@ -60,6 +60,12 @@ describe('stepsLine', () => {
     expect(B.stepLabel({ tool: 'Read', target: '/w/FEAT/legacy-export/notes.md' }, sessions)).toBe('Reading the notes of legacy-export')
     expect(B.stepLabel({ tool: 'Edit', target: '/cfg/brutus/memory.md' }, sessions)).toBe('Writing to his memory')
   })
+  test('an edit of a session\'s notes is named as that, never as his memory', () => {
+    expect(B.stepLabel({ tool: 'Edit', target: '/w/FEAT/legacy-export/notes.md' }, sessions)).toBe('Editing the notes of legacy-export')
+    expect(B.stepLabel({ tool: 'Edit', target: '/w/FEAT/unknown/notes.md' }, sessions)).toBe("Editing a session's notes")
+    const steps = [{ tool: 'Read', target: '/w/FEAT/legacy-export/notes.md' }, { tool: 'Edit', target: '/w/FEAT/legacy-export/notes.md' }]
+    expect(B.stepsLine(steps, sessions)).toBe("notes of 1 session · edited one session's notes")
+  })
 })
 
 test('status and initial', () => {

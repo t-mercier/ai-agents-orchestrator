@@ -23,15 +23,19 @@ pub(crate) fn ensure() -> Result<PathBuf, String> {
     fs::canonicalize(&d).map_err(|e| e.to_string())
 }
 
-/// The writes he is allowed: his memory, and the documents he writes when asked for one.
-/// `Edit(…)` covers every file-editing tool — Claude Code ignores `Write(…)` rules — and
-/// `//` makes the path absolute; one `/` would be relative to this settings file and
-/// silently deny everything.
-pub(crate) fn settings_json(resolved_dir: &Path) -> Value {
+/// The writes he is allowed: his memory, the documents he writes when asked for one, and
+/// the `notes.md` of the sessions under each category folder in `notes_dirs` (the folders
+/// from `category_dirs`). Only files named `notes.md`: everything else in a category
+/// folder stays read-only. `Edit(…)` covers every file-editing tool — Claude Code ignores
+/// `Write(…)` rules — and `//` makes the path absolute; one `/` would be relative to this
+/// settings file and silently deny everything.
+pub(crate) fn settings_json(resolved_dir: &Path, notes_dirs: &[String]) -> Value {
     let mem = resolved_dir.join("memory.md");
     let docs = resolved_dir.join("docs");
+    let mut allow = vec![format!("Edit(/{})", mem.to_string_lossy()), format!("Edit(/{}/**)", docs.to_string_lossy())];
+    allow.extend(notes_dirs.iter().map(|d| format!("Edit(/{d}/**/notes.md)")));
     json!({ "permissions": {
-        "allow": [format!("Edit(/{})", mem.to_string_lossy()), format!("Edit(/{}/**)", docs.to_string_lossy())],
+        "allow": allow,
         "deny": SECRET_READS,
     } })
 }
@@ -80,34 +84,47 @@ const SECRET_READS: [&str; 19] = [
     "Read(//**/.pypirc)",
 ];
 
-/// What he may read: the category folders (where notes.md live) and the knowledge
-/// folders — never a space root, which can be a whole repo tree or `~` itself. Existing
-/// only, canonicalized, deduped, and never `home` or one of its ancestors: under
-/// `--restricted` these folders ARE the read boundary.
-pub(crate) fn read_dirs(cfg: &Value, home: &Path) -> Vec<String> {
-    let home = fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
+/// Existing folders only, canonicalized, deduped, and never `home` or one of its
+/// ancestors: under `--restricted` these folders ARE the read boundary, and the category
+/// ones also bound where he may edit a notes.md.
+fn push_dir(out: &mut Vec<String>, home: &Path, p: &str) {
+    if p.trim().is_empty() {
+        return;
+    }
+    let Ok(c) = fs::canonicalize(p) else { return };
+    if !c.is_dir() || home.starts_with(&c) {
+        return;
+    }
+    let s = c.to_string_lossy().into_owned();
+    if !out.contains(&s) {
+        out.push(s);
+    }
+}
+
+fn canonical_home(home: &Path) -> PathBuf {
+    fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf())
+}
+
+/// The category folders, where the sessions' notes.md live — never a space root, which
+/// can be a whole repo tree or `~` itself.
+pub(crate) fn category_dirs(cfg: &Value, home: &Path) -> Vec<String> {
+    let home = canonical_home(home);
     let mut out: Vec<String> = Vec::new();
-    let mut push = |p: &str| {
-        if p.trim().is_empty() {
-            return;
-        }
-        let Ok(c) = fs::canonicalize(p) else { return };
-        if !c.is_dir() || home.starts_with(&c) {
-            return;
-        }
-        let s = c.to_string_lossy().into_owned();
-        if !out.contains(&s) {
-            out.push(s);
-        }
-    };
     for sd in cfg.get("scanDirs").and_then(Value::as_array).into_iter().flatten() {
         if let Some(b) = sd.get("base").and_then(Value::as_str) {
-            push(b);
+            push_dir(&mut out, &home, b);
         }
     }
+    out
+}
+
+/// What he may read: the category folders and the knowledge folders.
+pub(crate) fn read_dirs(cfg: &Value, home: &Path) -> Vec<String> {
+    let mut out = category_dirs(cfg, home);
+    let home = canonical_home(home);
     for r in cfg.get("roots").and_then(Value::as_array).into_iter().flatten() {
         if let Some(v) = r.get("vaultPath").and_then(Value::as_str) {
-            push(v);
+            push_dir(&mut out, &home, v);
         }
     }
     out
@@ -230,11 +247,54 @@ mod tests {
 
     #[test]
     fn settings_allow_edits_on_his_memory_and_his_docs_only() {
-        let s = settings_json(Path::new("/private/tmp/x/brutus"));
+        let s = settings_json(Path::new("/private/tmp/x/brutus"), &[]);
         assert_eq!(s["permissions"]["allow"], json!([
             "Edit(//private/tmp/x/brutus/memory.md)",
             "Edit(//private/tmp/x/brutus/docs/**)",
         ]));
+    }
+
+    // He may edit a session's notes.md, under each category folder and nowhere else: no
+    // rule names a whole folder, and none is relative.
+    #[test]
+    fn settings_allow_notes_md_under_each_category_folder_and_nothing_broader() {
+        let cats = vec!["/w/space/BUG".to_string(), "/w/other/FEAT".to_string()];
+        let s = settings_json(Path::new("/cfg/brutus"), &cats);
+        let allow: Vec<String> = serde_json::from_value(s["permissions"]["allow"].clone()).unwrap();
+        assert_eq!(allow, vec![
+            "Edit(//cfg/brutus/memory.md)",
+            "Edit(//cfg/brutus/docs/**)",
+            "Edit(//w/space/BUG/**/notes.md)",
+            "Edit(//w/other/FEAT/**/notes.md)",
+        ]);
+        for rule in &allow {
+            assert!(rule.starts_with("Edit(//"), "a rule without // matches nothing: {rule}");
+            assert!(!rule.contains("//**"), "a rule open to the whole disk: {rule}");
+        }
+        for c in &cats {
+            assert!(!allow.contains(&format!("Edit(/{c}/**)")), "the whole folder {c} is writable");
+            assert!(allow.iter().filter(|r| r.contains(c.as_str())).all(|r| r.ends_with("/**/notes.md)")), "{c}: {allow:?}");
+        }
+    }
+
+    // The folders whose notes.md he may edit are the category folders he reads, never a
+    // knowledge folder, a space root or home.
+    #[test]
+    fn notes_are_editable_only_in_the_category_folders() {
+        let t = std::env::temp_dir().join(format!("ao-brutus-cats-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&t);
+        let home = t.join("home");
+        for d in ["home/work/BUG", "home/vault"] {
+            std::fs::create_dir_all(t.join(d)).unwrap();
+        }
+        let h = home.to_string_lossy();
+        let cfg = json!({
+            "scanDirs": [{ "base": format!("{h}/work/BUG") }, { "base": format!("{h}") }],
+            "roots": [{ "path": format!("{h}/work"), "vaultPath": format!("{h}/vault") }],
+        });
+        let canon = |p: &str| std::fs::canonicalize(t.join(p)).unwrap().to_string_lossy().into_owned();
+        assert_eq!(category_dirs(&cfg, &home), vec![canon("home/work/BUG")]);
+        let _ = std::fs::remove_dir_all(&t);
     }
 
     #[test]
@@ -264,7 +324,7 @@ mod tests {
     // settings file), Read(//**/.env) blocked the read. Every deny rule is absolute.
     #[test]
     fn secrets_are_denied_by_absolute_patterns_even_inside_a_readable_folder() {
-        let deny = settings_json(Path::new("/x"))["permissions"]["deny"].clone();
+        let deny = settings_json(Path::new("/x"), &[])["permissions"]["deny"].clone();
         let deny: Vec<String> = serde_json::from_value(deny).unwrap();
         for must in ["Read(//**/.env)", "Read(//**/.env.*)", "Read(//**/.ssh/**)", "Read(//**/*.pem)", "Read(//**/*secret*.json)"] {
             assert!(deny.iter().any(|d| d == must), "missing {must}: {deny:?}");
@@ -275,7 +335,7 @@ mod tests {
     // The review found these still readable inside a category folder.
     #[test]
     fn credentials_beyond_env_and_keys_are_denied_too() {
-        let deny = settings_json(Path::new("/x"))["permissions"]["deny"].clone();
+        let deny = settings_json(Path::new("/x"), &[])["permissions"]["deny"].clone();
         let deny: Vec<String> = serde_json::from_value(deny).unwrap();
         for must in ["Read(//**/.envrc)", "Read(//**/.git-credentials)", "Read(//**/credentials*.json)",
                      "Read(//**/.aws/**)", "Read(//**/*.p12)", "Read(//**/*.jks)", "Read(//**/*.keystore)",
@@ -291,6 +351,7 @@ mod tests {
         for rule in SECRET_READS {
             assert!(probe.contains(&format!("\"{rule}\"")), "probe-brutus-sandbox.sh lacks {rule}");
         }
+        assert!(probe.contains("/space/BUG/**/notes.md)"), "probe-brutus-sandbox.sh lacks the notes.md rule");
     }
 
     #[test]

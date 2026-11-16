@@ -276,7 +276,8 @@ pub(crate) fn prepare(live: Vec<Value>, with_history: bool) -> Result<Plan, Stri
     let dir = brutus_home::ensure()?;
     let cfg = config::load();
 
-    std::fs::write(dir.join("settings.json"), brutus_home::settings_json(&dir).to_string())
+    let notes_dirs = brutus_home::category_dirs(&cfg, &config::home());
+    std::fs::write(dir.join("settings.json"), brutus_home::settings_json(&dir, &notes_dirs).to_string())
         .map_err(|e| e.to_string())?;
     let read_dirs = brutus_home::read_dirs(&cfg, &config::home());
     let knowledge: Vec<String> = read_dirs

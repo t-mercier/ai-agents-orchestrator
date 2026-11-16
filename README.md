@@ -93,9 +93,10 @@ gets better the more you use him. Rename him, pick his companion — a blob, a g
 robot or a little devil, each animated as he thinks and answers — and his style — concise, friendly, casual,
 nerdy or sarcastic — in **Settings → AI Companion**, or turn him off there if you would rather not have an assistant. Ask him for a document — a brief, a summary to share — and he writes it and gives you a card to open it.
 
-He can read and remember, nothing else: every answer is a Claude Code run started with
-`--restricted`, no MCP servers and five file tools, reading only your category and knowledge
-folders and writing only his own `memory.md`. Actions — archiving the stale ones he points
+He reads, remembers, and edits a session's notes when you ask him to, nothing else: every
+answer is a Claude Code run started with `--restricted`, no MCP servers and five file tools,
+reading only your category and knowledge folders, and writing only his own `memory.md`, his
+documents and the `notes.md` files in your category folders. Actions — archiving the stale ones he points
 out — come next, and will always ask you first.
 
 ### Two ways to look at your work
