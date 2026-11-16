@@ -10,6 +10,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-16
+### Added
+- **Brutus updates a session's notes when you ask him to.** He edits only the `notes.md` of
+  a session, and says which one he changed and what.
+- **Brutus proposes, you click.** Ask him to archive, close, pause, sync or resume a session,
+  move it on the board or start a new one, and he answers with a button. Nothing happens until
+  you click it, and the click goes through the app's own control and its confirmation.
+
+### Removed
+- **Brutus no longer speaks first.** His reminders were not reliable enough, so they are gone,
+  with their pause button and their settings.
+
 ## [0.25.6] - 2026-11-10
 ### Fixed
 - **macOS stops asking for folder access again and again.** AO is now signed with the same
