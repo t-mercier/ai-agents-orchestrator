@@ -20,24 +20,51 @@ pub(crate) fn ensure() -> Result<PathBuf, String> {
         fs::write(&mem, MEMORY_SEED).map_err(|e| e.to_string())?;
     }
     fs::create_dir_all(d.join("docs")).map_err(|e| e.to_string())?;
+    remove_obsolete(&d);
     fs::canonicalize(&d).map_err(|e| e.to_string())
 }
 
+/// Files an earlier version kept in his folder for its reminders. He can read his folder,
+/// and these hold old session names, so they go.
+const OBSOLETE: [&str; 2] = ["nudges.json", "triage.json"];
+fn remove_obsolete(d: &Path) {
+    for f in OBSOLETE {
+        match fs::remove_file(d.join(f)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => log::warn!("brutus: could not remove {f}: {e}"),
+            _ => {}
+        }
+    }
+}
+
 /// The writes he is allowed: his memory, the documents he writes when asked for one, and
-/// the `notes.md` of the sessions under each category folder in `notes_dirs` (the folders
-/// from `category_dirs`). Only files named `notes.md`: everything else in a category
-/// folder stays read-only. `Edit(…)` covers every file-editing tool — Claude Code ignores
-/// `Write(…)` rules — and `//` makes the path absolute; one `/` would be relative to this
-/// settings file and silently deny everything.
+/// the `notes.md` of the sessions in each category folder in `notes_dirs` (the folders
+/// from `category_dirs`). A session is `<category>/<slug>/notes.md`, so the rule matches
+/// that depth only: a notes.md deeper down, in a repo cloned under a category, stays
+/// read-only, as does everything else there. A folder whose path holds a glob character
+/// gets no rule: the pattern would match other folders than the one named.
+/// `Edit(…)` covers every file-editing tool — Claude Code ignores `Write(…)` rules — and
+/// `//` makes the path absolute; one `/` would be relative to this settings file and
+/// silently deny everything.
 pub(crate) fn settings_json(resolved_dir: &Path, notes_dirs: &[String]) -> Value {
     let mem = resolved_dir.join("memory.md");
     let docs = resolved_dir.join("docs");
     let mut allow = vec![format!("Edit(/{})", mem.to_string_lossy()), format!("Edit(/{}/**)", docs.to_string_lossy())];
-    allow.extend(notes_dirs.iter().map(|d| format!("Edit(/{d}/**/notes.md)")));
+    for d in notes_dirs {
+        if has_glob_char(d) {
+            log::warn!("brutus: {d} holds a glob character, so he cannot edit the notes in it");
+            continue;
+        }
+        allow.push(format!("Edit(/{d}/*/notes.md)"));
+    }
     json!({ "permissions": {
         "allow": allow,
         "deny": SECRET_READS,
     } })
+}
+
+/// A character a permission pattern reads as a glob rather than as itself.
+pub(crate) fn has_glob_char(path: &str) -> bool {
+    path.chars().any(|c| matches!(c, '*' | '?' | '[' | ']' | '{' | '}' | '(' | ')'))
 }
 
 /// A document he may name: one plain `.md` or `.html` file directly in his docs folder.
@@ -87,11 +114,17 @@ const SECRET_READS: [&str; 19] = [
 /// Existing folders only, canonicalized, deduped, and never `home` or one of its
 /// ancestors: under `--restricted` these folders ARE the read boundary, and the category
 /// ones also bound where he may edit a notes.md.
-fn push_dir(out: &mut Vec<String>, home: &Path, p: &str) {
+fn push_dir(out: &mut Vec<String>, home: &Path, p: &str, kind: &str) {
     if p.trim().is_empty() {
         return;
     }
-    let Ok(c) = fs::canonicalize(p) else { return };
+    let c = match fs::canonicalize(p) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("brutus: the {kind} folder {p} cannot be resolved ({e}); he cannot read it");
+            return;
+        }
+    };
     if !c.is_dir() || home.starts_with(&c) {
         return;
     }
@@ -112,7 +145,7 @@ pub(crate) fn category_dirs(cfg: &Value, home: &Path) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for sd in cfg.get("scanDirs").and_then(Value::as_array).into_iter().flatten() {
         if let Some(b) = sd.get("base").and_then(Value::as_str) {
-            push_dir(&mut out, &home, b);
+            push_dir(&mut out, &home, b, "category");
         }
     }
     out
@@ -124,7 +157,7 @@ pub(crate) fn read_dirs(cfg: &Value, home: &Path) -> Vec<String> {
     let home = canonical_home(home);
     for r in cfg.get("roots").and_then(Value::as_array).into_iter().flatten() {
         if let Some(v) = r.get("vaultPath").and_then(Value::as_str) {
-            push_dir(&mut out, &home, v);
+            push_dir(&mut out, &home, v, "knowledge");
         }
     }
     out
@@ -264,8 +297,8 @@ mod tests {
         assert_eq!(allow, vec![
             "Edit(//cfg/brutus/memory.md)",
             "Edit(//cfg/brutus/docs/**)",
-            "Edit(//w/space/BUG/**/notes.md)",
-            "Edit(//w/other/FEAT/**/notes.md)",
+            "Edit(//w/space/BUG/*/notes.md)",
+            "Edit(//w/other/FEAT/*/notes.md)",
         ]);
         for rule in &allow {
             assert!(rule.starts_with("Edit(//"), "a rule without // matches nothing: {rule}");
@@ -273,8 +306,33 @@ mod tests {
         }
         for c in &cats {
             assert!(!allow.contains(&format!("Edit(/{c}/**)")), "the whole folder {c} is writable");
-            assert!(allow.iter().filter(|r| r.contains(c.as_str())).all(|r| r.ends_with("/**/notes.md)")), "{c}: {allow:?}");
+            assert!(allow.iter().filter(|r| r.contains(c.as_str())).all(|r| r.ends_with(&format!("{c}/*/notes.md)"))), "{c}: {allow:?}");
         }
+        assert!(!allow.iter().any(|r| r.contains("/**/notes.md")), "a notes.md at any depth is writable: {allow:?}");
+    }
+
+    // A glob character in a folder's own name would widen the rule to other folders.
+    #[test]
+    fn a_category_folder_with_a_glob_character_gets_no_notes_rule() {
+        let cats: Vec<String> = ["/w/a*b", "/w/q?", "/w/[x]", "/w/{y}", "/w/(z)", "/w/ok"].iter().map(|s| s.to_string()).collect();
+        let allow = settings_json(Path::new("/cfg/brutus"), &cats)["permissions"]["allow"].clone();
+        let allow: Vec<String> = serde_json::from_value(allow).unwrap();
+        assert_eq!(allow.iter().filter(|r| r.ends_with("/notes.md)")).collect::<Vec<_>>(), vec!["Edit(//w/ok/*/notes.md)"]);
+    }
+
+    #[test]
+    fn the_reminder_files_of_an_earlier_version_are_removed_and_nothing_else() {
+        let t = std::env::temp_dir().join(format!("ao-brutus-obsolete-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&t);
+        fs::create_dir_all(&t).unwrap();
+        for f in ["nudges.json", "triage.json", "memory.md", "conversation.json"] {
+            fs::write(t.join(f), "{}").unwrap();
+        }
+        remove_obsolete(&t);
+        remove_obsolete(&t);   // already gone: not an error
+        assert!(!t.join("nudges.json").exists() && !t.join("triage.json").exists());
+        assert!(t.join("memory.md").exists() && t.join("conversation.json").exists());
+        let _ = fs::remove_dir_all(&t);
     }
 
     // The folders whose notes.md he may edit are the category folders he reads, never a
@@ -351,7 +409,7 @@ mod tests {
         for rule in SECRET_READS {
             assert!(probe.contains(&format!("\"{rule}\"")), "probe-brutus-sandbox.sh lacks {rule}");
         }
-        assert!(probe.contains("/space/BUG/**/notes.md)"), "probe-brutus-sandbox.sh lacks the notes.md rule");
+        assert!(probe.contains("/space/BUG/*/notes.md)"), "probe-brutus-sandbox.sh lacks the notes.md rule");
     }
 
     #[test]
