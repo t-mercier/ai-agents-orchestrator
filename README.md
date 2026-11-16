@@ -20,7 +20,7 @@
 >
 > **AI Agents Orchestrator gives every session a memory it keeps** — a `notes.md` beside its code, a folder of knowledge notes the agent writes into as it learns, and a skill proposal whenever it learns a procedure. Nothing becomes active until you have seen the exact wording and said yes. And every session in one window: live status, the work in progress, and a terminal for each. Local-first, read-only on your session data, and silent on the network until you press **Sync** or **Close**.
 >
-> **New in 0.20: Brutus.** Ask him what's waiting on you, what a session is about, or what you decided last week — from a bubble in the corner, or **⌘K** from anywhere in the app. He has read every session's notes, and remembers what you tell him.
+> **New in 0.26:** Brutus updates a session's notes when you ask him to, and answers a request to archive, close, pause, sync or resume a session with a button that does nothing until you click it.
 
 ## TL;DR — how you're meant to use it
 
@@ -144,7 +144,7 @@ folder, not only a checkout. When the folder *is* inside a repo, session start f
 fires even with **Branch** left blank. Point **Start in** outside any repo, or leave it
 blank, and your checkout is never touched.
 
-It is **read-only on your session data by design**: every write is an action you trigger, and there are five of them — **archiving** a session, **saving its PR links / tickets**, the repairs you tick in **Doctor**, what you tick in **Clean** (archive, or delete to the OS Trash), and the rollback of a first-run import that died half-done. All written atomically and confined under your configured roots (see [`docs/adr`](docs/adr)). Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which puts back a copy edited by hand (and names it on screen) and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
+It is **read-only on your session data by design**: every write is an action you trigger, and there are five of them — **archiving** a session, **saving its PR links / tickets**, the repairs you tick in **Doctor**, what you tick in **Clean** (archive, or delete to the OS Trash), and the rollback of a first-run import that died half-done. All written atomically and confined under your configured roots (see [`docs/adr`](docs/adr)). There is one more, made by Brutus rather than by the app: when you ask him to update a session's notes, he edits that session's `notes.md` himself, with Claude Code's own Edit tool, and his sandbox lets him write no other file in your category folders. Separately, it keeps **its own session skills** current in `~/.claude/skills/`, syncing them at launch and on the Settings button — a write confined to that skills folder, which puts back a copy edited by hand (and names it on screen) and never touches your transcripts. Your UI preferences live in `localStorage` + your own config file.
 
 ## Quick start
 
