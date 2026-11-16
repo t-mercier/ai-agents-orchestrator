@@ -93,13 +93,10 @@ gets better the more you use him. Rename him, pick his companion — a blob, a g
 robot or a little devil, each animated as he thinks and answers — and his style — concise, friendly, casual,
 nerdy or sarcastic — in **Settings → AI Companion**, or turn him off there if you would rather not have an assistant. Ask him for a document — a brief, a summary to share — and he writes it and gives you a card to open it.
 
-He reads, remembers, and edits a session's notes when you ask him to, nothing else: every
-answer is a Claude Code run started with `--restricted`, no MCP servers and five file tools,
-reading only your category and knowledge folders, and writing only his own `memory.md`, his
-documents and the `notes.md` files in your category folders. When you ask him to archive, close,
-pause, sync or resume a session, move it on the board or start a new one, he proposes it as a
-button: you click it, and the app runs its own control for that action, with the same
-confirmation.
+He also does the chores you ask for. Tell him what changed and he updates that session's notes.
+Ask him to archive, close, pause, sync or resume a session, move it on the board or start a new
+one, and he answers with a button: nothing happens until you click it, and the click goes through
+the same control and the same confirmation as in the app.
 
 ### Two ways to look at your work
 
@@ -437,7 +434,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 
 ## Security
 
-- **Brutus is sandboxed by flags, not by his prompt** — `--restricted` confines his reads to your category and knowledge folders (never a space root, never your home folder), `--strict-mcp-config` removes every MCP server, and he may write only his own `memory.md` and the documents he writes for you in his `docs/` folder. An HTML document opens with scripts and network requests blocked, whatever it contains. `scripts/probe-brutus-sandbox.sh` checks all of it against your installed Claude Code, judging each check on the tool's result, not the model's answer.
+- **Brutus is sandboxed by flags, not by his prompt** — `--restricted` confines his reads to your category and knowledge folders (never a space root, never your home folder), `--strict-mcp-config` removes every MCP server, and he may write only his own `memory.md`, the documents he writes for you in his `docs/` folder, and the `notes.md` files in your category folders. That last rule allows any session's notes, so only his prompt keeps him to the notes you asked him to update. He never runs an app action himself: he proposes it as a button, and your click runs the app's own control. An HTML document opens with scripts and network requests blocked, whatever it contains. `scripts/probe-brutus-sandbox.sh` checks all of it against your installed Claude Code, judging each check on the tool's result, not the model's answer.
 - **Every shell interpolation is quoted** — `claude` runs through a login shell, because a Finder-launched app has no `claude` on its PATH; each value interpolated into that command line is POSIX single-quote escaped first. `open`, `osascript` and `git` are spawned with separate args, and AppleScript uses the `on run argv` pattern.
 - Folder / branch / URL inputs are **allowlist-validated** (absolute canonical path that exists and is a directory; a real git checkout whenever a branch is asked for; safe branch name; `github.com/owner/repo/pull/N`).
 - The session-file writes (archive · PR links / tickets · Doctor's repairs · Clean's archive-or-delete · the rollback of a half-done import) are **atomic**, target a real `notes.md` or a session folder two levels below a configured space, and are **confined under your configured roots** (canonicalized — no `../` escape). A Clean deletion goes to the OS Trash, not an unlink.
@@ -458,7 +455,7 @@ Under the hood each import runs `/import-session`, which writes the `notes.md` a
 > [!NOTE]
 > ## What's new
 >
-> - 💬 **Brutus, the one you ask** — *what's waiting on me?*, *brief me on FEAT-1842*, *what did I decide last week?* From the bubble, a docked panel or **⌘K**. He answers with the sessions as clickable chips, remembers what you tell him, and can read and remember nothing else. Name him and pick his style in **Settings → AI Companion**.
+> - 💬 **Brutus, the one you ask** — *what's waiting on me?*, *brief me on FEAT-1842*, *what did I decide last week?* From the bubble, a docked panel or **⌘K**. He answers with the sessions as clickable chips, remembers what you tell him, updates a session's notes when you ask, and proposes archive, close, sync or a board move as a button you click. Name him and pick his style in **Settings → AI Companion**.
 > - ↕ **Order, group and sort every tab** — groups and drag-to-order now work on Closed and Archived too, and **Sort** orders each category by last update or ticket number.
 > - ⟳ **Sync realigns a session with reality** — one button: ticket statuses read from your tracker, and any pull request opened since the last checkpoint attached. **Sync all**, in the titlebar, does it for every open session at once — one `gh` batch, then the agents one at a time. Nothing runs in the background.
 > - 🔀 **Pull requests carry their state** — open, merged, closed or draft, on the card and spelled out with each PR's title in the detail panel.
