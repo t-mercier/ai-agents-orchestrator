@@ -1046,8 +1046,8 @@ mod tests {
         let _ = fs::remove_dir_all(&plain);
     }
 
-    // Brutus's nudges read a Next step marked 👤 as the person's (renderer/lib/nudge-model.js).
-    // Every app skill that writes Next steps has to say so, or the marker never appears.
+    // A Next step marked 👤 is the person's, not the agent's. Every app skill that writes
+    // Next steps has to say so, or the marker never appears.
     #[test]
     fn every_skill_that_writes_next_steps_teaches_the_person_marker() {
         for s in ["save-session", "close-session", "wrap-session", "start-session", "restart-session", "import-session"] {

@@ -146,9 +146,6 @@ const USAGE = {
 
 // ── Backend stub ───────────────────────────────────────────────────────────────
 const RESULTS = {
-  brutus_nudge: { message: 'Morning! [[session:checkout-redesign]] is waiting on your answer.', triage: {} },
-  // A visit just now: the launch is then no arrival, so no shot shows a nudge unless a test asks.
-  brutus_nudge_state: { said: {}, lastVisit: NOW, lastFacts: null, triage: {}, pending: null },
   get_config: CONFIG,
   get_sessions: RUNNING,
   get_historical_sessions_all: HISTORICAL,
@@ -201,15 +198,6 @@ window.__TAURI__ = {
       }
       // Kept so a test can read what Settings → Save would have written.
       if (cmd === 'set_config') { window.__LAST_SET_CONFIG__ = args.cfg; return Promise.resolve(null) }
-      if (cmd === 'brutus_nudge' && window.__NUDGE_FAIL__) return Promise.reject(new Error('the nudge took longer than 60 s'))
-      // A test can make the backend refuse the next N nudges as Rust does while Brutus answers.
-      if (cmd === 'brutus_nudge' && window.__NUDGE_BUSY__ > 0) { window.__NUDGE_BUSY__--; return Promise.reject('busy') }
-      // A test can hold the wording until it calls __NUDGE_RELEASE__(), to act while it runs.
-      if (cmd === 'brutus_nudge' && window.__NUDGE_HOLD__) return new Promise(r => { window.__NUDGE_RELEASE__ = () => r(window.__NUDGE_REPLY__ || null) })
-      if (cmd === 'brutus_nudge' && window.__NUDGE_REPLY__) return Promise.resolve(window.__NUDGE_REPLY__)
-      // A test can start the app from a saved state (set before the page loads).
-      if (cmd === 'brutus_nudge_state' && window.__NUDGE_STATE__) return Promise.resolve(window.__NUDGE_STATE__)
-      if (cmd === 'brutus_nudge_save') { window.__LAST_NUDGE_SAVE__ = args.state; return Promise.resolve(null) }
       return Promise.resolve(cmd in RESULTS ? RESULTS[cmd] : null)
     },
   },

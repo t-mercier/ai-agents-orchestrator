@@ -17,7 +17,6 @@
     homeOpen: false, palette: false, running: false, stopping: false,
     log: (() => { try { return JSON.parse(store.get(LOG_KEY, '[]')) } catch { return [] } })(),
     steps: [], pendingText: '', memory: 0,
-    nudge: null, recap: null, idle: [],
   }
   const name = () => ((window.CSM_CONFIG || {}).assistant || {}).name || 'Brutus'
   // Turned off in Settings: nothing of him is drawn, and ⌘K goes back to the page.
@@ -94,7 +93,6 @@
     stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>',
     side: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/></svg>',
     bubble: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="16" cy="16" r="2.6" fill="currentColor"/></svg>',
-    moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
   }
   // His face: the companion picked in Settings → AI Companion, in the state he is in. The
@@ -108,42 +106,7 @@
     : esc(M.initialOf(name()))
   const av = (cls = 'lg', still = false, badge = false) => `<span class="bru-pet ${cls}">${face(still, badge)}</span>`
 
-  const NM = () => window.CSMNudgeModel
-  // Opened or put away: renderer/nudges.js stops keeping it as pending.
-  const nudgeDone = () => window.dispatchEvent(new Event('brutus-nudge-done'))
-  // A nudge turn carries its stale list, so "want me to list them?" can answer from it.
-  function nudgeTurnHTML(t) {
-    const list = t.stale && t.stale.length && !t.listed ? `<button type="button" class="bru-nudge-list" data-bru="nudge-list" data-turn="${state.log.indexOf(t)}">${NM().words(t.lang).listAsk}</button>` : ''
-    return `<div class="bru-b">${av('', true)}<div class="bru-bt">${M.renderAnswer(t.text, sessions(), ticketBase())}${list}</div></div>`
-  }
-  function nudgeBubble() {
-    if (!state.nudge || state.homeOpen || state.palette) return
-    const n = document.createElement('div')
-    n.className = `bru-nudge ${state.home === 'side' ? 'under-tb' : ''}`
-    n.setAttribute('role', 'status')
-    const w = NM().words(state.nudge.lang)
-    n.innerHTML = `<div class="bru-nudge-who">${esc(name())}</div><div class="bru-bt">${M.renderAnswer(NM().preview(state.nudge.text, 6, state.nudge.lang), sessions(), ticketBase())}</div>
-      <div class="bru-nudge-acts"><button type="button" class="bru-nudge-open" data-bru="nudge-open">${w.open}</button><button type="button" data-bru="nudge-later">${w.later}</button></div>`
-    n.addEventListener('click', onClick)
-    document.body.appendChild(n)
-    anchor(n)
-  }
-  // Points the bubble's tail at whoever speaks: the avatar, or the titlebar button when docked,
-  // with the bubble's right edge kept on screen.
-  function anchor(n) {
-    const a = document.querySelector(state.home === 'side' ? '#brutus-btn' : '.bru-fab')
-    const r = a && a.getBoundingClientRect()
-    if (!r || !r.width) return
-    const mid = r.left + r.width / 2
-    const right = Math.max(12, Math.min(innerWidth - mid - 28, innerWidth - n.offsetWidth - 12))
-    n.style.right = `${right}px`
-    n.style.setProperty('--tail', `${Math.max(16, Math.min(innerWidth - right - mid, n.offsetWidth - 16))}px`)
-    if (state.home === 'side') n.style.top = `${Math.round(r.bottom + 10)}px`
-  }
-  // The titlebar button moves with the window's width: keep the tail on it.
-  window.addEventListener('resize', () => { const n = document.querySelector('.bru-nudge'); if (n) anchor(n) })
   function turnHTML(t) {
-    if (t.role === 'brutus' && t.nudge) return nudgeTurnHTML(t)
     if (t.role === 'user') return `<div class="bru-u">${esc(t.text)}</div>`
     if (t.role === 'error') return `<div class="bru-b">${av('', true)}<div class="bru-bt bru-err">${esc(t.text)}</div></div>`
     return `<div class="bru-b">${av('', true)}<div class="bru-bt">${t.steps ? `<div class="bru-steps">${I.eye}${esc(t.steps)}</div>` : ''}${M.renderAnswer(t.text, sessions(), ticketBase())}</div></div>`
@@ -166,7 +129,7 @@
     if (palette && turns.length > 2) { lead = `<div class="bru-earlier">↑ ${turns.length - 2} earlier messages</div>`; turns = turns.slice(-2) }
     return lead + turns.map(turnHTML).join('') + liveHTML()
   }
-  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${quietUntil() ? `${quietUntil() >= NM().SNOOZE_OFF ? 'Reminders paused' : `Quiet until ${esc(hhmm(quietUntil()))}`} · <a data-bru="unsnooze">Resume</a>` : state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib${quietUntil() ? ' on' : ''}" data-bru="snooze" title="${quietUntil() ? (quietUntil() >= NM().SNOOZE_OFF ? 'Reminders paused' : `Quiet until ${hhmm(quietUntil())}`) : 'Pause his reminders'}">${I.moon}</button><button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
+  const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
   const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his memory and his docs</span></div></div>`
 
   function render() {
@@ -174,7 +137,7 @@
     // plays its entrance, or every answer would slide it in again.
     const wasHome = !!document.querySelector('.bru-panel.v-A, .bru-panel.v-C')
     const wasPalette = !!document.querySelector('.bru-panel.v-B')
-    document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab,.bru-nudge').forEach(e => e.remove())
+    document.querySelectorAll('.bru-panel,.bru-scrim,.bru-fab').forEach(e => e.remove())
     const tb = document.getElementById('brutus-btn')
     if (!enabled()) {
       document.querySelectorAll('.bru-toast,.bru-menu').forEach(e => e.remove())
@@ -214,7 +177,6 @@
       if (wasPalette) p.classList.add('bru-still')
       p.querySelector('input')?.focus()
     }
-    nudgeBubble()
   }
   function mount(cls, html) {
     const p = document.createElement('div')
@@ -248,23 +210,10 @@
     if (sugg) return send(sugg.textContent)
     const a = e.target.closest('[data-bru]'); if (!a) return
     const k = a.dataset.bru
-    if (k === 'nudge-open') {
-      const n = state.nudge; state.nudge = null
-      state.log.push({ role: 'brutus', nudge: true, text: n.text, stale: n.stale || [], lang: n.lang }); saveLog()
-      state.recap = n.text; state.homeOpen = true; render(); nudgeDone(); return
-    }
-    if (k === 'nudge-later') { state.nudge = null; render(); nudgeDone(); return }
-    if (k === 'nudge-list') {
-      const t = state.log[Number(a.dataset.turn)]; if (!t) return
-      t.listed = true
-      state.log.push({ role: 'brutus', text: NM().staleLines(t.stale, t.lang) }); saveLog(); render(); return
-    }
     if (k === 'close') { state.homeOpen = false; render() }
     else if (k === 'send') send(a.closest('.bru-panel').querySelector('input').value)
     else if (k === 'stop') stop()
     else if (k === 'reset') reset()
-    else if (k === 'snooze') snoozeMenu(a)
-    else if (k === 'unsnooze') window.CSMNudges && window.CSMNudges.snooze(null)
     else if (k === 'memory') openMemory()
     else if (k === 'to-bubble') setHome('bubble')
     else if (k === 'to-side') setHome('side')
@@ -278,10 +227,7 @@
     state.log.push({ role: 'user', text: t }); saveLog()
     state.running = true; state.stopping = false; state.steps = []; state.pendingText = ''
     render()
-    // The reply to a nudge goes with the nudge: his conversation does not contain it.
-    const msg = state.recap ? NM().withRecap(state.recap, t) : t
-    state.recap = null
-    try { await window.api.brutusAsk(msg) }
+    try { await window.api.brutusAsk(t) }
     catch (e) { finish({ kind: 'error', message: String(e) }) }
   }
   // Stop is received even before claude has started (the backend is still preparing):
@@ -294,7 +240,6 @@
   function finish(ev) {
     if (!state.running) return
     state.running = false; state.stopping = false
-    const waiters = state.idle.splice(0); setTimeout(() => waiters.forEach(cb => cb()), 0)
     // A moment of joy when an answer lands, then back to rest.
     if (ev.kind === 'done' && !ev.is_error) { state.happyUntil = Date.now() + 2400; setTimeout(render, 2500) }
     if (ev.kind === 'error' || (ev.kind === 'done' && ev.is_error)) {
@@ -335,30 +280,6 @@
     const el = key ? cards.find(c => c.dataset.key === key) : cards.find(c => (c.textContent || '').includes(n))
     if (!el) return
     el.classList.add('bru-flash'); setTimeout(() => el.classList.remove('bru-flash'), 1300)
-  }
-  const quietUntil = () => (window.CSMNudges && window.CSMNudges.snoozedUntil ? window.CSMNudges.snoozedUntil() : null)
-  const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  // Tomorrow at 05:00, when the morning recap may start.
-  const tomorrow = () => { const d = new Date(); if (d.getHours() >= 5) d.setDate(d.getDate() + 1); d.setHours(5, 0, 0, 0); return d.getTime() }
-  function snoozeMenu(anchor) {
-    document.querySelector('.bru-menu')?.remove()
-    const m = document.createElement('div'); m.className = 'bru-menu'
-    const opts = [['30 minutes', 30 * 60_000], ['1 hour', 60 * 60_000], ['2 hours', 120 * 60_000], ['Until tomorrow', 0], ['Until I turn it back on', -1]]
-    m.innerHTML = `<div class="bru-menu-head">Pause his reminders</div>${opts.map(([l], i) => `<button type="button" data-i="${i}">${l}</button>`).join('')}${quietUntil() ? '<div class="sep"></div><button type="button" data-i="resume">Resume now</button>' : ''}`
-    document.body.appendChild(m)
-    const r = anchor.getBoundingClientRect(), mr = m.getBoundingClientRect()
-    m.style.left = Math.max(8, Math.min(r.right - mr.width, innerWidth - mr.width - 8)) + 'px'
-    m.style.top = Math.min(r.bottom + 6, innerHeight - mr.height - 8) + 'px'
-    const done = () => { m.remove(); removeEventListener('mousedown', out, true) }
-    const out = (e) => { if (!m.contains(e.target)) done() }
-    addEventListener('mousedown', out, true)
-    m.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-i]'); if (!btn || !window.CSMNudges) return
-      done()
-      const i = btn.dataset.i
-      const ms = i === 'resume' ? null : opts[i][1]
-      window.CSMNudges.snooze(ms === null ? null : ms < 0 ? NM().SNOOZE_OFF : ms ? Date.now() + ms : tomorrow())
-    })
   }
   function menu(x, y) {
     document.querySelector('.bru-menu')?.remove()
@@ -421,23 +342,9 @@
     if (e.key !== 'Escape') return
     if (state.palette) { state.palette = false; render() } else if (state.homeOpen && document.activeElement?.closest('.bru-panel')) { state.homeOpen = false; render() }
   })
-  // A pause set or lifted redraws his header, which shows until when he keeps quiet.
-  window.addEventListener('brutus-snooze', () => render())
   window.CSMBrutusUI = {
     open: () => { state.homeOpen = true; render() }, close: () => { state.homeOpen = false; render() },
     palette: () => { state.palette = true; render() }, setHome, refresh,
-    // A nudge that arrives while another is still unread joins it: replacing it would lose
-    // reminders that were already recorded as said.
-    showNudge: (n) => {
-      if (!enabled() || !n || !n.text) return
-      const prev = state.nudge
-      state.nudge = { text: prev ? `${prev.text}\n\n${n.text}` : n.text, stale: n.stale || (prev && prev.stale) || [], lang: n.lang === 'fr' ? 'fr' : 'en' }
-      render()
-    },
-    // The nudge on screen, merged as shown, so renderer/nudges.js can keep it until it is seen.
-    pendingNudge: () => (state.nudge ? { ...state.nudge } : null),
-    onIdle: (cb) => { if (!state.running) cb(); else state.idle.push(cb) },
-    lastUserText: () => { const u = [...state.log].reverse().find(t => t.role === 'user'); return u ? u.text : '' },
   }
   refresh()
 })()
