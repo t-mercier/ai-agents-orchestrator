@@ -106,16 +106,27 @@
     : esc(M.initialOf(name()))
   const av = (cls = 'lg', still = false, badge = false) => `<span class="bru-pet ${cls}">${face(still, badge)}</span>`
 
-  function turnHTML(t) {
+  // What his proposed actions are checked against: the board's columns, the +New dialog's
+  // categories, and the app's own rule for when each action applies.
+  function actionCtx() {
+    const board = window.CSMBoard ? window.CSMBoard.load() : { columns: [], placements: {} }
+    return {
+      sessions: window.CSMBrutusSessions ? window.CSMBrutusSessions(true) : [],
+      columns: board.columns, placements: board.placements,
+      categories: window.newSessionCategories ? window.newSessionCategories() : [],
+      why: window.CSMSessionActions ? window.CSMSessionActions.why : {},
+    }
+  }
+  function turnHTML(t, ctx) {
     if (t.role === 'user') return `<div class="bru-u">${esc(t.text)}</div>`
     if (t.role === 'error') return `<div class="bru-b">${av('', true)}<div class="bru-bt bru-err">${esc(t.text)}</div></div>`
-    return `<div class="bru-b">${av('', true)}<div class="bru-bt">${t.steps ? `<div class="bru-steps">${I.eye}${esc(t.steps)}</div>` : ''}${M.renderAnswer(t.text, sessions(), ticketBase())}</div></div>`
+    return `<div class="bru-b">${av('', true)}<div class="bru-bt">${t.steps ? `<div class="bru-steps">${I.eye}${esc(t.steps)}</div>` : ''}${M.renderAnswer(t.text, sessions(), ticketBase(), ctx)}</div></div>`
   }
-  function liveHTML() {
+  function liveHTML(ctx) {
     if (!state.running) return ''
     const last = state.steps[state.steps.length - 1]
     const label = state.stopping ? 'Stopping' : last ? M.stepLabel(last, sessions()) : 'Thinking'
-    const text = state.pendingText ? M.renderAnswer(state.pendingText, sessions(), ticketBase()) : '<div class="bru-think"><i></i><i></i><i></i></div><div class="bru-skel" style="width:88%"></div><div class="bru-skel" style="width:64%"></div>'
+    const text = state.pendingText ? M.renderAnswer(state.pendingText, sessions(), ticketBase(), ctx) : '<div class="bru-think"><i></i><i></i><i></i></div><div class="bru-skel" style="width:88%"></div><div class="bru-skel" style="width:64%"></div>'
     return `<div class="bru-b">${av()}<div class="bru-bt"><div class="bru-steps">${I.eye}${esc(label)}…</div>${text}</div></div>`
   }
   function emptyHTML() {
@@ -127,7 +138,8 @@
     let turns = state.log
     let lead = ''
     if (palette && turns.length > 2) { lead = `<div class="bru-earlier">↑ ${turns.length - 2} earlier messages</div>`; turns = turns.slice(-2) }
-    return lead + turns.map(turnHTML).join('') + liveHTML()
+    const ctx = actionCtx()
+    return lead + turns.map(t => turnHTML(t, ctx)).join('') + liveHTML(ctx)
   }
   const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
   const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his memory, his docs and the notes you ask for</span></div></div>`
@@ -159,7 +171,7 @@
       fab.title = `${name()} (${kbd()} to ask quickly) — right-click for options`
       fab.setAttribute('aria-label', name())
       fab.innerHTML = av('xl', false, true)
-      fab.onclick = () => { state.homeOpen = !state.homeOpen; render() }
+      fab.onclick = () => { state.homeOpen = !state.homeOpen; render(); if (state.homeOpen) freshen() }
       fab.oncontextmenu = (e) => { e.preventDefault(); menu(e.clientX, e.clientY) }
       document.body.appendChild(fab)
     }
@@ -201,6 +213,8 @@
       window.api.openExternal(refA.dataset.bruUrl).then(r => { if (r && r.ok === false) say(`Could not open ${refA.dataset.bruUrl}: ${r.error}`) })
       return
     }
+    const act = e.target.closest('[data-bru-action]')
+    if (act) return runAction(act.dataset)
     const doc = e.target.closest('[data-bru-doc]')
     if (doc) {
       window.api.brutusOpenDoc(doc.dataset.bruDoc).then(r => { if (r && !r.ok) say(`Could not open ${doc.dataset.bruDoc}: ${r.error}`) })
@@ -249,7 +263,11 @@
       state.log.push({ role: 'brutus', text, steps: M.stepsLine(state.steps, sessions()) })
     }
     state.steps = []; state.pendingText = ''
-    saveLog(); refresh()
+    saveLog(); refresh(); freshen()
+  }
+  // The sessions his proposed actions are drawn against, read again, then redrawn.
+  function freshen() {
+    if (window.refreshBrutusSessions) window.refreshBrutusSessions().then(render, () => {})
   }
   window.api.onEvent('brutus-event', (ev) => {
     if (!ev || !state.running) return
@@ -268,6 +286,22 @@
   async function openMemory() {
     const r = await window.api.brutusOpenMemory()
     if (!r || !r.ok) say(`Could not open his memory: ${(r && r.error) || 'unknown error'}`)
+  }
+  // A button for an action he proposed. Checked again against freshly read sessions, then
+  // handed to the app's own action, which asks for confirmation where its control does.
+  // An action that no longer applies says why instead of doing nothing.
+  async function runAction(d) {
+    const a = { verb: d.bruAction || '', name: d.bruTarget || '', arg: d.bruArg || '' }
+    if (window.refreshBrutusSessions) await window.refreshBrutusSessions()
+    const r = M.resolveAction(a, actionCtx())
+    const A = window.CSMSessionActions
+    if (!r.ok || (a.verb === 'new' ? !window.openNewSession : !A)) {
+      render()
+      return say(`${r.label}: ${r.ok ? 'not available in this window' : r.why}.`)
+    }
+    if (a.verb === 'new') window.openNewSession(r.category)
+    else if (a.verb === 'board') { A.run.board(r.session, r.column); render() }
+    else A.run[a.verb](r.session)
   }
   // A session chip opens that session, the way a click on its card does, and shows where
   // it is in the list. A name no session has falls back to finding the card by its text.
@@ -320,7 +354,7 @@
     state.memory = s.memoryCount === null ? null : (s.memoryCount || 0)
     render()
   }
-  document.getElementById('brutus-btn')?.addEventListener('click', () => { state.homeOpen = !state.homeOpen; render() })
+  document.getElementById('brutus-btn')?.addEventListener('click', () => { state.homeOpen = !state.homeOpen; render(); if (state.homeOpen) freshen() })
   // The bubble folds on a click anywhere else, like a popover. The side panel stays:
   // it is docked beside the work, not over it. The ⌘K palette has its own scrim.
   document.addEventListener('mousedown', (e) => {
@@ -338,12 +372,12 @@
   })
   document.addEventListener('keydown', (e) => {
     if (!enabled()) return
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); state.palette = !state.palette; render(); return }
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); state.palette = !state.palette; render(); if (state.palette) freshen(); return }
     if (e.key !== 'Escape') return
     if (state.palette) { state.palette = false; render() } else if (state.homeOpen && document.activeElement?.closest('.bru-panel')) { state.homeOpen = false; render() }
   })
   window.CSMBrutusUI = {
-    open: () => { state.homeOpen = true; render() }, close: () => { state.homeOpen = false; render() },
+    open: () => { state.homeOpen = true; render(); freshen() }, close: () => { state.homeOpen = false; render() },
     palette: () => { state.palette = true; render() }, setHome, refresh,
   }
   refresh()

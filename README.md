@@ -96,8 +96,10 @@ nerdy or sarcastic — in **Settings → AI Companion**, or turn him off there i
 He reads, remembers, and edits a session's notes when you ask him to, nothing else: every
 answer is a Claude Code run started with `--restricted`, no MCP servers and five file tools,
 reading only your category and knowledge folders, and writing only his own `memory.md`, his
-documents and the `notes.md` files in your category folders. Actions — archiving the stale ones he points
-out — come next, and will always ask you first.
+documents and the `notes.md` files in your category folders. When you ask him to archive, close,
+pause, sync or resume a session, move it on the board or start a new one, he proposes it as a
+button: you click it, and the app runs its own control for that action, with the same
+confirmation.
 
 ### Two ways to look at your work
 

@@ -66,9 +66,81 @@
     return `<span class="bru-doc"><span class="bru-doc-name">📄 ${name}</span><button type="button" class="bru-doc-open" data-bru-doc="${name}">Open</button></span>`
   }
 
-  function renderAnswer(text, sessions, ticketBase) {
+  // An action he proposes: `[[action:<verb>:<session name>]]`, `[[action:board:<session
+  // name>:<column>]]` or `[[action:new:<category>]]`. He never runs it; the app draws a
+  // button and the person clicks it, which goes through the app's own control for that
+  // action, confirmation included. The session is resolved by its exact name, as a chip is.
+  const ACTION = /\[\[action:([^\]\n]*)\]\]/g
+  const VERBS = { archive: 'Archive', close: 'Close', pause: 'Pause', sync: 'Sync', resume: 'Resume', board: 'Move', new: 'New session' }
+  function parseAction(body) {
+    const parts = String(body || '').split(':')
+    const verb = parts[0].trim().toLowerCase()
+    const rest = parts.slice(1)
+    if (verb === 'new') return { verb, name: '', arg: rest.join(':').trim() }
+    // The column is the last part: a session name may hold a colon, a column id does not.
+    if (verb === 'board' && rest.length > 1) return { verb, name: rest.slice(0, -1).join(':').trim(), arg: rest[rest.length - 1].trim() }
+    return { verb, name: rest.join(':').trim(), arg: '' }
+  }
+  const keyOf = (s) => s.notesPath || s.sessionId || s.name || ''
+
+  // What a click on that button would do, against the app as it is now: `{ ok, label }`,
+  // with `why` when it cannot apply. `ctx` is { sessions, columns, placements,
+  // categories, why: { <verb>(session) → '' or the reason } }.
+  function resolveAction(a, ctx) {
+    const c = ctx || {}
+    if (!a || !Object.prototype.hasOwnProperty.call(VERBS, a.verb)) {
+      return { ok: false, label: 'Unknown action', why: `"${(a && a.verb) || ''}" is not an action the app has` }
+    }
+    if (a.verb === 'new') {
+      const label = a.arg ? `New ${a.arg} session` : 'New session'
+      if (!(c.categories || []).includes(a.arg)) return { ok: false, label, why: a.arg ? `No category named "${a.arg}"` : 'No category given' }
+      return { ok: true, label, category: a.arg }
+    }
+    const session = (c.sessions || []).find(x => (x.name || '') === a.name)
+    const label = `${VERBS[a.verb]} ${a.name}${a.verb === 'board' && a.arg ? ` to ${a.arg}` : ''}`
+    if (!a.name || !session) return { ok: false, label, why: `No session named "${a.name}"` }
+    if (a.verb === 'board') {
+      const col = (c.columns || []).find(x => x.id === a.arg) ||
+        (c.columns || []).find(x => String(x.name || '').toLowerCase() === a.arg.toLowerCase())
+      if (!a.arg || !col) return { ok: false, label, why: `No board column named "${a.arg}"` }
+      const named = `${VERBS.board} ${a.name} to ${col.name}`
+      if (col.hidden) return { ok: false, label: named, why: `The column "${col.name}" is hidden` }
+      if (!keyOf(session)) return { ok: false, label: named, why: 'This session cannot be placed on the board' }
+      if ((c.placements || {})[keyOf(session)] === col.id) return { ok: false, label: named, why: `Already in ${col.name}` }
+      return { ok: true, label: named, session, column: col.id }
+    }
+    const test = (c.why || {})[a.verb]
+    const why = test ? test(session) : 'Not available here'
+    return why ? { ok: false, label, why } : { ok: true, label, session }
+  }
+
+  function actionButton(a, ctx) {
+    const r = resolveAction(a, ctx)
+    const attrs = `data-bru-action="${esc(a.verb)}" data-bru-target="${esc(a.name)}" data-bru-arg="${esc(a.arg)}"`
+    return `<button type="button" class="bru-act" ${attrs}${r.ok ? '' : ` disabled title="${esc(r.why)}"`}>${esc(r.label)}</button>`
+  }
+
+  // Markers are taken out before the text is escaped and formatted, and their buttons put
+  // back last, so nothing in a session name is read as a link, bold or a chip. One inside
+  // a code span stays text: that is how he quotes the syntax without proposing anything.
+  function extractActions(text) {
+    const acts = []
+    const marked = String(text || '').replace(/\u0000/g, '').split(/(`[^`\n]+`)/)
+      .map((part, i) => i % 2 ? part : part.replace(ACTION, (_, body) => { acts.push(parseAction(body)); return `\u0000${acts.length - 1}\u0000` }))
+      .join('')
+    return { marked, acts }
+  }
+
+  function renderAnswer(text, sessions, ticketBase, actions) {
     const refs = refsOf(sessions, ticketBase)
-    const blocks = esc(String(text || '')).split(/\n\s*\n/)
+    const { marked, acts } = extractActions(text)
+    const ctx = { sessions, ...(actions || {}) }
+    const put = (html) => acts.length ? html.replace(/\u0000(\d+)\u0000/g, (_, i) => actionButton(acts[Number(i)], ctx)) : html
+    return put(renderBlocks(esc(marked), sessions, refs))
+  }
+
+  function renderBlocks(escaped, sessions, refs) {
+    const blocks = escaped.split(/\n\s*\n/)
     return blocks.map(b => {
       const lines = b.split('\n').filter(l => l.trim())
       if (!lines.length) return ''
@@ -139,5 +211,5 @@
     return c ? c.toUpperCase() : 'B'
   }
 
-  return { renderAnswer, stepsLine, stepLabel, initialOf, statusOf }
+  return { renderAnswer, stepsLine, stepLabel, initialOf, statusOf, parseAction, resolveAction }
 })

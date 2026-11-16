@@ -1,9 +1,12 @@
 let sessions = []
-// Brutus resolves the names in his answers against what the dashboard shows: the live
-// list plus the stale and closed ones seeded at launch. Deduped by name, live first.
-window.CSMBrutusSessions = () => {
+// Brutus resolves the names in his answers against what the dashboard shows: the list on
+// screen, and the live, stale and closed ones last read by seedTabCounts. Deduped by name,
+// the list on screen first; `readFirst` puts the ones seedTabCounts read first instead, for
+// his proposed actions, which re-read them before they are drawn and again on a click.
+window.CSMBrutusSessions = (readFirst = false) => {
   const seen = new Set()
-  return [...sessions, ...(window._historicalForBrutus || [])].filter(s => {
+  const read = [...(window._liveForBrutus || []), ...(window._historicalForBrutus || [])]
+  return (readFirst ? [...read, ...sessions] : [...sessions, ...read]).filter(s => {
     if (!s || !s.name || seen.has(s.name)) return false
     seen.add(s.name); return true
   })
@@ -1075,19 +1078,30 @@ function describeAgent() {
 document.getElementById('ns-agent')?.addEventListener('change', describeAgent)
 
 let agentChoiceReady = Promise.resolve()
-document.getElementById('new-session-btn').addEventListener('click', () => {
+// Opens the +New dialog, empty. With `category`, that category is preselected (in the
+// first space that has it); nothing starts until the person fills the dialog and confirms.
+function openNewSession(category) {
   agentChoiceReady = fillAgentChoice()
   for (const id of ['ns-name', 'ns-ticket', 'ns-startin', 'ns-branch', 'ns-pr']) {
     document.getElementById(id).value = ''
   }
   hideNsError()
+  if (category && configRoots().length > 1 && !categoriesForRoot(nsRoot).includes(category)) {
+    nsRoot = configRoots().find(r => categoriesForRoot(r).includes(category)) || nsRoot
+  }
   populateNewSessionCategories()   // refresh (scope toggle + config may have changed)
+  const sel = document.getElementById('ns-category')
+  if (category && sel && [...sel.options].some(o => o.value === category)) { sel.value = category; syncPrField() }
   // Render the Embedded/Terminal destination toggle reflecting the current pref.
   const destEl = document.getElementById('ns-dest')
   if (destEl && window.destinationToggle) destEl.innerHTML = window.destinationToggle()
   newSessionModal.showModal()
   document.getElementById('ns-name').focus()
-})
+}
+window.openNewSession = openNewSession
+// The categories the +New dialog offers, across every space.
+window.newSessionCategories = () => [...new Set(configRoots().length > 1 ? configRoots().flatMap(categoriesForRoot) : filterCategories())]
+document.getElementById('new-session-btn').addEventListener('click', () => openNewSession())
 document.getElementById('ns-cancel').addEventListener('click', () => newSessionModal.close())
 // Category change → show/hide the REVIEW-only PR field.
 document.getElementById('ns-category').addEventListener('change', syncPrField)
@@ -1352,11 +1366,16 @@ async function seedTabCounts() {
       archived: hist.archived.length,
     }
     window._waitingCount = active.filter(s => s.status === 'waiting').length
-    // Brutus resolves session names against these (brutus.js).
+    // Brutus resolves session names against these (brutus.js), whichever tab is showing.
+    window._liveForBrutus = active
     window._historicalForBrutus = [...hist.stale, ...hist.closed]
     if (window.updateTabBadges) window.updateTabBadges()
   } catch (e) { /* badges fall back to lazy per-visit fill */ }
 }
+// Brutus re-reads every session when his panel opens, when an answer lands and before
+// running an action he proposed: seeded at launch only, these lists would draw and run his
+// buttons against a state that has since changed.
+window.refreshBrutusSessions = seedTabCounts
 
 // First-launch nudge: if the bundled session skills aren't in ~/.claude/skills yet,
 // offer a one-click install (non-force — a fresh install, never clobbering edits).

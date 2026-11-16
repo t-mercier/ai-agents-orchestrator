@@ -119,3 +119,77 @@ describe('ticket and PR references', () => {
     expect(html).toContain('>#12</a>')
   })
 })
+
+describe('proposed actions', () => {
+  const columns = [{ id: 'todo', name: 'To do' }, { id: 'review', name: 'To review' }, { id: 'old', name: 'Old', hidden: true }]
+  // Each verb applies to the stale session only, as the app's own rules would say.
+  const why = Object.fromEntries(['archive', 'close', 'pause', 'sync', 'resume']
+    .map(v => [v, (s) => s.state === 'stale' ? '' : `cannot ${v} it`]))
+  const ctx = { columns, placements: { '/w/FEAT/checkout-redesign/notes.md': 'todo' }, categories: ['FEAT', 'BUG'], why }
+  const render = (text) => B.renderAnswer(text, sessions, '', ctx)
+  const resolve = (body) => B.resolveAction(B.parseAction(body), { sessions, ...ctx })
+
+  test('a valid marker becomes an enabled button that names the action and the session', () => {
+    const html = render('I can close it: [[action:close:legacy-export]]')
+    expect(html).toContain('<button type="button" class="bru-act" data-bru-action="close" data-bru-target="legacy-export" data-bru-arg="">Close legacy-export</button>')
+    expect(html).not.toContain('[[action:')
+  })
+  test('every session verb is resolved by the exact session name', () => {
+    for (const v of ['archive', 'close', 'pause', 'sync', 'resume']) {
+      const r = resolve(`${v}:legacy-export`)
+      expect(r.ok).toBe(true)
+      expect(r.session.name).toBe('legacy-export')
+    }
+    expect(resolve('close:Legacy-Export').ok).toBe(false)
+  })
+  test('an unknown session renders disabled, with the reason as its tooltip', () => {
+    const html = render('[[action:archive:ghost]]')
+    expect(html).toContain('disabled title="No session named &quot;ghost&quot;"')
+    expect(html).toContain('>Archive ghost</button>')
+  })
+  test('an action that does not apply to the session renders disabled with the app\'s reason', () => {
+    expect(render('[[action:close:checkout-redesign]]')).toContain('disabled title="cannot close it"')
+  })
+  test('an action with no rule in this window is disabled, never enabled by default', () => {
+    expect(B.resolveAction(B.parseAction('close:legacy-export'), { sessions })).toMatchObject({ ok: false, why: 'Not available here' })
+  })
+  test('a bad verb renders a disabled button, not a silent no-op', () => {
+    const html = render('[[action:delete:legacy-export]]')
+    expect(html).toContain('data-bru-action="delete"')
+    expect(html).toContain('disabled title="&quot;delete&quot; is not an action the app has"')
+  })
+  test('a board move names the column by id or by name, and refuses an unknown or hidden one', () => {
+    expect(resolve('board:legacy-export:review')).toMatchObject({ ok: true, column: 'review', label: 'Move legacy-export to To review' })
+    expect(resolve('board:legacy-export:to review')).toMatchObject({ ok: true, column: 'review' })
+    expect(resolve('board:legacy-export:nowhere')).toMatchObject({ ok: false, why: 'No board column named "nowhere"' })
+    expect(resolve('board:legacy-export:old')).toMatchObject({ ok: false, why: 'The column "Old" is hidden' })
+    expect(resolve('board:ghost:review')).toMatchObject({ ok: false, why: 'No session named "ghost"' })
+    expect(resolve('board:checkout-redesign:todo')).toMatchObject({ ok: false, why: 'Already in To do' })
+    expect(resolve('board:legacy-export')).toMatchObject({ ok: false, why: 'No board column named ""' })
+  })
+  test('a session name with a colon still resolves, the column being the last part', () => {
+    const r = B.resolveAction(B.parseAction('board:api: v2:review'), { sessions: [{ name: 'api: v2', notesPath: '/n.md' }], ...ctx })
+    expect(r).toMatchObject({ ok: true, column: 'review' })
+    expect(B.parseAction('close:api: v2')).toEqual({ verb: 'close', name: 'api: v2', arg: '' })
+  })
+  test('new opens a known category only', () => {
+    expect(resolve('new:BUG')).toMatchObject({ ok: true, category: 'BUG', label: 'New BUG session' })
+    expect(resolve('new:NOPE')).toMatchObject({ ok: false, why: 'No category named "NOPE"' })
+    expect(render('[[action:new:BUG]]')).toContain('data-bru-action="new" data-bru-target="" data-bru-arg="BUG">New BUG session</button>')
+  })
+  test('a marker inside a code span stays literal text', () => {
+    const html = render('Write `[[action:close:legacy-export]]` to propose it.')
+    expect(html).not.toContain('<button')
+    expect(html).toContain('<code>[[action:close:legacy-export]]</code>')
+  })
+  test('a name in a marker cannot inject markup, links or chips', () => {
+    const html = render('[[action:close:<img src=x onerror=alert(1)> FEAT-1 [[session:legacy-export]]')
+    expect(html).not.toContain('<img')
+    const named = render('[[action:close:**x** FEAT-12]]')
+    expect(named).not.toContain('<strong>')
+    expect(named).toContain('data-bru-target="**x** FEAT-12"')
+  })
+  test('a stray placeholder byte in his text cannot pose as a button', () => {
+    expect(render('a \u00000\u0000 b')).not.toContain('<button')
+  })
+})

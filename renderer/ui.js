@@ -269,10 +269,14 @@ function pinBtn(s) {
 // The data- payload the close handler reads, shared by the list card's hover icon and the
 // detail panel's verb. The session id is only passed when it can actually be resumed —
 // without a transcript there is nothing to summarise, so the plain marker is all we can do.
+function closeArgs(s) {
+  return { notes: s.notesPath, name: s.name || '', sid: canResume(s) && !agentOf(s) ? (s.sessionId || '') : '', cwd: s.cwd || '', agent: agentOf(s) }
+}
 function closeAttrs(s) {
-  return `data-close-notes="${escapeHtml(s.notesPath)}" data-close-name="${escapeHtml(s.name || '')}"` +
-    ` data-close-sid="${escapeHtml(canResume(s) && !agentOf(s) ? (s.sessionId || '') : '')}" data-close-cwd="${escapeHtml(s.cwd || '')}"` +
-    (agentOf(s) ? ` data-close-agent="${agentOf(s)}"` : '') +
+  const a = closeArgs(s)
+  return `data-close-notes="${escapeHtml(a.notes)}" data-close-name="${escapeHtml(a.name)}"` +
+    ` data-close-sid="${escapeHtml(a.sid)}" data-close-cwd="${escapeHtml(a.cwd)}"` +
+    (a.agent ? ` data-close-agent="${a.agent}"` : '') +
     (notesInFlight.has(s.notesPath) ? ' disabled' : '')
 }
 
@@ -296,6 +300,20 @@ const canClose = (s) => !!s.notesPath && s.state === 'stale'
 const canArchive = (s) => !!s.notesPath && s.historyStatus === 'closed'
 const canDelete = (s) => s.historyStatus === 'archived' && !!s.notesPath
 const canPause = (s) => !!(window.liveTerminalKeyFor && window.liveTerminalKeyFor(s.sessionId, s.notesPath))
+
+// Why an action does not apply to `s` right now, '' when it does: the reason a proposed
+// action of Brutus's shows on its disabled button. Built on the same can* rules.
+const COLLAB_WHY = 'A collab has no terminal: its agents run headless'
+const BUSY_WHY = 'A close or a sync of this session is already running'
+const whyNot = {
+  close: (s) => !canClose(s) ? (s.state === 'active' ? 'Still running: pause it or let it finish first' : 'Only a stale session can be closed')
+    : notesInFlight.has(s.notesPath) ? BUSY_WHY : '',
+  archive: (s) => canArchive(s) ? '' : 'Only a closed session can be archived',
+  pause: (s) => s.collab ? COLLAB_WHY : canPause(s) ? '' : 'Nothing to pause: no terminal is open for this session',
+  sync: (s) => !(prLinksOf(s).length || ticketsOf(s).length) ? 'This session has no ticket and no pull request'
+    : s.notesPath && notesInFlight.has(s.notesPath) ? BUSY_WHY : '',
+  resume: (s) => s.collab ? COLLAB_WHY : canResume(s) ? '' : 'No conversation to resume: restart it from its notes instead',
+}
 
 function closeBtn(s) {
   if (!canClose(s)) return ''
@@ -1117,6 +1135,16 @@ function boardMenuOutside(e) {
   if (!e.target.closest('#board-menu') && !e.target.closest('[data-board-menu]')) closeBoardMenu()
 }
 function boardMenuEsc(e) { if (e.key === 'Escape') closeBoardMenu() }
+// Places, moves (columnId) or removes (null) a session on the board, then refreshes the
+// detail pill and the board if it is open.
+function moveOnBoard(key, columnId) {
+  if (!window.CSMBoard) return
+  const s = CSMBoard.load()
+  CSMBoard.save(columnId ? CSMBoard.placeSession(s, key, columnId) : CSMBoard.unplaceSession(s, key))
+  const sel = sessionByKey(window._lastSelectedKey)
+  if (sel && window.renderDetailPanel) renderDetailPanel(sel, activeTab)
+  if (window.viewMode === 'board' && window.renderBoard) window.renderBoard()
+}
 function openBoardMenu(anchor, key) {
   closeBoardMenu()
   if (!window.CSMBoard) return
@@ -1141,13 +1169,8 @@ function openBoardMenu(anchor, key) {
   positionPopover(menu, anchor)
   menu.addEventListener('click', (e) => {
     const item = e.target.closest('.board-menu-item'); if (!item) return
-    const s = CSMBoard.load()
-    const next = item.dataset.remove ? CSMBoard.unplaceSession(s, key) : CSMBoard.placeSession(s, key, item.dataset.col)
-    CSMBoard.save(next)
     closeBoardMenu()
-    const sel = sessionByKey(window._lastSelectedKey)
-    if (sel && window.renderDetailPanel) renderDetailPanel(sel, activeTab)
-    if (window.viewMode === 'board' && window.renderBoard) window.renderBoard()
+    moveOnBoard(key, item.dataset.remove ? null : item.dataset.col)
   })
   // Defer the dismiss listeners so the opening click doesn't immediately close it.
   setTimeout(() => {
@@ -2080,6 +2103,130 @@ window.routeRestart = routeRestart
 window.openSessionDefault = openSessionDefault
 window.destinationToggle = destinationToggle   // reused by the +New modal (app.js)
 
+// ── The session actions, each the one code path its controls share ──
+// The card icons, the detail panel's verbs and the right-click menu reach these through
+// the delegated click handler below; Brutus's proposed buttons call them directly
+// (window.CSMSessionActions). Every confirmation lives here, so no caller can skip it.
+
+// Pause: kill the embedded pty directly (no wrap-up, no close marker). The session just
+// goes idle (grey dot + age) and stays in Running, ready to Resume later.
+function pauseSession(sid, notes) {
+  const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(sid, notes)
+  if (liveKey && window.killTerminal) {
+    window.killTerminal(liveKey)
+    if (window.refreshSessions) window.refreshSessions()
+  }
+}
+
+// Sync: the one place the app talks to the network, and only because you clicked. `el`,
+// when the click came from a button, shows the run as busy.
+function syncSession({ notes, cwd, known }, el) {
+  if (notes && notesInFlight.has(notes)) return
+  if (notes) { notesInFlight.add(notes); markNotesBusy(notes, 'data-sync-notes', true) }
+  if (el) { el.disabled = true; el.classList.add('busy') }
+  const fail = (res) => {
+    if (window.confirmAction) {
+      // A missing tool or a logged-out CLI is one thing to fix, so it is said once
+      // and plainly rather than turning every reference into a silent "unknown".
+      window.confirmAction({ title: 'Could not sync', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+    }
+  }
+  const done = () => {
+    if (el) { el.disabled = false; el.classList.remove('busy') }
+    if (notes) { notesInFlight.delete(notes); markNotesBusy(notes, 'data-sync-notes', false) }
+    if (window.refreshSessions) window.refreshSessions()
+  }
+  // Two passes, in order. First the agent realigns the frontmatter — ticket statuses
+  // from the tracker, plus any PR opened since the last checkpoint. Only then is the
+  // PR list complete enough to be worth asking gh for each state.
+  const refreshStates = (urls) => {
+    if (!urls.length || !window.api.syncPrStatus) { done(); return }
+    window.api.syncPrStatus(urls).then(res => {
+      if (res && res.ok) window._prStatus = res.status
+      else fail(res)
+      done()
+    })
+  }
+  if (notes && window.api.syncRefs) {
+    window.api.syncRefs(notes, cwd).then(res => {
+      if (!res || !res.ok) { fail(res); done(); return }
+      // The list comes back from the file the agent just rewrote, so a PR it discovered
+      // gets its state in this same click.
+      refreshStates(res.prs.length ? res.prs : known)
+    })
+  } else {
+    refreshStates(known)
+  }
+}
+
+// Close (stale → Closed). With a resumable session id, wrap_session resumes it headless
+// so /wrap-session writes a real summary — that takes a while, hence the spinner.
+// Without one (transcript gone), only the plain marker is possible.
+function closeSessionFlow({ notes, name, sid, cwd, agent }) {
+  name = name || 'this session'
+  if (notesInFlight.has(notes)) return
+  const canWrap = !!(sid && cwd && window.api.wrapSession)
+  if (!window.confirmAction || !window.api.closeSession) return
+  window.confirmAction({
+    title: 'Close session',
+    body: canWrap
+      ? `Close "${name}"? It gets summarised into its notes first — that takes up to a minute — then moves to the Closed tab.`
+      : agent
+        ? `Close "${name}"? It moves to the Closed tab. ${AGENT_NAMES[agent]} sessions close without a summary for now; its notes stay as it left them.`
+        : `Close "${name}"? Its transcript is gone, so it moves to the Closed tab without a summary.`,
+    confirmLabel: 'Close',
+  }).then(choice => {
+    // A second Close confirmed while the first dialog was open must not start
+    // a second headless resume of the same session.
+    if (choice !== 'confirm' || notesInFlight.has(notes)) return
+    notesInFlight.add(notes)
+    markNotesBusy(notes, 'data-close-notes', true)
+    const done = (res) => {
+      notesInFlight.delete(notes)
+      markNotesBusy(notes, 'data-close-notes', false)
+      if (res && res.ok) {
+        if (window.refreshSessions) window.refreshSessions()
+      } else if (window.confirmAction) {
+        window.confirmAction({ title: '⚠️ Close failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+      }
+    }
+    if (canWrap) window.api.wrapSession(notes, sid, cwd).then(done)
+    else window.api.closeSession(notes, Date.now()).then(done)
+  })
+}
+
+// Archive: confirm, then archive_session (moves Closed → Archived).
+function archiveSessionFlow(notes, name) {
+  name = name || 'this session'
+  if (!window.confirmAction) return
+  window.confirmAction({
+    title: 'Archive session',
+    body: `Archive "${name}"? It moves to the Archived tab — you can bring it back later with Restart.`,
+    confirmLabel: 'Archive',
+  }).then(choice => {
+    if (choice !== 'confirm') return
+    window.api.archiveSession(notes).then(res => {
+      if (res && res.ok) {
+        if (window.refreshSessions) window.refreshSessions()
+      } else if (window.confirmAction) {
+        window.confirmAction({ title: '⚠️ Archive failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
+      }
+    })
+  })
+}
+
+window.CSMSessionActions = {
+  why: whyNot,
+  run: {
+    archive: (s) => archiveSessionFlow(s.notesPath, s.name || ''),
+    close: (s) => closeSessionFlow(closeArgs(s)),
+    pause: (s) => pauseSession(s.sessionId || '', s.notesPath || ''),
+    sync: (s) => syncSession({ notes: s.notesPath || '', cwd: s.cwd || '', known: prLinksOf(s) }),
+    resume: (s) => routeResume(s.sessionId, s.cwd || '', s.notesPath || ''),
+    board: (s, columnId) => moveOnBoard(sessionKey(s), columnId),
+  },
+}
+
 function installDelegatedHandlers() {
   if (delegationInstalled) return
   delegationInstalled = true
@@ -2247,72 +2394,19 @@ function installDelegatedHandlers() {
     const detach = e.target.closest('.drawer-detach[data-key]')
     if (detach && window.detachSession) { window.detachSession(detach.dataset.key); return }
 
-    // Pause — kill the embedded pty directly (no wrap-up, no close marker). The session
-    // just goes idle (grey dot + age) and stays in Running, ready to Resume later.
     const pause = e.target.closest('.pause-btn[data-pause-sid], .pause-btn[data-pause-notes]')
     if (pause) {
       e.stopPropagation()
-      const sid = pause.dataset.pauseSid || ''
-      const notes = pause.dataset.pauseNotes || ''
-      const liveKey = window.liveTerminalKeyFor && window.liveTerminalKeyFor(sid, notes)
-      if (liveKey && window.killTerminal) {
-        window.killTerminal(liveKey)
-        if (window.refreshSessions) window.refreshSessions()
-      }
+      pauseSession(pause.dataset.pauseSid || '', pause.dataset.pauseNotes || '')
       return
     }
 
-    // Archive — confirm, then archive_session (moves Closed → Archived). Must come
-    // before the card-select handler (it's inside a card); stopPropagation so the
-    // card isn't selected by the same click.
-    // Close (stale → Closed). With a resumable session id, wrap_session resumes it
-    // headless so /wrap-session writes a real summary — that takes a while, hence the
-    // spinner. Without one (transcript gone), only the plain marker is possible.
-    // Sync: the one place the app talks to the network, and only because you clicked.
+    // Sync, Close and Archive must come before the card-select handler (they sit inside a
+    // card); stopPropagation so the card isn't selected by the same click.
     const sync = e.target.closest('[data-sync-prs]')
     if (sync) {
       e.stopPropagation()
-      const notes = sync.dataset.syncNotes || ''
-      const cwd = sync.dataset.syncCwd || ''
-      if (notes && notesInFlight.has(notes)) return
-      if (notes) { notesInFlight.add(notes); markNotesBusy(notes, 'data-sync-notes', true) }
-      sync.disabled = true
-      sync.classList.add('busy')
-      const fail = (res) => {
-        if (window.confirmAction) {
-          // A missing tool or a logged-out CLI is one thing to fix, so it is said once
-          // and plainly rather than turning every reference into a silent "unknown".
-          window.confirmAction({ title: 'Could not sync', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
-        }
-      }
-      const done = () => {
-        sync.disabled = false
-        sync.classList.remove('busy')
-        if (notes) { notesInFlight.delete(notes); markNotesBusy(notes, 'data-sync-notes', false) }
-        if (window.refreshSessions) window.refreshSessions()
-      }
-      // Two passes, in order. First the agent realigns the frontmatter — ticket statuses
-      // from the tracker, plus any PR opened since the last checkpoint. Only then is the
-      // PR list complete enough to be worth asking gh for each state.
-      const refreshStates = (urls) => {
-        if (!urls.length || !window.api.syncPrStatus) { done(); return }
-        window.api.syncPrStatus(urls).then(res => {
-          if (res && res.ok) window._prStatus = res.status
-          else fail(res)
-          done()
-        })
-      }
-      const known = (sync.dataset.syncPrs || '').split(' ').filter(Boolean)
-      if (notes && window.api.syncRefs) {
-        window.api.syncRefs(notes, cwd).then(res => {
-          if (!res || !res.ok) { fail(res); done(); return }
-          // The list comes back from the file the agent just rewrote, so a PR it discovered
-          // gets its state in this same click.
-          refreshStates(res.prs.length ? res.prs : known)
-        })
-      } else {
-        refreshStates(known)
-      }
+      syncSession({ notes: sync.dataset.syncNotes || '', cwd: sync.dataset.syncCwd || '', known: (sync.dataset.syncPrs || '').split(' ').filter(Boolean) }, sync)
       return
     }
 
@@ -2321,64 +2415,15 @@ function installDelegatedHandlers() {
     const close = e.target.closest('[data-close-notes]')
     if (close) {
       e.stopPropagation()
-      const notes = close.dataset.closeNotes
-      const name = close.dataset.closeName || 'this session'
-      const sid = close.dataset.closeSid || ''
-      const cwd = close.dataset.closeCwd || ''
-      if (notesInFlight.has(notes)) return
-      const canWrap = !!(sid && cwd && window.api.wrapSession)
-      if (window.confirmAction && window.api.closeSession) {
-        window.confirmAction({
-          title: 'Close session',
-          body: canWrap
-            ? `Close "${name}"? It gets summarised into its notes first — that takes up to a minute — then moves to the Closed tab.`
-            : close.dataset.closeAgent
-              ? `Close "${name}"? It moves to the Closed tab. ${AGENT_NAMES[close.dataset.closeAgent]} sessions close without a summary for now; its notes stay as it left them.`
-              : `Close "${name}"? Its transcript is gone, so it moves to the Closed tab without a summary.`,
-          confirmLabel: 'Close',
-        }).then(choice => {
-          // A second Close confirmed while the first dialog was open must not start
-          // a second headless resume of the same session.
-          if (choice !== 'confirm' || notesInFlight.has(notes)) return
-          notesInFlight.add(notes)
-          markNotesBusy(notes, 'data-close-notes', true)
-          const done = (res) => {
-            notesInFlight.delete(notes)
-            markNotesBusy(notes, 'data-close-notes', false)
-            if (res && res.ok) {
-              if (window.refreshSessions) window.refreshSessions()
-            } else if (window.confirmAction) {
-              window.confirmAction({ title: '⚠️ Close failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
-            }
-          }
-          if (canWrap) window.api.wrapSession(notes, sid, cwd).then(done)
-          else window.api.closeSession(notes, Date.now()).then(done)
-        })
-      }
+      closeSessionFlow({ notes: close.dataset.closeNotes, name: close.dataset.closeName || '', sid: close.dataset.closeSid || '',
+        cwd: close.dataset.closeCwd || '', agent: close.dataset.closeAgent || '' })
       return
     }
 
     const archive = e.target.closest('.archive-btn[data-archive-notes]')
     if (archive) {
       e.stopPropagation()
-      const notes = archive.dataset.archiveNotes
-      const name = archive.dataset.archiveName || 'this session'
-      if (window.confirmAction) {
-        window.confirmAction({
-          title: 'Archive session',
-          body: `Archive "${name}"? It moves to the Archived tab — you can bring it back later with Restart.`,
-          confirmLabel: 'Archive',
-        }).then(choice => {
-          if (choice !== 'confirm') return
-          window.api.archiveSession(notes).then(res => {
-            if (res && res.ok) {
-              if (window.refreshSessions) window.refreshSessions()
-            } else if (window.confirmAction) {
-              window.confirmAction({ title: '⚠️ Archive failed', body: (res && res.error) || 'unknown error', confirmLabel: 'OK' })
-            }
-          })
-        })
-      }
+      archiveSessionFlow(archive.dataset.archiveNotes, archive.dataset.archiveName || '')
       return
     }
 
