@@ -66,6 +66,7 @@ Four things you shouldn't have to do twice — each one something you already wo
 ## Features
 
 - **Knowledge that outlives a session** — closing a session distils its high-signal decisions into a folder of **knowledge notes** (per space), so what cost you an afternoon is still there months later — and `/route <ticket>` reads it back, with your past sessions and your tracker, *before* you open the code. A folder you choose; **Obsidian is one way to browse it, not a requirement**.
+- **Dock icon status**: the Dock icon shows a red dot with the number of sessions waiting for your answer, or an orange dot with the number that are busy, and the plain icon when neither. Turn it off in **Settings → General**.
 - **Live dashboard** — polled every 5s. Every session's status at a glance: **busy** · **idle** · **waiting** (pulsing) · **stale** (terminal gone, work not wrapped up) · **background shell**.
 - **Two views** — a grouped **List** and a **Board** (kanban). In the List, drag cards to order them or onto each other to group them, on Running, Closed and Archived alike, or **sort** each category by last update or ticket number.
 - **Kanban board** — drag to reorder (insertion line), **drop a card onto another to group** them (named, collapsible), **attach notes** to a card or group, flag **urgent**, and add sessions from the board itself. Generative **column colours** (pick one seed → a harmonious set across however many columns you have), with each column tinting its own accent.
