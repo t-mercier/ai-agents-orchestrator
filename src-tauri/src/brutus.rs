@@ -201,12 +201,26 @@ impl Drop for Busy {
 fn conversation_path() -> std::path::PathBuf {
     brutus_home::dir().join("conversation.json")
 }
-fn read_conversation() -> Option<String> {
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(conversation_path()).ok()?).ok()?;
+/// A fingerprint of what Brutus is told he can do (FNV-1a, stable across builds). A
+/// conversation started under other instructions is not resumed: its earlier answers say
+/// what he could do then ("I can only read"), and he would keep repeating them.
+fn prompt_stamp(source: &str) -> String {
+    let h = source.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    format!("{h:016x}")
+}
+/// The conversation to resume: the saved id, when it was saved under today's instructions.
+fn conversation_in(raw: &str, stamp: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(raw).ok()?;
+    if v.get("prompt").and_then(Value::as_str) != Some(stamp) {
+        return None;
+    }
     v.get("sessionId").and_then(Value::as_str).filter(|s| crate::is_valid_session_id(s)).map(str::to_string)
 }
+fn read_conversation() -> Option<String> {
+    conversation_in(&std::fs::read_to_string(conversation_path()).ok()?, &prompt_stamp(brutus_agent::agent_source()))
+}
 fn write_conversation_at(path: &std::path::Path, id: &str) -> std::io::Result<()> {
-    std::fs::write(path, json!({ "sessionId": id }).to_string())
+    std::fs::write(path, json!({ "sessionId": id, "prompt": prompt_stamp(brutus_agent::agent_source()) }).to_string())
 }
 
 /// `--restricted` ignores ~/.claude/settings.json, so the model is passed explicitly: the
@@ -512,6 +526,27 @@ pub fn brutus_open_memory() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 0.26 gave him new abilities, and he kept answering "I can only read" because the
+    // conversation he resumed was full of that sentence.
+    #[test]
+    fn a_conversation_started_under_other_instructions_is_not_resumed() {
+        let id = "1c5e3b6d-ac67-4d56-ac9d-68251bde5e88";
+        let now = prompt_stamp("today's instructions");
+        let saved = |stamp: &str| json!({ "sessionId": id, "prompt": stamp }).to_string();
+        assert_eq!(conversation_in(&saved(&now), &now).as_deref(), Some(id));
+        assert_eq!(conversation_in(&saved(&prompt_stamp("older instructions")), &now), None);
+        // A file written before the stamp existed.
+        assert_eq!(conversation_in(&json!({ "sessionId": id }).to_string(), &now), None);
+        assert_eq!(conversation_in("not json", &now), None);
+    }
+
+    #[test]
+    fn the_stamp_depends_only_on_the_text() {
+        assert_eq!(prompt_stamp("a"), prompt_stamp("a"));
+        assert_ne!(prompt_stamp("a"), prompt_stamp("b"));
+        assert_eq!(prompt_stamp(""), "cbf29ce484222325");
+    }
 
     fn plan() -> Plan {
         Plan {
