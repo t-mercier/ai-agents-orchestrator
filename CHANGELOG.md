@@ -10,6 +10,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-17
+### Added
+- **The Dock icon shows who needs you.** A red dot with a number when sessions wait for your
+  answer, an orange one when agents are only working, and the plain icon when all is quiet.
+  Turn it off in **Settings → General** if you prefer the icon as it is.
+
 ## [0.26.0] - 2026-11-16
 ### Added
 - **Brutus updates a session's notes when you ask him to.** He edits only the `notes.md` of
