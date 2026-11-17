@@ -142,7 +142,7 @@
     return lead + turns.map(t => turnHTML(t, ctx)).join('') + liveHTML(ctx)
   }
   const head = () => `<div class="bru-head">${av()}<div><div class="bru-title">${esc(name())}</div><div class="bru-sub">${state.memory === null ? 'Could not read his memory' : state.memory ? `Remembers <a data-bru="memory">${state.memory} thing${state.memory > 1 ? 's' : ''}</a> about your work` : 'Nothing remembered yet'}</div></div><span class="bru-sp"></span>${state.home === 'side' ? `<button class="bru-ib" data-bru="to-bubble" title="Back to the bubble">${I.bubble}</button>` : `<button class="bru-ib" data-bru="to-side" title="Move to the side panel">${I.side}</button>`}<button class="bru-ib" data-bru="reset" title="New conversation (keeps his memory)">${I.plus}</button><button class="bru-ib" data-bru="close" title="Close (Esc)">${I.x}</button></div>`
-  const foot = (big) => `<div class="bru-foot"><div class="bru-in"><input maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}/>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Esc to close</span><span>Writes only his memory, his docs and the notes you ask for</span></div></div>`
+  const foot = (big) => `<div class="bru-foot"><div class="bru-in"><textarea rows="1" maxlength="8000" placeholder="${big ? `Ask ${esc(name())} anything about your sessions…` : `Ask ${esc(name())}…`}" ${state.running ? 'disabled' : ''}></textarea>${state.running ? `<button class="bru-send" data-bru="stop" title="Stop" ${state.stopping ? 'disabled' : ''}>${I.stop}</button>` : `<button class="bru-send" data-bru="send" title="Send">${I.send}</button>`}</div><div class="bru-hint"><span>Enter to send · Shift+Enter for a new line · Esc to close</span><span>Writes only his memory, his docs and the notes you ask for</span></div></div>`
 
   function render() {
     // A panel already on screen is re-rendered in place: only a panel that is opening
@@ -187,7 +187,7 @@
       document.body.appendChild(sc)
       const p = mount('bru-panel v-B', foot(true) + `<div class="bru-body">${bodyHTML(true)}${state.log.length ? `<div class="bru-cont" data-bru="continue">Continue in the ${state.home === 'side' ? 'side panel' : 'bubble'} ↗</div>` : ''}</div>`)
       if (wasPalette) p.classList.add('bru-still')
-      p.querySelector('input')?.focus()
+      p.querySelector('textarea')?.focus()
     }
   }
   function mount(cls, html) {
@@ -196,12 +196,17 @@
     document.body.appendChild(p)
     const b = p.querySelector('.bru-body'); if (b) b.scrollTop = b.scrollHeight
     p.addEventListener('click', onClick)
-    const inp = p.querySelector('input')
+    const inp = p.querySelector('textarea')
     if (inp) {
+      // A long question wraps and the box grows with it, up to the height the stylesheet
+      // allows; past that it scrolls.
+      const fit = () => { inp.style.height = 'auto'; inp.style.height = `${inp.scrollHeight}px` }
       // Every render rebuilds the input, so it takes back what was typed.
       inp.value = store.get(DRAFT_KEY, '')
-      inp.addEventListener('input', () => store.set(DRAFT_KEY, inp.value))
-      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); send(inp.value) } })
+      fit()
+      inp.addEventListener('input', () => { store.set(DRAFT_KEY, inp.value); fit() })
+      // Enter sends; Shift+Enter is the new line.
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(inp.value) } })
     }
     return p
   }
@@ -225,7 +230,7 @@
     const a = e.target.closest('[data-bru]'); if (!a) return
     const k = a.dataset.bru
     if (k === 'close') { state.homeOpen = false; render() }
-    else if (k === 'send') send(a.closest('.bru-panel').querySelector('input').value)
+    else if (k === 'send') send(a.closest('.bru-panel').querySelector('textarea').value)
     else if (k === 'stop') stop()
     else if (k === 'reset') reset()
     else if (k === 'memory') openMemory()

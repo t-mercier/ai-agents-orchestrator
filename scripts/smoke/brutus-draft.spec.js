@@ -7,7 +7,7 @@ async function open(page) {
   await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
   await page.evaluate(() => window.CSMBrutusUI.setHome('bubble'))
 }
-const input = (page) => page.locator('.bru-panel.v-A input')
+const input = (page) => page.locator('.bru-panel.v-A textarea')
 
 test('a draft survives folding the bubble and opening it again', async ({ page }) => {
   await open(page)

@@ -14,7 +14,7 @@ async function boot(page, home) {
     window.__BRUTUS_SCRIPT__ = { reads: [], text: 'See /Users/dev/work/FEAT/checkout-redesign/src/checkout/steps/AddressStepWithInlineValidationAndExpressPay.tsx and https://github.com/acme/web/pull/1842/files#diff-0123456789abcdef0123456789abcdef' }
     window.CSMBrutusUI.setHome(h)
   }, home)
-  const input = page.locator(`.bru-panel.${home === 'side' ? 'v-C' : 'v-A'} input`)
+  const input = page.locator(`.bru-panel.${home === 'side' ? 'v-C' : 'v-A'} textarea`)
   await input.fill('Where is the address step?')
   await input.press('Enter')
   await expect(page.locator('.bru-panel .bru-bt').last()).toContainText('AddressStep')

@@ -292,8 +292,8 @@ const SCENES = {
       ].join('\n'),
     }
     window.CSMBrutusUI.palette()
-    await waitFor(() => document.querySelector('.bru-panel.v-B input'))
-    const input = document.querySelector('.bru-panel.v-B input')
+    await waitFor(() => document.querySelector('.bru-panel.v-B textarea'))
+    const input = document.querySelector('.bru-panel.v-B textarea')
     input.value = "What's waiting on me?"
     document.querySelector('.bru-panel.v-B [data-bru="send"]').click()
     await waitFor(() => document.querySelector('.bru-panel.v-B .bru-bt ul'))
