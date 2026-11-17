@@ -7,11 +7,18 @@
 
 use tauri::{AppHandle, Webview};
 
+/// Which dot: red for sessions waiting for the user, orange for busy ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Waiting,
+    Busy,
+}
+
 /// What the badge shows. `None` from `badge_for` is the plain icon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Badge {
-    Waiting(u32),
-    Busy(u32),
+pub struct Badge {
+    pub kind: Kind,
+    pub count: u32,
 }
 
 /// The badge for a renderer request. An unknown kind or a zero count is the plain icon, so a
@@ -20,11 +27,12 @@ pub fn badge_for(kind: &str, count: u32) -> Option<Badge> {
     if count == 0 {
         return None;
     }
-    match kind {
-        "waiting" => Some(Badge::Waiting(count)),
-        "busy" => Some(Badge::Busy(count)),
-        _ => None,
-    }
+    let kind = match kind {
+        "waiting" => Kind::Waiting,
+        "busy" => Kind::Busy,
+        _ => return None,
+    };
+    Some(Badge { kind, count })
 }
 
 /// The text inside the dot: the count, capped at "99+".
@@ -55,7 +63,7 @@ fn apply(app: &AppHandle, badge: Option<Badge>) {
     use tauri::Manager;
     if let Some(w) = app.get_webview_window("main") {
         let count = match badge {
-            Some(Badge::Waiting(n)) => Some(i64::from(n)),
+            Some(Badge { kind: Kind::Waiting, count }) => Some(i64::from(count)),
             _ => None,
         };
         // Unsupported on some platforms, and a missing badge is no reason to fail.
@@ -97,7 +105,7 @@ mod macos {
     };
     use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
 
-    use super::{label, pill_width, Badge};
+    use super::{label, pill_width, Badge, Kind};
 
     thread_local! {
         // The app's own icon, read before the first badge is drawn. Composing from the icon
@@ -124,16 +132,10 @@ mod macos {
     }
 
     fn colour(badge: Badge) -> (f64, f64, f64) {
-        match badge {
+        match badge.kind {
             // #FF3B30 and #FF9F0A.
-            Badge::Waiting(_) => (1.0, 59.0 / 255.0, 48.0 / 255.0),
-            Badge::Busy(_) => (1.0, 159.0 / 255.0, 10.0 / 255.0),
-        }
-    }
-
-    fn count(badge: Badge) -> u32 {
-        match badge {
-            Badge::Waiting(n) | Badge::Busy(n) => n,
+            Kind::Waiting => (1.0, 59.0 / 255.0, 48.0 / 255.0),
+            Kind::Busy => (1.0, 159.0 / 255.0, 10.0 / 255.0),
         }
     }
 
@@ -145,7 +147,7 @@ mod macos {
         // Dimensions from the icon width: a dot 30% of it, a ring 2 px at 128 px.
         let diameter = w * 0.3;
         let ring = w * 2.0 / 128.0;
-        let text = NSString::from_str(&label(count(badge)));
+        let text = NSString::from_str(&label(badge.count));
         let font = NSFont::boldSystemFontOfSize(diameter * 0.58);
         let white = NSColor::whiteColor();
         let attrs = attributes(&font, &white);
@@ -199,8 +201,8 @@ mod tests {
 
     #[test]
     fn waiting_and_busy_keep_their_count() {
-        assert_eq!(badge_for("waiting", 2), Some(Badge::Waiting(2)));
-        assert_eq!(badge_for("busy", 7), Some(Badge::Busy(7)));
+        assert_eq!(badge_for("waiting", 2), Some(Badge { kind: Kind::Waiting, count: 2 }));
+        assert_eq!(badge_for("busy", 7), Some(Badge { kind: Kind::Busy, count: 7 }));
     }
 
     #[test]
