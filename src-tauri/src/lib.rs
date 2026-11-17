@@ -19,6 +19,7 @@ mod updater;
 mod agents;
 mod shell;
 mod advisors;
+mod dock;
 
 use tauri::{Manager, Emitter};
 use serde_json::Value;
@@ -1625,6 +1626,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            dock::set_dock_status,
             updater::app_update_check,
             updater::app_update_install,
             pinned::list_skills,
