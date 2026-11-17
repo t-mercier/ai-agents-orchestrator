@@ -10,6 +10,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/save-session` works in a session that was never started.** A session opened outside
+  the dashboard (Claude desktop, a bare `claude` in a shell) has no notes, and the skill
+  stopped there and asked for `/start-session`. Its first checkpoint now creates the notes
+  and registers the session; `/close-session` does the same.
+
 ## [0.26.0] - 2026-11-16
 ### Added
 - **Brutus updates a session's notes when you ask him to.** He edits only the `notes.md` of
