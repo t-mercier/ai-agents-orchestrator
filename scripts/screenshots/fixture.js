@@ -288,7 +288,7 @@ const SCENES = {
         '- [[session:checkout-redesign]] wants to know whether the express-pay buttons go left or right of the order summary.',
         '- [[session:search-suggest]] asks if suggestions should include recent searches.',
         '',
-        '[[session:legacy-export]] has been stale for 3 days. Close it, or pick it back up?',
+        '[[session:legacy-export]] has been stale for 3 days. Close it, or pick it back up? [[action:close:legacy-export]]',
       ].join('\n'),
     }
     window.CSMBrutusUI.palette()
