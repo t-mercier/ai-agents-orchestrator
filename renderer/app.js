@@ -498,6 +498,7 @@ async function fetchAndRender(resort = false) {
         window.api.getHistoricalSessions('stale'),
       ])
       noteLiveSessions(active)
+      applyDockStatus(active)
       fetched = [...active, ...stale]
     } else {
       fetched = await window.api.getHistoricalSessions(tab)
@@ -580,6 +581,7 @@ async function buildBoardIndex() {
       window.api.getHistoricalAll(),   // {stale, closed, archived} in one scan
     ])
     noteLiveSessions(running)
+    applyDockStatus(running)
     const idx = {}
     for (const s of [...running, ...hist.stale, ...hist.closed, ...hist.archived]) idx[sessionKey(s)] = s
     window._boardIndex = idx
@@ -1762,30 +1764,32 @@ async function refreshUsage() {
 
 // The Dock icon's status badge (src-tauri/src/dock.rs), decided from every live session, so
 // it follows the Running list whatever tab or search is showing. Only this window runs it:
-// detail.html does not load app.js. Sends a call only when the badge changed.
+// detail.html does not load app.js. A call is made only when the badge changed.
 let dockSent = null          // what the Dock icon was last told, as 'kind:count'
-let dockInFlight = false
+// Apply the badge from a live session list that a fetch already read (the unfiltered list).
+function applyDockStatus(live) {
+  if (!window.api || !window.api.setDockStatus || !window.CSMDockStatus) return
+  let kind = 'none'
+  let count = 0
+  if ((window.CSM_CONFIG || {}).dockStatus === false) {
+    // Turned off: restore the plain icon once if a badge is showing, then stay silent.
+    if (dockSent === null || dockSent === 'none:0') return
+  } else {
+    ({ kind, count } = window.CSMDockStatus.decide(live))
+  }
+  const key = `${kind}:${count}`
+  if (key === dockSent) return
+  dockSent = key
+  window.api.setDockStatus(kind, count)   // the wrapper never throws
+}
+// For the tabs that do not list the running sessions: one read of the live sessions.
 async function refreshDockStatus() {
-  if (dockInFlight || !window.api || !window.api.setDockStatus || !window.CSMDockStatus) return
-  dockInFlight = true
+  if (!window.api || !window.api.getSessions) return
+  if ((window.CSM_CONFIG || {}).dockStatus === false && (dockSent === null || dockSent === 'none:0')) return
   try {
-    if ((window.CSM_CONFIG || {}).dockStatus === false) {
-      // Turned off: restore the plain icon once if a badge is showing, then stay silent.
-      if (dockSent !== null && dockSent !== 'none:0') {
-        await window.api.setDockStatus('none', 0)
-        dockSent = 'none:0'
-      }
-      return
-    }
-    const { kind, count } = window.CSMDockStatus.decide(await window.api.getSessions())
-    const key = `${kind}:${count}`
-    if (key === dockSent) return
-    await window.api.setDockStatus(kind, count)
-    dockSent = key
+    applyDockStatus(await window.api.getSessions())
   } catch (e) {
     console.warn('dock status: refresh failed', e)
-  } finally {
-    dockInFlight = false
   }
 }
 
@@ -1882,7 +1886,8 @@ async function boot() {
     if (viewMode === 'board') window.refreshBoard()
     else if (!fetchInFlight) fetchAndRender(false)
     refreshUsage()                            // refresh usage bar on every poll
-    refreshDockStatus()                       // Dock badge: all live sessions, not the list on screen
+    // Dock badge: the Running fetches feed it; other tabs need their own read of the sessions.
+    if (viewMode !== 'board' && activeTab !== 'running') refreshDockStatus()
   }, POLL_INTERVAL)
   refreshDockStatus()
 }
