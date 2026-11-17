@@ -9,7 +9,7 @@ description: >-
   "wrap up", "ferme la session". Never on an intent to merely persist notes —
   "save session notes" belongs to /save-session, and closing a session the user
   did not ask to close takes it out of their Running list.
-allowed-tools: Bash Read Edit Write
+allowed-tools: Bash Read Edit Write AskUserQuestion
 argument-hint: ""
 ---
 
@@ -82,8 +82,9 @@ if [ -z "$NOTES_PATH" ] && [ -n "$SESSION_ID" ]; then
 fi
 ```
 
-If `$NOTES_PATH` is empty: stop and tell the user there's no active session registered
-for this conversation — run `/start-session` (new) or `/restart-session <slug>` (resume) first.
+If `$NOTES_PATH` is empty, this conversation has no notes yet (a session opened outside the
+dashboard never ran `/start-session`). Create them by `/save-session` Step 2b, then
+continue at Step 3: a session closed without notes leaves nothing behind.
 
 ## Step 3 — Read the notes + frontmatter
 
