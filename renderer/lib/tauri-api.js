@@ -22,6 +22,11 @@
     // All three lifecycle buckets ({stale, closed, archived}) from ONE backend scan —
     // for callers that need every bucket at once (badge seed, board index).
     getHistoricalAll: () => invoke('get_historical_sessions_all'),
+    // The Dock icon's status badge (src-tauri/src/dock.rs). Fire-and-forget: a failed call
+    // leaves the icon as it was, so nothing is thrown back to the poll.
+    setDockStatus: async (kind, count) => {
+      try { await invoke('set_dock_status', { kind, count }) } catch {}
+    },
     // One page of ALL untracked sessions + the full count → { sessions, total }.
     // Errors are returned, not swallowed: a missing command (an app built before this
     // existed) would otherwise make "Load more" do nothing at all, silently.

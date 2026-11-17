@@ -1760,6 +1760,35 @@ async function refreshUsage() {
   }
 }
 
+// The Dock icon's status badge (src-tauri/src/dock.rs), decided from every live session, so
+// it follows the Running list whatever tab or search is showing. Only this window runs it:
+// detail.html does not load app.js. Sends a call only when the badge changed.
+let dockSent = null          // what the Dock icon was last told, as 'kind:count'
+let dockInFlight = false
+async function refreshDockStatus() {
+  if (dockInFlight || !window.api || !window.api.setDockStatus || !window.CSMDockStatus) return
+  dockInFlight = true
+  try {
+    if ((window.CSM_CONFIG || {}).dockStatus === false) {
+      // Turned off: restore the plain icon once if a badge is showing, then stay silent.
+      if (dockSent !== null && dockSent !== 'none:0') {
+        await window.api.setDockStatus('none', 0)
+        dockSent = 'none:0'
+      }
+      return
+    }
+    const { kind, count } = window.CSMDockStatus.decide(await window.api.getSessions())
+    const key = `${kind}:${count}`
+    if (key === dockSent) return
+    await window.api.setDockStatus(kind, count)
+    dockSent = key
+  } catch (e) {
+    console.warn('dock status: refresh failed', e)
+  } finally {
+    dockInFlight = false
+  }
+}
+
 async function boot() {
   // Sync the native window background to the saved theme (the inline head script already
   // set dataset.theme before first paint) so a resize never flashes the wrong colour.
@@ -1853,7 +1882,9 @@ async function boot() {
     if (viewMode === 'board') window.refreshBoard()
     else if (!fetchInFlight) fetchAndRender(false)
     refreshUsage()                            // refresh usage bar on every poll
+    refreshDockStatus()                       // Dock badge: all live sessions, not the list on screen
   }, POLL_INTERVAL)
+  refreshDockStatus()
 }
 window.reloadConfig = async () => {           // called by Settings after save
   window.CSM_CONFIG = await window.api.getConfig()
@@ -1863,6 +1894,7 @@ window.reloadConfig = async () => {           // called by Settings after save
   fetchAndRender(true)   // refreshes the active tab + its badge
   seedTabCounts()        // re-seed ALL tab badges — roots/categories may have changed
   if (window.CSMBrutusUI) window.CSMBrutusUI.refresh()   // he may have been turned on or off
+  refreshDockStatus()    // the Dock badge setting may have changed
 }
 
 // v1 → v2 migration notification (emitted by Rust on startup).
