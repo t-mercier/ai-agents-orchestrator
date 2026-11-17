@@ -82,7 +82,7 @@ fn apply(app: &AppHandle, badge: Option<Badge>) {
         let ns_app = NSApplication::sharedApplication(mtm);
         let icon = match badge {
             None => None,
-            Some(b) => match macos::compose(&ns_app, b) {
+            Some(b) => match macos::app_icon(&ns_app).map(|base| macos::compose(base, b)) {
                 Some(img) => Some(img),
                 None => return,
             },
@@ -113,22 +113,27 @@ mod macos {
         static BASE_ICON: RefCell<Option<Retained<NSImage>>> = const { RefCell::new(None) };
     }
 
-    /// The app icon with the badge drawn on it. The drawing runs when AppKit draws the image,
-    /// on the main thread, with the base icon captured here.
-    pub fn compose(ns_app: &NSApplication, badge: Badge) -> Option<Retained<NSImage>> {
-        let base = BASE_ICON.with(|cell| {
+    /// The app's own icon, read before the first badge is drawn and kept, so a badge is never
+    /// drawn on another badge.
+    pub fn app_icon(ns_app: &NSApplication) -> Option<Retained<NSImage>> {
+        BASE_ICON.with(|cell| {
             let mut slot = cell.borrow_mut();
             if slot.is_none() {
                 *slot = ns_app.applicationIconImage();
             }
             slot.clone()
-        })?;
+        })
+    }
+
+    /// The base icon with the badge drawn on it, at the base's size. The drawing runs when
+    /// AppKit draws the image; the base is captured by the drawing handler.
+    pub fn compose(base: Retained<NSImage>, badge: Badge) -> Retained<NSImage> {
         let size = base.size();
         let handler = RcBlock::new(move |rect: NSRect| -> Bool {
             draw(&base, rect, badge);
             Bool::YES
         });
-        Some(NSImage::imageWithSize_flipped_drawingHandler(size, false, &handler))
+        NSImage::imageWithSize_flipped_drawingHandler(size, false, &handler)
     }
 
     fn colour(badge: Badge) -> (f64, f64, f64) {
@@ -218,5 +223,46 @@ mod tests {
         assert_eq!(pill_width(40.0, 10.0), 40.0, "narrow text keeps the circle");
         assert_eq!(pill_width(40.0, 36.0), 56.0, "text plus a margin on each side");
         assert!(pill_width(40.0, 36.0) > pill_width(40.0, 10.0));
+    }
+}
+
+// Writes the four badge previews as PNGs, so the look can be checked without launching the
+// app. Run by hand: AO_DOCK_PREVIEW_DIR=<dir> cargo test preview_badges -- --ignored
+#[cfg(target_os = "macos")]
+#[cfg(test)]
+mod preview {
+    use super::macos::compose;
+    use super::{Badge, Kind};
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2::AnyThread;
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
+    use objc2_foundation::{NSDictionary, NSSize, NSString};
+
+    #[test]
+    #[ignore = "writes preview PNGs to AO_DOCK_PREVIEW_DIR"]
+    fn preview_badges() {
+        let Some(dir) = std::env::var_os("AO_DOCK_PREVIEW_DIR") else { return };
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).expect("preview dir");
+        let icon = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("icons/128x128@2x.png");
+        let path = NSString::from_str(icon.to_str().expect("utf-8 path"));
+        let base: Retained<NSImage> = NSImage::initWithContentsOfFile(NSImage::alloc(), &path).expect("base icon");
+        // The @2x file reports 128 pt; one point per pixel gives the 256 px previews.
+        base.setSize(NSSize::new(256.0, 256.0));
+        let cases = [
+            ("waiting-2", Badge { kind: Kind::Waiting, count: 2 }),
+            ("busy-3", Badge { kind: Kind::Busy, count: 3 }),
+            ("waiting-12", Badge { kind: Kind::Waiting, count: 12 }),
+            ("busy-150", Badge { kind: Kind::Busy, count: 150 }),
+        ];
+        for (name, badge) in cases {
+            let image = compose(base.clone(), badge);
+            let tiff = image.TIFFRepresentation().expect("tiff");
+            let rep = NSBitmapImageRep::imageRepWithData(&tiff).expect("bitmap rep");
+            let props = NSDictionary::<NSString, AnyObject>::new();
+            let png = unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props) }.expect("png");
+            std::fs::write(dir.join(format!("{name}.png")), png.to_vec()).expect("write png");
+        }
     }
 }

@@ -42,6 +42,6 @@ include_dir = "0.7"            # embed ../skills into the binary so the app can 
 # same objc2 versions Tauri already locks; block2 for the NSImage drawing handler.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSImage", "NSBezierPath", "NSColor", "NSFont", "NSGraphics", "NSStringDrawing", "NSAttributedString"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSGeometry", "NSString", "NSDictionary", "NSAttributedString"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSImage", "NSBezierPath", "NSColor", "NSFont", "NSGraphics", "NSStringDrawing", "NSAttributedString", "NSBitmapImageRep", "NSImageRep"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSGeometry", "NSString", "NSDictionary", "NSAttributedString", "NSData"] }
 block2 = "0.6.2"
