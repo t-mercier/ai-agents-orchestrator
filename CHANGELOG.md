@@ -10,6 +10,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-11-17
+### Fixed
+- **Brutus knows what he can do after an update.** He kept answering that he could only
+  read, because he resumed a conversation from before 0.26. He now starts a new conversation
+  when his instructions change. His memory is kept.
+- **A long question to Brutus wraps.** His input grows with the text instead of running on
+  one line. Shift+Enter adds a line, Enter sends.
+
 ## [0.27.0] - 2026-11-17
 ### Added
 - **The Dock icon shows who needs you.** A red dot with a number when sessions wait for your
