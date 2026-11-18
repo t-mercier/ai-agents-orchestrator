@@ -10,11 +10,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.27.1] - 2026-11-17
+## [0.27.1] - 2026-11-18
 ### Fixed
 - **Brutus knows what he can do after an update.** He kept answering that he could only
   read, because he resumed a conversation from before 0.26. He now starts a new conversation
-  when his instructions change. His memory is kept.
+  when his instructions change, and it opens on his last exchanges with you, so he picks up
+  where he was. His memory is kept.
+- **Brutus's conversation no longer grows without end.** After 30 questions he continues in a
+  new conversation that opens on the last 8 exchanges. The app keeps the last 300 in
+  `history.jsonl` in his folder, and he can read it. "New conversation" clears it.
 - **A long question to Brutus wraps.** His input grows with the text instead of running on
   one line. Shift+Enter adds a line, Enter sends.
 
