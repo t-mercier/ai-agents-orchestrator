@@ -1,14 +1,14 @@
 ---
 name: save-session
 description: >-
-  Checkpoint the active session WITHOUT closing it: resolve its registered notes.md,
-  summarise what this session did so far (Decisions, Files touched, Open questions,
+  Checkpoint the active session WITHOUT closing it: resolve its registered notes.md
+  (creating it on the first checkpoint of a session that has none), summarise what this session did so far (Decisions, Files touched, Open questions,
   Next steps), update those sections, and append an "(in progress)" Session history
   entry. The session stays open. Useful mid-session, or right before context compaction.
   Trigger on "/save-session", "save session", "save session notes", "checkpoint",
   "sauvegarde la session" — and whenever context is running out: running out is a
   reason to checkpoint, never a reason to close.
-allowed-tools: Bash Read Edit Write
+allowed-tools: Bash Read Edit Write AskUserQuestion
 argument-hint: ""
 ---
 
@@ -82,8 +82,33 @@ if [ -z "$NOTES_PATH" ] && [ -n "$SESSION_ID" ]; then
 fi
 ```
 
-If `$NOTES_PATH` is empty: stop and tell the user there's no active session registered
-for this conversation — run `/start-session` (new) or `/restart-session <slug>` (resume) first.
+If `$NOTES_PATH` is empty, this conversation has no notes yet: go to Step 2b.
+
+## Step 2b — No notes yet: create them (first checkpoint only)
+
+**Skip this step when `$NOTES_PATH` is set.**
+
+A session opened outside the dashboard (Claude desktop, a bare `claude` in a shell) never
+ran `/start-session`, so nothing is registered for it. Its first checkpoint creates the
+notes instead of sending the user away to start a session they are already in.
+
+If `$SESSION_ID` is empty as well, stop and say so: without an id nothing can be registered.
+
+1. **Work out what the session is about**, by the rules of `/start-session` Step 1:
+   `CATEGORY` from the configured list, `TICKET` only if the session is dedicated to one,
+   `NAME` in 3–6 words. Take them from the conversation; ask once, with `AskUserQuestion`,
+   only for what it does not settle. Nobody there to answer → stop and name what is missing.
+2. **Compute `$TARGET_DIR` and `$NOTES_PATH`** as `/start-session` Step 2 does.
+3. **Never overwrite.** A `notes.md` already at `$NOTES_PATH` belongs to earlier work or to
+   another live session. Stop and ask: continue that session (`/restart-session <FOLDER>`,
+   which rebinds it safely) or give this one another name and go back to 2.
+4. **Create and register** by `/start-session` Steps 5, 6, 6.5 and 7, with the `$SESSION_ID`
+   resolved above. That skill owns the template; do not write a second one here.
+   Skip its Step 4.5 (nothing is bound yet), Step 8 and Step 9: git sync and rename belong
+   to a session being opened, and this one is already under way.
+
+Then continue at Step 3 with the new `$NOTES_PATH`, and say in the confirmation that the
+notes were created and where.
 
 ## Step 3 — Read the notes + frontmatter
 
