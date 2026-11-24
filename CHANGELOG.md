@@ -17,6 +17,24 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   stopped there and asked for `/start-session`. Its first checkpoint now creates the notes
   and registers the session; `/close-session` does the same.
 
+## [0.27.1] - 2026-11-18
+### Fixed
+- **Brutus knows what he can do after an update.** He kept answering that he could only
+  read, because he resumed a conversation from before 0.26. He now starts a new conversation
+  when his instructions change, and it opens on his last exchanges with you, so he picks up
+  where he was. His memory is kept.
+- **Brutus's conversation no longer grows without end.** After 30 questions he continues in a
+  new conversation that opens on the last 8 exchanges. The app keeps the last 300 in
+  `history.jsonl` in his folder, and he can read it. "New conversation" clears it.
+- **A long question to Brutus wraps.** His input grows with the text instead of running on
+  one line. Shift+Enter adds a line, Enter sends.
+
+## [0.27.0] - 2026-11-17
+### Added
+- **The Dock icon shows who needs you.** A red dot with a number when sessions wait for your
+  answer, an orange one when agents are only working, and the plain icon when all is quiet.
+  Turn it off in **Settings → General** if you prefer the icon as it is.
+
 ## [0.26.0] - 2026-11-16
 ### Added
 - **Brutus updates a session's notes when you ask him to.** He edits only the `notes.md` of

@@ -93,6 +93,16 @@
   }
   window.CSMSettings.register({ populate: populateUpdates, collect: collectUpdates })
 
+  // The status badge on the Dock icon (dock-status-model.js): part of the saved config, so
+  // Save writes it and reloadConfig re-applies it.
+  function populateDock() {
+    const box = $('set-dock-status'); if (box) box.checked = (window.CSM_CONFIG || {}).dockStatus !== false
+  }
+  function collectDock(out) {
+    const box = $('set-dock-status'); if (box) out.dockStatus = box.checked
+  }
+  window.CSMSettings.register({ populate: populateDock, collect: collectDock })
+
   window.CSMSettings.register({
     populate: renderSpaceRows,
     collect: collectSpaces,

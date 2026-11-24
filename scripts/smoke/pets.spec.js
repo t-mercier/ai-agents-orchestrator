@@ -53,8 +53,8 @@ test('he thinks while an answer runs, then is happy', async ({ page }) => {
   // …once: the panel's own face does not repeat the badge.
   await expect(page.locator('.bru-panel .bru-head svg .pe-alert')).toHaveCount(0)
   await page.evaluate(() => { window.__HOLD__ = true })
-  await page.locator('.bru-panel input').fill('what is waiting?')
-  await page.locator('.bru-panel input').press('Enter')
+  await page.locator('.bru-panel textarea').fill('what is waiting?')
+  await page.locator('.bru-panel textarea').press('Enter')
   await expect(page.locator('.bru-panel .bru-head svg.pet-svg')).toHaveClass(/pe-think/)
   // The scripted run of the fixture answers: he is happy for a moment.
   await page.evaluate(() => { window.__HOLD__ = false })

@@ -29,7 +29,7 @@ test('Stop pressed before claude has started says it was received', async ({ pag
     window.api.brutusCancel = () => Promise.resolve(true)
   })
   await page.locator('.bru-fab').click()
-  await page.locator('.bru-panel input').fill('anything')
+  await page.locator('.bru-panel textarea').fill('anything')
   await page.keyboard.press('Enter')
   // Each render re-mounts the panel with its pop animation: click without waiting for it.
   await page.locator('.bru-panel [data-bru="stop"]').dispatchEvent('click')
@@ -39,10 +39,10 @@ test('Stop pressed before claude has started says it was received', async ({ pag
 
 test('a failed reset keeps the conversation and says why', async ({ page }) => {
   await page.locator('.bru-fab').click()
-  await page.locator('.bru-panel input').fill("What's waiting on me?")
+  await page.locator('.bru-panel textarea').fill("What's waiting on me?")
   await page.keyboard.press('Enter')
   await expect(page.locator('.bru-panel .bru-u')).toHaveCount(1)
-  await expect(page.locator('.bru-panel input')).toBeEnabled()
+  await expect(page.locator('.bru-panel textarea')).toBeEnabled()
   await page.evaluate(() => { window.api.brutusReset = () => Promise.resolve({ ok: false, error: 'EACCES: permission denied' }) })
   await page.locator('.bru-panel [data-bru="reset"]').dispatchEvent('click')
   await expect(page.locator('.bru-panel .bru-err')).toContainText('EACCES')

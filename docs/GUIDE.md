@@ -24,6 +24,8 @@ Every session is in exactly one state. The tabs map to them:
 
 So **Closed** = "finished and tidied", **Archived** = "finished and filed away", **Stale** = "still open but unattended".
 
+The Dock icon shows the **Active** sessions at a glance, when **Settings → General → Status dot on the Dock icon** is on (it is on by default). A red dot with a number means that many sessions are waiting for your answer. An orange dot means that many are busy, and the plain icon means neither. Waiting always takes the red dot. The count covers every running session, whatever tab or search you have open.
+
 ## Start vs Resume vs Restart — the three ways in
 
 The one thing worth getting straight:

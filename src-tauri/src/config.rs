@@ -123,6 +123,12 @@ fn assistant_of(user: &Value) -> Value {
     json!({ "name": name, "style": style, "enabled": enabled, "pet": pet })
 }
 
+/// Whether the Dock icon shows the status badge. Only an explicit false turns it off, so a
+/// config from before the setting keeps the badge.
+fn dock_status_of(user: &Value) -> bool {
+    user.get("dockStatus").and_then(Value::as_bool).unwrap_or(true)
+}
+
 /// Whether the user has Brutus turned on, read from a derived config.
 pub(crate) fn assistant_enabled(cfg: &Value) -> bool {
     cfg.get("assistant").and_then(|a| a.get("enabled")).and_then(Value::as_bool).unwrap_or(true)
@@ -276,6 +282,8 @@ fn derive(user: &Value) -> Value {
         "terminalApp": terminal_app,
         // Brutus: always present and already normalised, so no reader has to guess.
         "assistant": assistant_of(user),
+        // The Dock icon badge (dock.rs): always present, a plain boolean.
+        "dockStatus": dock_status_of(user),
         "pinnedSkills": pinned_skills_of(user),
         "scanDirs": scan_dirs,
         "order": order,
@@ -790,6 +798,17 @@ mod tests {
     // The skill-learning loop (skillProposals) ships on: a fresh install must not require
     // finding and hand-setting a key that appears nowhere in Settings to get the product's
     // own default behaviour.
+    // The Dock badge is on by default; only an explicit false turns it off.
+    #[test]
+    fn dock_status_is_on_unless_turned_off_explicitly() {
+        assert_eq!(derive(&default_config())["dockStatus"], true);
+        let mut c = default_config();
+        c["dockStatus"] = json!(false);
+        assert_eq!(derive(&c)["dockStatus"], false);
+        c["dockStatus"] = json!("no");
+        assert_eq!(derive(&c)["dockStatus"], true, "a non-boolean is not a choice");
+    }
+
     #[test]
     fn default_config_ships_skill_proposals_on() {
         assert_eq!(default_config()["skillProposals"], true);

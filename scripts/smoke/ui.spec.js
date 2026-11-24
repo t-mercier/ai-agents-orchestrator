@@ -431,12 +431,12 @@ test.describe('Brutus', () => {
 
   test('an answer renders a chip for a known session and never executes markup', async ({ page }) => {
     await page.locator('.bru-fab').click()
-    await page.locator('.bru-panel input').fill("What's waiting on me?")
+    await page.locator('.bru-panel textarea').fill("What's waiting on me?")
     await page.keyboard.press('Enter')
     await expect(page.locator('.bru-panel [data-brutus-session="checkout-redesign"]')).toBeVisible()
     await expect(page.locator('.bru-panel .bru-steps').last()).toContainText('Read the dashboard')
     expect(await page.evaluate(() => window.__XSS__)).toBeUndefined()
-    await expect(page.locator('.bru-panel input')).toBeEnabled()
+    await expect(page.locator('.bru-panel textarea')).toBeEnabled()
   })
 
   test('Settings → AI Companion saves the name and style, and his menu opens it', async ({ page }) => {
@@ -454,9 +454,9 @@ test.describe('Brutus', () => {
 
   test('a failed run shows one error line and gives the input back', async ({ page }) => {
     await page.locator('.bru-fab').click()
-    await page.locator('.bru-panel input').fill('please fail')
+    await page.locator('.bru-panel textarea').fill('please fail')
     await page.keyboard.press('Enter')
     await expect(page.locator('.bru-panel .bru-err')).toContainText('logged in')
-    await expect(page.locator('.bru-panel input')).toBeEnabled()
+    await expect(page.locator('.bru-panel textarea')).toBeEnabled()
   })
 })

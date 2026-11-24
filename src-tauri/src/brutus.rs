@@ -16,6 +16,14 @@ use crate::{brutus_agent, brutus_home, config, pty};
 const MAX_MESSAGE: usize = 8000;
 const TIMEOUT: Duration = Duration::from_secs(180);
 const RECENT_CLOSED_DAYS: i64 = 14;
+/// The app's own record of the exchanges, one JSON object per line, in his folder.
+const HISTORY_FILE: &str = "history.jsonl";
+const HISTORY_KEEP: usize = 300;
+/// What a new conversation is told of the earlier ones.
+const RECAP_EXCHANGES: usize = 8;
+const RECAP_CHARS: usize = 1200;
+/// A conversation is replaced by a new one, opened on the recap, after this many questions.
+const ROTATE_AFTER: u64 = 30;
 
 pub(crate) struct Plan {
     pub dir: String,
@@ -201,12 +209,72 @@ impl Drop for Busy {
 fn conversation_path() -> std::path::PathBuf {
     brutus_home::dir().join("conversation.json")
 }
-fn read_conversation() -> Option<String> {
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(conversation_path()).ok()?).ok()?;
+/// A fingerprint of what Brutus is told he can do (FNV-1a, stable across builds). A
+/// conversation started under other instructions is not resumed: its earlier answers say
+/// what he could do then ("I can only read"), and he would keep repeating them. The new
+/// one opens on a recap of the recent exchanges, so he still picks up where he was.
+fn prompt_stamp(source: &str) -> String {
+    let h = source.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    format!("{h:016x}")
+}
+/// The conversation to resume: the saved id, when it was saved under today's instructions
+/// and has not grown past `ROTATE_AFTER` questions.
+fn conversation_in(raw: &str, stamp: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(raw).ok()?;
+    if v.get("prompt").and_then(Value::as_str) != Some(stamp) {
+        return None;
+    }
+    if v.get("turns").and_then(Value::as_u64).unwrap_or(1) >= ROTATE_AFTER {
+        return None;
+    }
     v.get("sessionId").and_then(Value::as_str).filter(|s| crate::is_valid_session_id(s)).map(str::to_string)
 }
-fn write_conversation_at(path: &std::path::Path, id: &str) -> std::io::Result<()> {
-    std::fs::write(path, json!({ "sessionId": id }).to_string())
+fn read_conversation() -> Option<String> {
+    conversation_in(&std::fs::read_to_string(conversation_path()).ok()?, &prompt_stamp(brutus_agent::agent_source()))
+}
+/// `resumed` says the run continued the saved conversation, which adds one question to its count.
+fn write_conversation_at(path: &std::path::Path, id: &str, resumed: bool) -> std::io::Result<()> {
+    let before = std::fs::read_to_string(path).ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|v| v.get("turns").and_then(Value::as_u64))
+        .unwrap_or(1);
+    let turns = if resumed { before + 1 } else { 1 };
+    std::fs::write(path, json!({ "sessionId": id, "prompt": prompt_stamp(brutus_agent::agent_source()), "turns": turns }).to_string())
+}
+
+fn history_path() -> std::path::PathBuf {
+    brutus_home::dir().join(HISTORY_FILE)
+}
+/// Adds one exchange and keeps the last `HISTORY_KEEP`.
+fn append_history_at(path: &std::path::Path, at: &str, question: &str, answer: &str) -> std::io::Result<()> {
+    let mut lines: Vec<String> = std::fs::read_to_string(path).unwrap_or_default()
+        .lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
+    lines.push(json!({ "at": at, "q": question, "a": answer }).to_string());
+    let from = lines.len().saturating_sub(HISTORY_KEEP);
+    std::fs::write(path, lines[from..].join("\n") + "\n")
+}
+fn clip(s: &str) -> String {
+    if s.chars().count() <= RECAP_CHARS {
+        return s.to_string();
+    }
+    s.chars().take(RECAP_CHARS).collect::<String>() + " […]"
+}
+/// The message a new conversation starts with: the recent exchanges, then the question.
+/// With no history, the question alone.
+fn with_recap(history: &str, question: &str) -> String {
+    let all: Vec<Value> = history.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    if all.is_empty() {
+        return question.to_string();
+    }
+    let s = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let mut out = String::from(
+        "[Your earlier exchanges with the user, oldest first, so you can pick up where you were. \
+         Your instructions as they are now decide what you can do, whatever you said then. \
+         The full record is history.jsonl in your folder.]\n\n");
+    for v in &all[all.len().saturating_sub(RECAP_EXCHANGES)..] {
+        out += &format!("User ({}): {}\nYou: {}\n\n", s(v, "at"), clip(&s(v, "q")), clip(&s(v, "a")));
+    }
+    out + "[End of the earlier exchanges. The user's new message follows.]\n\n" + question
 }
 
 /// `--restricted` ignores ~/.claude/settings.json, so the model is passed explicitly: the
@@ -367,7 +435,7 @@ fn run_in(shell: &str, plan: &Plan, message: &str, mut on_event: impl FnMut(Valu
                 if crate::is_valid_session_id(session_id) {
                     // Not fatal to this answer, but the next message will start a new
                     // conversation: say so in the log rather than nowhere.
-                    if let Err(e) = write_conversation_at(&conversation_path(), session_id) {
+                    if let Err(e) = write_conversation_at(&conversation_path(), session_id, plan.resume.is_some()) {
                         log::warn!("brutus: could not save the conversation id: {e}");
                     }
                 }
@@ -427,9 +495,27 @@ pub fn brutus_ask(
     }
     let _busy = Busy::acquire()?;
     let plan = prepare(crate::reader::get_sessions(pty_state), true)?;
-    ask(plan, |p| run(p, &message, |ev| emit(&app, &ev)), || {
+    let mut answer: Option<String> = None;
+    ask(plan, |p| {
+        // A conversation that starts here knows nothing of the earlier ones: tell it.
+        let sent = if p.resume.is_some() { message.clone() }
+            else { with_recap(&std::fs::read_to_string(history_path()).unwrap_or_default(), &message) };
+        run(p, &sent, |ev| {
+            if ev.get("kind").and_then(Value::as_str) == Some("done") && ev.get("is_error").and_then(Value::as_bool) == Some(false) {
+                answer = ev.get("result").and_then(Value::as_str).map(str::to_string);
+            }
+            emit(&app, &ev);
+        })
+    }, || {
         let _ = std::fs::remove_file(conversation_path());
-    })
+    })?;
+    if let Some(a) = answer.filter(|a| !a.trim().is_empty()) {
+        let (day, time) = crate::local_date_time().unwrap_or_default();
+        if let Err(e) = append_history_at(&history_path(), &format!("{day} {time}"), &message, &a) {
+            log::warn!("brutus: could not save the exchange: {e}");
+        }
+    }
+    Ok(())
 }
 
 /// True when a run is in flight, whether or not claude has started yet.
@@ -443,13 +529,16 @@ pub fn brutus_cancel() -> bool {
     BUSY.load(Ordering::SeqCst)
 }
 
-/// A new conversation. His memory is untouched.
+/// A new conversation with nothing carried over: the history goes too. His memory is untouched.
 #[tauri::command]
 pub fn brutus_reset() -> Result<(), String> {
-    match std::fs::remove_file(conversation_path()) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
-        _ => Ok(()),
+    for path in [conversation_path(), history_path()] {
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+            _ => {}
+        }
     }
+    Ok(())
 }
 
 /// No file yet is nothing remembered; a file that cannot be read is unknown (null), not 0.
@@ -512,6 +601,77 @@ pub fn brutus_open_memory() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // 0.26 gave him new abilities, and he kept answering "I can only read" because the
+    // conversation he resumed was full of that sentence.
+    #[test]
+    fn a_conversation_started_under_other_instructions_is_not_resumed() {
+        let id = "1c5e3b6d-ac67-4d56-ac9d-68251bde5e88";
+        let now = prompt_stamp("today's instructions");
+        let saved = |stamp: &str| json!({ "sessionId": id, "prompt": stamp }).to_string();
+        assert_eq!(conversation_in(&saved(&now), &now).as_deref(), Some(id));
+        assert_eq!(conversation_in(&saved(&prompt_stamp("older instructions")), &now), None);
+        // A file written before the stamp existed.
+        assert_eq!(conversation_in(&json!({ "sessionId": id }).to_string(), &now), None);
+        assert_eq!(conversation_in("not json", &now), None);
+    }
+
+    #[test]
+    fn a_long_conversation_is_replaced_and_the_count_restarts() {
+        let id = "1c5e3b6d-ac67-4d56-ac9d-68251bde5e88";
+        let now = prompt_stamp("x");
+        let saved = |turns: u64| json!({ "sessionId": id, "prompt": now, "turns": turns }).to_string();
+        assert_eq!(conversation_in(&saved(ROTATE_AFTER - 1), &now).as_deref(), Some(id));
+        assert_eq!(conversation_in(&saved(ROTATE_AFTER), &now), None);
+
+        let dir = std::env::temp_dir().join(format!("ao-brutus-turns-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("conversation.json");
+        let turns = || serde_json::from_str::<Value>(&std::fs::read_to_string(&path).unwrap()).unwrap()["turns"].as_u64();
+        write_conversation_at(&path, id, false).unwrap();
+        assert_eq!(turns(), Some(1));
+        write_conversation_at(&path, id, true).unwrap();
+        write_conversation_at(&path, id, true).unwrap();
+        assert_eq!(turns(), Some(3));
+        write_conversation_at(&path, id, false).unwrap();
+        assert_eq!(turns(), Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_new_conversation_opens_on_the_recent_exchanges_only() {
+        assert_eq!(with_recap("", "hello"), "hello");
+        assert_eq!(with_recap("not json\n", "hello"), "hello");
+
+        let dir = std::env::temp_dir().join(format!("ao-brutus-history-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.jsonl");
+        for i in 0..HISTORY_KEEP + 5 {
+            append_history_at(&path, "2026-11-18 10:00", &format!("question {i}"), &format!("answer {i}\nsecond line")).unwrap();
+        }
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(raw.lines().count(), HISTORY_KEEP);
+        assert!(raw.starts_with(r#"{"a":"answer 5\nsecond line""#), "{}", &raw[..60]);
+
+        let sent = with_recap(&raw, "and now?");
+        let last = HISTORY_KEEP + 4;
+        assert!(sent.contains(&format!("question {last}")) && sent.contains(&format!("answer {last}\nsecond line")));
+        assert!(sent.contains(&format!("question {}", last + 1 - RECAP_EXCHANGES)));
+        assert!(!sent.contains(&format!("question {}\n", last - RECAP_EXCHANGES)));
+        assert!(sent.ends_with("\n\nand now?"));
+
+        let long = json!({ "at": "d", "q": "é".repeat(RECAP_CHARS + 50), "a": "ok" }).to_string();
+        let clipped = with_recap(&long, "q");
+        assert!(clipped.contains(&("é".repeat(RECAP_CHARS) + " […]")) && !clipped.contains(&"é".repeat(RECAP_CHARS + 1)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_stamp_depends_only_on_the_text() {
+        assert_eq!(prompt_stamp("a"), prompt_stamp("a"));
+        assert_ne!(prompt_stamp("a"), prompt_stamp("b"));
+        assert_eq!(prompt_stamp(""), "cbf29ce484222325");
+    }
 
     fn plan() -> Plan {
         Plan {
@@ -698,7 +858,7 @@ mod tests {
 
     #[test]
     fn a_failed_conversation_write_is_reported() {
-        assert!(write_conversation_at(std::path::Path::new("/nonexistent-ao-dir/conversation.json"), "abc").is_err());
+        assert!(write_conversation_at(std::path::Path::new("/nonexistent-ao-dir/conversation.json"), "abc", false).is_err());
     }
 
     // Shipped: the message went on the stdin of `$SHELL -ilc`, so an rc file that reads

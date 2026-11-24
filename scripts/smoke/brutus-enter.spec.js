@@ -10,7 +10,7 @@ for (const home of ['side', 'bubble']) {
     await page.waitForFunction(() => window.__SHOT_READY__ === true, { timeout: 15_000 })
     // The fixture's list scene leaves checkout-redesign selected, and running.
     await page.evaluate((h) => { try { localStorage.removeItem('csm.brutusLog') } catch {} ; window.CSMBrutusUI.setHome(h) }, home)
-    const input = page.locator(`.bru-panel.${home === 'side' ? 'v-C' : 'v-A'} input`)
+    const input = page.locator(`.bru-panel.${home === 'side' ? 'v-C' : 'v-A'} textarea`)
     await input.fill("What's waiting on me?")
     await input.press('Enter')
     await expect(page.locator('.bru-panel .bru-u').last()).toHaveText("What's waiting on me?")

@@ -288,12 +288,12 @@ const SCENES = {
         '- [[session:checkout-redesign]] wants to know whether the express-pay buttons go left or right of the order summary.',
         '- [[session:search-suggest]] asks if suggestions should include recent searches.',
         '',
-        '[[session:legacy-export]] has been stale for 3 days. Close it, or pick it back up?',
+        '[[session:legacy-export]] has been stale for 3 days. Close it, or pick it back up? [[action:close:legacy-export]]',
       ].join('\n'),
     }
     window.CSMBrutusUI.palette()
-    await waitFor(() => document.querySelector('.bru-panel.v-B input'))
-    const input = document.querySelector('.bru-panel.v-B input')
+    await waitFor(() => document.querySelector('.bru-panel.v-B textarea'))
+    const input = document.querySelector('.bru-panel.v-B textarea')
     input.value = "What's waiting on me?"
     document.querySelector('.bru-panel.v-B [data-bru="send"]').click()
     await waitFor(() => document.querySelector('.bru-panel.v-B .bru-bt ul'))

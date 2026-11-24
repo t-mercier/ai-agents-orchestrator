@@ -10,7 +10,7 @@ async function answer(page, text) {
     window.__BRUTUS_SCRIPT__ = { reads: [], text }
     window.CSMBrutusUI.setHome('bubble')
   }, text)
-  await page.locator('.bru-panel.v-A input').fill('do it')
+  await page.locator('.bru-panel.v-A textarea').fill('do it')
   await page.keyboard.press('Enter')
   await expect(page.locator('.bru-panel.v-A .bru-act').first()).toBeVisible()
 }
@@ -75,7 +75,7 @@ test('a session closed after launch is archivable from his next answer', async (
     window.refreshSessions()   // what the app does once it has closed a session
     window.CSMBrutusUI.setHome('bubble')
   })
-  await page.locator('.bru-panel.v-A input').fill('archive it')
+  await page.locator('.bru-panel.v-A textarea').fill('archive it')
   await page.keyboard.press('Enter')
   await expect(page.locator('.bru-act[data-bru-action="archive"]')).toBeEnabled()
   await page.locator('.bru-act[data-bru-action="archive"]').click()
